@@ -1,78 +1,497 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-<title>Elevate Automation</title>
-<meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Elevate Automation</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
 
-<style>
-body{
-font-family: Arial, sans-serif;
-background:#0f0f0f;
-color:white;
-text-align:center;
-padding:80px;
-margin:0;
-}
+    body {
+      font-family: Arial, sans-serif;
+      background: #0b0b0b;
+      color: #ffffff;
+      line-height: 1.6;
+    }
 
-h1{
-font-size:42px;
-margin-bottom:10px;
-}
+    a {
+      text-decoration: none;
+    }
 
-h2{
-margin-top:60px;
-}
+    .container {
+      width: 90%;
+      max-width: 1200px;
+      margin: 0 auto;
+    }
 
-p{
-font-size:18px;
-color:#cccccc;
-}
+    .hero {
+      padding: 90px 0 70px;
+      text-align: center;
+      background: linear-gradient(180deg, #0b0b0b 0%, #151515 100%);
+    }
 
-.btn{
-display:inline-block;
-margin:15px;
-padding:15px 30px;
-background:#4CAF50;
-color:white;
-text-decoration:none;
-border-radius:6px;
-font-size:18px;
-}
+    .hero h1 {
+      font-size: 48px;
+      max-width: 900px;
+      margin: 0 auto 20px;
+      line-height: 1.15;
+    }
 
-.plan{
-margin-top:20px;
-}
-</style>
+    .hero p {
+      font-size: 20px;
+      color: #c9c9c9;
+      max-width: 820px;
+      margin: 0 auto 30px;
+    }
+
+    .button-row {
+      display: flex;
+      gap: 16px;
+      justify-content: center;
+      flex-wrap: wrap;
+      margin-top: 28px;
+    }
+
+    .btn {
+      display: inline-block;
+      padding: 14px 28px;
+      border-radius: 8px;
+      font-weight: bold;
+      font-size: 16px;
+      transition: 0.2s ease;
+    }
+
+    .btn-primary {
+      background: #d4af37;
+      color: #111111;
+    }
+
+    .btn-primary:hover {
+      opacity: 0.9;
+    }
+
+    .btn-secondary {
+      border: 1px solid #555;
+      color: #ffffff;
+    }
+
+    .btn-secondary:hover {
+      background: #1b1b1b;
+    }
+
+    .section {
+      padding: 70px 0;
+    }
+
+    .section-title {
+      text-align: center;
+      font-size: 34px;
+      margin-bottom: 16px;
+    }
+
+    .section-subtitle {
+      text-align: center;
+      color: #bdbdbd;
+      max-width: 760px;
+      margin: 0 auto 50px;
+      font-size: 18px;
+    }
+
+    .grid-3 {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 24px;
+    }
+
+    .grid-2 {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 24px;
+    }
+
+    .card {
+      background: #151515;
+      border: 1px solid #232323;
+      border-radius: 14px;
+      padding: 28px;
+    }
+
+    .card h3 {
+      font-size: 22px;
+      margin-bottom: 12px;
+    }
+
+    .card p {
+      color: #c7c7c7;
+      font-size: 16px;
+    }
+
+    .highlight {
+      color: #d4af37;
+      font-weight: bold;
+    }
+
+    .problem-solution {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 24px;
+    }
+
+    .list {
+      margin-top: 16px;
+      padding-left: 18px;
+      color: #d0d0d0;
+    }
+
+    .list li {
+      margin-bottom: 10px;
+    }
+
+    .demo-box {
+      background: #151515;
+      border: 1px solid #232323;
+      border-radius: 14px;
+      padding: 28px;
+      text-align: center;
+    }
+
+    .demo-box p {
+      color: #c7c7c7;
+      margin-bottom: 18px;
+    }
+
+    .pricing {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 24px;
+      max-width: 900px;
+      margin: 0 auto;
+    }
+
+    .pricing-card {
+      background: #151515;
+      border: 1px solid #2b2b2b;
+      border-radius: 16px;
+      padding: 34px 28px;
+      text-align: center;
+    }
+
+    .pricing-card.featured {
+      border: 1px solid #d4af37;
+      transform: scale(1.02);
+    }
+
+    .price {
+      font-size: 44px;
+      font-weight: bold;
+      margin: 12px 0;
+    }
+
+    .price span {
+      font-size: 18px;
+      color: #bdbdbd;
+      font-weight: normal;
+    }
+
+    .pricing-card ul {
+      list-style: none;
+      margin: 24px 0;
+      color: #d0d0d0;
+    }
+
+    .pricing-card ul li {
+      margin-bottom: 12px;
+    }
+
+    .trial-box {
+      margin-top: 28px;
+      text-align: center;
+      color: #d4af37;
+      font-size: 18px;
+      font-weight: bold;
+    }
+
+    .faq {
+      max-width: 900px;
+      margin: 0 auto;
+      display: grid;
+      gap: 18px;
+    }
+
+    .faq-item {
+      background: #151515;
+      border: 1px solid #232323;
+      border-radius: 12px;
+      padding: 24px;
+    }
+
+    .faq-item h4 {
+      margin-bottom: 10px;
+      font-size: 20px;
+    }
+
+    .faq-item p {
+      color: #c7c7c7;
+    }
+
+    .cta {
+      text-align: center;
+      padding: 80px 0 90px;
+      background: linear-gradient(180deg, #151515 0%, #0b0b0b 100%);
+    }
+
+    .cta h2 {
+      font-size: 36px;
+      margin-bottom: 16px;
+    }
+
+    .cta p {
+      color: #c7c7c7;
+      max-width: 720px;
+      margin: 0 auto 28px;
+      font-size: 18px;
+    }
+
+    .footer {
+      border-top: 1px solid #1f1f1f;
+      text-align: center;
+      padding: 28px 0 40px;
+      color: #9f9f9f;
+      font-size: 15px;
+    }
+
+    @media (max-width: 900px) {
+      .grid-3,
+      .grid-2,
+      .problem-solution,
+      .pricing {
+        grid-template-columns: 1fr;
+      }
+
+      .hero h1 {
+        font-size: 36px;
+      }
+
+      .section-title {
+        font-size: 28px;
+      }
+
+      .price {
+        font-size: 36px;
+      }
+    }
+  </style>
 </head>
-
 <body>
 
-<h1>Elevate Automation</h1>
+  <section class="hero">
+    <div class="container">
+      <h1>Automate Listings, Lead Capture, and Sales Workflows in Seconds</h1>
+      <p>
+        Elevate Automation helps automotive sales professionals, real estate agents, and sales teams
+        move faster, reduce admin work, and create more output with less effort.
+      </p>
+      <div class="button-row">
+        <a class="btn btn-primary" href="https://buy.stripe.com/cNi14nehU3Ked7Z0cNdZ601">Start Starter Plan</a>
+        <a class="btn btn-secondary" href="https://buy.stripe.com/7sY4gz7TwfsW5Fxf7HdZ600">Start Pro Plan</a>
+      </div>
+    </div>
+  </section>
 
-<p>Automation tools for automotive sales, real estate professionals, and sales teams.</p>
+  <section class="section">
+    <div class="container">
+      <h2 class="section-title">Why This Tool Exists</h2>
+      <p class="section-subtitle">
+        Most salespeople waste too much time rewriting the same information, filling out the same fields,
+        and manually building listings over and over again.
+      </p>
 
-<p>Create listings faster, automate workflows, and scale your productivity.</p>
+      <div class="problem-solution">
+        <div class="card">
+          <h3>Manual Workflow</h3>
+          <ul class="list">
+            <li>Copy listing details manually</li>
+            <li>Upload and organize photos one by one</li>
+            <li>Rewrite descriptions repeatedly</li>
+            <li>Fill out repetitive posting fields</li>
+            <li>Lose time every day on admin instead of sales</li>
+          </ul>
+        </div>
 
-<h2>Pricing</h2>
+        <div class="card">
+          <h3>With Elevate Automation</h3>
+          <ul class="list">
+            <li>Generate listings faster</li>
+            <li>Standardize your workflow</li>
+            <li>Cut repetitive admin work</li>
+            <li>Move from idea to post in seconds</li>
+            <li>Stay focused on closing, prospecting, and follow-up</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
 
-<div class="plan">
-<p><strong>Starter</strong></p>
-<p>$39/month</p>
-<a class="btn" href="https://buy.stripe.com/cNi14nehU3Ked7Z0cNdZ601">Start Starter Plan</a>
-</div>
+  <section class="section">
+    <div class="container">
+      <h2 class="section-title">Built for Multiple Sales Verticals</h2>
+      <p class="section-subtitle">
+        Start in automotive. Expand into real estate, sales teams, and other high-output client bases.
+      </p>
 
-<div class="plan">
-<p><strong>Pro</strong></p>
-<p>$79/month</p>
-<a class="btn" href="https://buy.stripe.com/7sY4gz7TwfsW5Fxf7HdZ600">Start Pro Plan</a>
-</div>
+      <div class="grid-3">
+        <div class="card">
+          <h3>Automotive Sales</h3>
+          <p>Speed up inventory listing workflows, reduce manual entry, and create more output across your selling channels.</p>
+        </div>
+        <div class="card">
+          <h3>Real Estate</h3>
+          <p>Adapt the same framework for property marketing workflows, listing descriptions, and repetitive posting tasks.</p>
+        </div>
+        <div class="card">
+          <h3>Sales Teams</h3>
+          <p>Use automation to reduce admin drag, standardize execution, and give reps more time for revenue-generating activity.</p>
+        </div>
+      </div>
+    </div>
+  </section>
 
-<h2>Free Trial</h2>
+  <section class="section">
+    <div class="container">
+      <h2 class="section-title">Core Advantages</h2>
+      <p class="section-subtitle">
+        This is not just a browser extension. It is a repeatable workflow engine built to save time and increase output.
+      </p>
 
-<p>Try Elevate Automation with 3 free listings.</p>
-<p>Upgrade once your free listings are used.</p>
+      <div class="grid-3">
+        <div class="card">
+          <h3>Faster Execution</h3>
+          <p>Compress work that normally takes several minutes into a much shorter and cleaner process.</p>
+        </div>
+        <div class="card">
+          <h3>Repeatable Systems</h3>
+          <p>Create a consistent operating process instead of relying on manual effort every time.</p>
+        </div>
+        <div class="card">
+          <h3>Subscription-Based Updates</h3>
+          <p>Continue improving the tool over time while clients stay on the latest version.</p>
+        </div>
+      </div>
+    </div>
+  </section>
 
-<p style="margin-top:60px;">Support: ElevateGPmarketing@gmail.com</p>
+  <section class="section">
+    <div class="container">
+      <h2 class="section-title">Demo</h2>
+      <p class="section-subtitle">
+        Add your Loom or screen recording here. Keep it short and outcome-focused.
+      </p>
+
+      <div class="demo-box">
+        <p><span class="highlight">Suggested demo flow:</span> open tool → generate listing → auto-fill workflow → finished output</p>
+        <a class="btn btn-secondary" href="#">Watch Demo Coming Soon</a>
+      </div>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="container">
+      <h2 class="section-title">Simple Pricing</h2>
+      <p class="section-subtitle">
+        Start with the plan that matches your workflow. Upgrade as you need more output and more power.
+      </p>
+
+      <div class="pricing">
+        <div class="pricing-card">
+          <h3>Starter</h3>
+          <p>For individual users getting started</p>
+          <div class="price">$39 <span>/ month</span></div>
+          <ul>
+            <li>Core automation access</li>
+            <li>Ongoing updates</li>
+            <li>Workflow templates</li>
+            <li>Subscription-based support</li>
+          </ul>
+          <a class="btn btn-primary" href="https://buy.stripe.com/cNi14nehU3Ked7Z0cNdZ601">Start Starter Plan</a>
+        </div>
+
+        <div class="pricing-card featured">
+          <h3>Pro</h3>
+          <p>For higher-output users and operators</p>
+          <div class="price">$79 <span>/ month</span></div>
+          <ul>
+            <li>Everything in Starter</li>
+            <li>More advanced workflows</li>
+            <li>Priority access to improvements</li>
+            <li>Built for heavier use</li>
+          </ul>
+          <a class="btn btn-primary" href="https://buy.stripe.com/7sY4gz7TwfsW5Fxf7HdZ600">Start Pro Plan</a>
+        </div>
+      </div>
+
+      <div class="trial-box">
+        3 free listings before upgrade
+      </div>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="container">
+      <h2 class="section-title">Frequently Asked Questions</h2>
+
+      <div class="faq">
+        <div class="faq-item">
+          <h4>How does the free trial work?</h4>
+          <p>You get 3 free listings to test the workflow before upgrading to a paid subscription.</p>
+        </div>
+
+        <div class="faq-item">
+          <h4>Who is this built for?</h4>
+          <p>It is designed for automotive sales, real estate, and other sales-driven industries that benefit from faster execution and less admin work.</p>
+        </div>
+
+        <div class="faq-item">
+          <h4>Are updates included?</h4>
+          <p>Yes. Your subscription includes access to ongoing updates, improvements, and maintenance.</p>
+        </div>
+
+        <div class="faq-item">
+          <h4>Is this a one-time purchase?</h4>
+          <p>No. Elevate Automation is sold as a monthly subscription so the platform can continue improving over time.</p>
+        </div>
+
+        <div class="faq-item">
+          <h4>What if I need help?</h4>
+          <p>Support is available by email at ElevateGPmarketing@gmail.com.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="cta">
+    <div class="container">
+      <h2>Move Faster. Do More. Sell More.</h2>
+      <p>
+        If repetitive workflow is slowing you down, Elevate Automation gives you a cleaner and faster system
+        to execute at a higher level.
+      </p>
+      <div class="button-row">
+        <a class="btn btn-primary" href="https://buy.stripe.com/cNi14nehU3Ked7Z0cNdZ601">Get Started</a>
+        <a class="btn btn-secondary" href="mailto:ElevateGPmarketing@gmail.com">Contact Support</a>
+      </div>
+    </div>
+  </section>
+
+  <footer class="footer">
+    <div class="container">
+      <p>Elevate Automation</p>
+      <p>Support: ElevateGPmarketing@gmail.com</p>
+    </div>
+  </footer>
 
 </body>
 </html>
