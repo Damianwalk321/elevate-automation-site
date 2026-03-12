@@ -1,4 +1,5 @@
-:root {
+
+ :root {
   --bg: #070707;
   --bg-soft: #111111;
   --panel: #121212;
@@ -11,9 +12,12 @@
   --gold: #d4af37;
   --gold-deep: #b8911f;
   --gold-soft: rgba(212, 175, 55, 0.12);
+  --green-soft: rgba(54, 179, 126, 0.14);
+  --green-line: rgba(54, 179, 126, 0.38);
+  --red-soft: rgba(220, 80, 80, 0.14);
+  --red-line: rgba(220, 80, 80, 0.38);
   --shadow: 0 24px 60px rgba(0, 0, 0, 0.35);
   --radius: 22px;
-  --radius-sm: 16px;
   --max: 1240px;
 }
 
@@ -46,6 +50,10 @@ a {
   margin: 0 auto;
 }
 
+.hidden {
+  display: none !important;
+}
+
 .site-header {
   position: sticky;
   top: 0;
@@ -68,7 +76,9 @@ a {
 .eyebrow,
 .panel-label,
 .timeline-label,
-.card-label {
+.card-label,
+.pricing-badge,
+.referral-label {
   font-size: 12px;
   letter-spacing: 0.22em;
   text-transform: uppercase;
@@ -92,8 +102,9 @@ a {
   font-size: 14px;
 }
 
-.main-nav a:hover {
-  color: var(--text);
+.main-nav a:hover,
+.footer-links a:hover {
+  color: var(--gold);
 }
 
 .btn {
@@ -111,6 +122,11 @@ a {
 
 .btn:hover {
   transform: translateY(-1px);
+}
+
+.btn:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
 }
 
 .btn-gold {
@@ -250,7 +266,13 @@ a {
   grid-column: 1 / -1;
 }
 
-.panel-card h3 {
+.panel-card h3,
+.feature-card h3,
+.timeline-card h3,
+.audience-card h3,
+.faq-card h3,
+.waitlist-card h3,
+.pricing-card h3 {
   margin-top: 0;
   margin-bottom: 12px;
 }
@@ -303,7 +325,12 @@ a {
 
 .section-heading p,
 .two-col p,
-.final-cta p {
+.final-cta p,
+.feature-card p,
+.timeline-card p,
+.faq-card p,
+.waitlist-card p,
+.pricing-card p {
   color: var(--text-soft);
   font-size: 18px;
 }
@@ -311,7 +338,8 @@ a {
 .feature-grid,
 .timeline-grid,
 .audience-grid,
-.faq-grid {
+.faq-grid,
+.pricing-grid {
   display: grid;
   gap: 18px;
   grid-template-columns: repeat(4, 1fr);
@@ -323,7 +351,8 @@ a {
 .faq-card,
 .waitlist-card,
 .proof-box,
-.final-cta {
+.final-cta,
+.pricing-card {
   background: rgba(255, 255, 255, 0.03);
   border: 1px solid var(--line);
   border-radius: var(--radius);
@@ -333,23 +362,9 @@ a {
 .feature-card,
 .timeline-card,
 .audience-card,
-.faq-card {
+.faq-card,
+.pricing-card {
   padding: 24px;
-}
-
-.feature-card h3,
-.timeline-card h3,
-.audience-card h3,
-.faq-card h3 {
-  margin-top: 0;
-  font-size: 22px;
-}
-
-.feature-card p,
-.timeline-card p,
-.audience-card li,
-.faq-card p {
-  color: var(--text-soft);
 }
 
 .two-col {
@@ -363,7 +378,8 @@ a {
   margin-bottom: 24px;
 }
 
-.stack-list {
+.stack-list,
+.roadmap-list {
   display: grid;
   gap: 14px;
 }
@@ -382,6 +398,74 @@ a {
   padding: 22px;
   display: grid;
   gap: 14px;
+}
+
+.checkout-message {
+  margin-bottom: 22px;
+  padding: 16px 18px;
+  border-radius: 18px;
+  border: 1px solid var(--line);
+  background: rgba(255,255,255,0.03);
+  color: var(--text-soft);
+}
+
+.checkout-message.success {
+  background: var(--green-soft);
+  border-color: var(--green-line);
+  color: #c9f3de;
+}
+
+.checkout-message.cancelled {
+  background: var(--red-soft);
+  border-color: var(--red-line);
+  color: #ffd0d0;
+}
+
+.referral-banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 22px;
+  padding: 14px 18px;
+  border-radius: 18px;
+  background: rgba(212, 175, 55, 0.10);
+  border: 1px solid var(--line-strong);
+  color: #f0d887;
+}
+
+.referral-code-display {
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
+.pricing-card {
+  position: relative;
+}
+
+.pricing-card-featured {
+  background: linear-gradient(180deg, rgba(212,175,55,0.08), rgba(255,255,255,0.03));
+  border-color: var(--line-strong);
+}
+
+.price-line {
+  margin: 8px 0 14px;
+  font-size: 44px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.price-line span {
+  font-size: 16px;
+  font-weight: 500;
+  color: var(--text-muted);
+  margin-left: 6px;
+}
+
+.pricing-card ul,
+.audience-card ul {
+  margin: 0 0 18px;
+  padding-left: 18px;
+  color: var(--text-soft);
 }
 
 .trust-strip {
@@ -416,16 +500,6 @@ a {
   background: linear-gradient(180deg, rgba(212,175,55,0.05), rgba(255,255,255,0.03));
 }
 
-.waitlist-card h3 {
-  margin-top: 10px;
-  margin-bottom: 12px;
-  font-size: 28px;
-}
-
-.waitlist-card p {
-  color: var(--text-soft);
-}
-
 .waitlist-form {
   margin-top: 22px;
   display: grid;
@@ -455,11 +529,6 @@ a {
   font-size: 13px;
   color: var(--text-muted);
   margin: 0;
-}
-
-.roadmap-list {
-  display: grid;
-  gap: 14px;
 }
 
 .roadmap-row {
@@ -523,10 +592,6 @@ a {
   font-size: 14px;
 }
 
-.footer-links a:hover {
-  color: var(--gold);
-}
-
 @media (max-width: 1100px) {
   .hero-grid,
   .two-col,
@@ -536,6 +601,7 @@ a {
   .timeline-grid,
   .audience-grid,
   .faq-grid,
+  .pricing-grid,
   .trust-strip {
     grid-template-columns: 1fr 1fr;
   }
@@ -565,6 +631,7 @@ a {
   .audience-grid,
   .faq-grid,
   .panel-grid,
+  .pricing-grid,
   .trust-strip {
     grid-template-columns: 1fr;
   }
@@ -574,7 +641,8 @@ a {
   }
 
   .panel-top,
-  .footer-wrap {
+  .footer-wrap,
+  .referral-banner {
     flex-direction: column;
     align-items: flex-start;
   }
@@ -587,4 +655,3 @@ a {
     line-height: 1.02;
   }
 }
- 
