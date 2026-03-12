@@ -1,7 +1,11 @@
 const SUPABASE_URL = https://teixblbxkoershwgqpym.supabase.co;
 const SUPABASE_ANON_KEY = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRlaXhibGJ4a29lcnNod2dxcHltIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMwODUzMDMsImV4cCI6MjA4ODY2MTMwM30.wxt9zjKhsBuflaFZZT9awZiwckRzYkEl-OLm_4q8qF4;
 
+console.log("Elevate script loaded");
+
 async function insertIntoSupabase(table, payload) {
+  console.log("Submitting to table:", table, payload);
+
   const response = await fetch(`${SUPABASE_URL}/rest/v1/${table}`, {
     method: "POST",
     headers: {
@@ -15,6 +19,7 @@ async function insertIntoSupabase(table, payload) {
 
   if (!response.ok) {
     const errorText = await response.text();
+    console.error("Supabase response error:", errorText);
     throw new Error(errorText || "Submission failed.");
   }
 
@@ -35,12 +40,18 @@ function resetButton(button) {
 }
 
 document.addEventListener("DOMContentLoaded", function () {
+  console.log("DOM fully loaded");
+
   const betaForm = document.getElementById("beta-waitlist-form");
   const partnerForm = document.getElementById("partner-waitlist-form");
+
+  console.log("Beta form found:", !!betaForm);
+  console.log("Partner form found:", !!partnerForm);
 
   if (betaForm) {
     betaForm.addEventListener("submit", async function (e) {
       e.preventDefault();
+      console.log("Beta form submit intercepted");
 
       const submitButton = betaForm.querySelector('button[type="submit"]');
       const note = betaForm.querySelector(".form-note");
@@ -82,6 +93,7 @@ document.addEventListener("DOMContentLoaded", function () {
   if (partnerForm) {
     partnerForm.addEventListener("submit", async function (e) {
       e.preventDefault();
+      console.log("Partner form submit intercepted");
 
       const submitButton = partnerForm.querySelector('button[type="submit"]');
       const note = partnerForm.querySelector(".form-note");
