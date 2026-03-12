@@ -21,13 +21,13 @@
       <nav class="main-nav">
         <a href="#product">Product</a>
         <a href="#why">Why Elevate</a>
-        <a href="#launch">Launch</a>
+        <a href="#pricing">Pricing</a>
         <a href="#partners">Partners</a>
         <a href="#roadmap">Roadmap</a>
         <a href="#faq">FAQ</a>
       </nav>
 
-      <a href="#waitlists" class="btn btn-gold nav-cta">Get Access</a>
+      <a href="#pricing" class="btn btn-gold nav-cta">Get Access</a>
     </div>
   </header>
 
@@ -45,7 +45,7 @@
           </p>
 
           <div class="hero-actions">
-            <a href="#waitlists" class="btn btn-gold">Join the Waitlist</a>
+            <a href="#pricing" class="btn btn-gold">Choose Your Plan</a>
             <a href="#product" class="btn btn-outline">Explore the Platform</a>
           </div>
 
@@ -185,7 +185,116 @@
       </div>
     </section>
 
-    <section id="launch" class="section">
+    <section id="pricing" class="section">
+      <div class="container">
+        <div class="section-heading">
+          <div class="section-kicker">PRICING & ACCESS</div>
+          <h2>Choose the right access path.</h2>
+          <p>
+            Founder pricing is positioned for early adopters. Standard pricing supports ongoing platform access as Elevate Automation scales.
+          </p>
+        </div>
+
+        <div id="checkout-message" class="checkout-message hidden"></div>
+
+        <div id="referral-banner" class="referral-banner hidden">
+          <span class="referral-label">Referral Code Active</span>
+          <span id="referral-code-display" class="referral-code-display"></span>
+        </div>
+
+        <div class="pricing-grid">
+          <div class="pricing-card pricing-card-featured">
+            <div class="pricing-badge">Founder</div>
+            <h3>Founder Starter</h3>
+            <div class="price-line">$39<span>/month</span></div>
+            <p>Early founder access for individual sales professionals entering before broader rollout.</p>
+            <ul>
+              <li>Vehicle Poster access</li>
+              <li>Founder pricing position</li>
+              <li>Early feature access</li>
+              <li>Clean upgrade path</li>
+            </ul>
+            <button
+              class="btn btn-gold full-width checkout-btn"
+              data-price-id="price_1TAIiQFjHUUVl5XclBkphvUF"
+              data-plan-type="founder_starter"
+              data-user-type="founder"
+              data-access-type="founder"
+            >
+              Get Founder Starter
+            </button>
+          </div>
+
+          <div class="pricing-card">
+            <div class="pricing-badge">Founder</div>
+            <h3>Founder Pro</h3>
+            <div class="price-line">$59<span>/month</span></div>
+            <p>Founder-level access with stronger positioning for users who want the more premium early plan.</p>
+            <ul>
+              <li>Vehicle Poster access</li>
+              <li>Founder pricing position</li>
+              <li>Priority expansion path</li>
+              <li>Broader future access track</li>
+            </ul>
+            <button
+              class="btn btn-outline full-width checkout-btn"
+              data-price-id="price_1TAIipFjHUUVl5XcRhx3sAvv"
+              data-plan-type="founder_pro"
+              data-user-type="founder"
+              data-access-type="founder"
+            >
+              Get Founder Pro
+            </button>
+          </div>
+
+          <div class="pricing-card">
+            <div class="pricing-badge">Standard</div>
+            <h3>Starter</h3>
+            <div class="price-line">$49<span>/month</span></div>
+            <p>Core plan for users entering under standard public pricing.</p>
+            <ul>
+              <li>Vehicle Poster access</li>
+              <li>Core workflow support</li>
+              <li>Standard platform entry</li>
+              <li>Future upgrade path</li>
+            </ul>
+            <button
+              class="btn btn-outline full-width checkout-btn"
+              data-price-id="price_1TAIjWFjHUUVl5XciikHcOks"
+              data-plan-type="starter"
+              data-user-type="standard"
+              data-access-type="standard"
+            >
+              Get Starter
+            </button>
+          </div>
+
+          <div class="pricing-card">
+            <div class="pricing-badge">Standard</div>
+            <h3>Pro</h3>
+            <div class="price-line">$79<span>/month</span></div>
+            <p>Higher-tier access for users wanting the stronger long-term plan structure.</p>
+            <ul>
+              <li>Vehicle Poster access</li>
+              <li>Premium positioning</li>
+              <li>Future automation path</li>
+              <li>Broader platform upside</li>
+            </ul>
+            <button
+              class="btn btn-outline full-width checkout-btn"
+              data-price-id="price_1T98thFjHUUVl5XcPZfqa4wx"
+              data-plan-type="pro"
+              data-user-type="standard"
+              data-access-type="standard"
+            >
+              Get Pro
+            </button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="launch" class="section section-dark">
       <div class="container">
         <div class="section-heading">
           <div class="section-kicker">LAUNCH POSITIONING</div>
@@ -201,31 +310,25 @@
           <div class="timeline-card">
             <div class="timeline-label">PHASE 1</div>
             <h3>Vehicle Poster Launch</h3>
-            <p>
-              Get the current posting engine stable, onboard early users, and gather proof.
-            </p>
+            <p>Get the current posting engine stable, onboard early users, and gather proof.</p>
           </div>
 
           <div class="timeline-card">
             <div class="timeline-label">PHASE 2</div>
             <h3>Dealer & User Infrastructure</h3>
-            <p>
-              Improve account systems, compliance logic, access control, and admin visibility.
-            </p>
+            <p>Improve account systems, compliance logic, access control, and admin visibility.</p>
           </div>
 
           <div class="timeline-card">
             <div class="timeline-label">PHASE 3</div>
             <h3>Growth Systems Platform</h3>
-            <p>
-              Expand into CRM, mass SMS, scheduler, AI media workflows, analytics, and partner dashboards.
-            </p>
+            <p>Expand into CRM, mass SMS, scheduler, AI media workflows, analytics, and partner dashboards.</p>
           </div>
         </div>
       </div>
     </section>
 
-    <section id="partners" class="section section-dark">
+    <section id="partners" class="section">
       <div class="container">
         <div class="section-heading">
           <div class="section-kicker">PARTNERS & FOUNDING AFFILIATES</div>
@@ -271,7 +374,7 @@
       </div>
     </section>
 
-    <section id="waitlists" class="section">
+    <section id="waitlists" class="section section-dark">
       <div class="container">
         <div class="trust-strip">
           <div class="trust-item">Built for automotive sales professionals</div>
@@ -333,7 +436,7 @@
       </div>
     </section>
 
-    <section id="roadmap" class="section section-dark">
+    <section id="roadmap" class="section">
       <div class="container">
         <div class="section-heading">
           <div class="section-kicker">ROADMAP</div>
@@ -354,7 +457,7 @@
       </div>
     </section>
 
-    <section id="faq" class="section">
+    <section id="faq" class="section section-dark">
       <div class="container">
         <div class="section-heading">
           <div class="section-kicker">FAQ</div>
@@ -374,14 +477,14 @@
             <h3>What is live right now?</h3>
             <p>
               The current focus is the Vehicle Poster launch, waitlist capture, access systems,
-              and preparing the infrastructure around the product.
+              pricing access, and preparing the infrastructure around the product.
             </p>
           </div>
 
           <div class="faq-card">
-            <h3>Why separate waitlists?</h3>
+            <h3>Why separate waitlists and pricing paths?</h3>
             <p>
-              Beta users and founding partners serve different functions and should enter through different systems from day one.
+              Beta users, founder users, standard users, and founding partners serve different functions and should enter through different systems from day one.
             </p>
           </div>
 
@@ -404,7 +507,7 @@
             Elevate Automation is being positioned to win at launch while remaining structured for long-term scale.
           </p>
         </div>
-        <a href="#waitlists" class="btn btn-gold">Get Priority Access</a>
+        <a href="#pricing" class="btn btn-gold">Get Priority Access</a>
       </div>
     </section>
   </main>
