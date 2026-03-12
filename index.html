@@ -1,423 +1,426 @@
-export default function ElevateAutomationLandingPage() {
-  const features = [
-    {
-      title: "Post inventory faster",
-      body: "Scan dealer inventory, build a queue, auto-fill Marketplace fields, and publish in a fraction of the manual time.",
-    },
-    {
-      title: "Compliance-aware by province",
-      body: "Built for dealership workflows with province selection and disclosure logic for Alberta, Ontario, and British Columbia.",
-    },
-    {
-      title: "Built for sales teams",
-      body: "Support individual salespeople, dealership managers, and multi-user rollouts with scalable onboarding and reporting.",
-    },
-    {
-      title: "The platform beyond posting",
-      body: "Roadmap includes dashboard analytics, CRM, mass SMS, scheduler, AI photo workflows, and partner dashboards.",
-    },
-  ];
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Elevate Automation | Premium Posting & Sales Automation</title>
+  <meta
+    name="description"
+    content="Elevate Automation helps automotive sales professionals and dealerships post faster, scale cleaner, and prepare for the next generation of sales automation."
+  />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header class="site-header">
+    <div class="container nav-wrap">
+      <div class="brand-block">
+        <div class="brand-kicker">ELEVATE AUTOMATION</div>
+        <div class="brand-sub">Vehicle Poster • Sales Growth Systems</div>
+      </div>
 
-  const pillars = [
-    {
-      kicker: "Now",
-      title: "Vehicle Poster",
-      text: "Chrome-based posting engine for dealer inventory to Marketplace with queue logic, faster listing flow, and cleaner execution.",
-    },
-    {
-      kicker: "Next",
-      title: "Dealer & User Dashboard",
-      text: "Visibility into listings, activity, usage, support, onboarding, and team-level performance.",
-    },
-    {
-      kicker: "Future",
-      title: "Growth Systems Platform",
-      text: "CRM, follow-up automation, mass SMS, scheduler, AI tools, analytics, affiliate management, and dealership-scale growth workflows.",
-    },
-  ];
+      <nav class="main-nav">
+        <a href="#product">Product</a>
+        <a href="#why">Why Elevate</a>
+        <a href="#launch">Launch</a>
+        <a href="#partners">Partners</a>
+        <a href="#roadmap">Roadmap</a>
+        <a href="#faq">FAQ</a>
+      </nav>
 
-  const proofCards = [
-    "Dealer inventory scan → listing queue → Marketplace posting",
-    "Designed for salespeople first, not generic marketing teams",
-    "Founder pricing, beta onboarding, partner workflows, and waitlist capture baked into the site structure",
-  ];
+      <a href="#waitlists" class="btn btn-gold nav-cta">Get Access</a>
+    </div>
+  </header>
 
-  const audiences = [
-    {
-      title: "Salespeople",
-      points: ["Post inventory faster", "Create more exposure", "Generate more conversations", "Spend less time on repetitive listing work"],
-    },
-    {
-      title: "Dealership leaders",
-      points: ["Standardize posting", "Support team adoption", "Prepare for dashboard visibility", "Roll out cleaner systems across stores"],
-    },
-    {
-      title: "Partners & affiliates",
-      points: ["Founding partner access", "Recurring referral economics", "Promo-kit-ready ecosystem", "Built for organic growth, not gimmicks"],
-    },
-  ];
+  <main>
+    <section class="hero-section">
+      <div class="container hero-grid">
+        <div class="hero-copy">
+          <div class="eyebrow">NOW ACCEPTING EARLY INTEREST</div>
+          <h1>
+            The premium posting and sales automation system for
+            automotive sales professionals and dealerships.
+          </h1>
+          <p class="hero-text">
+            Elevate Automation begins with a faster, cleaner vehicle posting engine
+            built for real dealer workflows — then expands into a broader sales
+            platform with dashboards, compliance-aware systems, CRM, automation,
+            partner tools, and growth infrastructure.
+          </p>
 
-  const roadmap = [
-    "Marketplace posting engine",
-    "Province-based compliance selection",
-    "Dealer/user setup",
-    "License-key access and billing",
-    "Dashboard and analytics",
-    "Affiliate and partner portal",
-    "CRM, scheduler, mass SMS, and AI media tools",
-  ];
+          <div class="hero-actions">
+            <a href="#waitlists" class="btn btn-gold">Join the Waitlist</a>
+            <a href="#product" class="btn btn-outline">Explore the Platform</a>
+          </div>
 
-  const faqs = [
-    {
-      q: "Who is Elevate Automation for?",
-      a: "Initially automotive sales professionals and dealerships. The broader platform is being developed to support other sales-driven industries over time.",
-    },
-    {
-      q: "What is available right now?",
-      a: "The current focus is the Vehicle Poster workflow, onboarding infrastructure, licensing, and beta rollout systems.",
-    },
-    {
-      q: "What are the waitlists for?",
-      a: "There are separate paths for beta users and founding partners / affiliates so early users and growth partners can be onboarded properly.",
-    },
-    {
-      q: "Is this just a listing tool?",
-      a: "No. The listing engine is phase one. The long-term product is a broader sales automation platform.",
-    },
-  ];
+          <div class="hero-highlights">
+            <div class="highlight-card">Automotive-first execution</div>
+            <div class="highlight-card">Built for launch and scale</div>
+            <div class="highlight-card">Partner and affiliate ready</div>
+          </div>
+        </div>
 
-  return (
-    <div className="min-h-screen bg-neutral-950 text-white">
-      <section className="relative overflow-hidden border-b border-white/10">
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(212,175,55,0.18),transparent_35%),radial-gradient(circle_at_80%_20%,rgba(255,255,255,0.08),transparent_20%)]" />
-        <div className="relative mx-auto max-w-7xl px-6 py-8">
-          <nav className="flex items-center justify-between rounded-2xl border border-white/10 bg-white/5 px-4 py-3 backdrop-blur">
-            <div>
-              <div className="text-xs uppercase tracking-[0.35em] text-amber-300/80">Elevate Automation</div>
-              <div className="text-sm text-white/60">Vehicle Poster • Sales Growth Systems</div>
-            </div>
-            <div className="hidden gap-6 text-sm text-white/70 md:flex">
-              <a href="#product" className="hover:text-white">Product</a>
-              <a href="#roadmap" className="hover:text-white">Roadmap</a>
-              <a href="#partners" className="hover:text-white">Partners</a>
-              <a href="#waitlists" className="hover:text-white">Waitlists</a>
-              <a href="#faq" className="hover:text-white">FAQ</a>
-            </div>
-          </nav>
-
-          <div className="grid gap-12 py-16 md:grid-cols-2 md:items-center md:py-24">
-            <div>
-              <div className="mb-4 inline-flex items-center rounded-full border border-amber-300/30 bg-amber-300/10 px-3 py-1 text-xs uppercase tracking-[0.25em] text-amber-200">
-                Beta access • founder pricing • dealership-ready direction
+        <div class="hero-panel">
+          <div class="panel-shell">
+            <div class="panel-top">
+              <div>
+                <div class="panel-label">PLATFORM DIRECTION</div>
+                <h2>Vehicle Poster Command Center</h2>
               </div>
-              <h1 className="max-w-3xl text-5xl font-semibold leading-tight tracking-tight md:text-7xl">
-                The premium posting engine for sales teams moving inventory on Facebook Marketplace.
-              </h1>
-              <p className="mt-6 max-w-2xl text-lg leading-8 text-white/70">
-                Elevate Automation starts with a faster Vehicle Poster for automotive sales professionals, then expands into the broader operating system for modern sales teams: dashboards, CRM, automation, media workflows, partner systems, and growth infrastructure.
-              </p>
-              <div className="mt-8 flex flex-col gap-4 sm:flex-row">
-                <a
-                  href="#waitlists"
-                  className="rounded-2xl bg-amber-300 px-6 py-4 text-sm font-semibold text-neutral-950 transition hover:scale-[1.01]"
-                >
-                  Join the waitlist
-                </a>
-                <a
-                  href="#product"
-                  className="rounded-2xl border border-white/15 bg-white/5 px-6 py-4 text-sm font-semibold text-white transition hover:bg-white/10"
-                >
-                  Explore the platform
-                </a>
-              </div>
-              <div className="mt-8 grid max-w-xl grid-cols-1 gap-3 sm:grid-cols-3">
-                {[
-                  "Built for automotive first",
-                  "Compliance-aware direction",
-                  "Partner and affiliate ready",
-                ].map((item) => (
-                  <div key={item} className="rounded-2xl border border-white/10 bg-white/5 p-4 text-sm text-white/75">
-                    {item}
-                  </div>
-                ))}
-              </div>
+              <div class="status-pill">Launch Mode</div>
             </div>
 
-            <div className="relative">
-              <div className="absolute -inset-3 rounded-[2rem] bg-amber-300/10 blur-2xl" />
-              <div className="relative rounded-[2rem] border border-white/10 bg-gradient-to-br from-white/10 to-white/5 p-5 shadow-2xl">
-                <div className="rounded-[1.5rem] border border-white/10 bg-neutral-900 p-5">
-                  <div className="flex items-center justify-between border-b border-white/10 pb-4">
-                    <div>
-                      <div className="text-xs uppercase tracking-[0.3em] text-amber-300">Dashboard Preview</div>
-                      <div className="mt-1 text-xl font-semibold">Vehicle Poster Command Center</div>
-                    </div>
-                    <div className="rounded-full border border-emerald-400/20 bg-emerald-400/10 px-3 py-1 text-xs text-emerald-300">
-                      Beta ready direction
-                    </div>
-                  </div>
+            <div class="panel-grid">
+              <div class="panel-card">
+                <h3>Current Focus</h3>
+                <ul>
+                  <li>Scan inventory faster</li>
+                  <li>Queue vehicles for posting</li>
+                  <li>Reduce repetitive manual work</li>
+                  <li>Prepare beta onboarding cleanly</li>
+                </ul>
+              </div>
 
-                  <div className="mt-5 grid gap-4 md:grid-cols-2">
-                    <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
-                      <div className="text-xs uppercase tracking-[0.25em] text-white/45">Posting flow</div>
-                      <div className="mt-3 space-y-3 text-sm text-white/75">
-                        {[
-                          "Scan dealer inventory",
-                          "Build queue",
-                          "Open Marketplace assistant",
-                          "Auto-fill listing fields",
-                          "Apply province compliance logic",
-                          "Publish faster",
-                        ].map((step, idx) => (
-                          <div key={step} className="flex items-center gap-3">
-                            <div className="flex h-7 w-7 items-center justify-center rounded-full bg-amber-300 text-xs font-semibold text-neutral-950">{idx + 1}</div>
-                            <span>{step}</span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
+              <div class="panel-card">
+                <h3>Built For Next</h3>
+                <ul>
+                  <li>Compliance-aware workflows</li>
+                  <li>User and dealership settings</li>
+                  <li>Licensing and access control</li>
+                  <li>Future dashboard ecosystem</li>
+                </ul>
+              </div>
 
-                    <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
-                      <div className="text-xs uppercase tracking-[0.25em] text-white/45">System blocks</div>
-                      <div className="mt-3 space-y-3 text-sm text-white/75">
-                        {[
-                          "Licensing and secure access",
-                          "User and dealership settings",
-                          "Waitlist capture",
-                          "Partner / affiliate onboarding",
-                          "Demo and walkthrough sections",
-                          "Expansion into CRM and automation",
-                        ].map((item) => (
-                          <div key={item} className="rounded-xl border border-white/10 bg-black/20 px-3 py-2">
-                            {item}
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
+              <div class="panel-card wide">
+                <h3>Future Expansion</h3>
+                <div class="future-tags">
+                  <span>CRM</span>
+                  <span>Mass SMS</span>
+                  <span>Scheduler</span>
+                  <span>AI Media Tools</span>
+                  <span>Affiliate Portal</span>
+                  <span>Analytics</span>
                 </div>
               </div>
             </div>
           </div>
         </div>
-      </section>
+      </div>
+    </section>
 
-      <section id="product" className="mx-auto max-w-7xl px-6 py-20">
-        <div className="mb-12 max-w-3xl">
-          <div className="text-xs uppercase tracking-[0.35em] text-amber-300">Product position</div>
-          <h2 className="mt-4 text-3xl font-semibold md:text-5xl">A cleaner, sharper alternative to generic listing tools.</h2>
-          <p className="mt-4 text-lg leading-8 text-white/70">
-            The positioning is straightforward: speed, control, cleaner UX, compliance-aware execution, and a visible path from listing software into a true sales automation platform.
+    <section id="product" class="section">
+      <div class="container">
+        <div class="section-heading">
+          <div class="section-kicker">PRODUCT POSITIONING</div>
+          <h2>A sharper alternative to generic listing tools.</h2>
+          <p>
+            Elevate Automation is being built to do more than help a salesperson
+            get a listing live. The objective is cleaner execution, higher posting
+            output, stronger dealership credibility, and a path into a full sales
+            operating system.
           </p>
         </div>
-        <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-4">
-          {features.map((feature) => (
-            <div key={feature.title} className="rounded-[1.75rem] border border-white/10 bg-white/[0.03] p-6 shadow-lg">
-              <div className="mb-3 inline-flex rounded-full border border-amber-300/20 bg-amber-300/10 px-3 py-1 text-xs uppercase tracking-[0.25em] text-amber-200">
-                Core advantage
-              </div>
-              <h3 className="text-xl font-semibold">{feature.title}</h3>
-              <p className="mt-3 leading-7 text-white/65">{feature.body}</p>
-            </div>
-          ))}
-        </div>
-      </section>
 
-      <section className="border-y border-white/10 bg-white/[0.02]">
-        <div className="mx-auto grid max-w-7xl gap-6 px-6 py-20 md:grid-cols-3">
-          {pillars.map((pillar) => (
-            <div key={pillar.title} className="rounded-[1.75rem] border border-white/10 bg-neutral-950/60 p-6">
-              <div className="text-xs uppercase tracking-[0.35em] text-amber-300">{pillar.kicker}</div>
-              <h3 className="mt-4 text-2xl font-semibold">{pillar.title}</h3>
-              <p className="mt-4 leading-7 text-white/70">{pillar.text}</p>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      <section className="mx-auto max-w-7xl px-6 py-20">
-        <div className="grid gap-8 lg:grid-cols-[1.05fr_0.95fr]">
-          <div>
-            <div className="text-xs uppercase tracking-[0.35em] text-amber-300">Why this site structure works</div>
-            <h2 className="mt-4 text-3xl font-semibold md:text-5xl">It sells the current product without boxing in the future company.</h2>
-            <p className="mt-5 max-w-3xl text-lg leading-8 text-white/70">
-              This matters because the website cannot look like a one-feature Chrome extension if your actual direction is a larger sales operating system. The message needs to convert current beta users while also legitimizing the broader roadmap for dealerships, investors, affiliates, and future verticals.
-            </p>
-            <div className="mt-8 space-y-4">
-              {proofCards.map((card) => (
-                <div key={card} className="rounded-2xl border border-white/10 bg-white/[0.03] p-5 text-white/80">
-                  {card}
-                </div>
-              ))}
-            </div>
-          </div>
-
-          <div className="rounded-[2rem] border border-white/10 bg-gradient-to-b from-amber-300/10 to-transparent p-6">
-            <div className="rounded-[1.5rem] border border-white/10 bg-neutral-950 p-6">
-              <div className="text-xs uppercase tracking-[0.35em] text-amber-300">Planned media zone</div>
-              <h3 className="mt-3 text-2xl font-semibold">Demo block ready</h3>
-              <p className="mt-3 leading-7 text-white/65">
-                This section is intentionally prepared for walkthrough videos, before/after inventory scans, beta clips, and future dashboard demos.
-              </p>
-              <div className="mt-6 grid gap-4 sm:grid-cols-2">
-                {[
-                  "Walkthrough video",
-                  "Before / after proof",
-                  "Beta testimonials",
-                  "Dashboard preview",
-                ].map((item) => (
-                  <div key={item} className="rounded-2xl border border-dashed border-white/15 bg-white/[0.03] p-6 text-center text-sm text-white/55">
-                    {item}
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <section id="partners" className="mx-auto max-w-7xl px-6 py-20">
-        <div className="mb-10 max-w-3xl">
-          <div className="text-xs uppercase tracking-[0.35em] text-amber-300">Built for multiple audiences</div>
-          <h2 className="mt-4 text-3xl font-semibold md:text-5xl">One site. Multiple conversion paths.</h2>
-        </div>
-        <div className="grid gap-6 lg:grid-cols-3">
-          {audiences.map((audience) => (
-            <div key={audience.title} className="rounded-[1.75rem] border border-white/10 bg-white/[0.03] p-6">
-              <h3 className="text-2xl font-semibold">{audience.title}</h3>
-              <div className="mt-5 space-y-3 text-white/70">
-                {audience.points.map((point) => (
-                  <div key={point} className="rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-sm">
-                    {point}
-                  </div>
-                ))}
-              </div>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      <section id="waitlists" className="border-y border-white/10 bg-white/[0.02]">
-        <div className="mx-auto max-w-7xl px-6 py-20">
-          <div className="mb-10 max-w-3xl">
-            <div className="text-xs uppercase tracking-[0.35em] text-amber-300">Acquisition engine</div>
-            <h2 className="mt-4 text-3xl font-semibold md:text-5xl">Separate waitlists for users and growth partners.</h2>
-            <p className="mt-4 text-lg leading-8 text-white/70">
-              Keep these distinct. Beta users and founding partners are not the same audience and should not enter through the same funnel.
+        <div class="feature-grid">
+          <div class="feature-card">
+            <h3>Post inventory faster</h3>
+            <p>
+              Reduce time spent on repetitive listing actions and move toward a
+              cleaner, more scalable posting workflow.
             </p>
           </div>
 
-          <div className="grid gap-6 lg:grid-cols-2">
-            <div className="rounded-[2rem] border border-white/10 bg-neutral-950 p-6">
-              <div className="text-xs uppercase tracking-[0.35em] text-amber-300">Beta waitlist</div>
-              <h3 className="mt-3 text-2xl font-semibold">Get early access to Elevate Automation</h3>
-              <p className="mt-3 leading-7 text-white/65">
-                For automotive salespeople and dealerships who want early access, onboarding priority, founder pricing visibility, and beta communication.
-              </p>
-              <div className="mt-6 grid gap-3">
-                <input className="rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-4 outline-none placeholder:text-white/30" placeholder="First name" />
-                <input className="rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-4 outline-none placeholder:text-white/30" placeholder="Email" />
-                <input className="rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-4 outline-none placeholder:text-white/30" placeholder="Dealership / company" />
-                <button className="rounded-2xl bg-amber-300 px-5 py-4 font-semibold text-neutral-950">Join beta waitlist</button>
-              </div>
-            </div>
-
-            <div className="rounded-[2rem] border border-white/10 bg-neutral-950 p-6">
-              <div className="text-xs uppercase tracking-[0.35em] text-amber-300">Partner / affiliate waitlist</div>
-              <h3 className="mt-3 text-2xl font-semibold">Apply as a founding partner</h3>
-              <p className="mt-3 leading-7 text-white/65">
-                For connectors, dealership leaders, creators, and affiliates who can refer high-quality users and want to participate in the rollout early.
-              </p>
-              <div className="mt-6 grid gap-3">
-                <input className="rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-4 outline-none placeholder:text-white/30" placeholder="Full name" />
-                <input className="rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-4 outline-none placeholder:text-white/30" placeholder="Email" />
-                <input className="rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-4 outline-none placeholder:text-white/30" placeholder="Audience / dealership / network" />
-                <button className="rounded-2xl border border-amber-300/30 bg-amber-300/10 px-5 py-4 font-semibold text-amber-200">Join partner waitlist</button>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <section id="roadmap" className="mx-auto max-w-7xl px-6 py-20">
-        <div className="grid gap-8 lg:grid-cols-[0.9fr_1.1fr]">
-          <div>
-            <div className="text-xs uppercase tracking-[0.35em] text-amber-300">Roadmap framing</div>
-            <h2 className="mt-4 text-3xl font-semibold md:text-5xl">This should communicate immediate utility and strategic depth.</h2>
-            <p className="mt-5 text-lg leading-8 text-white/70">
-              The website needs to make phase one credible without understating what the business is becoming.
+          <div class="feature-card">
+            <h3>Built for salespeople</h3>
+            <p>
+              The workflow is designed for people actively moving units, not for
+              generic marketers with no dealership context.
             </p>
           </div>
-          <div className="grid gap-3">
-            {roadmap.map((item, idx) => (
-              <div key={item} className="flex items-center gap-4 rounded-2xl border border-white/10 bg-white/[0.03] p-4">
-                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-amber-300 font-semibold text-neutral-950">{idx + 1}</div>
-                <div className="text-white/80">{item}</div>
-              </div>
-            ))}
+
+          <div class="feature-card">
+            <h3>Compliance-aware direction</h3>
+            <p>
+              Structured around real dealer needs, including province-based
+              disclosure logic and cleaner operational control.
+            </p>
+          </div>
+
+          <div class="feature-card">
+            <h3>Platform, not just a tool</h3>
+            <p>
+              Vehicle Poster is phase one. The company direction extends into
+              dashboards, CRM, automation, partner systems, and team infrastructure.
+            </p>
           </div>
         </div>
-      </section>
+      </div>
+    </section>
 
-      <section className="border-y border-white/10 bg-white/[0.02]">
-        <div className="mx-auto max-w-7xl px-6 py-20">
-          <div className="grid gap-6 lg:grid-cols-3">
-            <div className="rounded-[1.75rem] border border-white/10 bg-neutral-950 p-6">
-              <div className="text-xs uppercase tracking-[0.35em] text-amber-300">Licensing</div>
-              <h3 className="mt-3 text-2xl font-semibold">Secure access architecture</h3>
-              <p className="mt-3 leading-7 text-white/65">
-                This section is positioned for license-key validation today and account-based access later as the broader platform matures.
-              </p>
+    <section id="why" class="section section-dark">
+      <div class="container two-col">
+        <div>
+          <div class="section-kicker">WHY ELEVATE</div>
+          <h2>Launch with a real use case. Scale into the larger company vision.</h2>
+          <p class="mb-24">
+            The website needs to support two realities at once:
+            a high-utility launch product today, and a broader automation company tomorrow.
+          </p>
+
+          <div class="stack-list">
+            <div class="stack-item">
+              <strong>Now:</strong> Vehicle Poster for automotive sales professionals
             </div>
-            <div className="rounded-[1.75rem] border border-white/10 bg-neutral-950 p-6">
-              <div className="text-xs uppercase tracking-[0.35em] text-amber-300">Compliance</div>
-              <h3 className="mt-3 text-2xl font-semibold">Province-aware workflow</h3>
-              <p className="mt-3 leading-7 text-white/65">
-                Supports the narrative that the tool is designed for real dealership deployment rather than casual consumer posting.
-              </p>
+            <div class="stack-item">
+              <strong>Next:</strong> user setup, licensing, compliance logic, team visibility
             </div>
-            <div className="rounded-[1.75rem] border border-white/10 bg-neutral-950 p-6">
-              <div className="text-xs uppercase tracking-[0.35em] text-amber-300">Expansion</div>
-              <h3 className="mt-3 text-2xl font-semibold">Future account ecosystem</h3>
-              <p className="mt-3 leading-7 text-white/65">
-                Prepares users for a migration from license key workflows into dashboard login, subscriptions, partner visibility, and team systems.
-              </p>
+            <div class="stack-item">
+              <strong>Later:</strong> CRM, follow-up systems, scheduler, mass SMS, AI tools, affiliate systems
             </div>
           </div>
         </div>
-      </section>
 
-      <section id="faq" className="mx-auto max-w-7xl px-6 py-20">
-        <div className="mb-10 max-w-3xl">
-          <div className="text-xs uppercase tracking-[0.35em] text-amber-300">FAQ</div>
-          <h2 className="mt-4 text-3xl font-semibold md:text-5xl">Questions the landing page should answer immediately.</h2>
+        <div class="proof-box">
+          <div class="proof-item">Cleaner than low-end posting bots</div>
+          <div class="proof-item">Positioned for dealership credibility</div>
+          <div class="proof-item">Prepared for beta users and future founder access</div>
+          <div class="proof-item">Built around launch now and systems later</div>
         </div>
-        <div className="grid gap-4">
-          {faqs.map((faq) => (
-            <div key={faq.q} className="rounded-[1.5rem] border border-white/10 bg-white/[0.03] p-6">
-              <h3 className="text-xl font-semibold">{faq.q}</h3>
-              <p className="mt-3 leading-7 text-white/68">{faq.a}</p>
-            </div>
-          ))}
-        </div>
-      </section>
+      </div>
+    </section>
 
-      <section className="mx-auto max-w-7xl px-6 pb-20">
-        <div className="rounded-[2rem] border border-amber-300/20 bg-gradient-to-r from-amber-300/10 via-white/[0.03] to-amber-300/10 p-8 md:p-10">
-          <div className="grid gap-8 md:grid-cols-[1fr_auto] md:items-center">
-            <div>
-              <div className="text-xs uppercase tracking-[0.35em] text-amber-300">Final CTA</div>
-              <h2 className="mt-3 text-3xl font-semibold md:text-5xl">Launch with the current tool. Sell the larger vision.</h2>
-              <p className="mt-4 max-w-3xl text-lg leading-8 text-white/70">
-                The strongest version of this site makes the Vehicle Poster feel real today while clearly signaling the broader operating system you are building next.
-              </p>
-            </div>
-            <a href="#waitlists" className="rounded-2xl bg-amber-300 px-6 py-4 text-center font-semibold text-neutral-950">
-              Get priority access
-            </a>
+    <section id="launch" class="section">
+      <div class="container">
+        <div class="section-heading">
+          <div class="section-kicker">LAUNCH POSITIONING</div>
+          <h2>Built around current launch goals and future company expansion.</h2>
+          <p>
+            Elevate Automation is being structured to support immediate beta launch,
+            founder-style early access, dealership conversations, and future rollout
+            into a larger software ecosystem.
+          </p>
+        </div>
+
+        <div class="timeline-grid">
+          <div class="timeline-card">
+            <div class="timeline-label">PHASE 1</div>
+            <h3>Vehicle Poster Launch</h3>
+            <p>
+              Get the current posting engine stable, onboard early users, and gather proof.
+            </p>
+          </div>
+
+          <div class="timeline-card">
+            <div class="timeline-label">PHASE 2</div>
+            <h3>Dealer & User Infrastructure</h3>
+            <p>
+              Improve account systems, compliance logic, access control, and admin visibility.
+            </p>
+          </div>
+
+          <div class="timeline-card">
+            <div class="timeline-label">PHASE 3</div>
+            <h3>Growth Systems Platform</h3>
+            <p>
+              Expand into CRM, mass SMS, scheduler, AI media workflows, analytics, and partner dashboards.
+            </p>
           </div>
         </div>
-      </section>
+      </div>
+    </section>
+
+    <section id="partners" class="section section-dark">
+      <div class="container">
+        <div class="section-heading">
+          <div class="section-kicker">FOUNDING PARTNERS / AFFILIATES</div>
+          <h2>Built for users, dealership leaders, and growth partners.</h2>
+          <p>
+            The launch structure is being designed to support not only salespeople,
+            but also dealership teams, managers, connectors, and founding partners
+            who can help drive adoption.
+          </p>
+        </div>
+
+        <div class="audience-grid">
+          <div class="audience-card">
+            <h3>Salespeople</h3>
+            <ul>
+              <li>Post faster</li>
+              <li>Create more exposure</li>
+              <li>Spend less time on repetitive work</li>
+              <li>Prepare for future automation tools</li>
+            </ul>
+          </div>
+
+          <div class="audience-card">
+            <h3>Dealerships</h3>
+            <ul>
+              <li>Standardize listing execution</li>
+              <li>Support team adoption</li>
+              <li>Improve workflow consistency</li>
+              <li>Prepare for broader systems rollout</li>
+            </ul>
+          </div>
+
+          <div class="audience-card">
+            <h3>Founding Partners</h3>
+            <ul>
+              <li>Early positioning in the ecosystem</li>
+              <li>Structured referral potential</li>
+              <li>Future payout visibility and partner tools</li>
+              <li>Access to a growth-focused platform direction</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="waitlists" class="section">
+      <div class="container">
+        <div class="section-heading">
+          <div class="section-kicker">EARLY ACCESS</div>
+          <h2>Separate paths for users and founding partners.</h2>
+          <p>
+            Keep these audiences distinct. Early users and growth partners should not be mixed in the same intake.
+          </p>
+        </div>
+
+        <div class="waitlist-grid">
+          <div class="waitlist-card">
+            <div class="card-label">BETA WAITLIST</div>
+            <h3>Get early access to Elevate Automation</h3>
+            <p>
+              For automotive salespeople, dealership staff, and managers interested in launch access and product updates.
+            </p>
+
+            <form id="beta-waitlist-form" class="waitlist-form">
+              <input type="text" name="first_name" placeholder="First name" required />
+              <input type="text" name="last_name" placeholder="Last name" required />
+              <input type="email" name="email" placeholder="Email" required />
+              <input type="text" name="phone" placeholder="Phone number" />
+              <input type="text" name="company" placeholder="Dealership / company" />
+              <input type="text" name="role" placeholder="Role" />
+              <input type="text" name="province" placeholder="Province" />
+              <input type="text" name="vehicles_per_week" placeholder="Vehicles posted per week" />
+              <button type="submit" class="btn btn-gold full-width">Join Beta Waitlist</button>
+              <p class="form-note">Form connection is added in Phase 2.</p>
+            </form>
+          </div>
+
+          <div class="waitlist-card partner">
+            <div class="card-label">FOUNDING PARTNER WAITLIST</div>
+            <h3>Apply as a founding partner / affiliate</h3>
+            <p>
+              For managers, connectors, creators, and operators who can help grow the platform through high-quality referrals and partnerships.
+            </p>
+
+            <form id="partner-waitlist-form" class="waitlist-form">
+              <input type="text" name="first_name" placeholder="First name" required />
+              <input type="text" name="last_name" placeholder="Last name" required />
+              <input type="email" name="email" placeholder="Email" required />
+              <input type="text" name="phone" placeholder="Phone number" />
+              <input type="text" name="company" placeholder="Company / audience / network" />
+              <input type="text" name="role" placeholder="Role" />
+              <input type="text" name="province" placeholder="Province" />
+              <input type="text" name="audience_size" placeholder="Estimated referral reach" />
+              <button type="submit" class="btn btn-outline full-width">Join Partner Waitlist</button>
+              <p class="form-note">Form connection is added in Phase 2.</p>
+            </form>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="roadmap" class="section section-dark">
+      <div class="container">
+        <div class="section-heading">
+          <div class="section-kicker">ROADMAP</div>
+          <h2>The launch product is only the entry point.</h2>
+          <p>
+            The current objective is to launch a strong core posting engine while laying the foundation for a much larger platform.
+          </p>
+        </div>
+
+        <div class="roadmap-list">
+          <div class="roadmap-row"><span>01</span><p>Vehicle Poster launch and beta onboarding</p></div>
+          <div class="roadmap-row"><span>02</span><p>Province-aware compliance workflow</p></div>
+          <div class="roadmap-row"><span>03</span><p>Licensing and access control system</p></div>
+          <div class="roadmap-row"><span>04</span><p>User and dealership setup infrastructure</p></div>
+          <div class="roadmap-row"><span>05</span><p>Affiliate / partner tracking and payout logic</p></div>
+          <div class="roadmap-row"><span>06</span><p>Dashboard ecosystem, analytics, CRM, scheduler, mass SMS, AI tools</p></div>
+        </div>
+      </div>
+    </section>
+
+    <section id="faq" class="section">
+      <div class="container">
+        <div class="section-heading">
+          <div class="section-kicker">FAQ</div>
+          <h2>What this website should answer immediately.</h2>
+        </div>
+
+        <div class="faq-grid">
+          <div class="faq-card">
+            <h3>Who is Elevate Automation for?</h3>
+            <p>
+              Initially automotive sales professionals, dealership staff, and teams.
+              The broader company direction expands into a larger sales automation platform.
+            </p>
+          </div>
+
+          <div class="faq-card">
+            <h3>What is live right now?</h3>
+            <p>
+              The current focus is the Vehicle Poster launch, waitlist capture, access systems,
+              and preparing the infrastructure around the product.
+            </p>
+          </div>
+
+          <div class="faq-card">
+            <h3>Why separate waitlists?</h3>
+            <p>
+              Beta users and founding partners serve different functions and should enter through different systems from day one.
+            </p>
+          </div>
+
+          <div class="faq-card">
+            <h3>Is this just a posting tool?</h3>
+            <p>
+              No. The posting engine is the launch wedge. The broader company is being built around automation, systems, and sales infrastructure.
+            </p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section final-cta-section">
+      <div class="container final-cta">
+        <div>
+          <div class="section-kicker">NEXT STEP</div>
+          <h2>Launch the current product. Build the larger platform correctly.</h2>
+          <p>
+            Elevate Automation is being positioned to win at launch while remaining structured for long-term scale.
+          </p>
+        </div>
+        <a href="#waitlists" class="btn btn-gold">Get Priority Access</a>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container footer-wrap">
+      <div>
+        <div class="footer-brand">Elevate Automation</div>
+        <div class="footer-sub">Premium posting and sales automation systems.</div>
+      </div>
+
+      <div class="footer-links">
+        <a href="privacy.html">Privacy</a>
+        <a href="terms.html">Terms</a>
+        <a href="refund.html">Refund</a>
+      </div>
     </div>
-  );
-}
+  </footer>
+
+  <script src="script.js"></script>
+</body>
+</html>
