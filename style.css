@@ -703,7 +703,11 @@ a {
   align-items: center;
   background: linear-gradient(90deg, rgba(212,175,55,0.10), rgba(255,255,255,0.03), rgba(212,175,55,0.10));
 }
-
+.final-cta-actions {
+  display: flex;
+  gap: 14px;
+  flex-wrap: wrap;
+}
 .site-footer {
   border-top: 1px solid var(--line);
   padding: 28px 0;
@@ -802,10 +806,21 @@ a {
 
   .panel-top,
   .footer-wrap,
-  .referral-banner {
-    flex-direction: column;
-    align-items: flex-start;
+function showReferralBanner() {
+  const banner = document.getElementById("referral-banner");
+  const display = document.getElementById("referral-code-display");
+  const code = getReferralCode();
+
+  if (!banner || !display) return;
+
+  if (code && code.trim()) {
+    display.textContent = code;
+    banner.classList.remove("hidden");
+  } else {
+    banner.classList.add("hidden");
+    display.textContent = "";
   }
+}
 
   .roadmap-row,
   .step-row {
