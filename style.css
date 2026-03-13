@@ -840,3 +840,23 @@ function showReferralBanner() {
     line-height: 1.02;
   }
 }
+.dashboard-list{
+display:grid;
+gap:10px;
+font-size:14px;
+}
+
+.dashboard-spacing-top{
+margin-top:20px;
+}
+
+.dashboard-actions{
+display:grid;
+gap:12px;
+margin-top:16px;
+}
+
+.feedback-status{
+font-size:13px;
+opacity:0.8;
+}
