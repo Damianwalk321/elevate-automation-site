@@ -1,157 +1,329 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Elevate Automation Dashboard</title>
-  <meta
-    name="description"
-    content="Elevate Automation user dashboard."
-  />
-  <link rel="stylesheet" href="style.css" />
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<title>Elevate Automation Dashboard</title>
+
+<link rel="stylesheet" href="style.css">
 </head>
+
 <body>
-  <header class="site-header">
-    <div class="container nav-wrap">
-      <div class="brand-block">
-        <div class="brand-kicker">ELEVATE AUTOMATION</div>
-        <div class="brand-sub">Dashboard • License • Usage • Referrals</div>
-      </div>
 
-      <nav class="main-nav">
-        <a href="index.html">Main Site</a>
-        <a href="beta.html">Beta Portal</a>
-      </nav>
+<header class="site-header">
+<div class="container nav-wrap">
 
-      <a href="index.html#pricing" class="btn btn-outline nav-cta">Pricing</a>
-    </div>
-  </header>
-
-  <main>
-    <section class="hero-section beta-hero">
-      <div class="container">
-        <div class="section-heading">
-          <div class="section-kicker">DASHBOARD</div>
-          <h2>Access your account, license, usage limits, and referral tools.</h2>
-          <p>
-            This is the first version of the Elevate Automation dashboard. Enter your account email to load your current access details.
-          </p>
-        </div>
-
-        <div class="portal-box">
-          <form id="dashboard-lookup-form" class="beta-form">
-            <div class="beta-form-grid">
-              <input type="email" id="lookup-email" placeholder="Enter your account email" required />
-              <button type="submit" class="btn btn-gold">Load Dashboard</button>
-            </div>
-            <div id="dashboard-status" class="feedback-status"></div>
-          </form>
-        </div>
-      </div>
-    </section>
-
-    <section class="section">
-      <div class="container">
-        <div id="dashboard-content" class="hidden">
-          <div class="resource-grid">
-            <div class="portal-box">
-              <div class="card-kicker">ACCOUNT</div>
-              <h3>Profile</h3>
-              <div class="dashboard-list">
-  <div><strong>Daily Limit:</strong> <span id="dash-daily-limit">—</span></div>
-  <div><strong>Weekly Limit:</strong> <span id="dash-weekly-limit">—</span></div>
-  <div><strong>Cooldown:</strong> <span id="dash-cooldown">—</span></div>
+<div class="brand-block">
+<div class="brand-kicker">ELEVATE AUTOMATION</div>
+<div class="brand-sub">User Dashboard</div>
 </div>
-              </div>
-            </div>
 
-            <div class="portal-box">
-              <div class="card-kicker">SUBSCRIPTION</div>
-              <h3>Plan Status</h3>
-              <div class="dashboard-list">
-                <div><strong>Plan:</strong> <span id="dash-plan">—</span></div>
-                <div><strong>Subscription:</strong> <span id="dash-subscription-status">—</span></div>
-                <div><strong>Billing:</strong> <span id="dash-billing-status">—</span></div>
-              </div>
-            </div>
-          </div>
+<nav class="main-nav">
+<a href="index.html">Main Site</a>
+<a href="beta.html">Beta Portal</a>
+</nav>
 
-          <div class="resource-grid dashboard-spacing-top">
-            <div class="portal-box">
-              <div class="card-kicker">LICENSE</div>
-              <h3>Access Key</h3>
-              <div class="dashboard-list">
-                <div><strong>License Key:</strong> <span id="dash-license-key">—</span></div>
-                <div><strong>Access Type:</strong> <span id="dash-access-type">—</span></div>
-                <div><strong>Status:</strong> <span id="dash-license-status">—</span></div>
-              </div>
-            </div>
+</div>
+</header>
 
-            <div class="portal-box">
-              <div class="card-kicker">USAGE LIMITS</div>
-              <h3>Posting Limits</h3>
-              <div class="dashboard-list">
-                <div><strong>Daily Limit:</strong> <span id="dash-daily-limit">—</span></div>
-                <div><strong>Weekly Limit:</strong> <span id="dash-weekly-limit">—</span></div>
-                <div><strong>Cooldown:</strong> <span id="dash-cooldown">—</span></div>
-              </div>
-            </div>
-          </div>
+<main>
 
-          <div class="resource-grid dashboard-spacing-top">
-            <div class="portal-box">
-              <div class="card-kicker">REFERRALS</div>
-              <h3>Your Referral Code</h3>
-              <div class="dashboard-list">
-                <div><strong>Code:</strong> <span id="dash-referral-code">—</span></div>
-                <div><strong>Eligible for Commission:</strong> <span id="dash-referral-eligible">—</span></div>
-                <div><strong>Referral Link:</strong> <span id="dash-referral-link">—</span></div>
-              </div>
-            </div>
+<section class="hero-section beta-hero">
 
-            <div class="portal-box">
-              <div class="card-kicker">RESOURCES</div>
-              <h3>Quick Access</h3>
-              <div class="portal-links">
-                <a class="portal-link" href="beta.html">
-                  <span>Open Beta Portal</span>
-                  <span>→</span>
-                </a>
-                <a class="portal-link" href="#">
-                  <span>Download Extension</span>
-                  <span>→</span>
-                </a>
-                <a class="portal-link" href="#">
-                  <span>Install Guide</span>
-                  <span>→</span>
-                </a>
-                <a class="portal-link" href="mailto:ElevateGPmarketing@gmail.com">
-                  <span>Support</span>
-                  <span>→</span>
-                </a>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </section>
-  </main>
+<div class="container">
 
-  <footer class="site-footer">
-    <div class="container footer-wrap">
-      <div>
-        <div class="footer-brand">Elevate Automation</div>
-        <div class="footer-sub">Dashboard V1</div>
-      </div>
+<div class="section-heading">
 
-      <div class="footer-links">
-        <a href="index.html">Main Site</a>
-        <a href="beta.html">Beta Portal</a>
-        <a href="privacy.html">Privacy</a>
-      </div>
-    </div>
-  </footer>
+<div class="section-kicker">
+DASHBOARD
+</div>
 
-  <script src="dashboard.js"></script>
+<h2>
+Access your account, license, usage limits and referral tools.
+</h2>
+
+<p>
+Enter the email used during checkout to load your dashboard.
+</p>
+
+</div>
+
+
+<div class="portal-box">
+
+<form id="dashboard-lookup-form" class="beta-form">
+
+<div class="beta-form-grid">
+
+<input
+type="email"
+id="lookup-email"
+placeholder="Enter your account email"
+required
+>
+
+<button
+type="submit"
+class="btn btn-gold"
+>
+Load Dashboard
+</button>
+
+</div>
+
+<div id="dashboard-status" class="feedback-status"></div>
+
+</form>
+
+</div>
+
+</div>
+
+</section>
+
+
+<section class="section">
+
+<div class="container">
+
+<div id="dashboard-content" class="hidden">
+
+<div class="resource-grid">
+
+<div class="portal-box">
+
+<div class="card-kicker">ACCOUNT</div>
+
+<h3>Profile</h3>
+
+<div class="dashboard-list">
+
+<div>
+<strong>Name:</strong>
+<span id="dash-name">—</span>
+</div>
+
+<div>
+<strong>Email:</strong>
+<span id="dash-email">—</span>
+</div>
+
+<div>
+<strong>Company:</strong>
+<span id="dash-company">—</span>
+</div>
+
+<div>
+<strong>Province:</strong>
+<span id="dash-province">—</span>
+</div>
+
+</div>
+
+</div>
+
+
+<div class="portal-box">
+
+<div class="card-kicker">SUBSCRIPTION</div>
+
+<h3>Plan Status</h3>
+
+<div class="dashboard-list">
+
+<div>
+<strong>Plan:</strong>
+<span id="dash-plan">—</span>
+</div>
+
+<div>
+<strong>Subscription:</strong>
+<span id="dash-subscription-status">—</span>
+</div>
+
+<div>
+<strong>Billing:</strong>
+<span id="dash-billing-status">—</span>
+</div>
+
+</div>
+
+</div>
+
+</div>
+
+
+
+<div class="resource-grid dashboard-spacing-top">
+
+<div class="portal-box">
+
+<div class="card-kicker">LICENSE</div>
+
+<h3>Access Key</h3>
+
+<div class="dashboard-list">
+
+<div>
+<strong>License Key:</strong>
+<span id="dash-license-key">—</span>
+</div>
+
+<div>
+<strong>Access Type:</strong>
+<span id="dash-access-type">—</span>
+</div>
+
+<div>
+<strong>Status:</strong>
+<span id="dash-license-status">—</span>
+</div>
+
+</div>
+
+</div>
+
+
+
+<div class="portal-box">
+
+<div class="card-kicker">USAGE LIMITS</div>
+
+<h3>Posting Limits</h3>
+
+<div class="dashboard-list">
+
+<div>
+<strong>Daily Limit:</strong>
+<span id="dash-daily-limit">—</span>
+</div>
+
+<div>
+<strong>Weekly Limit:</strong>
+<span id="dash-weekly-limit">—</span>
+</div>
+
+<div>
+<strong>Cooldown:</strong>
+<span id="dash-cooldown">—</span>
+</div>
+
+<div>
+<strong>Posts Today:</strong>
+<span id="dash-posts-today">—</span>
+</div>
+
+<div>
+<strong>Posts This Week:</strong>
+<span id="dash-posts-week">—</span>
+</div>
+
+<div>
+<strong>Remaining Today:</strong>
+<span id="dash-remaining-today">—</span>
+</div>
+
+<div>
+<strong>Remaining Week:</strong>
+<span id="dash-remaining-week">—</span>
+</div>
+
+</div>
+
+</div>
+
+</div>
+
+
+
+<div class="resource-grid dashboard-spacing-top">
+
+<div class="portal-box">
+
+<div class="card-kicker">REFERRALS</div>
+
+<h3>Your Referral Code</h3>
+
+<div class="dashboard-list">
+
+<div>
+<strong>Code:</strong>
+<span id="dash-referral-code">—</span>
+</div>
+
+<div>
+<strong>Eligible:</strong>
+<span id="dash-referral-eligible">—</span>
+</div>
+
+<div>
+<strong>Referral Link:</strong>
+<span id="dash-referral-link">—</span>
+</div>
+
+</div>
+
+<div class="dashboard-actions">
+
+<button
+id="copy-referral-btn"
+class="btn btn-outline"
+type="button"
+>
+Copy Referral Link
+</button>
+
+<div id="copy-referral-status" class="feedback-status"></div>
+
+</div>
+
+</div>
+
+
+<div class="portal-box">
+
+<div class="card-kicker">RESOURCES</div>
+
+<h3>Quick Access</h3>
+
+<div class="portal-links">
+
+<a class="portal-link" href="beta.html">
+<span>Open Beta Portal</span>
+<span>→</span>
+</a>
+
+<a class="portal-link" href="#">
+<span>Download Extension</span>
+<span>→</span>
+</a>
+
+<a class="portal-link" href="#">
+<span>Install Guide</span>
+<span>→</span>
+</a>
+
+<a class="portal-link" href="mailto:ElevateGPmarketing@gmail.com">
+<span>Support</span>
+<span>→</span>
+</a>
+
+</div>
+
+</div>
+
+</div>
+
+</div>
+
+</div>
+
+</section>
+
+</main>
+
+<script src="dashboard.js"></script>
+
 </body>
 </html>
