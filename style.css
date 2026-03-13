@@ -1,5 +1,4 @@
-
- :root {
+:root {
   --bg: #070707;
   --bg-soft: #111111;
   --panel: #121212;
@@ -78,7 +77,8 @@ a {
 .timeline-label,
 .card-label,
 .pricing-badge,
-.referral-label {
+.referral-label,
+.card-kicker {
   font-size: 12px;
   letter-spacing: 0.22em;
   text-transform: uppercase;
@@ -149,6 +149,10 @@ a {
   padding: 86px 0 56px;
 }
 
+.beta-hero {
+  padding-bottom: 64px;
+}
+
 .hero-grid {
   display: grid;
   grid-template-columns: 1.1fr 0.9fr;
@@ -164,10 +168,21 @@ a {
   max-width: 900px;
 }
 
+.hero-copy h2 {
+  margin: 0;
+  font-size: 28px;
+}
+
 .hero-text {
   max-width: 760px;
   font-size: 18px;
   color: var(--text-soft);
+}
+
+.note-text {
+  margin-top: 16px;
+  color: var(--text-soft);
+  font-size: 16px;
 }
 
 .hero-actions {
@@ -272,7 +287,10 @@ a {
 .audience-card h3,
 .faq-card h3,
 .waitlist-card h3,
-.pricing-card h3 {
+.pricing-card h3,
+.portal-box h3,
+.offer-box h3,
+.step-row h3 {
   margin-top: 0;
   margin-bottom: 12px;
 }
@@ -330,7 +348,10 @@ a {
 .timeline-card p,
 .faq-card p,
 .waitlist-card p,
-.pricing-card p {
+.pricing-card p,
+.portal-box p,
+.offer-box p,
+.step-row p {
   color: var(--text-soft);
   font-size: 18px;
 }
@@ -339,7 +360,10 @@ a {
 .timeline-grid,
 .audience-grid,
 .faq-grid,
-.pricing-grid {
+.pricing-grid,
+.beta-offer-grid,
+.resource-grid,
+.beta-expectation-grid {
   display: grid;
   gap: 18px;
   grid-template-columns: repeat(4, 1fr);
@@ -352,7 +376,9 @@ a {
 .waitlist-card,
 .proof-box,
 .final-cta,
-.pricing-card {
+.pricing-card,
+.portal-box,
+.offer-box {
   background: rgba(255, 255, 255, 0.03);
   border: 1px solid var(--line);
   border-radius: var(--radius);
@@ -363,7 +389,9 @@ a {
 .timeline-card,
 .audience-card,
 .faq-card,
-.pricing-card {
+.pricing-card,
+.portal-box,
+.offer-box {
   padding: 24px;
 }
 
@@ -379,7 +407,8 @@ a {
 }
 
 .stack-list,
-.roadmap-list {
+.roadmap-list,
+.step-list {
   display: grid;
   gap: 14px;
 }
@@ -462,7 +491,10 @@ a {
 }
 
 .pricing-card ul,
-.audience-card ul {
+.audience-card ul,
+.feature-card ul,
+.portal-box ul,
+.offer-box ul {
   margin: 0 0 18px;
   padding-left: 18px;
   color: var(--text-soft);
@@ -538,7 +570,8 @@ a {
   gap: 16px;
 }
 
-.roadmap-row span {
+.roadmap-row span,
+.step-number {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -548,6 +581,114 @@ a {
   background: linear-gradient(135deg, var(--gold), #f2d77a);
   color: #0b0b0b;
   font-weight: 700;
+}
+
+.step-row {
+  display: grid;
+  grid-template-columns: 70px 1fr;
+  gap: 16px;
+  align-items: start;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  padding: 18px;
+  box-shadow: var(--shadow);
+}
+
+.portal-links {
+  display: grid;
+  gap: 14px;
+  margin-top: 18px;
+}
+
+.portal-link {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 18px;
+  border-radius: 16px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--text-soft);
+}
+
+.portal-link:hover {
+  border-color: var(--line-strong);
+  color: var(--text);
+}
+
+.warning-box {
+  margin-top: 22px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--gold);
+  border-radius: 18px;
+  padding: 18px 20px;
+  color: var(--text-soft);
+  box-shadow: var(--shadow);
+}
+
+.offer-box {
+  background: linear-gradient(180deg, rgba(212,175,55,0.08), rgba(255,255,255,0.03));
+  border-color: var(--line-strong);
+}
+
+.big-offer {
+  font-size: 38px;
+  line-height: 1;
+  font-weight: 800;
+  margin: 10px 0 14px;
+  color: #f2d77a;
+}
+
+.beta-form {
+  display: grid;
+  gap: 14px;
+}
+
+.beta-form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+
+.beta-form input,
+.beta-form select,
+.beta-form textarea {
+  width: 100%;
+  min-height: 52px;
+  border-radius: 14px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text);
+  padding: 0 14px;
+  font-size: 15px;
+}
+
+.beta-form textarea {
+  min-height: 160px;
+  padding: 14px;
+  resize: vertical;
+}
+
+.beta-form input::placeholder,
+.beta-form textarea::placeholder {
+  color: rgba(255, 255, 255, 0.35);
+}
+
+.feedback-status {
+  min-height: 24px;
+  font-size: 14px;
+  color: var(--text-soft);
+}
+
+.feedback-status.success {
+  color: #c9f3de;
+}
+
+.feedback-status.error {
+  color: #ffd0d0;
 }
 
 .final-cta-section {
@@ -592,6 +733,18 @@ a {
   font-size: 14px;
 }
 
+.beta-offer-grid {
+  grid-template-columns: 1fr 1fr;
+}
+
+.resource-grid {
+  grid-template-columns: 1fr 1fr;
+}
+
+.beta-expectation-grid {
+  grid-template-columns: repeat(3, 1fr);
+}
+
 @media (max-width: 1100px) {
   .hero-grid,
   .two-col,
@@ -602,7 +755,10 @@ a {
   .audience-grid,
   .faq-grid,
   .pricing-grid,
-  .trust-strip {
+  .trust-strip,
+  .beta-offer-grid,
+  .resource-grid,
+  .beta-expectation-grid {
     grid-template-columns: 1fr 1fr;
   }
 
@@ -632,7 +788,11 @@ a {
   .faq-grid,
   .panel-grid,
   .pricing-grid,
-  .trust-strip {
+  .trust-strip,
+  .beta-offer-grid,
+  .resource-grid,
+  .beta-expectation-grid,
+  .beta-form-grid {
     grid-template-columns: 1fr;
   }
 
@@ -647,7 +807,8 @@ a {
     align-items: flex-start;
   }
 
-  .roadmap-row {
+  .roadmap-row,
+  .step-row {
     grid-template-columns: 1fr;
   }
 
