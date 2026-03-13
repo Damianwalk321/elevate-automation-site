@@ -1,0 +1,790 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Elevate Automation Beta Portal</title>
+  <meta
+    name="description"
+    content="Elevate Automation beta portal for testers, content partners, and early users."
+  />
+  <style>
+    :root {
+      --bg: #070707;
+      --bg-soft: #111111;
+      --panel: #121212;
+      --panel-2: #171717;
+      --line: rgba(255, 255, 255, 0.10);
+      --line-strong: rgba(212, 175, 55, 0.35);
+      --text: #ffffff;
+      --text-soft: rgba(255, 255, 255, 0.74);
+      --text-muted: rgba(255, 255, 255, 0.55);
+      --gold: #d4af37;
+      --gold-soft: rgba(212, 175, 55, 0.12);
+      --shadow: 0 24px 60px rgba(0, 0, 0, 0.35);
+      --radius: 22px;
+      --max: 1180px;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html {
+      scroll-behavior: smooth;
+    }
+
+    body {
+      margin: 0;
+      background:
+        radial-gradient(circle at top left, rgba(212, 175, 55, 0.10), transparent 28%),
+        radial-gradient(circle at 85% 10%, rgba(255, 255, 255, 0.05), transparent 18%),
+        var(--bg);
+      color: var(--text);
+      font-family: Arial, Helvetica, sans-serif;
+      line-height: 1.6;
+    }
+
+    a {
+      color: inherit;
+      text-decoration: none;
+    }
+
+    .container {
+      width: min(100% - 32px, var(--max));
+      margin: 0 auto;
+    }
+
+    .site-header {
+      position: sticky;
+      top: 0;
+      z-index: 20;
+      backdrop-filter: blur(18px);
+      background: rgba(7, 7, 7, 0.84);
+      border-bottom: 1px solid var(--line);
+    }
+
+    .nav-wrap {
+      min-height: 84px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 24px;
+    }
+
+    .brand-kicker,
+    .section-kicker,
+    .card-kicker {
+      font-size: 12px;
+      letter-spacing: 0.22em;
+      text-transform: uppercase;
+      color: var(--gold);
+    }
+
+    .brand-sub {
+      font-size: 13px;
+      color: var(--text-muted);
+    }
+
+    .main-nav {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 22px;
+    }
+
+    .main-nav a {
+      color: var(--text-soft);
+      font-size: 14px;
+    }
+
+    .main-nav a:hover {
+      color: var(--text);
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 50px;
+      padding: 0 22px;
+      border-radius: 16px;
+      font-weight: 700;
+      border: 1px solid transparent;
+      transition: 0.2s ease;
+      cursor: pointer;
+    }
+
+    .btn:hover {
+      transform: translateY(-1px);
+    }
+
+    .btn-gold {
+      background: linear-gradient(135deg, var(--gold), #f2d77a);
+      color: #0b0b0b;
+      box-shadow: 0 10px 28px rgba(212, 175, 55, 0.18);
+    }
+
+    .btn-outline {
+      background: rgba(255, 255, 255, 0.04);
+      border-color: var(--line);
+      color: var(--text);
+    }
+
+    .hero {
+      padding: 84px 0 48px;
+    }
+
+    .hero-grid {
+      display: grid;
+      grid-template-columns: 1.1fr 0.9fr;
+      gap: 30px;
+      align-items: center;
+    }
+
+    h1 {
+      font-size: clamp(42px, 7vw, 72px);
+      line-height: 0.98;
+      letter-spacing: -0.03em;
+      margin: 12px 0 18px;
+    }
+
+    .hero-copy p,
+    .section-heading p,
+    .panel p,
+    .card p,
+    .note {
+      color: var(--text-soft);
+      font-size: 18px;
+    }
+
+    .hero-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 14px;
+      margin-top: 26px;
+    }
+
+    .hero-points {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 14px;
+      margin-top: 28px;
+    }
+
+    .point {
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      padding: 16px;
+      color: var(--text-soft);
+      box-shadow: var(--shadow);
+    }
+
+    .panel {
+      background: linear-gradient(180deg, rgba(212,175,55,0.10), rgba(255,255,255,0.03));
+      padding: 1px;
+      border-radius: 28px;
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+
+    .panel-inner {
+      background: var(--panel);
+      padding: 28px;
+      border-radius: 28px;
+    }
+
+    .status-row {
+      display: flex;
+      justify-content: space-between;
+      gap: 18px;
+      align-items: flex-start;
+      margin-bottom: 20px;
+      padding-bottom: 18px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .status-pill {
+      padding: 10px 14px;
+      border-radius: 999px;
+      background: var(--gold-soft);
+      border: 1px solid var(--line-strong);
+      color: #f0d887;
+      white-space: nowrap;
+      font-size: 13px;
+    }
+
+    .panel-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+
+    .panel-card,
+    .card,
+    .portal-box {
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid var(--line);
+      border-radius: 20px;
+      box-shadow: var(--shadow);
+    }
+
+    .panel-card {
+      padding: 18px;
+      background: var(--panel-2);
+    }
+
+    .section {
+      padding: 78px 0;
+    }
+
+    .section-dark {
+      background: rgba(255, 255, 255, 0.025);
+      border-top: 1px solid var(--line);
+      border-bottom: 1px solid var(--line);
+    }
+
+    .section-heading {
+      max-width: 860px;
+      margin-bottom: 34px;
+    }
+
+    .section-heading h2,
+    .final-cta h2 {
+      margin: 10px 0 12px;
+      font-size: clamp(30px, 5vw, 52px);
+      line-height: 1.05;
+      letter-spacing: -0.02em;
+    }
+
+    .grid-3 {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 18px;
+    }
+
+    .grid-2 {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 18px;
+    }
+
+    .card,
+    .portal-box {
+      padding: 24px;
+    }
+
+    .card h3,
+    .portal-box h3 {
+      margin-top: 0;
+      margin-bottom: 12px;
+      font-size: 24px;
+    }
+
+    ul {
+      margin: 0;
+      padding-left: 18px;
+      color: var(--text-soft);
+    }
+
+    .offer-box {
+      background: linear-gradient(180deg, rgba(212,175,55,0.08), rgba(255,255,255,0.03));
+      border: 1px solid var(--line-strong);
+    }
+
+    .offer-box .big {
+      font-size: 38px;
+      line-height: 1;
+      font-weight: 800;
+      margin: 10px 0 14px;
+      color: #f2d77a;
+    }
+
+    .step-list {
+      display: grid;
+      gap: 14px;
+    }
+
+    .step {
+      display: grid;
+      grid-template-columns: 58px 1fr;
+      gap: 16px;
+      align-items: start;
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      padding: 18px;
+      box-shadow: var(--shadow);
+    }
+
+    .step-number {
+      width: 46px;
+      height: 46px;
+      border-radius: 50%;
+      display: inline-flex;
+      justify-content: center;
+      align-items: center;
+      background: linear-gradient(135deg, var(--gold), #f2d77a);
+      color: #0b0b0b;
+      font-weight: 800;
+    }
+
+    .portal-links {
+      display: grid;
+      gap: 14px;
+      margin-top: 18px;
+    }
+
+    .portal-link {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      padding: 16px 18px;
+      border-radius: 16px;
+      border: 1px solid var(--line);
+      background: rgba(255, 255, 255, 0.03);
+      color: var(--text-soft);
+    }
+
+    .portal-link:hover {
+      border-color: var(--line-strong);
+      color: var(--text);
+    }
+
+    .warning-box {
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid var(--line);
+      border-left: 4px solid var(--gold);
+      border-radius: 18px;
+      padding: 18px 20px;
+      color: var(--text-soft);
+      box-shadow: var(--shadow);
+    }
+
+    .final-cta {
+      padding: 30px;
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 18px;
+      align-items: center;
+      background: linear-gradient(90deg, rgba(212,175,55,0.10), rgba(255,255,255,0.03), rgba(212,175,55,0.10));
+      border: 1px solid var(--line);
+      border-radius: 24px;
+      box-shadow: var(--shadow);
+    }
+
+    .site-footer {
+      padding: 28px 0;
+      border-top: 1px solid var(--line);
+      background: rgba(0, 0, 0, 0.25);
+    }
+
+    .footer-wrap {
+      display: flex;
+      justify-content: space-between;
+      gap: 18px;
+      align-items: center;
+    }
+
+    .footer-links {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 18px;
+    }
+
+    .footer-links a {
+      color: var(--text-soft);
+      font-size: 14px;
+    }
+
+    @media (max-width: 1100px) {
+      .hero-grid,
+      .grid-3,
+      .grid-2,
+      .hero-points,
+      .panel-grid,
+      .final-cta {
+        grid-template-columns: 1fr 1fr;
+      }
+    }
+
+    @media (max-width: 780px) {
+      .nav-wrap,
+      .footer-wrap {
+        flex-direction: column;
+        align-items: flex-start;
+        padding: 16px 0;
+      }
+
+      .hero-grid,
+      .grid-3,
+      .grid-2,
+      .hero-points,
+      .panel-grid,
+      .final-cta {
+        grid-template-columns: 1fr;
+      }
+
+      .status-row {
+        flex-direction: column;
+        align-items: flex-start;
+      }
+
+      .step {
+        grid-template-columns: 1fr;
+      }
+
+      h1 {
+        line-height: 1.02;
+      }
+    }
+  </style>
+</head>
+<body>
+  <header class="site-header">
+    <div class="container nav-wrap">
+      <div>
+        <div class="brand-kicker">ELEVATE AUTOMATION</div>
+        <div class="brand-sub">Beta Portal • Setup • Support • Content Partner Access</div>
+      </div>
+
+      <nav class="main-nav">
+        <a href="#offer">Offer</a>
+        <a href="#setup">Setup</a>
+        <a href="#expectations">Expectations</a>
+        <a href="#support">Support</a>
+      </nav>
+
+      <a href="index.html" class="btn btn-outline">Back to Main Site</a>
+    </div>
+  </header>
+
+  <main>
+    <section class="hero">
+      <div class="container hero-grid">
+        <div class="hero-copy">
+          <div class="section-kicker">BETA PORTAL</div>
+          <h1>Welcome to the Elevate Automation beta.</h1>
+          <p>
+            This portal is the central onboarding page for beta testers, content partners, and early founder users. Use it for setup, expectations, support, and next steps.
+          </p>
+
+          <div class="hero-actions">
+            <a href="#setup" class="btn btn-gold">Start Setup</a>
+            <a href="#support" class="btn btn-outline">Get Support</a>
+          </div>
+
+          <div class="hero-points">
+            <div class="point">Vehicle Poster beta access</div>
+            <div class="point">Structured onboarding process</div>
+            <div class="point">Early user / partner positioning</div>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-inner">
+            <div class="status-row">
+              <div>
+                <div class="card-kicker">CURRENT STATUS</div>
+                <h2 style="margin: 8px 0 0;">Beta Access Hub</h2>
+              </div>
+              <div class="status-pill">March 16 → March 30</div>
+            </div>
+
+            <div class="panel-grid">
+              <div class="panel-card">
+                <h3>What This Is</h3>
+                <ul>
+                  <li>Beta onboarding page</li>
+                  <li>Setup and install reference</li>
+                  <li>Support and bug reporting hub</li>
+                  <li>Content partner expectations page</li>
+                </ul>
+              </div>
+
+              <div class="panel-card">
+                <h3>What This Is Not</h3>
+                <ul>
+                  <li>Final polished customer dashboard</li>
+                  <li>Full affiliate portal</li>
+                  <li>Complete training library</li>
+                  <li>Final public onboarding experience</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="offer" class="section section-dark">
+      <div class="container">
+        <div class="section-heading">
+          <div class="section-kicker">BETA OFFER</div>
+          <h2>What approved beta testers and content partners get.</h2>
+          <p>
+            The beta is structured to reward early participation while also setting clear expectations for feedback, usage, and promotion.
+          </p>
+        </div>
+
+        <div class="grid-2">
+          <div class="card offer-box">
+            <div class="card-kicker">CONTENT PARTNER / QUALIFIED BETA OFFER</div>
+            <div class="big">50% OFF<br>FOR 3 MONTHS</div>
+            <p>
+              Approved content partners and select beta testers receive 50% off for the first 3 months in exchange for early participation and contribution during beta.
+            </p>
+            <ul>
+              <li>Discount applies to the first 3 months</li>
+              <li>Requires active beta participation</li>
+              <li>Requires useful feedback during testing</li>
+              <li>Requires 2–3 pieces of social content during beta</li>
+            </ul>
+          </div>
+
+          <div class="card">
+            <div class="card-kicker">EXPECTATION FRAMEWORK</div>
+            <h3>What we expect in return.</h3>
+            <ul>
+              <li>Use the tool during the beta window</li>
+              <li>Report bugs, friction points, and improvements</li>
+              <li>Provide honest product feedback</li>
+              <li>Post 2–3 social media pieces if approved as a content partner</li>
+              <li>Operate the tool responsibly within platform limits</li>
+            </ul>
+            <p class="note" style="margin-top: 16px;">
+              This is not a free-access giveaway. It is an early access arrangement for engaged testers and aligned partners.
+            </p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="setup" class="section">
+      <div class="container">
+        <div class="section-heading">
+          <div class="section-kicker">SETUP</div>
+          <h2>How to get started correctly.</h2>
+          <p>
+            Keep the beta flow simple. Access, install, activate, test, and report.
+          </p>
+        </div>
+
+        <div class="step-list">
+          <div class="step">
+            <div class="step-number">1</div>
+            <div>
+              <h3>Receive Access</h3>
+              <p>
+                Once approved, you’ll receive your access confirmation and license key. Keep your key saved for activation.
+              </p>
+            </div>
+          </div>
+
+          <div class="step">
+            <div class="step-number">2</div>
+            <div>
+              <h3>Install the Extension</h3>
+              <p>
+                Download and install the current beta build. Follow the install guide exactly to avoid setup issues.
+              </p>
+            </div>
+          </div>
+
+          <div class="step">
+            <div class="step-number">3</div>
+            <div>
+              <h3>Enter Your License Key</h3>
+              <p>
+                Activate the tool using the key assigned to your account. Keep it private and do not share it.
+              </p>
+            </div>
+          </div>
+
+          <div class="step">
+            <div class="step-number">4</div>
+            <div>
+              <h3>Run Your First Post</h3>
+              <p>
+                Follow the guided setup, verify mapped fields, and run your first controlled posting workflow.
+              </p>
+            </div>
+          </div>
+
+          <div class="step">
+            <div class="step-number">5</div>
+            <div>
+              <h3>Report Friction Fast</h3>
+              <p>
+                If anything breaks, stalls, or feels confusing, report it immediately so it can be fixed before broader rollout.
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="portal" class="section section-dark">
+      <div class="container">
+        <div class="section-heading">
+          <div class="section-kicker">BETA RESOURCES</div>
+          <h2>Core links and support tools.</h2>
+          <p>
+            Replace the placeholder links below with your live files, videos, extension package, and support destinations as they are finalized.
+          </p>
+        </div>
+
+        <div class="grid-2">
+          <div class="portal-box">
+            <h3>Setup Resources</h3>
+            <div class="portal-links">
+              <a class="portal-link" href="#">
+                <span>Download Extension Build</span>
+                <span>→</span>
+              </a>
+              <a class="portal-link" href="#">
+                <span>Install Guide</span>
+                <span>→</span>
+              </a>
+              <a class="portal-link" href="#">
+                <span>Setup Walkthrough Video</span>
+                <span>→</span>
+              </a>
+              <a class="portal-link" href="#">
+                <span>Activation Instructions</span>
+                <span>→</span>
+              </a>
+            </div>
+          </div>
+
+          <div class="portal-box">
+            <h3>Support Resources</h3>
+            <div class="portal-links">
+              <a class="portal-link" href="#">
+                <span>Report a Bug</span>
+                <span>→</span>
+              </a>
+              <a class="portal-link" href="#">
+                <span>Request a Feature</span>
+                <span>→</span>
+              </a>
+              <a class="portal-link" href="mailto:ElevateGPmarketing@gmail.com">
+                <span>Email Support</span>
+                <span>→</span>
+              </a>
+              <a class="portal-link" href="#">
+                <span>Beta Group / Community</span>
+                <span>→</span>
+              </a>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="expectations" class="section">
+      <div class="container">
+        <div class="section-heading">
+          <div class="section-kicker">EXPECTATIONS</div>
+          <h2>How beta testers should use the tool.</h2>
+          <p>
+            The beta is designed for controlled testing, product improvement, and measured rollout. Use it responsibly.
+          </p>
+        </div>
+
+        <div class="grid-3">
+          <div class="card">
+            <h3>Use It Seriously</h3>
+            <p>
+              This is not passive access. The value of the beta comes from real testing, real usage, and real feedback.
+            </p>
+          </div>
+
+          <div class="card">
+            <h3>Respect Limits</h3>
+            <p>
+              Posting limits and safety controls exist to protect users, the tool, and platform longevity. Do not try to abuse volume.
+            </p>
+          </div>
+
+          <div class="card">
+            <h3>Communicate Fast</h3>
+            <p>
+              If something breaks, report it quickly. Fast communication during beta is one of the biggest advantages early testers bring.
+            </p>
+          </div>
+        </div>
+
+        <div style="margin-top: 22px;" class="warning-box">
+          Beta access may be limited, adjusted, or revoked if the tool is abused, shared improperly, or used outside intended beta conditions.
+        </div>
+      </div>
+    </section>
+
+    <section id="support" class="section section-dark">
+      <div class="container">
+        <div class="section-heading">
+          <div class="section-kicker">SUPPORT</div>
+          <h2>Where to go if you hit friction.</h2>
+          <p>
+            Keep support centralized. That helps fixes happen faster and keeps beta cleaner for everyone.
+          </p>
+        </div>
+
+        <div class="grid-2">
+          <div class="card">
+            <h3>Before Reporting an Issue</h3>
+            <ul>
+              <li>Confirm the latest extension build is installed</li>
+              <li>Restart the browser if needed</li>
+              <li>Note the exact field or workflow step that failed</li>
+              <li>Take a screenshot or short screen recording if possible</li>
+            </ul>
+          </div>
+
+          <div class="card">
+            <h3>What to Include in a Bug Report</h3>
+            <ul>
+              <li>Your name and email</li>
+              <li>Vehicle or workflow being tested</li>
+              <li>What you expected to happen</li>
+              <li>What actually happened</li>
+              <li>Any screenshot or screen recording</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="container final-cta">
+        <div>
+          <div class="section-kicker">NEXT STEP</div>
+          <h2>Use the beta properly. Help shape the product early.</h2>
+          <p>
+            Elevate Automation is being built for serious sales operators. The beta is where reliability, speed, and workflow quality get refined.
+          </p>
+        </div>
+        <a href="index.html#pricing" class="btn btn-gold">Go to Pricing</a>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container footer-wrap">
+      <div>
+        <div class="brand-kicker">ELEVATE AUTOMATION</div>
+        <div class="brand-sub">Beta portal for early users, testers, and partners.</div>
+      </div>
+
+      <div class="footer-links">
+        <a href="index.html">Main Site</a>
+        <a href="privacy.html">Privacy</a>
+        <a href="terms.html">Terms</a>
+        <a href="refund.html">Refund</a>
+      </div>
+    </div>
+  </footer>
+</body>
+</html>
