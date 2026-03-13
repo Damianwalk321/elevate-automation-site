@@ -803,6 +803,15 @@ a {
   .hero-section {
     padding-top: 48px;
   }
+  .dashboard-list {
+  display: grid;
+  gap: 12px;
+  color: var(--text-soft);
+}
+
+.dashboard-spacing-top {
+  margin-top: 18px;
+}
 
   .panel-top,
   .footer-wrap,
