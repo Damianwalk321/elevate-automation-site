@@ -1,259 +1,315 @@
-const SUPABASE_URL = "https://teixblbxkoershwgqpym.supabase.co";
-const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRlaXhibGJ4a29lcnNod2dxcHltIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMwODUzMDMsImV4cCI6MjA4ODY2MTMwM30.wxt9zjKhsBuflaFZZT9awZiwckRzYkEl-OLm_4q8qF4";
-const CREATE_CHECKOUT_SESSION_URL = "https://teixblbxkoershwgqpym.supabase.co/functions/v1/create-checkout-session";
+// /script.js
 
-
-async function insertIntoSupabase(table, payload) {
-  const response = await fetch(`${SUPABASE_URL}/rest/v1/${table}`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "apikey": SUPABASE_ANON_KEY,
-      "Authorization": `Bearer ${SUPABASE_ANON_KEY}`,
-      "Prefer": "return=minimal"
-    },
-    body: JSON.stringify(payload)
-  });
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(errorText || "Submission failed.");
-  }
-
-  return true;
+function getQueryParam(name) {
+  const params = new URLSearchParams(window.location.search);
+  return params.get(name);
 }
 
-function setButtonLoading(button, loadingText) {
-  if (!button) return;
-  button.dataset.originalText = button.textContent;
-  button.textContent = loadingText;
-  button.disabled = true;
-}
-
-function resetButton(button) {
-  if (!button) return;
-  button.textContent = button.dataset.originalText || "Submit";
-  button.disabled = false;
-}
-
-function getReferralCode() {
-  return localStorage.getItem("elevate_ref_code") || "";
-}
-
-function setReferralCode(code) {
-  if (!code) return;
-  localStorage.setItem("elevate_ref_code", code);
-}
-
-function showReferralBanner() {
+function showReferralBanner(refCode) {
   const banner = document.getElementById("referral-banner");
   const display = document.getElementById("referral-code-display");
-  const code = getReferralCode();
 
-  if (banner && display && code) {
-    display.textContent = code;
-    banner.classList.remove("hidden");
+  if (!banner || !display || !refCode) return;
+
+  display.textContent = refCode;
+  banner.classList.remove("hidden");
+
+  try {
+    localStorage.setItem("elevate_referral_code", refCode);
+  } catch (error) {
+    console.error("Could not store referral code:", error);
   }
 }
 
-function handleReferralParam() {
-  const params = new URLSearchParams(window.location.search);
-  const ref = params.get("ref");
+function loadStoredReferralCode() {
+  const queryRef = getQueryParam("ref");
 
-  if (ref && ref.trim()) {
-    setReferralCode(ref.trim().toUpperCase());
+  if (queryRef) {
+    showReferralBanner(queryRef);
+    return queryRef;
+  }
+
+  try {
+    const storedRef = localStorage.getItem("elevate_referral_code");
+    if (storedRef) {
+      showReferralBanner(storedRef);
+      return storedRef;
+    }
+  } catch (error) {
+    console.error("Could not read stored referral code:", error);
+  }
+
+  return null;
+}
+
+function showCheckoutMessage(message, isError = false) {
+  const el = document.getElementById("checkout-message");
+  if (!el) return;
+
+  el.textContent = message;
+  el.classList.remove("hidden");
+
+  el.style.color = isError ? "#ffb3b3" : "";
+  el.style.borderColor = isError ? "rgba(255,92,92,0.22)" : "";
+  el.style.background = isError ? "rgba(255,92,92,0.08)" : "";
+}
+
+async function getLoggedInUserEmail() {
+  try {
+    if (typeof window.getCurrentUser === "function") {
+      const user = await window.getCurrentUser();
+      if (user?.email) {
+        localStorage.setItem("user_email", user.email);
+        return user.email;
+      }
+    }
+  } catch (error) {
+    console.error("Could not get current auth user:", error);
+  }
+
+  try {
+    return localStorage.getItem("user_email");
+  } catch (error) {
+    console.error("Could not read cached user email:", error);
+    return null;
   }
 }
 
-function showCheckoutMessage() {
-  const params = new URLSearchParams(window.location.search);
-  const status = params.get("checkout");
-  const box = document.getElementById("checkout-message");
+async function startCheckout(priceId, planType, userType, accessType) {
+  try {
+    const email = await getLoggedInUserEmail();
+    const referralCode = loadStoredReferralCode();
 
-  if (!box || !status) return;
+    if (!email) {
+      showCheckoutMessage("Please create an account or log in before checkout.", true);
+      window.location.href = "/login.html";
+      return;
+    }
 
-  box.classList.remove("hidden", "success", "cancelled");
+    showCheckoutMessage("Redirecting to secure checkout...");
 
-  if (status === "success") {
-    box.classList.add("success");
-    box.textContent = "Checkout completed successfully. Your access is now being processed.";
-  } else if (status === "cancelled") {
-    box.classList.add("cancelled");
-    box.textContent = "Checkout was cancelled. You can return to pricing and try again when ready.";
-  } else {
-    box.classList.add("hidden");
+    const response = await fetch("/api/create-checkout-session", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        priceId,
+        email,
+        referralCode,
+        planType,
+        userType,
+        accessType
+      })
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.error || "Checkout session could not be created.");
+    }
+
+    if (data.url) {
+      window.location.href = data.url;
+      return;
+    }
+
+    throw new Error("Checkout URL missing.");
+  } catch (error) {
+    console.error("Checkout error:", error);
+    showCheckoutMessage(error.message || "Could not start checkout.", true);
   }
 }
 
-async function createCheckoutSession(payload) {
-  const response = await fetch(CREATE_CHECKOUT_SESSION_URL, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "apikey": SUPABASE_ANON_KEY,
-      "Authorization": `Bearer ${SUPABASE_ANON_KEY}`
-    },
-    body: JSON.stringify(payload)
+function bindCheckoutButtons() {
+  const buttons = document.querySelectorAll(".checkout-btn");
+  if (!buttons.length) return;
+
+  buttons.forEach((button) => {
+    button.addEventListener("click", async () => {
+      const priceId = button.dataset.priceId;
+      const planType = button.dataset.planType || "";
+      const userType = button.dataset.userType || "";
+      const accessType = button.dataset.accessType || "";
+
+      if (!priceId) {
+        showCheckoutMessage("Missing Stripe price ID on this plan.", true);
+        return;
+      }
+
+      await startCheckout(priceId, planType, userType, accessType);
+    });
   });
-
-  const data = await response.json();
-
-  if (!response.ok) {
-    throw new Error(data.error || "Failed to create checkout session.");
-  }
-
-  return data;
 }
 
-document.addEventListener("DOMContentLoaded", function () {
-  handleReferralParam();
-  showReferralBanner();
-  showCheckoutMessage();
+function setElementDisplay(id, show, displayType = "inline-flex") {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.style.display = show ? displayType : "none";
+}
 
+async function updateAuthAwareUI() {
+  let loggedIn = false;
+
+  try {
+    if (typeof window.getCurrentUser === "function") {
+      const user = await window.getCurrentUser();
+      loggedIn = !!user;
+      if (user?.email) {
+        localStorage.setItem("user_email", user.email);
+      }
+    }
+  } catch (error) {
+    console.error("Auth-aware UI check failed:", error);
+  }
+
+  setElementDisplay("loginNavBtn", !loggedIn, "inline-flex");
+  setElementDisplay("signupNavBtn", !loggedIn, "inline-flex");
+  setElementDisplay("dashboardNavBtn", loggedIn, "inline-flex");
+  setElementDisplay("logoutNavBtn", loggedIn, "inline-flex");
+
+  setElementDisplay("heroSignupBtn", !loggedIn, "inline-flex");
+  setElementDisplay("heroLoginBtn", !loggedIn, "inline-flex");
+  setElementDisplay("heroDashboardBtn", loggedIn, "inline-flex");
+}
+
+function bindLogoutButton() {
+  const logoutBtn = document.getElementById("logoutNavBtn");
+  if (!logoutBtn) return;
+
+  logoutBtn.addEventListener("click", async () => {
+    try {
+      if (typeof window.signOutUser === "function") {
+        await window.signOutUser();
+      } else {
+        localStorage.removeItem("user_email");
+      }
+
+      window.location.href = "/login.html";
+    } catch (error) {
+      console.error("Logout failed:", error);
+      alert(error.message || "Logout failed.");
+    }
+  });
+}
+
+function showFormMessage(form, message, isError = false) {
+  if (!form) return;
+
+  let msgEl = form.querySelector(".dynamic-form-message");
+
+  if (!msgEl) {
+    msgEl = document.createElement("p");
+    msgEl.className = "dynamic-form-message";
+    msgEl.style.marginTop = "12px";
+    msgEl.style.fontSize = "14px";
+    msgEl.style.lineHeight = "1.5";
+    form.appendChild(msgEl);
+  }
+
+  msgEl.textContent = message;
+  msgEl.style.color = isError ? "#ffb3b3" : "#d4af37";
+}
+
+function serializeForm(form) {
+  const formData = new FormData(form);
+  const payload = {};
+
+  for (const [key, value] of formData.entries()) {
+    payload[key] = typeof value === "string" ? value.trim() : value;
+  }
+
+  return payload;
+}
+
+function bindWaitlistForms() {
   const betaForm = document.getElementById("beta-waitlist-form");
   const partnerForm = document.getElementById("partner-waitlist-form");
-  const checkoutButtons = document.querySelectorAll(".checkout-btn");
 
   if (betaForm) {
-    betaForm.addEventListener("submit", async function (e) {
+    betaForm.addEventListener("submit", async (e) => {
       e.preventDefault();
 
-      const submitButton = betaForm.querySelector('button[type="submit"]');
-      const note = betaForm.querySelector(".form-note");
+      const payload = serializeForm(betaForm);
+      const referralCode = loadStoredReferralCode();
+      if (referralCode) payload.referral_code = referralCode;
+      payload.list_type = "beta";
 
       try {
-        setButtonLoading(submitButton, "Submitting...");
+        showFormMessage(betaForm, "Submitting...");
 
-        const formData = new FormData(betaForm);
+        const response = await fetch("/api/waitlist", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify(payload)
+        });
 
-        const payload = {
-          first_name: formData.get("first_name")?.toString().trim() || null,
-          last_name: formData.get("last_name")?.toString().trim() || null,
-          email: formData.get("email")?.toString().trim() || null,
-          phone: formData.get("phone")?.toString().trim() || null,
-          company: formData.get("company")?.toString().trim() || null,
-          role: formData.get("role")?.toString().trim() || null,
-          province: formData.get("province")?.toString().trim() || null,
-          vehicles_per_week: formData.get("vehicles_per_week")?.toString().trim() || null,
-          source: "website"
-        };
+        const data = await response.json();
 
-        await insertIntoSupabase("beta_waitlist", payload);
+        if (!response.ok) {
+          throw new Error(data.error || "Could not submit beta waitlist form.");
+        }
 
         betaForm.reset();
-        if (note) {
-          note.textContent = "Request received. We’ll review your early access submission.";
-        }
+        showFormMessage(betaForm, "Request submitted. We’ll review and follow up.");
       } catch (error) {
         console.error("Beta waitlist error:", error);
-        if (note) {
-          note.textContent = "There was an issue submitting your request. Please try again.";
-        }
-      } finally {
-        resetButton(submitButton);
+        showFormMessage(
+          betaForm,
+          error.message || "Submission failed. Please try again.",
+          true
+        );
       }
     });
   }
 
   if (partnerForm) {
-    partnerForm.addEventListener("submit", async function (e) {
+    partnerForm.addEventListener("submit", async (e) => {
       e.preventDefault();
 
-      const submitButton = partnerForm.querySelector('button[type="submit"]');
-      const note = partnerForm.querySelector(".form-note");
+      const payload = serializeForm(partnerForm);
+      const referralCode = loadStoredReferralCode();
+      if (referralCode) payload.referral_code = referralCode;
+      payload.list_type = "partner";
 
       try {
-        setButtonLoading(submitButton, "Submitting...");
+        showFormMessage(partnerForm, "Submitting...");
 
-        const formData = new FormData(partnerForm);
+        const response = await fetch("/api/waitlist", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify(payload)
+        });
 
-        const payload = {
-          first_name: formData.get("first_name")?.toString().trim() || null,
-          last_name: formData.get("last_name")?.toString().trim() || null,
-          email: formData.get("email")?.toString().trim() || null,
-          phone: formData.get("phone")?.toString().trim() || null,
-          company: formData.get("company")?.toString().trim() || null,
-          role: formData.get("role")?.toString().trim() || null,
-          province: formData.get("province")?.toString().trim() || null,
-          audience_size: formData.get("audience_size")?.toString().trim() || null,
-          source: "website"
-        };
+        const data = await response.json();
 
-        await insertIntoSupabase("partner_waitlist", payload);
+        if (!response.ok) {
+          throw new Error(data.error || "Could not submit partner waitlist form.");
+        }
 
         partnerForm.reset();
-        if (note) {
-          note.textContent = "Application received. We’ll review your partner request.";
-        }
+        showFormMessage(partnerForm, "Application submitted. We’ll review and follow up.");
       } catch (error) {
         console.error("Partner waitlist error:", error);
-        if (note) {
-          note.textContent = "There was an issue submitting your application. Please try again.";
-        }
-      } finally {
-        resetButton(submitButton);
+        showFormMessage(
+          partnerForm,
+          error.message || "Submission failed. Please try again.",
+          true
+        );
       }
     });
   }
+}
 
-  checkoutButtons.forEach((button) => {
-    button.addEventListener("click", async function () {
-      try {
-        setButtonLoading(button, "Redirecting...");
+document.addEventListener("DOMContentLoaded", async () => {
+  loadStoredReferralCode();
+  bindCheckoutButtons();
+  bindLogoutButton();
+  bindWaitlistForms();
 
-        const priceId = button.dataset.priceId;
-        const planType = button.dataset.planType;
-        const userType = button.dataset.userType;
-        const accessType = button.dataset.accessType;
-        const affiliateCode = getReferralCode();
-
-        const email = window.prompt("Enter your email for access setup:");
-        if (!email) {
-          resetButton(button);
-          return;
-        }
-
-        const firstName = window.prompt("First name:");
-        if (!firstName) {
-          resetButton(button);
-          return;
-        }
-
-        const lastName = window.prompt("Last name:") || "";
-        const phone = window.prompt("Phone number:") || "";
-        const company = window.prompt("Company / dealership:") || "";
-        const province = window.prompt("Province:") || "";
-
-        const payload = {
-          priceId,
-          successUrl: "https://elevate-automation-site.vercel.app/?checkout=success",
-          cancelUrl: "https://elevate-automation-site.vercel.app/?checkout=cancelled",
-          firstName,
-          lastName,
-          phone,
-          company,
-          province,
-          userType,
-          planType,
-          source: "website",
-          affiliateCode,
-          accessType,
-          email
-        };
-
-        const result = await createCheckoutSession(payload);
-
-        if (result.url) {
-          window.location.href = result.url;
-          return;
-        }
-
-        throw new Error("No checkout URL returned.");
-      } catch (error) {
-        console.error("Checkout error:", error);
-        alert("There was an issue starting checkout. Please try again.");
-        resetButton(button);
-      }
-    });
-  });
+  await updateAuthAwareUI();
 });
