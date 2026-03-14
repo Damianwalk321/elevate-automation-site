@@ -1,271 +1,601 @@
-// /js/dashboard.js
+(function () {
+  "use strict";
 
-function setText(id, value, fallback = "-") {
-  const el = document.getElementById(id);
-  if (!el) return;
-  el.textContent = value === null || value === undefined || value === "" ? fallback : value;
-}
+  // =========================================================
+  // Elevate Automation Dashboard
+  // Matches rebuilt sidebar dashboard.html
+  // =========================================================
 
-function showLoading(message = "Loading dashboard...") {
-  const loadingEl = document.getElementById("dashboardLoading");
-  if (!loadingEl) return;
-  loadingEl.textContent = message;
-  loadingEl.classList.add("show");
-}
+  const SUPABASE_URL =
+    window.SUPABASE_URL ||
+    window.__SUPABASE_URL__ ||
+    "YOUR_SUPABASE_URL";
 
-function hideLoading() {
-  const loadingEl = document.getElementById("dashboardLoading");
-  if (!loadingEl) return;
-  loadingEl.classList.remove("show");
-}
+  const SUPABASE_ANON_KEY =
+    window.SUPABASE_ANON_KEY ||
+    window.__SUPABASE_ANON_KEY__ ||
+    "YOUR_SUPABASE_ANON_KEY";
 
-function showError(message) {
-  const errorEl = document.getElementById("dashboardError");
-  if (!errorEl) return;
-  errorEl.textContent = message || "Something went wrong loading the dashboard.";
-  errorEl.classList.add("show");
-}
+  const LOGIN_PATH = "/login.html";
+  const DEFAULT_HOME_PATH = "/";
+  const DEFAULT_PROFILE_PATH = "/profile.html";
 
-function clearError() {
-  const errorEl = document.getElementById("dashboardError");
-  if (!errorEl) return;
-  errorEl.textContent = "";
-  errorEl.classList.remove("show");
-}
+  let supabaseClient = null;
+  let currentUser = null;
+  let currentAccountData = null;
 
-function getBillingReadableStatus(status) {
-  if (!status) return "Unknown";
+  // ---------------------------------------------------------
+  // DOM helpers
+  // ---------------------------------------------------------
+  const $ = (id) => document.getElementById(id);
 
-  const normalized = String(status).toLowerCase();
-
-  if (normalized === "active") return "Active";
-  if (normalized === "trialing") return "Trialing";
-  if (normalized === "past_due") return "Past Due";
-  if (normalized === "cancelled") return "Cancelled";
-  if (normalized === "unpaid") return "Unpaid";
-  if (normalized === "incomplete") return "Incomplete";
-
-  return status;
-}
-
-function updateBillingUI(data) {
-  const billingStatus = getBillingReadableStatus(data.subscription_status || "active");
-  const founderPricing = data.founder_pricing_locked ? "Locked In" : "Not Locked";
-
-  setText("billingStatus", billingStatus);
-  setText("founderPricing", founderPricing);
-  setText("userPlanInline", data.plan || "Beta");
-
-  const hasStripeCustomer = !!data.stripe_customer_id;
-  const hasStripeSubscription = !!data.stripe_subscription_id;
-  const hasStripePrice = !!data.stripe_price_id;
-
-  setText("stripeCustomerStatus", hasStripeCustomer ? "Connected" : "Not Linked");
-  setText("stripeSubscriptionStatus", hasStripeSubscription ? "Connected" : "Not Linked");
-  setText("stripePriceStatus", hasStripePrice ? "Linked" : "Not Linked");
-  setText("billingReady", hasStripeCustomer ? "Yes" : "No");
-
-  let accessState = "Pending";
-  const normalized = (data.subscription_status || "").toLowerCase();
-
-  if (normalized === "active") accessState = "Live";
-  if (normalized === "past_due") accessState = "Attention Needed";
-  if (normalized === "cancelled") accessState = "Cancelled";
-
-  setText("accessState", accessState);
-
-  const billingStatusPill = document.getElementById("billingStatusPill");
-  if (billingStatusPill) {
-    billingStatusPill.classList.remove("success", "warning", "danger");
-
-    if (normalized === "active" || normalized === "trialing") {
-      billingStatusPill.classList.add("success");
-    } else if (normalized === "past_due" || normalized === "incomplete") {
-      billingStatusPill.classList.add("warning");
-    } else if (normalized === "cancelled" || normalized === "unpaid") {
-      billingStatusPill.classList.add("danger");
-    }
-  }
-}
-
-function updateInviteUI(unlockedInvites, usedInvites) {
-  const unlocked = Number(unlockedInvites || 1);
-  const used = Number(usedInvites || 0);
-  const remaining = Math.max(unlocked - used, 0);
-
-  setText("unlockedInvites", unlocked);
-  setText("usedInvites", used);
-  setText("remainingInvites", remaining);
-
-  let tier = "Tester";
-  let width = "33%";
-  let label = `${Math.min(unlocked, 3)} of 3 unlocked`;
-  let unlockMessage = "Complete activation, feedback, or beta participation to unlock invite #2.";
-
-  if (unlocked >= 3) {
-    tier = "Founding Partner";
-    width = "100%";
-    unlockMessage = "All 3 invite spots unlocked. Founder-level beta access is active.";
-  } else if (unlocked >= 2) {
-    tier = "Contributor";
-    width = "66%";
-    unlockMessage = "Bring in 1 qualified user or complete the next contribution milestone to unlock invite #3.";
+  function setText(id, value, fallback = "-") {
+    const node = $(id);
+    if (!node) return;
+    const finalValue =
+      value === undefined || value === null || value === ""
+        ? fallback
+        : String(value);
+    node.textContent = finalValue;
   }
 
-  setText("inviteTier", tier);
-  setText("inviteTierBadge", tier);
-  setText("inviteProgressLabel", label);
-  setText("unlockMessage", unlockMessage);
+  function setHref(id, href) {
+    const node = $(id);
+    if (!node) return;
+    node.href = href;
+  }
 
-  const fill = document.getElementById("inviteProgressFill");
-  if (fill) fill.style.width = width;
-}
+  function showStatus(message, type = "") {
+    const banner = $("statusBanner");
+    if (!banner) return;
 
-function buildReferralLink(referralCode) {
-  if (!referralCode) return "-";
-  return `${window.location.origin}/?ref=${referralCode}`;
-}
+    banner.textContent = message;
+    banner.className = "status-banner show";
 
-async function fetchDashboardData(user) {
-  const response = await fetch("/api/get-user-data", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json"
+    if (type) banner.classList.add(type);
+  }
+
+  function clearStatus() {
+    const banner = $("statusBanner");
+    if (!banner) return;
+    banner.textContent = "";
+    banner.className = "status-banner";
+  }
+
+  function formatBool(value) {
+    return value ? "Yes" : "No";
+  }
+
+  function safeUpper(str) {
+    return String(str || "").trim().toUpperCase();
+  }
+
+  function clip(str, max = 42) {
+    const s = String(str || "");
+    if (s.length <= max) return s;
+    return `${s.slice(0, max)}...`;
+  }
+
+  function buildReferralLink(code) {
+    if (!code) return "";
+    const origin = window.location.origin || "";
+    return `${origin}/?ref=${encodeURIComponent(code)}`;
+  }
+
+  // ---------------------------------------------------------
+  // Sidebar / section navigation
+  // ---------------------------------------------------------
+  const sectionMeta = {
+    overview: {
+      title: "Founder Beta Dashboard",
+      subtitle:
+        "Control center for account access, referral growth, billing status, invite progression, and future Elevate automation tools.",
     },
-    body: JSON.stringify({
-      email: user.email,
-      auth_user_id: user.id
-    })
-  });
+    poster: {
+      title: "Vehicle Poster",
+      subtitle:
+        "Execution layer for Marketplace posting, queue flow, helper logic, next/publish controls, and future posting analytics.",
+    },
+    profile: {
+      title: "Profile & Setup",
+      subtitle:
+        "Save salesperson identity, dealership defaults, compliance preferences, and listing behavior inside the current authenticated dashboard.",
+    },
+    compliance: {
+      title: "Compliance Center",
+      subtitle:
+        "Province-aware posting safeguards, rule presets, blocked phrase controls, and disclaimer infrastructure.",
+    },
+    ai: {
+      title: "AI Studio",
+      subtitle:
+        "Generate descriptions, captions, CTAs, and platform-specific copy from vehicle, user, and dealership data.",
+    },
+    referrals: {
+      title: "Referral System",
+      subtitle:
+        "Manage invite growth, referral links, beta expansion, and tracked successful referrals.",
+    },
+    billing: {
+      title: "Billing",
+      subtitle:
+        "View founder pricing, plan status, billing readiness, and future commercial tier access.",
+    },
+    settings: {
+      title: "Settings",
+      subtitle:
+        "Platform configuration, automation defaults, account controls, and future team-level system settings.",
+    },
+  };
 
-  const text = await response.text();
+  function setActiveSection(sectionKey) {
+    const navItems = document.querySelectorAll(".nav-item");
+    const sections = document.querySelectorAll(".section");
+    const pageTitle = $("pageTitle");
+    const pageSubtitle = $("pageSubtitle");
 
-  let data;
-  try {
-    data = JSON.parse(text);
-  } catch {
-    throw new Error(`Dashboard API returned non-JSON response: ${text}`);
+    navItems.forEach((btn) => {
+      btn.classList.toggle("active", btn.dataset.section === sectionKey);
+    });
+
+    sections.forEach((section) => {
+      section.classList.toggle("active", section.id === `section-${sectionKey}`);
+    });
+
+    const meta = sectionMeta[sectionKey] || sectionMeta.overview;
+
+    if (pageTitle) pageTitle.textContent = meta.title;
+    if (pageSubtitle) pageSubtitle.textContent = meta.subtitle;
+
+    try {
+      window.history.replaceState(null, "", `#${sectionKey}`);
+    } catch (err) {
+      console.warn("Failed to update hash:", err);
+    }
   }
 
-  if (!response.ok) {
-    throw new Error(data.details || data.error || "Failed to load dashboard data.");
+  function initSectionNavigation() {
+    const navItems = document.querySelectorAll(".nav-item");
+
+    navItems.forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const sectionKey = btn.dataset.section || "overview";
+        setActiveSection(sectionKey);
+      });
+    });
+
+    const initialHash = (window.location.hash || "").replace("#", "").trim();
+    const initialSection = sectionMeta[initialHash] ? initialHash : "overview";
+    setActiveSection(initialSection);
   }
 
-  return data;
-}
-
-async function loadDashboard() {
-  try {
-    clearError();
-    showLoading("Checking session...");
-
-    if (typeof requireAuth !== "function") {
-      throw new Error("requireAuth() is not available. auth.js may not be loaded.");
+  // ---------------------------------------------------------
+  // Auth
+  // ---------------------------------------------------------
+  function initSupabase() {
+    if (
+      !window.supabase ||
+      !SUPABASE_URL ||
+      SUPABASE_URL === "YOUR_SUPABASE_URL" ||
+      !SUPABASE_ANON_KEY ||
+      SUPABASE_ANON_KEY === "YOUR_SUPABASE_ANON_KEY"
+    ) {
+      console.warn("Supabase config missing on dashboard.");
+      return false;
     }
 
-    const user = await requireAuth();
+    try {
+      supabaseClient = window.supabase.createClient(
+        SUPABASE_URL,
+        SUPABASE_ANON_KEY
+      );
+      return true;
+    } catch (err) {
+      console.error("Failed to initialize Supabase:", err);
+      return false;
+    }
+  }
 
-    if (!user || !user.email) {
-      throw new Error("Authenticated user not found.");
+  async function getCurrentUser() {
+    if (!supabaseClient) return null;
+
+    try {
+      const {
+        data: { user },
+        error,
+      } = await supabaseClient.auth.getUser();
+
+      if (error) {
+        console.warn("getUser error:", error.message);
+        return null;
+      }
+
+      return user || null;
+    } catch (err) {
+      console.error("Failed to get current user:", err);
+      return null;
+    }
+  }
+
+  async function handleLogout() {
+    try {
+      if (supabaseClient) {
+        await supabaseClient.auth.signOut();
+      }
+    } catch (err) {
+      console.warn("Sign out error:", err);
     }
 
-    localStorage.setItem("user_email", user.email);
+    window.location.href = LOGIN_PATH;
+  }
 
-    showLoading("Loading dashboard data...");
+  // ---------------------------------------------------------
+  // Data loading
+  // ---------------------------------------------------------
+  async function fetchJson(url, options = {}) {
+    const res = await fetch(url, options);
+    let json = null;
 
-    const data = await fetchDashboardData(user);
+    try {
+      json = await res.json();
+    } catch (err) {
+      json = null;
+    }
 
-    setText("userEmail", data.email || user.email);
-    setText("userPlan", data.plan || "Beta");
-    setText("userStatus", getBillingReadableStatus(data.subscription_status || "active"));
-    setText("referralCode", data.referral_code || "-");
-    setText("referralCount", Number(data.referral_count || 0));
+    if (!res.ok) {
+      const message =
+        json?.error || json?.message || `Request failed: ${res.status}`;
+      throw new Error(message);
+    }
 
-    const refLink = buildReferralLink(data.referral_code || "");
-    setText("refLink", refLink);
+    return json;
+  }
 
-    updateBillingUI(data);
-    updateInviteUI(
-      Number(data.unlocked_invites || 1),
-      Number(data.used_invites || 0)
+  async function fetchUserData(email) {
+    if (!email) throw new Error("Missing user email");
+
+    const attempts = [
+      async () =>
+        fetchJson(`/api/get-user-data?email=${encodeURIComponent(email)}`),
+      async () =>
+        fetchJson(`/api/get-user-data?user_email=${encodeURIComponent(email)}`),
+      async () =>
+        fetchJson("/api/get-user-data", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email }),
+        }),
+      async () =>
+        fetchJson("/api/get-user-data", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ user_email: email }),
+        }),
+    ];
+
+    let lastError = null;
+
+    for (const attempt of attempts) {
+      try {
+        const data = await attempt();
+        return data;
+      } catch (err) {
+        lastError = err;
+      }
+    }
+
+    throw lastError || new Error("Failed to load user data");
+  }
+
+  async function fetchProfileData(email) {
+    if (!email) return null;
+
+    try {
+      const json = await fetchJson(
+        `/api/profile?user_email=${encodeURIComponent(email)}`
+      );
+      return json?.profile || null;
+    } catch (err) {
+      console.warn("Profile load skipped/failed:", err.message);
+      return null;
+    }
+  }
+
+  // ---------------------------------------------------------
+  // Normalization
+  // ---------------------------------------------------------
+  function normalizeAccountData(raw, userEmail) {
+    const account = raw?.user || raw?.account || raw?.data || raw || {};
+
+    const email =
+      account.email ||
+      account.user_email ||
+      account.customer_email ||
+      userEmail ||
+      "";
+
+    const referralCode =
+      account.referral_code ||
+      account.referralCode ||
+      account.ref_code ||
+      account.code ||
+      "";
+
+    const referralLink =
+      account.referral_link ||
+      account.referralLink ||
+      buildReferralLink(referralCode);
+
+    const inviteTier =
+      account.invite_tier ||
+      account.inviteTier ||
+      account.tier ||
+      "Founder Beta";
+
+    const stripeCustomer =
+      account.stripe_customer_id ||
+      account.stripeCustomerId ||
+      account.stripe_customer ||
+      "";
+
+    const plan =
+      account.plan ||
+      account.plan_name ||
+      account.subscription_plan ||
+      "Founder Beta";
+
+    const subscriptionStatus =
+      account.subscription_status ||
+      account.status ||
+      account.billing_status ||
+      "active";
+
+    const founderPricing =
+      account.founder_pricing ||
+      account.founderPricing ||
+      "Locked";
+
+    const billingStatus =
+      account.billing_status ||
+      account.subscription_status ||
+      "active";
+
+    const successfulReferrals = Number(
+      account.successful_referrals ||
+        account.referrals_count ||
+        account.referral_count ||
+        account.referrals ||
+        0
     );
 
-    hideLoading();
-  } catch (error) {
-    console.error("Dashboard load error:", error);
-    hideLoading();
-    showError(error.message || "Could not load dashboard.");
+    const unlockedInvites = Number(
+      account.unlocked_invites ||
+        account.invites_unlocked ||
+        account.max_invites ||
+        1
+    );
+
+    const usedInvites = Number(
+      account.used_invites || account.invites_used || 0
+    );
+
+    const remainingInvites = Math.max(
+      0,
+      Number(
+        account.remaining_invites ??
+          account.invites_remaining ??
+          unlockedInvites - usedInvites
+      )
+    );
+
+    const billingReadiness =
+      account.billing_readiness ||
+      account.billingReady ||
+      (stripeCustomer ? "Ready" : "Pending");
+
+    return {
+      email,
+      referralCode,
+      referralLink,
+      inviteTier,
+      stripeCustomer,
+      plan,
+      subscriptionStatus,
+      founderPricing,
+      billingStatus,
+      successfulReferrals,
+      unlockedInvites,
+      usedInvites,
+      remainingInvites,
+      billingReadiness,
+      raw: account,
+    };
   }
-}
 
-async function copyReferralLink() {
-  try {
-    const refLinkEl = document.getElementById("refLink");
-    if (!refLinkEl) return;
-
-    const link = refLinkEl.textContent || "";
-    if (!link || link === "-") return;
-
-    await navigator.clipboard.writeText(link);
-
-    const primaryBtn = document.getElementById("copyReferralBtn");
-    const secondaryBtn = document.getElementById("copyReferralBtnSecondary");
-
-    const originalPrimary = primaryBtn ? primaryBtn.textContent : null;
-    const originalSecondary = secondaryBtn ? secondaryBtn.textContent : null;
-
-    if (primaryBtn) primaryBtn.textContent = "Copied";
-    if (secondaryBtn) secondaryBtn.textContent = "Copied";
-
-    setTimeout(() => {
-      if (primaryBtn && originalPrimary) primaryBtn.textContent = originalPrimary;
-      if (secondaryBtn && originalSecondary) secondaryBtn.textContent = originalSecondary;
-    }, 1500);
-  } catch (error) {
-    console.error("Copy failed:", error);
-    alert("Could not copy referral link.");
-  }
-}
-
-async function logoutUser() {
-  try {
-    if (typeof signOutUser !== "function") {
-      throw new Error("signOutUser() is not available.");
+  function normalizeProfile(profile, emailFallback) {
+    if (!profile) {
+      return {
+        full_name: "",
+        dealership_name: "",
+        city: "",
+        province: "",
+        compliance_mode: "",
+        display_email: emailFallback || "",
+      };
     }
 
-    await signOutUser();
-    window.location.href = "/login.html";
-  } catch (error) {
-    console.error("Logout failed:", error);
-    alert(error.message || "Logout failed.");
+    return {
+      full_name: profile.full_name || "",
+      dealership_name: profile.dealership_name || "",
+      city: profile.city || "",
+      province: profile.province || "",
+      compliance_mode: profile.compliance_mode || "",
+      display_email:
+        profile.display_email || profile.user_email || emailFallback || "",
+    };
   }
-}
 
-document.addEventListener("DOMContentLoaded", async () => {
-  const homeBtn = document.getElementById("homeBtn");
-  const copyBtn = document.getElementById("copyReferralBtn");
-  const copyBtnSecondary = document.getElementById("copyReferralBtnSecondary");
-  const logoutBtn = document.getElementById("logoutBtn");
+  // ---------------------------------------------------------
+  // Render
+  // ---------------------------------------------------------
+  function renderAccount(account, profile) {
+    currentAccountData = account;
 
-  if (homeBtn) {
-    homeBtn.addEventListener("click", () => {
-      window.location.href = "/";
+    // Overview
+    setText("founderPricingValue", account.founderPricing);
+    setText("billingStatusValue", safeUpper(account.billingStatus));
+    setText("currentPlanValue", account.plan);
+    setText("planValue", account.plan);
+    setText("subscriptionStatusValue", safeUpper(account.subscriptionStatus));
+    setText("privateReferralLink", account.referralLink || "-");
+    setText("referralCount", account.successfulReferrals);
+    setText("unlockedInvites", account.unlockedInvites);
+    setText("usedInvites", account.usedInvites);
+    setText("remainingInvites", account.remainingInvites);
+    setText("billingReadiness", account.billingReadiness);
+
+    // Snapshot
+    setText("snapshotEmail", account.email || profile.display_email || "-");
+    setText("snapshotReferralCode", account.referralCode || "-");
+    setText("snapshotInviteTier", account.inviteTier || "-");
+    setText("snapshotStripeCustomer", clip(account.stripeCustomer || "-", 28));
+
+    // Sidebar workspace
+    const workspaceName =
+      profile.dealership_name || "Elevate Automation Workspace";
+    const workspaceMeta = [profile.city, profile.province]
+      .filter(Boolean)
+      .join(", ");
+
+    setText("sidebarWorkspaceName", workspaceName);
+    setText("sidebarWorkspaceMeta", workspaceMeta || "Founder Beta");
+
+    // Referrals section
+    setText("referralLinkSectionValue", clip(account.referralLink || "-", 36));
+    setText("referralCodeSectionValue", account.referralCode || "-");
+    setText("referralCountSectionValue", account.successfulReferrals);
+    setText("remainingInvitesSectionValue", account.remainingInvites);
+
+    // Billing section
+    setText("billingPlanValue", account.plan);
+    setText("billingStatusSectionValue", safeUpper(account.billingStatus));
+    setText("billingFounderValue", account.founderPricing);
+    setText(
+      "billingStripeValue",
+      clip(account.stripeCustomer || "Not created yet", 28)
+    );
+  }
+
+  // ---------------------------------------------------------
+  // Referral copy
+  // ---------------------------------------------------------
+  async function copyReferralLink() {
+    const link = currentAccountData?.referralLink || "";
+
+    if (!link) {
+      showStatus("Referral link is not available yet.", "error");
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(link);
+      showStatus("Referral link copied.", "success");
+    } catch (err) {
+      console.error("Copy failed:", err);
+      showStatus("Failed to copy referral link.", "error");
+    }
+  }
+
+  function wireButtons() {
+    $("copyReferralTopBtn")?.addEventListener("click", copyReferralLink);
+    $("copyReferralSidebarBtn")?.addEventListener("click", copyReferralLink);
+    $("copyReferralInlineBtn")?.addEventListener("click", copyReferralLink);
+    $("copyReferralSectionBtn")?.addEventListener("click", copyReferralLink);
+
+    $("logoutBtn")?.addEventListener("click", handleLogout);
+    $("logoutTopBtn")?.addEventListener("click", handleLogout);
+
+    // Optional quick route helpers if you add these later
+    const profileLinkTargets = document.querySelectorAll(
+      '[data-go-profile="true"]'
+    );
+    profileLinkTargets.forEach((btn) => {
+      btn.addEventListener("click", () => {
+        window.location.href = DEFAULT_PROFILE_PATH;
+      });
     });
   }
 
-  if (copyBtn) {
-    copyBtn.addEventListener("click", copyReferralLink);
+  // ---------------------------------------------------------
+  // Session watcher
+  // ---------------------------------------------------------
+  function wireAuthWatcher() {
+    if (!supabaseClient) return;
+
+    supabaseClient.auth.onAuthStateChange((event, session) => {
+      if (event === "SIGNED_OUT" || !session?.user) {
+        window.location.href = LOGIN_PATH;
+      }
+    });
   }
 
-  if (copyBtnSecondary) {
-    copyBtnSecondary.addEventListener("click", copyReferralLink);
+  // ---------------------------------------------------------
+  // Init
+  // ---------------------------------------------------------
+  async function initDashboard() {
+    initSectionNavigation();
+    wireButtons();
+
+    showStatus("Loading dashboard...", "");
+
+    const supabaseReady = initSupabase();
+
+    if (!supabaseReady) {
+      showStatus(
+        "Supabase config missing in dashboard.js. Set SUPABASE_URL and SUPABASE_ANON_KEY first.",
+        "error"
+      );
+      return;
+    }
+
+    wireAuthWatcher();
+
+    currentUser = await getCurrentUser();
+
+    if (!currentUser) {
+      window.location.href = LOGIN_PATH;
+      return;
+    }
+
+    try {
+      const [userDataRaw, profileRaw] = await Promise.all([
+        fetchUserData(currentUser.email),
+        fetchProfileData(currentUser.email),
+      ]);
+
+      const account = normalizeAccountData(userDataRaw, currentUser.email);
+      const profile = normalizeProfile(profileRaw, currentUser.email);
+
+      renderAccount(account, profile);
+      clearStatus();
+    } catch (err) {
+      console.error("Dashboard load failed:", err);
+
+      // still render a partial safe state using session info
+      const fallbackAccount = normalizeAccountData({}, currentUser.email);
+      const fallbackProfile = normalizeProfile(null, currentUser.email);
+
+      renderAccount(fallbackAccount, fallbackProfile);
+
+      showStatus(
+        `Dashboard loaded partially. ${err.message || "Some account data could not be loaded."}`,
+        "error"
+      );
+    }
   }
 
-  if (logoutBtn) {
-    logoutBtn.addEventListener("click", logoutUser);
-  }
+  document.addEventListener("DOMContentLoaded", initDashboard);
+})();
 
-  await loadDashboard();
-});
 
 
