@@ -1,158 +1,272 @@
-// /js/auth.js
+// /js/dashboard.js
 
-function getSupabaseClient() {
-  if (!window.supabaseClient) {
-    throw new Error("Supabase client is not initialized.");
-  }
-  return window.supabaseClient;
+function setText(id, value, fallback = "-") {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.textContent = value === null || value === undefined || value === "" ? fallback : value;
 }
 
-async function syncUserToAppTable(user) {
-  if (!user || !user.id || !user.email) return;
-
-  try {
-    await fetch("/api/sync-user", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        auth_user_id: user.id,
-        email: user.email,
-        full_name: user.user_metadata?.full_name || ""
-      })
-    });
-  } catch (error) {
-    console.error("User sync failed:", error);
-  }
+function showLoading(message = "Loading dashboard...") {
+  const loadingEl = document.getElementById("dashboardLoading");
+  if (!loadingEl) return;
+  loadingEl.textContent = message;
+  loadingEl.classList.add("show");
 }
 
-async function signUpWithEmail(email, password, fullName = "") {
-  const supabase = getSupabaseClient();
+function hideLoading() {
+  const loadingEl = document.getElementById("dashboardLoading");
+  if (!loadingEl) return;
+  loadingEl.classList.remove("show");
+}
 
-  const { data, error } = await supabase.auth.signUp({
-    email: email,
-    password: password,
-    options: {
-      data: {
-        full_name: fullName
-      },
-      emailRedirectTo: `${window.location.origin}/login.html`
+function showError(message) {
+  const errorEl = document.getElementById("dashboardError");
+  if (!errorEl) return;
+  errorEl.textContent = message || "Something went wrong loading the dashboard.";
+  errorEl.classList.add("show");
+}
+
+function clearError() {
+  const errorEl = document.getElementById("dashboardError");
+  if (!errorEl) return;
+  errorEl.textContent = "";
+  errorEl.classList.remove("show");
+}
+
+function getBillingReadableStatus(status) {
+  if (!status) return "Unknown";
+
+  const normalized = String(status).toLowerCase();
+
+  if (normalized === "active") return "Active";
+  if (normalized === "trialing") return "Trialing";
+  if (normalized === "past_due") return "Past Due";
+  if (normalized === "cancelled") return "Cancelled";
+  if (normalized === "unpaid") return "Unpaid";
+  if (normalized === "incomplete") return "Incomplete";
+
+  return status;
+}
+
+function updateBillingUI(data) {
+  const billingStatus = getBillingReadableStatus(data.subscription_status || "active");
+  const founderPricing = data.founder_pricing_locked ? "Locked In" : "Not Locked";
+
+  setText("billingStatus", billingStatus);
+  setText("founderPricing", founderPricing);
+  setText("userPlanInline", data.plan || "Beta");
+
+  const hasStripeCustomer = !!data.stripe_customer_id;
+  const hasStripeSubscription = !!data.stripe_subscription_id;
+  const hasStripePrice = !!data.stripe_price_id;
+
+  setText("stripeCustomerStatus", hasStripeCustomer ? "Connected" : "Not Linked");
+  setText("stripeSubscriptionStatus", hasStripeSubscription ? "Connected" : "Not Linked");
+  setText("stripePriceStatus", hasStripePrice ? "Linked" : "Not Linked");
+  setText("billingReady", hasStripeCustomer ? "Yes" : "No");
+
+  let accessState = "Pending";
+  const normalized = (data.subscription_status || "").toLowerCase();
+
+  if (normalized === "active") accessState = "Live";
+  if (normalized === "past_due") accessState = "Attention Needed";
+  if (normalized === "cancelled") accessState = "Cancelled";
+
+  setText("accessState", accessState);
+
+  const billingStatusPill = document.getElementById("billingStatusPill");
+  if (billingStatusPill) {
+    billingStatusPill.classList.remove("success", "warning", "danger");
+
+    if (normalized === "active" || normalized === "trialing") {
+      billingStatusPill.classList.add("success");
+    } else if (normalized === "past_due" || normalized === "incomplete") {
+      billingStatusPill.classList.add("warning");
+    } else if (normalized === "cancelled" || normalized === "unpaid") {
+      billingStatusPill.classList.add("danger");
     }
+  }
+}
+
+function updateInviteUI(unlockedInvites, usedInvites) {
+  const unlocked = Number(unlockedInvites || 1);
+  const used = Number(usedInvites || 0);
+  const remaining = Math.max(unlocked - used, 0);
+
+  setText("unlockedInvites", unlocked);
+  setText("usedInvites", used);
+  setText("remainingInvites", remaining);
+
+  let tier = "Tester";
+  let width = "33%";
+  let label = `${Math.min(unlocked, 3)} of 3 unlocked`;
+  let unlockMessage = "Complete activation, feedback, or beta participation to unlock invite #2.";
+
+  if (unlocked >= 3) {
+    tier = "Founding Partner";
+    width = "100%";
+    unlockMessage = "All 3 invite spots unlocked. Founder-level beta access is active.";
+  } else if (unlocked >= 2) {
+    tier = "Contributor";
+    width = "66%";
+    unlockMessage = "Bring in 1 qualified user or complete the next contribution milestone to unlock invite #3.";
+  }
+
+  setText("inviteTier", tier);
+  setText("inviteTierBadge", tier);
+  setText("inviteProgressLabel", label);
+  setText("unlockMessage", unlockMessage);
+
+  const fill = document.getElementById("inviteProgressFill");
+  if (fill) fill.style.width = width;
+}
+
+function buildReferralLink(referralCode) {
+  if (!referralCode) return "-";
+  return `${window.location.origin}/?ref=${referralCode}`;
+}
+
+async function fetchDashboardData(user) {
+  const response = await fetch("/api/get-user-data", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      email: user.email,
+      auth_user_id: user.id
+    })
   });
 
-  if (error) throw error;
+  const text = await response.text();
 
-  if (data?.user) {
-    await syncUserToAppTable(data.user);
+  let data;
+  try {
+    data = JSON.parse(text);
+  } catch {
+    throw new Error(`Dashboard API returned non-JSON response: ${text}`);
+  }
+
+  if (!response.ok) {
+    throw new Error(data.details || data.error || "Failed to load dashboard data.");
   }
 
   return data;
 }
 
-async function signInWithEmail(email, password) {
-  const supabase = getSupabaseClient();
-
-  const { data, error } = await supabase.auth.signInWithPassword({
-    email: email,
-    password: password
-  });
-
-  if (error) throw error;
-
-  if (data?.user?.email) {
-    localStorage.setItem("user_email", data.user.email);
-    await syncUserToAppTable(data.user);
-  }
-
-  return data;
-}
-
-async function signOutUser() {
-  const supabase = getSupabaseClient();
-
-  const { error } = await supabase.auth.signOut();
-
-  localStorage.removeItem("user_email");
-
-  if (error) throw error;
-}
-
-async function sendResetPassword(email) {
-  const supabase = getSupabaseClient();
-
-  const { error } = await supabase.auth.resetPasswordForEmail(email, {
-    redirectTo: `${window.location.origin}/reset-password.html`
-  });
-
-  if (error) throw error;
-}
-
-async function updatePassword(newPassword) {
-  const supabase = getSupabaseClient();
-
-  const { error } = await supabase.auth.updateUser({
-    password: newPassword
-  });
-
-  if (error) throw error;
-}
-
-async function getCurrentUser() {
-  const supabase = getSupabaseClient();
-
-  const { data, error } = await supabase.auth.getUser();
-
-  if (error) throw error;
-
-  return data.user;
-}
-
-async function requireAuth() {
+async function loadDashboard() {
   try {
-    const user = await getCurrentUser();
+    clearError();
+    showLoading("Checking session...");
 
-    if (!user) {
-      window.location.href = "/login.html";
-      return null;
+    if (typeof requireAuth !== "function") {
+      throw new Error("requireAuth() is not available. auth.js may not be loaded.");
     }
 
-    if (user.email) {
-      localStorage.setItem("user_email", user.email);
+    const user = await requireAuth();
+
+    if (!user || !user.email) {
+      throw new Error("Authenticated user not found.");
     }
 
-    await syncUserToAppTable(user);
+    localStorage.setItem("user_email", user.email);
 
-    return user;
+    showLoading("Session confirmed. Loading dashboard data...");
+
+    const data = await fetchDashboardData(user);
+
+    showLoading("Rendering dashboard...");
+
+    setText("userEmail", data.email || user.email);
+    setText("userPlan", data.plan || "Beta");
+    setText("userStatus", getBillingReadableStatus(data.subscription_status || "active"));
+    setText("referralCode", data.referral_code || "-");
+    setText("referralCount", Number(data.referral_count || 0));
+
+    const refLink = buildReferralLink(data.referral_code || "");
+    setText("refLink", refLink);
+
+    updateBillingUI(data);
+    updateInviteUI(
+      Number(data.unlocked_invites || 1),
+      Number(data.used_invites || 0)
+    );
+
+    hideLoading();
   } catch (error) {
-    console.error("Auth check failed:", error);
+    console.error("Dashboard load error:", error);
+    hideLoading();
+    showError(error.message || "Could not load dashboard.");
+  }
+}
+
+async function copyReferralLink() {
+  try {
+    const refLinkEl = document.getElementById("refLink");
+    if (!refLinkEl) return;
+
+    const link = refLinkEl.textContent || "";
+    if (!link || link === "-") return;
+
+    await navigator.clipboard.writeText(link);
+
+    const primaryBtn = document.getElementById("copyReferralBtn");
+    const secondaryBtn = document.getElementById("copyReferralBtnSecondary");
+
+    const originalPrimary = primaryBtn ? primaryBtn.textContent : null;
+    const originalSecondary = secondaryBtn ? secondaryBtn.textContent : null;
+
+    if (primaryBtn) primaryBtn.textContent = "Copied";
+    if (secondaryBtn) secondaryBtn.textContent = "Copied";
+
+    setTimeout(() => {
+      if (primaryBtn && originalPrimary) primaryBtn.textContent = originalPrimary;
+      if (secondaryBtn && originalSecondary) secondaryBtn.textContent = originalSecondary;
+    }, 1500);
+  } catch (error) {
+    console.error("Copy failed:", error);
+    alert("Could not copy referral link.");
+  }
+}
+
+async function logoutUser() {
+  try {
+    if (typeof signOutUser !== "function") {
+      throw new Error("signOutUser() is not available.");
+    }
+
+    await signOutUser();
     window.location.href = "/login.html";
-    return null;
+  } catch (error) {
+    console.error("Logout failed:", error);
+    alert(error.message || "Logout failed.");
   }
 }
 
-document.addEventListener("DOMContentLoaded", () => {
-  if (!window.supabaseClient) {
-    console.error("Supabase client missing on page.");
-    return;
+document.addEventListener("DOMContentLoaded", async () => {
+  const homeBtn = document.getElementById("homeBtn");
+  const copyBtn = document.getElementById("copyReferralBtn");
+  const copyBtnSecondary = document.getElementById("copyReferralBtnSecondary");
+  const logoutBtn = document.getElementById("logoutBtn");
+
+  if (homeBtn) {
+    homeBtn.addEventListener("click", () => {
+      window.location.href = "/";
+    });
   }
 
-  window.supabaseClient.auth.onAuthStateChange(async (event, session) => {
-    if (session?.user?.email) {
-      localStorage.setItem("user_email", session.user.email);
-      await syncUserToAppTable(session.user);
-    }
+  if (copyBtn) {
+    copyBtn.addEventListener("click", copyReferralLink);
+  }
 
-    if (event === "SIGNED_OUT") {
-      localStorage.removeItem("user_email");
-    }
-  });
+  if (copyBtnSecondary) {
+    copyBtnSecondary.addEventListener("click", copyReferralLink);
+  }
+
+  if (logoutBtn) {
+    logoutBtn.addEventListener("click", logoutUser);
+  }
+
+  await loadDashboard();
 });
 
-window.signUpWithEmail = signUpWithEmail;
-window.signInWithEmail = signInWithEmail;
-window.signOutUser = signOutUser;
-window.sendResetPassword = sendResetPassword;
-window.updatePassword = updatePassword;
-window.getCurrentUser = getCurrentUser;
-window.requireAuth = requireAuth;
