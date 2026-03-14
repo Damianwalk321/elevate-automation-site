@@ -3,80 +3,90 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Sign Up | Elevate Automation</title>
+  <title>Create Account | Elevate Automation</title>
   <style>
     body {
       margin: 0;
       font-family: Arial, sans-serif;
       background: #070707;
-      color: #fff;
-      display: grid;
-      place-items: center;
+      color: white;
+      display: flex;
+      align-items: center;
+      justify-content: center;
       min-height: 100vh;
       padding: 24px;
     }
-    .wrap {
+
+    .card {
       width: 100%;
-      max-width: 460px;
-      background: #111;
-      border: 1px solid rgba(212,175,55,0.2);
-      border-radius: 18px;
-      padding: 28px;
+      max-width: 420px;
+      background: #111111;
+      border: 1px solid rgba(212, 175, 55, 0.18);
+      border-radius: 14px;
+      padding: 36px;
     }
-    h1 { margin: 0 0 10px; color: #d4af37; }
-    p { color: #aaa; line-height: 1.5; }
-    .field { margin-top: 16px; }
-    label { display: block; margin-bottom: 8px; font-size: 14px; color: #ccc; }
+
+    h2 {
+      margin-top: 0;
+      margin-bottom: 8px;
+      color: #d4af37;
+    }
+
+    p {
+      color: #b0b0b0;
+      line-height: 1.5;
+      margin-bottom: 18px;
+    }
+
     input {
       width: 100%;
-      padding: 14px;
-      border-radius: 12px;
-      border: 1px solid #2a2a2a;
-      background: #0b0b0b;
-      color: #fff;
+      padding: 12px;
+      margin-top: 10px;
+      margin-bottom: 18px;
+      background: #000000;
+      border: 1px solid #333333;
+      color: white;
+      border-radius: 10px;
       box-sizing: border-box;
     }
+
     button {
       width: 100%;
-      margin-top: 18px;
-      padding: 14px;
-      border: none;
-      border-radius: 12px;
+      padding: 12px;
       background: #d4af37;
-      color: #111;
-      font-weight: 700;
+      border: none;
       cursor: pointer;
+      font-weight: bold;
+      border-radius: 10px;
+      color: #111111;
     }
-    .msg { margin-top: 16px; font-size: 14px; line-height: 1.5; }
-    a { color: #d4af37; }
+
+    a {
+      color: #d4af37;
+      text-decoration: none;
+    }
+
+    #message {
+      margin-top: 18px;
+      min-height: 22px;
+      color: #dddddd;
+    }
   </style>
 </head>
 <body>
-  <div class="wrap">
-    <h1>Create Account</h1>
-    <p>Create your Elevate Automation account. This becomes the long-term access layer for dashboard, billing, and tool control.</p>
+  <div class="card">
+    <h2>Create Account</h2>
+    <p>Create your Elevate Automation account.</p>
 
     <form id="signupForm">
-      <div class="field">
-        <label for="fullName">Full Name</label>
-        <input id="fullName" type="text" placeholder="Damian Walker" />
-      </div>
-
-      <div class="field">
-        <label for="email">Email</label>
-        <input id="email" type="email" placeholder="you@example.com" required />
-      </div>
-
-      <div class="field">
-        <label for="password">Password</label>
-        <input id="password" type="password" placeholder="Minimum 6+ characters" required />
-      </div>
-
+      <input id="name" type="text" placeholder="Full Name" />
+      <input id="email" type="email" placeholder="Email" required />
+      <input id="password" type="password" placeholder="Password" required />
       <button type="submit">Create Account</button>
     </form>
 
-    <div class="msg" id="message"></div>
-    <div class="msg"><a href="/login.html">Already have an account? Log in</a></div>
+    <p id="message"></p>
+    <p><a href="/login.html">Already have an account?</a></p>
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -86,17 +96,16 @@
     document.getElementById("signupForm").addEventListener("submit", async (e) => {
       e.preventDefault();
 
+      const name = document.getElementById("name").value.trim();
+      const email = document.getElementById("email").value.trim();
+      const password = document.getElementById("password").value;
       const message = document.getElementById("message");
+
       message.textContent = "Creating account...";
 
       try {
-        const fullName = document.getElementById("fullName").value.trim();
-        const email = document.getElementById("email").value.trim();
-        const password = document.getElementById("password").value;
-
-        await signUpWithEmail(email, password, fullName);
-
-        message.innerHTML = 'Account created. Check your email to confirm, then <a href="/login.html">log in</a>.';
+        await signUpWithEmail(email, password, name);
+        message.textContent = "Account created. Check your email, then log in.";
       } catch (err) {
         message.textContent = err.message || "Signup failed.";
       }
