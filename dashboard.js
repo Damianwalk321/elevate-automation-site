@@ -1,134 +1,164 @@
 // /js/dashboard.js
 
+function setText(id, value, fallback = "-") {
+  const el = document.getElementById(id);
+  if (el) el.textContent = value ?? fallback;
+}
+
+function showError(message) {
+  const errorEl = document.getElementById("dashboardError");
+  if (!errorEl) return;
+  errorEl.textContent = message || "Something went wrong loading the dashboard.";
+  errorEl.style.display = "block";
+}
+
+function updateInviteUI(unlockedInvites, usedInvites) {
+  const unlocked = Number(unlockedInvites || 1);
+  const used = Number(usedInvites || 0);
+  const remaining = Math.max(unlocked - used, 0);
+
+  setText("unlockedInvites", unlocked);
+  setText("usedInvites", used);
+  setText("remainingInvites", remaining);
+
+  let tier = "Tester";
+  let width = "33%";
+  let label = `${Math.min(unlocked, 3)} of 3 unlocked`;
+  let unlockMessage =
+    "Complete activation, feedback, or beta participation to unlock invite #2.";
+
+  if (unlocked >= 3) {
+    tier = "Founding Partner";
+    width = "100%";
+    unlockMessage =
+      "All 3 invite spots unlocked. Founder-level beta access is active.";
+  } else if (unlocked >= 2) {
+    tier = "Contributor";
+    width = "66%";
+    unlockMessage =
+      "Bring in 1 qualified user or complete the next contribution milestone to unlock invite #3.";
+  }
+
+  setText("inviteTier", tier);
+  setText("inviteTierBadge", tier);
+  setText("inviteProgressLabel", label);
+  setText("unlockMessage", unlockMessage);
+
+  const fill = document.getElementById("inviteProgressFill");
+  if (fill) fill.style.width = width;
+}
+
+function buildReferralLink(referralCode) {
+  if (!referralCode) return "-";
+  return `${window.location.origin}/?ref=${referralCode}`;
+}
+
 async function loadDashboard() {
   try {
-    const email = localStorage.getItem("user_email");
+    const user = await requireAuth();
+    if (!user || !user.email) return;
 
-    if (!email) {
-      console.error("No user email found in localStorage");
-      window.location.href = "/login.html";
-      return;
-    }
+    localStorage.setItem("user_email", user.email);
 
     const response = await fetch("/api/get-user-data", {
       method: "POST",
       headers: {
         "Content-Type": "application/json"
       },
-      body: JSON.stringify({ email })
+      body: JSON.stringify({ email: user.email })
     });
 
     const data = await response.json();
 
     if (!response.ok) {
-      throw new Error(data.error || "Failed to load dashboard");
+      throw new Error(data.error || "Failed to load dashboard.");
     }
 
-    // Account info
-    const emailEl = document.getElementById("userEmail");
-    const planEl = document.getElementById("userPlan");
-    const statusEl = document.getElementById("userStatus");
+    setText("userEmail", data.email || user.email);
+    setText("userPlan", data.plan || "Beta");
+    setText("userStatus", data.subscription_status || "active");
+    setText(
+      "founderPricing",
+      data.founder_pricing_locked ? "Locked In" : "Not Locked"
+    );
+    setText("referralCode", data.referral_code || "-");
+    setText("referralCount", Number(data.referral_count || 0));
 
-    if (emailEl) emailEl.textContent = data.email || "-";
-    if (planEl) planEl.textContent = data.plan || "Beta";
-    if (statusEl) statusEl.textContent = data.subscription_status || "active";
+    const refLink = buildReferralLink(data.referral_code || "");
+    setText("refLink", refLink);
 
-    // Referral / invite info
-    const referralCode = data.referral_code || "";
-    const referralCount = Number(data.referral_count || 0);
-    const unlockedInvites = Number(data.unlocked_invites || 1);
-    const usedInvites = Number(data.used_invites || 0);
-    const remainingInvites = Math.max(unlockedInvites - usedInvites, 0);
-
-    const refLinkEl = document.getElementById("refLink");
-    const referralCodeEl = document.getElementById("referralCode");
-    const referralCountEl = document.getElementById("referralCount");
-    const unlockedInvitesEl = document.getElementById("unlockedInvites");
-    const usedInvitesEl = document.getElementById("usedInvites");
-    const remainingInvitesEl = document.getElementById("remainingInvites");
-
-    const referralLink = `${window.location.origin}/?ref=${referralCode}`;
-
-    if (refLinkEl) refLinkEl.textContent = referralLink;
-    if (referralCodeEl) referralCodeEl.textContent = referralCode || "-";
-    if (referralCountEl) referralCountEl.textContent = referralCount;
-    if (unlockedInvitesEl) unlockedInvitesEl.textContent = unlockedInvites;
-    if (usedInvitesEl) usedInvitesEl.textContent = usedInvites;
-    if (remainingInvitesEl) remainingInvitesEl.textContent = remainingInvites;
-
-    // Invite tier status
-    const inviteTierEl = document.getElementById("inviteTier");
-    if (inviteTierEl) {
-      if (unlockedInvites >= 3) {
-        inviteTierEl.textContent = "Founding Partner";
-      } else if (unlockedInvites >= 2) {
-        inviteTierEl.textContent = "Contributor";
-      } else {
-        inviteTierEl.textContent = "Tester";
-      }
-    }
-
-    // Progress / unlock messaging
-    const unlockMessageEl = document.getElementById("unlockMessage");
-    if (unlockMessageEl) {
-      if (unlockedInvites === 1) {
-        unlockMessageEl.textContent =
-          "Complete activation, feedback, or beta participation to unlock invite #2.";
-      } else if (unlockedInvites === 2) {
-        unlockMessageEl.textContent =
-          "Bring in 1 qualified user or complete the next contribution step to unlock invite #3.";
-      } else {
-        unlockMessageEl.textContent =
-          "All 3 invite spots unlocked. Founder-level beta access active.";
-      }
-    }
-
-    // Founder pricing
-    const founderPricingEl = document.getElementById("founderPricing");
-    if (founderPricingEl) {
-      founderPricingEl.textContent = data.founder_pricing_locked ? "Locked In" : "Not Locked";
-    }
-
+    updateInviteUI(
+      Number(data.unlocked_invites || 1),
+      Number(data.used_invites || 0)
+    );
   } catch (error) {
     console.error("Dashboard load error:", error);
-
-    const errorEl = document.getElementById("dashboardError");
-    if (errorEl) {
-      errorEl.textContent = error.message || "Something went wrong loading the dashboard.";
-      errorEl.style.display = "block";
-    }
+    showError(error.message || "Could not load dashboard.");
   }
 }
 
-function copyReferralLink() {
-  const refLinkEl = document.getElementById("refLink");
-  if (!refLinkEl) return;
+async function copyReferralLink() {
+  try {
+    const refLinkEl = document.getElementById("refLink");
+    if (!refLinkEl) return;
 
-  const text = refLinkEl.textContent || "";
-  if (!text) return;
+    const link = refLinkEl.textContent || "";
+    if (!link || link === "-") return;
 
-  navigator.clipboard.writeText(text)
-    .then(() => {
-      const btn = document.getElementById("copyReferralBtn");
-      if (btn) {
-        const original = btn.textContent;
-        btn.textContent = "Copied";
-        setTimeout(() => {
-          btn.textContent = original;
-        }, 1500);
-      }
-    })
-    .catch((err) => {
-      console.error("Clipboard copy failed:", err);
-      alert("Could not copy referral link.");
-    });
+    await navigator.clipboard.writeText(link);
+
+    const primaryBtn = document.getElementById("copyReferralBtn");
+    const secondaryBtn = document.getElementById("copyReferralBtnSecondary");
+
+    const originalPrimary = primaryBtn ? primaryBtn.textContent : null;
+    const originalSecondary = secondaryBtn ? secondaryBtn.textContent : null;
+
+    if (primaryBtn) primaryBtn.textContent = "Copied";
+    if (secondaryBtn) secondaryBtn.textContent = "Copied";
+
+    setTimeout(() => {
+      if (primaryBtn && originalPrimary) primaryBtn.textContent = originalPrimary;
+      if (secondaryBtn && originalSecondary) secondaryBtn.textContent = originalSecondary;
+    }, 1500);
+  } catch (error) {
+    console.error("Copy failed:", error);
+    alert("Could not copy referral link.");
+  }
 }
 
-document.addEventListener("DOMContentLoaded", () => {
+async function logoutUser() {
+  try {
+    await signOutUser();
+    window.location.href = "/login.html";
+  } catch (error) {
+    console.error("Logout failed:", error);
+    alert(error.message || "Logout failed.");
+  }
+}
+
+document.addEventListener("DOMContentLoaded", async () => {
+  const homeBtn = document.getElementById("homeBtn");
   const copyBtn = document.getElementById("copyReferralBtn");
+  const copyBtnSecondary = document.getElementById("copyReferralBtnSecondary");
+  const logoutBtn = document.getElementById("logoutBtn");
+
+  if (homeBtn) {
+    homeBtn.addEventListener("click", () => {
+      window.location.href = "/";
+    });
+  }
+
   if (copyBtn) {
     copyBtn.addEventListener("click", copyReferralLink);
   }
 
-  loadDashboard();
+  if (copyBtnSecondary) {
+    copyBtnSecondary.addEventListener("click", copyReferralLink);
+  }
+
+  if (logoutBtn) {
+    logoutBtn.addEventListener("click", logoutUser);
+  }
+
+  await loadDashboard();
 });
