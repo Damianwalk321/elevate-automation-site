@@ -1,4 +1,4 @@
-
+// /api/get-user-data.js
 
 import { createClient } from "@supabase/supabase-js";
 
@@ -23,6 +23,7 @@ export default async function handler(req, res) {
       .from("users")
       .select(`
         id,
+        auth_user_id,
         email,
         name,
         plan,
