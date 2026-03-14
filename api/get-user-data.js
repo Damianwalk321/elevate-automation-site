@@ -19,6 +19,8 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: "Missing email" });
     }
 
+    const normalizedEmail = String(email).trim().toLowerCase();
+
     const { data, error } = await supabase
       .from("users")
       .select(`
@@ -32,9 +34,12 @@ export default async function handler(req, res) {
         referral_count,
         unlocked_invites,
         used_invites,
-        founder_pricing_locked
+        founder_pricing_locked,
+        stripe_customer_id,
+        stripe_subscription_id,
+        stripe_price_id
       `)
-      .eq("email", email)
+      .eq("email", normalizedEmail)
       .single();
 
     if (error) {
@@ -46,3 +51,4 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: err.message });
   }
 }
+
