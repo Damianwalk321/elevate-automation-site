@@ -1,272 +1,217 @@
-// /js/dashboard.js
+// /js/auth.js
 
-function setText(id, value, fallback = "-") {
-  const el = document.getElementById(id);
-  if (!el) return;
-  el.textContent = value === null || value === undefined || value === "" ? fallback : value;
-}
+(function () {
+  function getSupabaseClient() {
+    if (!window.supabaseClient) {
+      throw new Error("Supabase client is not initialized.");
+    }
+    return window.supabaseClient;
+  }
 
-function showLoading(message = "Loading dashboard...") {
-  const loadingEl = document.getElementById("dashboardLoading");
-  if (!loadingEl) return;
-  loadingEl.textContent = message;
-  loadingEl.classList.add("show");
-}
+  function withTimeout(promise, ms, label = "Operation") {
+    return Promise.race([
+      promise,
+      new Promise((_, reject) =>
+        setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms)
+      )
+    ]);
+  }
 
-function hideLoading() {
-  const loadingEl = document.getElementById("dashboardLoading");
-  if (!loadingEl) return;
-  loadingEl.classList.remove("show");
-}
+  async function syncUserToAppTable(user) {
+    if (!user || !user.id || !user.email) return;
 
-function showError(message) {
-  const errorEl = document.getElementById("dashboardError");
-  if (!errorEl) return;
-  errorEl.textContent = message || "Something went wrong loading the dashboard.";
-  errorEl.classList.add("show");
-}
+    try {
+      const response = await fetch("/api/sync-user", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          auth_user_id: user.id,
+          email: user.email,
+          full_name: user.user_metadata?.full_name || ""
+        })
+      });
 
-function clearError() {
-  const errorEl = document.getElementById("dashboardError");
-  if (!errorEl) return;
-  errorEl.textContent = "";
-  errorEl.classList.remove("show");
-}
-
-function getBillingReadableStatus(status) {
-  if (!status) return "Unknown";
-
-  const normalized = String(status).toLowerCase();
-
-  if (normalized === "active") return "Active";
-  if (normalized === "trialing") return "Trialing";
-  if (normalized === "past_due") return "Past Due";
-  if (normalized === "cancelled") return "Cancelled";
-  if (normalized === "unpaid") return "Unpaid";
-  if (normalized === "incomplete") return "Incomplete";
-
-  return status;
-}
-
-function updateBillingUI(data) {
-  const billingStatus = getBillingReadableStatus(data.subscription_status || "active");
-  const founderPricing = data.founder_pricing_locked ? "Locked In" : "Not Locked";
-
-  setText("billingStatus", billingStatus);
-  setText("founderPricing", founderPricing);
-  setText("userPlanInline", data.plan || "Beta");
-
-  const hasStripeCustomer = !!data.stripe_customer_id;
-  const hasStripeSubscription = !!data.stripe_subscription_id;
-  const hasStripePrice = !!data.stripe_price_id;
-
-  setText("stripeCustomerStatus", hasStripeCustomer ? "Connected" : "Not Linked");
-  setText("stripeSubscriptionStatus", hasStripeSubscription ? "Connected" : "Not Linked");
-  setText("stripePriceStatus", hasStripePrice ? "Linked" : "Not Linked");
-  setText("billingReady", hasStripeCustomer ? "Yes" : "No");
-
-  let accessState = "Pending";
-  const normalized = (data.subscription_status || "").toLowerCase();
-
-  if (normalized === "active") accessState = "Live";
-  if (normalized === "past_due") accessState = "Attention Needed";
-  if (normalized === "cancelled") accessState = "Cancelled";
-
-  setText("accessState", accessState);
-
-  const billingStatusPill = document.getElementById("billingStatusPill");
-  if (billingStatusPill) {
-    billingStatusPill.classList.remove("success", "warning", "danger");
-
-    if (normalized === "active" || normalized === "trialing") {
-      billingStatusPill.classList.add("success");
-    } else if (normalized === "past_due" || normalized === "incomplete") {
-      billingStatusPill.classList.add("warning");
-    } else if (normalized === "cancelled" || normalized === "unpaid") {
-      billingStatusPill.classList.add("danger");
+      if (!response.ok) {
+        const text = await response.text();
+        console.error("sync-user failed:", text);
+      }
+    } catch (error) {
+      console.error("User sync failed:", error);
     }
   }
-}
 
-function updateInviteUI(unlockedInvites, usedInvites) {
-  const unlocked = Number(unlockedInvites || 1);
-  const used = Number(usedInvites || 0);
-  const remaining = Math.max(unlocked - used, 0);
+  async function signUpWithEmail(email, password, fullName = "") {
+    const supabase = getSupabaseClient();
 
-  setText("unlockedInvites", unlocked);
-  setText("usedInvites", used);
-  setText("remainingInvites", remaining);
-
-  let tier = "Tester";
-  let width = "33%";
-  let label = `${Math.min(unlocked, 3)} of 3 unlocked`;
-  let unlockMessage = "Complete activation, feedback, or beta participation to unlock invite #2.";
-
-  if (unlocked >= 3) {
-    tier = "Founding Partner";
-    width = "100%";
-    unlockMessage = "All 3 invite spots unlocked. Founder-level beta access is active.";
-  } else if (unlocked >= 2) {
-    tier = "Contributor";
-    width = "66%";
-    unlockMessage = "Bring in 1 qualified user or complete the next contribution milestone to unlock invite #3.";
-  }
-
-  setText("inviteTier", tier);
-  setText("inviteTierBadge", tier);
-  setText("inviteProgressLabel", label);
-  setText("unlockMessage", unlockMessage);
-
-  const fill = document.getElementById("inviteProgressFill");
-  if (fill) fill.style.width = width;
-}
-
-function buildReferralLink(referralCode) {
-  if (!referralCode) return "-";
-  return `${window.location.origin}/?ref=${referralCode}`;
-}
-
-async function fetchDashboardData(user) {
-  const response = await fetch("/api/get-user-data", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify({
-      email: user.email,
-      auth_user_id: user.id
-    })
-  });
-
-  const text = await response.text();
-
-  let data;
-  try {
-    data = JSON.parse(text);
-  } catch {
-    throw new Error(`Dashboard API returned non-JSON response: ${text}`);
-  }
-
-  if (!response.ok) {
-    throw new Error(data.details || data.error || "Failed to load dashboard data.");
-  }
-
-  return data;
-}
-
-async function loadDashboard() {
-  try {
-    clearError();
-    showLoading("Checking session...");
-
-    if (typeof requireAuth !== "function") {
-      throw new Error("requireAuth() is not available. auth.js may not be loaded.");
-    }
-
-    const user = await requireAuth();
-
-    if (!user || !user.email) {
-      throw new Error("Authenticated user not found.");
-    }
-
-    localStorage.setItem("user_email", user.email);
-
-    showLoading("Session confirmed. Loading dashboard data...");
-
-    const data = await fetchDashboardData(user);
-
-    showLoading("Rendering dashboard...");
-
-    setText("userEmail", data.email || user.email);
-    setText("userPlan", data.plan || "Beta");
-    setText("userStatus", getBillingReadableStatus(data.subscription_status || "active"));
-    setText("referralCode", data.referral_code || "-");
-    setText("referralCount", Number(data.referral_count || 0));
-
-    const refLink = buildReferralLink(data.referral_code || "");
-    setText("refLink", refLink);
-
-    updateBillingUI(data);
-    updateInviteUI(
-      Number(data.unlocked_invites || 1),
-      Number(data.used_invites || 0)
+    const { data, error } = await withTimeout(
+      supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: {
+            full_name: fullName
+          },
+          emailRedirectTo: `${window.location.origin}/login.html`
+        }
+      }),
+      10000,
+      "Sign up"
     );
 
-    hideLoading();
-  } catch (error) {
-    console.error("Dashboard load error:", error);
-    hideLoading();
-    showError(error.message || "Could not load dashboard.");
-  }
-}
+    if (error) throw error;
 
-async function copyReferralLink() {
-  try {
-    const refLinkEl = document.getElementById("refLink");
-    if (!refLinkEl) return;
-
-    const link = refLinkEl.textContent || "";
-    if (!link || link === "-") return;
-
-    await navigator.clipboard.writeText(link);
-
-    const primaryBtn = document.getElementById("copyReferralBtn");
-    const secondaryBtn = document.getElementById("copyReferralBtnSecondary");
-
-    const originalPrimary = primaryBtn ? primaryBtn.textContent : null;
-    const originalSecondary = secondaryBtn ? secondaryBtn.textContent : null;
-
-    if (primaryBtn) primaryBtn.textContent = "Copied";
-    if (secondaryBtn) secondaryBtn.textContent = "Copied";
-
-    setTimeout(() => {
-      if (primaryBtn && originalPrimary) primaryBtn.textContent = originalPrimary;
-      if (secondaryBtn && originalSecondary) secondaryBtn.textContent = originalSecondary;
-    }, 1500);
-  } catch (error) {
-    console.error("Copy failed:", error);
-    alert("Could not copy referral link.");
-  }
-}
-
-async function logoutUser() {
-  try {
-    if (typeof signOutUser !== "function") {
-      throw new Error("signOutUser() is not available.");
+    if (data?.user) {
+      await syncUserToAppTable(data.user);
     }
 
-    await signOutUser();
-    window.location.href = "/login.html";
-  } catch (error) {
-    console.error("Logout failed:", error);
-    alert(error.message || "Logout failed.");
-  }
-}
-
-document.addEventListener("DOMContentLoaded", async () => {
-  const homeBtn = document.getElementById("homeBtn");
-  const copyBtn = document.getElementById("copyReferralBtn");
-  const copyBtnSecondary = document.getElementById("copyReferralBtnSecondary");
-  const logoutBtn = document.getElementById("logoutBtn");
-
-  if (homeBtn) {
-    homeBtn.addEventListener("click", () => {
-      window.location.href = "/";
-    });
+    return data;
   }
 
-  if (copyBtn) {
-    copyBtn.addEventListener("click", copyReferralLink);
+  async function signInWithEmail(email, password) {
+    const supabase = getSupabaseClient();
+
+    const { data, error } = await withTimeout(
+      supabase.auth.signInWithPassword({
+        email,
+        password
+      }),
+      10000,
+      "Login"
+    );
+
+    if (error) throw error;
+
+    if (data?.user?.email) {
+      localStorage.setItem("user_email", data.user.email);
+      await syncUserToAppTable(data.user);
+    }
+
+    return data;
   }
 
-  if (copyBtnSecondary) {
-    copyBtnSecondary.addEventListener("click", copyReferralLink);
+  async function signOutUser() {
+    const supabase = getSupabaseClient();
+
+    const { error } = await withTimeout(
+      supabase.auth.signOut(),
+      10000,
+      "Logout"
+    );
+
+    localStorage.removeItem("user_email");
+
+    if (error) throw error;
   }
 
-  if (logoutBtn) {
-    logoutBtn.addEventListener("click", logoutUser);
+  async function sendResetPassword(email) {
+    const supabase = getSupabaseClient();
+
+    const { error } = await withTimeout(
+      supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/reset-password.html`
+      }),
+      10000,
+      "Reset password email"
+    );
+
+    if (error) throw error;
   }
 
-  await loadDashboard();
-});
+  async function updatePassword(newPassword) {
+    const supabase = getSupabaseClient();
+
+    const { error } = await withTimeout(
+      supabase.auth.updateUser({
+        password: newPassword
+      }),
+      10000,
+      "Update password"
+    );
+
+    if (error) throw error;
+  }
+
+  async function getCurrentUser() {
+    const supabase = getSupabaseClient();
+
+    const sessionResult = await withTimeout(
+      supabase.auth.getSession(),
+      8000,
+      "Get session"
+    );
+
+    if (sessionResult?.error) {
+      throw sessionResult.error;
+    }
+
+    const sessionUser = sessionResult?.data?.session?.user;
+    if (sessionUser) {
+      return sessionUser;
+    }
+
+    const userResult = await withTimeout(
+      supabase.auth.getUser(),
+      8000,
+      "Get user"
+    );
+
+    if (userResult?.error) {
+      throw userResult.error;
+    }
+
+    return userResult?.data?.user || null;
+  }
+
+  async function requireAuth() {
+    const user = await getCurrentUser();
+
+    if (!user) {
+      window.location.href = "/login.html";
+      return null;
+    }
+
+    if (user.email) {
+      localStorage.setItem("user_email", user.email);
+    }
+
+    await syncUserToAppTable(user);
+
+    return user;
+  }
+
+  // attach immediately
+  window.signUpWithEmail = signUpWithEmail;
+  window.signInWithEmail = signInWithEmail;
+  window.signOutUser = signOutUser;
+  window.sendResetPassword = sendResetPassword;
+  window.updatePassword = updatePassword;
+  window.getCurrentUser = getCurrentUser;
+  window.requireAuth = requireAuth;
+
+  // auth state listener
+  document.addEventListener("DOMContentLoaded", function () {
+    try {
+      if (!window.supabaseClient) {
+        console.error("Supabase client missing on page.");
+        return;
+      }
+
+      window.supabaseClient.auth.onAuthStateChange(async function (event, session) {
+        if (session?.user?.email) {
+          localStorage.setItem("user_email", session.user.email);
+        }
+
+        if (event === "SIGNED_OUT") {
+          localStorage.removeItem("user_email");
+        }
+      });
+    } catch (error) {
+      console.error("Auth state listener setup failed:", error);
+    }
+  });
+
+  console.log("auth.js loaded successfully");
+})();
 
