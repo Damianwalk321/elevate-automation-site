@@ -1,0 +1,468 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Elevate Automation | Profile & Setup</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <link rel="stylesheet" href="/style.css" />
+  <style>
+    :root {
+      --bg: #050505;
+      --panel: #0b0b0d;
+      --panel-2: #111114;
+      --line: rgba(212, 175, 55, 0.18);
+      --gold: #d4af37;
+      --gold-2: #f0d46b;
+      --text: #f5f5f5;
+      --muted: #a1a1aa;
+      --success: #7dd3a4;
+      --danger: #f87171;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: Inter, system-ui, sans-serif;
+      background:
+        radial-gradient(circle at top right, rgba(212,175,55,0.08), transparent 25%),
+        linear-gradient(180deg, #070707 0%, #000 100%);
+      color: var(--text);
+    }
+
+    .container {
+      max-width: 1280px;
+      margin: 0 auto;
+      padding: 28px 20px 60px;
+    }
+
+    .topbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 16px;
+      margin-bottom: 26px;
+      flex-wrap: wrap;
+    }
+
+    .eyebrow {
+      color: var(--gold);
+      text-transform: uppercase;
+      letter-spacing: 0.18em;
+      font-size: 12px;
+      margin-bottom: 8px;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: clamp(34px, 5vw, 56px);
+      line-height: 1;
+      font-weight: 800;
+    }
+
+    .sub {
+      margin-top: 10px;
+      color: var(--muted);
+      max-width: 820px;
+      line-height: 1.5;
+    }
+
+    .top-actions {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .btn {
+      border: 1px solid var(--line);
+      background: linear-gradient(180deg, #121212, #0b0b0d);
+      color: var(--text);
+      padding: 12px 18px;
+      border-radius: 16px;
+      cursor: pointer;
+      font-weight: 700;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      transition: 0.18s ease;
+    }
+
+    .btn:hover { transform: translateY(-1px); border-color: rgba(212,175,55,0.35); }
+    .btn.gold { background: linear-gradient(180deg, var(--gold-2), var(--gold)); color: #111; border: none; }
+    .btn.ghost { background: transparent; }
+
+    .status {
+      margin-bottom: 18px;
+      border: 1px solid var(--line);
+      background: linear-gradient(180deg, rgba(212,175,55,0.08), rgba(212,175,55,0.03));
+      color: #f4d976;
+      padding: 16px 18px;
+      border-radius: 18px;
+      display: none;
+    }
+
+    .status.show { display: block; }
+    .status.success { color: var(--success); border-color: rgba(125,211,164,0.25); background: rgba(125,211,164,0.08); }
+    .status.error { color: var(--danger); border-color: rgba(248,113,113,0.25); background: rgba(248,113,113,0.08); }
+
+    .grid {
+      display: grid;
+      grid-template-columns: 1.1fr 0.9fr;
+      gap: 18px;
+    }
+
+    .stack {
+      display: grid;
+      gap: 18px;
+    }
+
+    .card {
+      background: linear-gradient(180deg, rgba(12,12,14,0.96), rgba(7,7,8,0.98));
+      border: 1px solid var(--line);
+      border-radius: 24px;
+      padding: 22px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.22);
+    }
+
+    .card-title {
+      color: var(--gold);
+      text-transform: uppercase;
+      letter-spacing: 0.18em;
+      font-size: 12px;
+      margin-bottom: 12px;
+    }
+
+    .card h2 {
+      margin: 0 0 8px;
+      font-size: 18px;
+      line-height: 1.2;
+    }
+
+    .muted {
+      color: var(--muted);
+      line-height: 1.5;
+      font-size: 14px;
+    }
+
+    .form-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 14px;
+      margin-top: 18px;
+    }
+
+    .field {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .field.full {
+      grid-column: 1 / -1;
+    }
+
+    .label {
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.14em;
+      color: #8a8a93;
+    }
+
+    input, textarea, select {
+      width: 100%;
+      border: 1px solid rgba(255,255,255,0.06);
+      background: #101014;
+      color: var(--text);
+      border-radius: 16px;
+      padding: 14px 14px;
+      outline: none;
+      font-size: 14px;
+    }
+
+    textarea {
+      min-height: 120px;
+      resize: vertical;
+    }
+
+    input:focus, textarea:focus, select:focus {
+      border-color: rgba(212,175,55,0.35);
+      box-shadow: 0 0 0 3px rgba(212,175,55,0.08);
+    }
+
+    .toggle-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+      margin-top: 14px;
+    }
+
+    .toggle {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      padding: 14px 16px;
+      border-radius: 18px;
+      background: #101014;
+      border: 1px solid rgba(255,255,255,0.05);
+    }
+
+    .toggle span {
+      color: #e7e7ea;
+      font-size: 14px;
+    }
+
+    .meta-list {
+      display: grid;
+      gap: 12px;
+      margin-top: 18px;
+    }
+
+    .meta {
+      display: flex;
+      justify-content: space-between;
+      gap: 16px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid rgba(255,255,255,0.05);
+      font-size: 14px;
+    }
+
+    .meta .key { color: var(--muted); }
+    .meta .val { color: #fff; font-weight: 600; text-align: right; }
+
+    .save-row {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      margin-top: 22px;
+      flex-wrap: wrap;
+    }
+
+    @media (max-width: 980px) {
+      .grid { grid-template-columns: 1fr; }
+    }
+
+    @media (max-width: 720px) {
+      .form-grid, .toggle-grid { grid-template-columns: 1fr; }
+      .container { padding: 18px 14px 50px; }
+      .card { padding: 18px; border-radius: 20px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="topbar">
+      <div>
+        <div class="eyebrow">Elevate Automation</div>
+        <h1>Profile & Setup</h1>
+        <div class="sub">
+          Save salesperson identity, dealership defaults, compliance preferences, and listing behavior for AI captions, descriptions, and future platform modules.
+        </div>
+      </div>
+
+      <div class="top-actions">
+        <a class="btn ghost" href="/dashboard.html">← Back to Dashboard</a>
+        <button id="saveTopBtn" class="btn gold" type="button">Save Profile</button>
+      </div>
+    </div>
+
+    <div id="statusBox" class="status"></div>
+
+    <div class="grid">
+      <div class="stack">
+        <div class="card">
+          <div class="card-title">Salesperson Profile</div>
+          <h2>Public-facing identity</h2>
+          <div class="muted">This information feeds listing descriptions, captions, CTAs, and future CRM actions.</div>
+
+          <div class="form-grid">
+            <div class="field">
+              <label class="label">Full Name</label>
+              <input id="full_name" placeholder="Damian Walker" />
+            </div>
+            <div class="field">
+              <label class="label">Phone</label>
+              <input id="phone" placeholder="825-967-9258" />
+            </div>
+            <div class="field">
+              <label class="label">Email</label>
+              <input id="display_email" placeholder="Damian@sargenttoyota.com" />
+            </div>
+            <div class="field">
+              <label class="label">Booking Link</label>
+              <input id="booking_link" placeholder="Calendly / booking URL" />
+            </div>
+            <div class="field">
+              <label class="label">Instagram Handle</label>
+              <input id="instagram_handle" placeholder="@damianwalkerautomotive" />
+            </div>
+            <div class="field">
+              <label class="label">Primary CTA</label>
+              <input id="primary_cta" placeholder="Call or text Damian Walker today" />
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-title">Dealership / Company</div>
+          <h2>Default business settings</h2>
+          <div class="muted">These become the default source for location, compliance context, brand attribution, and listing structure.</div>
+
+          <div class="form-grid">
+            <div class="field">
+              <label class="label">Dealership Name</label>
+              <input id="dealership_name" placeholder="Sean Sargent Toyota" />
+            </div>
+            <div class="field">
+              <label class="label">Dealership Website</label>
+              <input id="dealership_website" placeholder="https://..." />
+            </div>
+            <div class="field">
+              <label class="label">City</label>
+              <input id="city" placeholder="Grande Prairie" />
+            </div>
+            <div class="field">
+              <label class="label">Province</label>
+              <select id="province">
+                <option value="Alberta">Alberta</option>
+                <option value="British Columbia">British Columbia</option>
+                <option value="Saskatchewan">Saskatchewan</option>
+                <option value="Ontario">Ontario</option>
+              </select>
+            </div>
+            <div class="field full">
+              <label class="label">Logo URL</label>
+              <input id="logo_url" placeholder="Hosted logo URL" />
+            </div>
+            <div class="field full">
+              <label class="label">Default Seller Name</label>
+              <input id="default_seller_name" placeholder="Damian Walker" />
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-title">Compliance</div>
+          <h2>Province-aware defaults</h2>
+          <div class="muted">This powers description generation, caption filtering, and province-specific safe posting rules.</div>
+
+          <div class="form-grid">
+            <div class="field">
+              <label class="label">Compliance Mode</label>
+              <select id="compliance_mode">
+                <option value="strict">Strict</option>
+                <option value="balanced">Balanced</option>
+                <option value="custom">Custom</option>
+              </select>
+            </div>
+
+            <div class="field full">
+              <label class="label">Active Disclaimer</label>
+              <textarea id="active_disclaimer" placeholder="AMVIC-compliant dealer listing. Contact Damian Walker at Sean Sargent Toyota for pricing details, availability, financing options, and trade appraisal information."></textarea>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-title">Listing Behavior</div>
+          <h2>Default switches</h2>
+          <div class="muted">These toggles will later feed the AI description builder and posting workflow.</div>
+
+          <div class="toggle-grid">
+            <label class="toggle">
+              <span>Trades Welcome</span>
+              <input id="trades_welcome" type="checkbox" checked />
+            </label>
+
+            <label class="toggle">
+              <span>Financing CTA</span>
+              <input id="financing_cta" type="checkbox" checked />
+            </label>
+
+            <label class="toggle">
+              <span>Delivery Available</span>
+              <input id="delivery_available" type="checkbox" />
+            </label>
+
+            <label class="toggle">
+              <span>CARFAX Mention</span>
+              <input id="carfax_mention" type="checkbox" checked />
+            </label>
+          </div>
+
+          <div class="save-row">
+            <button id="saveBottomBtn" class="btn gold" type="button">Save Profile</button>
+            <a class="btn" href="/dashboard.html">Return to Dashboard</a>
+          </div>
+        </div>
+      </div>
+
+      <div class="stack">
+        <div class="card">
+          <div class="card-title">Account Context</div>
+          <h2>Current logged-in user</h2>
+          <div class="muted">This page uses the same authenticated user session as your existing dashboard.</div>
+
+          <div class="meta-list">
+            <div class="meta">
+              <div class="key">Session Email</div>
+              <div id="sessionEmail" class="val">-</div>
+            </div>
+            <div class="meta">
+              <div class="key">Profile Record Status</div>
+              <div id="profileRecordStatus" class="val">Checking...</div>
+            </div>
+            <div class="meta">
+              <div class="key">Compliance Context</div>
+              <div id="complianceContext" class="val">-</div>
+            </div>
+            <div class="meta">
+              <div class="key">Dealership Context</div>
+              <div id="dealershipContext" class="val">-</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-title">What this unlocks</div>
+          <h2>Next module readiness</h2>
+          <div class="muted">
+            Once this profile layer is saved, the next modules can use it immediately without asking the user the same questions every time.
+          </div>
+
+          <div class="meta-list">
+            <div class="meta">
+              <div class="key">AI Descriptions</div>
+              <div class="val">Ready after save</div>
+            </div>
+            <div class="meta">
+              <div class="key">AI Captions</div>
+              <div class="val">Ready after save</div>
+            </div>
+            <div class="meta">
+              <div class="key">Compliance Rules</div>
+              <div class="val">Province-based</div>
+            </div>
+            <div class="meta">
+              <div class="key">Future CRM Layer</div>
+              <div class="val">Can inherit CTA + identity</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-title">Implementation Note</div>
+          <h2>Same auth, new module</h2>
+          <div class="muted">
+            This page should remain inside the current Elevate dashboard ecosystem. No second login system. No second user table. Same session, same user, new sub-module.
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="/profile.js"></script>
+</body>
+</html>
