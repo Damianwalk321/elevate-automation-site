@@ -1,142 +1,134 @@
-const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRlaXhibGJ4a29lcnNod2dxcHltIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMwODUzMDMsImV4cCI6MjA4ODY2MTMwM30.wxt9zjKhsBuflaFZZT9awZiwckRzYkEl-OLm_4q8qF4";
-const DASHBOARD_API = "https://teixblbxkoershwgqpym.supabase.co/functions/v1/get-dashboard-data";
+// /js/dashboard.js
 
-async function fetchDashboard(email){
+async function loadDashboard() {
+  try {
+    const email = localStorage.getItem("user_email");
 
-const response = await fetch(DASHBOARD_API,{
-method:"POST",
-headers:{
-"Content-Type":"application/json",
-"apikey":SUPABASE_ANON_KEY,
-"Authorization":`Bearer ${SUPABASE_ANON_KEY}`
-},
-body:JSON.stringify({email})
-});
+    if (!email) {
+      console.error("No user email found in localStorage");
+      window.location.href = "/login.html";
+      return;
+    }
 
-const data = await response.json();
+    const response = await fetch("/api/get-user-data", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ email })
+    });
 
-if(!response.ok){
-throw new Error(data.error || "Dashboard load failed");
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.error || "Failed to load dashboard");
+    }
+
+    // Account info
+    const emailEl = document.getElementById("userEmail");
+    const planEl = document.getElementById("userPlan");
+    const statusEl = document.getElementById("userStatus");
+
+    if (emailEl) emailEl.textContent = data.email || "-";
+    if (planEl) planEl.textContent = data.plan || "Beta";
+    if (statusEl) statusEl.textContent = data.subscription_status || "active";
+
+    // Referral / invite info
+    const referralCode = data.referral_code || "";
+    const referralCount = Number(data.referral_count || 0);
+    const unlockedInvites = Number(data.unlocked_invites || 1);
+    const usedInvites = Number(data.used_invites || 0);
+    const remainingInvites = Math.max(unlockedInvites - usedInvites, 0);
+
+    const refLinkEl = document.getElementById("refLink");
+    const referralCodeEl = document.getElementById("referralCode");
+    const referralCountEl = document.getElementById("referralCount");
+    const unlockedInvitesEl = document.getElementById("unlockedInvites");
+    const usedInvitesEl = document.getElementById("usedInvites");
+    const remainingInvitesEl = document.getElementById("remainingInvites");
+
+    const referralLink = `${window.location.origin}/?ref=${referralCode}`;
+
+    if (refLinkEl) refLinkEl.textContent = referralLink;
+    if (referralCodeEl) referralCodeEl.textContent = referralCode || "-";
+    if (referralCountEl) referralCountEl.textContent = referralCount;
+    if (unlockedInvitesEl) unlockedInvitesEl.textContent = unlockedInvites;
+    if (usedInvitesEl) usedInvitesEl.textContent = usedInvites;
+    if (remainingInvitesEl) remainingInvitesEl.textContent = remainingInvites;
+
+    // Invite tier status
+    const inviteTierEl = document.getElementById("inviteTier");
+    if (inviteTierEl) {
+      if (unlockedInvites >= 3) {
+        inviteTierEl.textContent = "Founding Partner";
+      } else if (unlockedInvites >= 2) {
+        inviteTierEl.textContent = "Contributor";
+      } else {
+        inviteTierEl.textContent = "Tester";
+      }
+    }
+
+    // Progress / unlock messaging
+    const unlockMessageEl = document.getElementById("unlockMessage");
+    if (unlockMessageEl) {
+      if (unlockedInvites === 1) {
+        unlockMessageEl.textContent =
+          "Complete activation, feedback, or beta participation to unlock invite #2.";
+      } else if (unlockedInvites === 2) {
+        unlockMessageEl.textContent =
+          "Bring in 1 qualified user or complete the next contribution step to unlock invite #3.";
+      } else {
+        unlockMessageEl.textContent =
+          "All 3 invite spots unlocked. Founder-level beta access active.";
+      }
+    }
+
+    // Founder pricing
+    const founderPricingEl = document.getElementById("founderPricing");
+    if (founderPricingEl) {
+      founderPricingEl.textContent = data.founder_pricing_locked ? "Locked In" : "Not Locked";
+    }
+
+  } catch (error) {
+    console.error("Dashboard load error:", error);
+
+    const errorEl = document.getElementById("dashboardError");
+    if (errorEl) {
+      errorEl.textContent = error.message || "Something went wrong loading the dashboard.";
+      errorEl.style.display = "block";
+    }
+  }
 }
 
-return data;
+function copyReferralLink() {
+  const refLinkEl = document.getElementById("refLink");
+  if (!refLinkEl) return;
 
+  const text = refLinkEl.textContent || "";
+  if (!text) return;
+
+  navigator.clipboard.writeText(text)
+    .then(() => {
+      const btn = document.getElementById("copyReferralBtn");
+      if (btn) {
+        const original = btn.textContent;
+        btn.textContent = "Copied";
+        setTimeout(() => {
+          btn.textContent = original;
+        }, 1500);
+      }
+    })
+    .catch((err) => {
+      console.error("Clipboard copy failed:", err);
+      alert("Could not copy referral link.");
+    });
 }
 
-function setText(id,value){
-const el=document.getElementById(id);
-if(el) el.textContent=value ?? "—";
-}
+document.addEventListener("DOMContentLoaded", () => {
+  const copyBtn = document.getElementById("copyReferralBtn");
+  if (copyBtn) {
+    copyBtn.addEventListener("click", copyReferralLink);
+  }
 
-function setStatus(msg,type=""){
-const el=document.getElementById("dashboard-status");
-if(!el) return;
-el.className=`feedback-status ${type}`;
-el.textContent=msg;
-}
-
-function setCopyStatus(msg,type=""){
-const el=document.getElementById("copy-referral-status");
-if(!el) return;
-el.className=`feedback-status ${type}`;
-el.textContent=msg;
-}
-
-document.addEventListener("DOMContentLoaded",()=>{
-
-const form=document.getElementById("dashboard-lookup-form");
-const content=document.getElementById("dashboard-content");
-const copyBtn=document.getElementById("copy-referral-btn");
-
-let referralLink="";
-
-if(copyBtn){
-
-copyBtn.addEventListener("click",async()=>{
-
-if(!referralLink){
-setCopyStatus("No referral link");
-return;
-}
-
-try{
-await navigator.clipboard.writeText(referralLink);
-setCopyStatus("Referral link copied","success");
-}catch(err){
-setCopyStatus("Copy failed","error");
-}
-
-});
-
-}
-
-form.addEventListener("submit",async(e)=>{
-
-e.preventDefault();
-
-try{
-
-setStatus("Loading dashboard...");
-content.classList.add("hidden");
-
-const email=document.getElementById("lookup-email").value.trim();
-
-if(!email){
-setStatus("Enter an email","error");
-return;
-}
-
-const data=await fetchDashboard(email);
-
-if(!data.found){
-setStatus("Account not found","error");
-return;
-}
-
-const user=data.user||{};
-const sub=data.subscription||{};
-const lic=data.license||{};
-const limits=data.posting_limits||{};
-const ref=data.referral||{};
-
-setText("dash-name",`${user.first_name||""} ${user.last_name||""}`);
-setText("dash-email",user.email);
-setText("dash-company",user.company);
-setText("dash-province",user.province);
-
-setText("dash-plan",sub.plan_type||lic.plan_type);
-setText("dash-subscription-status",sub.subscription_status);
-setText("dash-billing-status",sub.billing_status);
-
-setText("dash-license-key",lic.license_key);
-setText("dash-access-type",lic.access_type);
-setText("dash-license-status",lic.status);
-
-setText("dash-daily-limit",limits.daily_limit);
-setText("dash-weekly-limit",limits.weekly_limit);
-setText("dash-cooldown",limits.cooldown_minutes?limits.cooldown_minutes+" min":null);
-
-setText("dash-posts-today",limits.posts_today);
-setText("dash-posts-week",limits.posts_this_week);
-setText("dash-remaining-today",limits.remaining_today);
-setText("dash-remaining-week",limits.remaining_week);
-
-setText("dash-referral-code",ref.referral_code);
-setText("dash-referral-eligible",ref.is_commission_eligible?"Yes":"No");
-setText("dash-referral-link",ref.referral_link);
-
-referralLink=ref.referral_link||"";
-
-content.classList.remove("hidden");
-setStatus("Dashboard loaded","success");
-
-}catch(err){
-
-console.error(err);
-setStatus("Dashboard load failed","error");
-
-}
-
-});
-
+  loadDashboard();
 });
