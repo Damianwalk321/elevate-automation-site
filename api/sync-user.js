@@ -1,4 +1,5 @@
 // /api/sync-user.js
+
 import { createClient } from "@supabase/supabase-js";
 
 const supabase = createClient(
@@ -7,7 +8,11 @@ const supabase = createClient(
 );
 
 function generateReferralCode(email) {
-  const clean = (email || "user").split("@")[0].replace(/[^a-zA-Z0-9]/g, "").toLowerCase();
+  const clean = (email || "user")
+    .split("@")[0]
+    .replace(/[^a-zA-Z0-9]/g, "")
+    .toLowerCase();
+
   const rand = Math.floor(1000 + Math.random() * 9000);
   return `${clean}${rand}`;
 }
@@ -26,7 +31,7 @@ export default async function handler(req, res) {
 
     const { data: existingUser, error: existingError } = await supabase
       .from("users")
-      .select("id, email, referral_code")
+      .select("id, auth_user_id, email, referral_code")
       .eq("auth_user_id", auth_user_id)
       .maybeSingle();
 
@@ -59,13 +64,13 @@ export default async function handler(req, res) {
           auth_user_id,
           email,
           name: full_name || email.split("@")[0],
+          plan: "Beta",
+          subscription_status: "active",
           referral_code: referralCode,
           referral_count: 0,
           unlocked_invites: 1,
           used_invites: 0,
-          founder_pricing_locked: true,
-          plan: "Beta",
-          subscription_status: "active"
+          founder_pricing_locked: true
         }
       ]);
 
