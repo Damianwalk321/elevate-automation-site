@@ -14,14 +14,15 @@
     :root {
       --bg: #070707;
       --panel: #111111;
+      --panel-2: #171717;
       --border: rgba(212, 175, 55, 0.18);
       --gold: #d4af37;
       --gold-soft: rgba(212, 175, 55, 0.12);
       --text: #f5f5f5;
       --muted: #a1a1aa;
-      --danger: #ff5c5c;
-      --warning: #f0c36d;
+      --danger: #ff6b6b;
       --success: #8fd19e;
+      --warning: #f0c36d;
       --shadow: 0 10px 35px rgba(0, 0, 0, 0.35);
       --radius: 18px;
     }
@@ -34,11 +35,11 @@
         var(--bg);
       color: var(--text);
       min-height: 100vh;
-      padding: 28px;
+      padding: 24px;
     }
 
     .dashboard-shell {
-      max-width: 1320px;
+      max-width: 1280px;
       margin: 0 auto;
     }
 
@@ -46,9 +47,9 @@
       display: flex;
       justify-content: space-between;
       align-items: center;
-      gap: 18px;
-      margin-bottom: 28px;
+      gap: 16px;
       flex-wrap: wrap;
+      margin-bottom: 24px;
     }
 
     .brand-wrap {
@@ -62,7 +63,6 @@
       letter-spacing: 0.16em;
       text-transform: uppercase;
       color: var(--gold);
-      opacity: 0.9;
     }
 
     .brand-title {
@@ -74,8 +74,8 @@
     .brand-subtitle {
       color: var(--muted);
       font-size: 14px;
-      max-width: 720px;
       line-height: 1.5;
+      max-width: 760px;
     }
 
     .topbar-actions {
@@ -94,10 +94,6 @@
       font-weight: 700;
       transition: 0.18s ease;
       box-shadow: var(--shadow);
-      text-decoration: none;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
     }
 
     .btn:hover {
@@ -107,8 +103,33 @@
 
     .btn-gold {
       background: linear-gradient(180deg, #d4af37, #b9931d);
-      color: #111;
+      color: #111111;
       border: none;
+    }
+
+    .state-box {
+      display: none;
+      margin-bottom: 20px;
+      padding: 16px 18px;
+      border-radius: 14px;
+      font-size: 14px;
+      line-height: 1.6;
+    }
+
+    .state-box.show {
+      display: block;
+    }
+
+    #dashboardLoading {
+      background: rgba(212, 175, 55, 0.08);
+      border: 1px solid rgba(212, 175, 55, 0.16);
+      color: #f0e2a8;
+    }
+
+    #dashboardError {
+      background: rgba(255, 107, 107, 0.08);
+      border: 1px solid rgba(255, 107, 107, 0.18);
+      color: #ffc2c2;
     }
 
     .grid {
@@ -123,20 +144,427 @@
       border-radius: var(--radius);
       padding: 22px;
       box-shadow: var(--shadow);
-      overflow: hidden;
-      position: relative;
-    }
-
-    .card::after {
-      content: "";
-      position: absolute;
-      inset: 0;
-      pointer-events: none;
-      border-radius: var(--radius);
-      box-shadow: inset 0 1px 0 rgba(255,255,255,0.03);
     }
 
     .span-12 { grid-column: span 12; }
     .span-8 { grid-column: span 8; }
     .span-6 { grid-column: span 6; }
+    .span-4 { grid-column: span 4; }
+    .span-3 { grid-column: span 3; }
 
+    .card-title {
+      font-size: 12px;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--gold);
+      margin-bottom: 12px;
+    }
+
+    .card-heading {
+      font-size: 24px;
+      font-weight: 800;
+      margin-bottom: 10px;
+    }
+
+    .card-copy {
+      color: var(--muted);
+      line-height: 1.6;
+      font-size: 14px;
+    }
+
+    .status-row {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-top: 16px;
+    }
+
+    .status-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 14px;
+      border-radius: 999px;
+      background: var(--gold-soft);
+      color: var(--gold);
+      border: 1px solid rgba(212, 175, 55, 0.22);
+      font-size: 13px;
+      font-weight: 700;
+    }
+
+    .status-pill.success {
+      background: rgba(143, 209, 158, 0.10);
+      border-color: rgba(143, 209, 158, 0.22);
+      color: var(--success);
+    }
+
+    .status-pill.warning {
+      background: rgba(240, 195, 109, 0.10);
+      border-color: rgba(240, 195, 109, 0.22);
+      color: var(--warning);
+    }
+
+    .status-pill.danger {
+      background: rgba(255, 107, 107, 0.10);
+      border-color: rgba(255, 107, 107, 0.22);
+      color: #ffc2c2;
+    }
+
+    .mini-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 14px;
+      margin-top: 18px;
+    }
+
+    .mini-stat {
+      background: rgba(255,255,255,0.02);
+      border: 1px solid rgba(255,255,255,0.04);
+      border-radius: 14px;
+      padding: 16px;
+    }
+
+    .mini-label {
+      color: var(--muted);
+      font-size: 12px;
+      margin-bottom: 8px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+
+    .mini-value {
+      font-size: 22px;
+      font-weight: 800;
+    }
+
+    .data-list {
+      display: grid;
+      gap: 14px;
+    }
+
+    .data-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 16px;
+      border-bottom: 1px solid rgba(255,255,255,0.05);
+      padding-bottom: 12px;
+    }
+
+    .data-row:last-child {
+      border-bottom: none;
+      padding-bottom: 0;
+    }
+
+    .data-label {
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    .data-value {
+      font-weight: 700;
+      text-align: right;
+      word-break: break-word;
+    }
+
+    .ref-box {
+      margin-top: 16px;
+      background: #0b0b0b;
+      border: 1px solid rgba(212, 175, 55, 0.15);
+      border-radius: 14px;
+      padding: 14px;
+      font-size: 14px;
+      color: #f3f3f3;
+      line-height: 1.6;
+      word-break: break-all;
+    }
+
+    .card-actions {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin-top: 16px;
+    }
+
+    .big-number {
+      font-size: 42px;
+      font-weight: 800;
+      line-height: 1;
+      margin-bottom: 8px;
+    }
+
+    .muted {
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    .tier-badge {
+      display: inline-block;
+      margin-top: 14px;
+      padding: 8px 12px;
+      border-radius: 999px;
+      background: rgba(212, 175, 55, 0.12);
+      border: 1px solid rgba(212, 175, 55, 0.22);
+      color: var(--gold);
+      font-size: 12px;
+      font-weight: 800;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .progress-wrap {
+      margin-top: 18px;
+    }
+
+    .progress-label {
+      display: flex;
+      justify-content: space-between;
+      gap: 16px;
+      font-size: 13px;
+      color: var(--muted);
+      margin-bottom: 8px;
+    }
+
+    .progress-bar {
+      height: 12px;
+      width: 100%;
+      background: rgba(255,255,255,0.06);
+      border-radius: 999px;
+      overflow: hidden;
+      border: 1px solid rgba(255,255,255,0.04);
+    }
+
+    .progress-fill {
+      height: 100%;
+      width: 33%;
+      background: linear-gradient(90deg, #8d6b12, #d4af37, #f0d77a);
+      border-radius: 999px;
+      transition: width 0.25s ease;
+    }
+
+    .notice {
+      margin-top: 18px;
+      background: rgba(212, 175, 55, 0.07);
+      border: 1px solid rgba(212, 175, 55, 0.16);
+      color: #f0e2a8;
+      border-radius: 14px;
+      padding: 14px;
+      line-height: 1.6;
+      font-size: 14px;
+    }
+
+    @media (max-width: 1024px) {
+      .span-8,
+      .span-6,
+      .span-4,
+      .span-3 {
+        grid-column: span 12;
+      }
+    }
+
+    @media (max-width: 640px) {
+      body {
+        padding: 16px;
+      }
+
+      .card {
+        padding: 18px;
+      }
+
+      .mini-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .data-row {
+        flex-direction: column;
+        align-items: flex-start;
+      }
+
+      .data-value {
+        text-align: left;
+      }
+
+      .topbar {
+        align-items: flex-start;
+      }
+
+      .topbar-actions {
+        width: 100%;
+      }
+
+      .topbar-actions .btn {
+        width: 100%;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="dashboard-shell">
+    <div class="topbar">
+      <div class="brand-wrap">
+        <div class="eyebrow">Elevate Automation</div>
+        <div class="brand-title">Founder Beta Dashboard</div>
+        <div class="brand-subtitle">
+          Control center for account access, billing status, referral growth, invite progression, and future automation tools.
+        </div>
+      </div>
+
+      <div class="topbar-actions">
+        <button class="btn" id="homeBtn" type="button">Main Site</button>
+        <button class="btn btn-gold" id="copyReferralBtn" type="button">Copy Referral Link</button>
+        <button class="btn" id="logoutBtn" type="button">Logout</button>
+      </div>
+    </div>
+
+    <div id="dashboardLoading" class="state-box show">Loading dashboard...</div>
+    <div id="dashboardError" class="state-box"></div>
+
+    <div class="grid">
+      <div class="card span-8">
+        <div class="card-title">Account Overview</div>
+        <div class="card-heading">Your account is active in the platform</div>
+        <div class="card-copy">
+          This dashboard reflects your live plan, account state, referral link, and invite progression as Elevate Automation scales into a larger sales platform.
+        </div>
+
+        <div class="status-row">
+          <div class="status-pill" id="founderPricingPill">
+            Founder Pricing: <span id="founderPricing">-</span>
+          </div>
+          <div class="status-pill success" id="billingStatusPill">
+            Billing Status: <span id="billingStatus">-</span>
+          </div>
+          <div class="status-pill" id="planStatusPill">
+            Current Plan: <span id="userPlanInline">-</span>
+          </div>
+        </div>
+
+        <div class="mini-grid">
+          <div class="mini-stat">
+            <div class="mini-label">Plan</div>
+            <div class="mini-value" id="userPlan">-</div>
+          </div>
+          <div class="mini-stat">
+            <div class="mini-label">Subscription Status</div>
+            <div class="mini-value" id="userStatus">-</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card span-4">
+        <div class="card-title">Account Snapshot</div>
+        <div class="data-list">
+          <div class="data-row">
+            <div class="data-label">Email</div>
+            <div class="data-value" id="userEmail">-</div>
+          </div>
+          <div class="data-row">
+            <div class="data-label">Referral Code</div>
+            <div class="data-value" id="referralCode">-</div>
+          </div>
+          <div class="data-row">
+            <div class="data-label">Invite Tier</div>
+            <div class="data-value" id="inviteTier">-</div>
+          </div>
+          <div class="data-row">
+            <div class="data-label">Stripe Customer</div>
+            <div class="data-value" id="stripeCustomerStatus">-</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card span-8">
+        <div class="card-title">Referral System</div>
+        <div class="card-heading">Your private referral link</div>
+        <div class="card-copy">
+          Share this link with qualified users. Additional invite access unlocks through activation, contribution, and successful referrals.
+        </div>
+
+        <div class="ref-box" id="refLink">-</div>
+
+        <div class="card-actions">
+          <button class="btn btn-gold" id="copyReferralBtnSecondary" type="button">Copy Link</button>
+        </div>
+      </div>
+
+      <div class="card span-4">
+        <div class="card-title">Referral Results</div>
+        <div class="big-number" id="referralCount">0</div>
+        <div class="muted">Successful referrals tracked in the beta system.</div>
+      </div>
+
+      <div class="card span-3">
+        <div class="card-title">Unlocked Invites</div>
+        <div class="big-number" id="unlockedInvites">1</div>
+        <div class="muted">Invite spots currently unlocked on your account.</div>
+      </div>
+
+      <div class="card span-3">
+        <div class="card-title">Used Invites</div>
+        <div class="big-number" id="usedInvites">0</div>
+        <div class="muted">Invite spots already consumed by accepted referrals.</div>
+      </div>
+
+      <div class="card span-3">
+        <div class="card-title">Remaining Invites</div>
+        <div class="big-number" id="remainingInvites">1</div>
+        <div class="muted">Available invite spots before you hit your current cap.</div>
+      </div>
+
+      <div class="card span-3">
+        <div class="card-title">Billing Readiness</div>
+        <div class="big-number" id="billingReady">-</div>
+        <div class="muted">Shows whether account billing linkage is connected.</div>
+      </div>
+
+      <div class="card span-8">
+        <div class="card-title">Invite Progression</div>
+        <div class="card-heading">Controlled beta unlock system</div>
+        <div class="card-copy">
+          Testers start with 1 invite. More access unlocks through real participation and actual results.
+        </div>
+
+        <div class="tier-badge" id="inviteTierBadge">Tester</div>
+
+        <div class="progress-wrap">
+          <div class="progress-label">
+            <span>Invite Unlock Progress</span>
+            <span id="inviteProgressLabel">1 of 3 unlocked</span>
+          </div>
+          <div class="progress-bar">
+            <div class="progress-fill" id="inviteProgressFill"></div>
+          </div>
+        </div>
+
+        <div class="notice" id="unlockMessage">
+          Complete activation, feedback, or beta participation to unlock invite #2.
+        </div>
+      </div>
+
+      <div class="card span-4">
+        <div class="card-title">Billing Notes</div>
+        <div class="data-list">
+          <div class="data-row">
+            <div class="data-label">Stripe Subscription</div>
+            <div class="data-value" id="stripeSubscriptionStatus">-</div>
+          </div>
+          <div class="data-row">
+            <div class="data-label">Stripe Price</div>
+            <div class="data-value" id="stripePriceStatus">-</div>
+          </div>
+          <div class="data-row">
+            <div class="data-label">Access State</div>
+            <div class="data-value" id="accessState">-</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="/js/supabase-client.js"></script>
+  <script src="/js/auth.js"></script>
+  <script src="/js/dashboard.js"></script>
+</body>
+</html>
