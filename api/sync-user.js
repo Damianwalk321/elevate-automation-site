@@ -2,6 +2,14 @@
 
 import { createClient } from "@supabase/supabase-js";
 
+if (!process.env.SUPABASE_URL) {
+  throw new Error("Missing env: SUPABASE_URL");
+}
+
+if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
+  throw new Error("Missing env: SUPABASE_SERVICE_ROLE_KEY");
+}
+
 const supabase = createClient(
   process.env.SUPABASE_URL,
   process.env.SUPABASE_SERVICE_ROLE_KEY
@@ -38,9 +46,7 @@ async function generateUniqueReferralCode(email) {
       throw new Error(`Referral lookup failed: ${error.message}`);
     }
 
-    if (!data) {
-      return code;
-    }
+    if (!data) return code;
 
     attempts += 1;
   }
@@ -65,7 +71,6 @@ export default async function handler(req, res) {
     const normalizedEmail = normalizeEmail(email);
     const displayName = (full_name || normalizedEmail.split("@")[0] || "User").trim();
 
-    // 1) Look for exact auth-linked row first
     const { data: authMatch, error: authMatchError } = await supabase
       .from("users")
       .select("*")
@@ -102,7 +107,6 @@ export default async function handler(req, res) {
       });
     }
 
-    // 2) Find rows by email
     const { data: emailRows, error: emailRowsError } = await supabase
       .from("users")
       .select("*")
@@ -113,7 +117,6 @@ export default async function handler(req, res) {
     }
 
     if (emailRows && emailRows.length > 0) {
-      // Prefer a row without auth_user_id so we can safely claim it
       const unclaimedRow = emailRows.find((row) => !row.auth_user_id);
       const alreadyClaimedRow = emailRows.find((row) => row.auth_user_id === auth_user_id);
       const bestRow = alreadyClaimedRow || unclaimedRow || emailRows[0];
@@ -123,7 +126,6 @@ export default async function handler(req, res) {
         name: displayName
       };
 
-      // Only attach auth_user_id if row is unclaimed or already belongs to this auth user
       if (!bestRow.auth_user_id || bestRow.auth_user_id === auth_user_id) {
         updatePayload.auth_user_id = auth_user_id;
       }
@@ -148,7 +150,6 @@ export default async function handler(req, res) {
       });
     }
 
-    // 3) Insert fresh row
     const referralCode = await generateUniqueReferralCode(normalizedEmail);
 
     const { data: insertedRows, error: insertError } = await supabase
@@ -181,7 +182,8 @@ export default async function handler(req, res) {
   } catch (err) {
     console.error("sync-user error:", err);
     return res.status(500).json({
-      error: err.message || "sync-user failed"
+      error: "sync-user failed",
+      details: err.message
     });
   }
 }
