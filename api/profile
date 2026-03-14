@@ -1,0 +1,79 @@
+import { createClient } from "@supabase/supabase-js";
+
+const supabaseUrl = process.env.SUPABASE_URL;
+const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+if (!supabaseUrl) throw new Error("Missing env: SUPABASE_URL");
+if (!supabaseServiceRoleKey) throw new Error("Missing env: SUPABASE_SERVICE_ROLE_KEY");
+
+const supabaseAdmin = createClient(supabaseUrl, supabaseServiceRoleKey);
+
+export default async function handler(req, res) {
+  try {
+    if (req.method === "GET") {
+      const { user_email } = req.query;
+
+      if (!user_email) {
+        return res.status(400).json({ error: "Missing user_email" });
+      }
+
+      const { data, error } = await supabaseAdmin
+        .from("user_profiles")
+        .select("*")
+        .eq("user_email", user_email)
+        .maybeSingle();
+
+      if (error) {
+        return res.status(500).json({ error: error.message });
+      }
+
+      return res.status(200).json({ profile: data || null });
+    }
+
+    if (req.method === "POST") {
+      const body = req.body || {};
+
+      if (!body.user_email) {
+        return res.status(400).json({ error: "Missing user_email" });
+      }
+
+      const payload = {
+        user_email: body.user_email,
+        full_name: body.full_name || "",
+        phone: body.phone || "",
+        display_email: body.display_email || "",
+        booking_link: body.booking_link || "",
+        instagram_handle: body.instagram_handle || "",
+        primary_cta: body.primary_cta || "",
+        dealership_name: body.dealership_name || "",
+        dealership_website: body.dealership_website || "",
+        city: body.city || "",
+        province: body.province || "",
+        logo_url: body.logo_url || "",
+        default_seller_name: body.default_seller_name || "",
+        trades_welcome: !!body.trades_welcome,
+        financing_cta: !!body.financing_cta,
+        delivery_available: !!body.delivery_available,
+        carfax_mention: !!body.carfax_mention,
+        compliance_mode: body.compliance_mode || "strict",
+        active_disclaimer: body.active_disclaimer || "",
+      };
+
+      const { data, error } = await supabaseAdmin
+        .from("user_profiles")
+        .upsert(payload, { onConflict: "user_email" })
+        .select()
+        .single();
+
+      if (error) {
+        return res.status(500).json({ error: error.message });
+      }
+
+      return res.status(200).json({ success: true, profile: data });
+    }
+
+    return res.status(405).json({ error: "Method not allowed" });
+  } catch (err) {
+    return res.status(500).json({ error: err.message || "Unexpected server error" });
+  }
+}
