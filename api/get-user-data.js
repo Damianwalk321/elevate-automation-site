@@ -2,6 +2,14 @@
 
 import { createClient } from "@supabase/supabase-js";
 
+if (!process.env.SUPABASE_URL) {
+  throw new Error("Missing env: SUPABASE_URL");
+}
+
+if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
+  throw new Error("Missing env: SUPABASE_SERVICE_ROLE_KEY");
+}
+
 const supabase = createClient(
   process.env.SUPABASE_URL,
   process.env.SUPABASE_SERVICE_ROLE_KEY
@@ -9,13 +17,8 @@ const supabase = createClient(
 
 function pickBestUserRow(rows = []) {
   if (!Array.isArray(rows) || rows.length === 0) return null;
-
-  // Prefer rows already linked to auth_user_id
   const linkedRow = rows.find((row) => row.auth_user_id);
-  if (linkedRow) return linkedRow;
-
-  // Otherwise just return the first row
-  return rows[0];
+  return linkedRow || rows[0];
 }
 
 export default async function handler(req, res) {
@@ -86,7 +89,10 @@ export default async function handler(req, res) {
     }
 
     if (queryError) {
-      return res.status(500).json({ error: queryError.message });
+      return res.status(500).json({
+        error: "Supabase query failed",
+        details: queryError.message
+      });
     }
 
     const user = pickBestUserRow(rows);
@@ -97,7 +103,12 @@ export default async function handler(req, res) {
 
     return res.status(200).json(user);
   } catch (err) {
-    return res.status(500).json({ error: err.message });
+    console.error("get-user-data error:", err);
+    return res.status(500).json({
+      error: "get-user-data failed",
+      details: err.message
+    });
   }
 }
+
 
