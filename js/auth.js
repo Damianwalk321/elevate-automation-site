@@ -1,33 +1,44 @@
+
 // /js/auth.js
 
-async function signUpWithEmail(email, password, fullName = "") {
-  const supabase = window.supabaseClient;
+async function syncUserToAppTable(user) {
+  if (!user || !user.id || !user.email) return;
 
-  const { data, error } = await supabase.auth.signUp({
-    email,
-    password,
-    options: {
-      data: {
-        full_name: fullName
-      }
-    }
-  });
-
-  if (error) throw error;
-
-  // Sync public users table if user object exists immediately
-  if (data?.user?.id) {
+  try {
     await fetch("/api/sync-user", {
       method: "POST",
       headers: {
         "Content-Type": "application/json"
       },
       body: JSON.stringify({
-        auth_user_id: data.user.id,
-        email: data.user.email,
-        full_name: fullName
+        auth_user_id: user.id,
+        email: user.email,
+        full_name: user.user_metadata?.full_name || ""
       })
     });
+  } catch (error) {
+    console.error("User sync failed:", error);
+  }
+}
+
+async function signUpWithEmail(email, password, fullName = "") {
+  const supabase = window.supabaseClient;
+
+  const { data, error } = await supabase.auth.signUp({
+    email: email,
+    password: password,
+    options: {
+      data: {
+        full_name: fullName
+      },
+      emailRedirectTo: `${window.location.origin}/login.html`
+    }
+  });
+
+  if (error) throw error;
+
+  if (data?.user) {
+    await syncUserToAppTable(data.user);
   }
 
   return data;
@@ -37,15 +48,15 @@ async function signInWithEmail(email, password) {
   const supabase = window.supabaseClient;
 
   const { data, error } = await supabase.auth.signInWithPassword({
-    email,
-    password
+    email: email,
+    password: password
   });
 
   if (error) throw error;
 
-  // Optional compatibility for older dashboard logic
   if (data?.user?.email) {
     localStorage.setItem("user_email", data.user.email);
+    await syncUserToAppTable(data.user);
   }
 
   return data;
@@ -53,6 +64,7 @@ async function signInWithEmail(email, password) {
 
 async function signOutUser() {
   const supabase = window.supabaseClient;
+
   const { error } = await supabase.auth.signOut();
 
   localStorage.removeItem("user_email");
@@ -82,9 +94,11 @@ async function updatePassword(newPassword) {
 
 async function getCurrentUser() {
   const supabase = window.supabaseClient;
+
   const { data, error } = await supabase.auth.getUser();
 
   if (error) throw error;
+
   return data.user;
 }
 
@@ -101,15 +115,16 @@ async function requireAuth() {
       localStorage.setItem("user_email", user.email);
     }
 
+    await syncUserToAppTable(user);
+
     return user;
-  } catch (err) {
-    console.error("Auth check failed:", err);
+  } catch (error) {
+    console.error("Auth check failed:", error);
     window.location.href = "/login.html";
     return null;
   }
 }
 
-// Auth state listener
 document.addEventListener("DOMContentLoaded", () => {
   const supabase = window.supabaseClient;
   if (!supabase) return;
@@ -117,18 +132,7 @@ document.addEventListener("DOMContentLoaded", () => {
   supabase.auth.onAuthStateChange(async (event, session) => {
     if (session?.user?.email) {
       localStorage.setItem("user_email", session.user.email);
-
-      await fetch("/api/sync-user", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          auth_user_id: session.user.id,
-          email: session.user.email,
-          full_name: session.user.user_metadata?.full_name || ""
-        })
-      });
+      await syncUserToAppTable(session.user);
     }
 
     if (event === "SIGNED_OUT") {
@@ -137,7 +141,6 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 });
 
-// expose to window
 window.signUpWithEmail = signUpWithEmail;
 window.signInWithEmail = signInWithEmail;
 window.signOutUser = signOutUser;
