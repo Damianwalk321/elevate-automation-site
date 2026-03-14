@@ -1,329 +1,622 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Elevate Automation Dashboard</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
 
-<title>Elevate Automation Dashboard</title>
+    :root {
+      --bg: #070707;
+      --panel: #111111;
+      --panel-2: #171717;
+      --border: rgba(212, 175, 55, 0.18);
+      --gold: #d4af37;
+      --gold-soft: rgba(212, 175, 55, 0.12);
+      --text: #f5f5f5;
+      --muted: #a1a1aa;
+      --danger: #ff5c5c;
+      --success: #8fd19e;
+      --shadow: 0 10px 35px rgba(0, 0, 0, 0.35);
+      --radius: 18px;
+    }
 
-<link rel="stylesheet" href="style.css">
+    body {
+      font-family: Arial, Helvetica, sans-serif;
+      background:
+        radial-gradient(circle at top left, rgba(212,175,55,0.08), transparent 30%),
+        radial-gradient(circle at top right, rgba(212,175,55,0.05), transparent 25%),
+        var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      padding: 28px;
+    }
+
+    .dashboard-shell {
+      max-width: 1320px;
+      margin: 0 auto;
+    }
+
+    .topbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 18px;
+      margin-bottom: 28px;
+      flex-wrap: wrap;
+    }
+
+    .brand-wrap {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .eyebrow {
+      font-size: 12px;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      color: var(--gold);
+      opacity: 0.9;
+    }
+
+    .brand-title {
+      font-size: clamp(28px, 4vw, 40px);
+      font-weight: 800;
+      line-height: 1;
+    }
+
+    .brand-subtitle {
+      color: var(--muted);
+      font-size: 14px;
+      max-width: 700px;
+      line-height: 1.5;
+    }
+
+    .topbar-actions {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .btn {
+      border: 1px solid var(--border);
+      background: linear-gradient(180deg, #1d1d1d, #101010);
+      color: var(--text);
+      padding: 12px 16px;
+      border-radius: 12px;
+      cursor: pointer;
+      font-weight: 700;
+      transition: 0.18s ease;
+      box-shadow: var(--shadow);
+    }
+
+    .btn:hover {
+      transform: translateY(-1px);
+      border-color: rgba(212, 175, 55, 0.35);
+    }
+
+    .btn-gold {
+      background: linear-gradient(180deg, #d4af37, #b9931d);
+      color: #111;
+      border: none;
+    }
+
+    .hero-grid {
+      display: grid;
+      grid-template-columns: 1.5fr 1fr;
+      gap: 20px;
+      margin-bottom: 20px;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(12, 1fr);
+      gap: 20px;
+    }
+
+    .card {
+      background: linear-gradient(180deg, rgba(24,24,24,0.98), rgba(14,14,14,0.98));
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 22px;
+      box-shadow: var(--shadow);
+      overflow: hidden;
+      position: relative;
+    }
+
+    .card::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      border-radius: var(--radius);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.03);
+    }
+
+    .span-12 { grid-column: span 12; }
+    .span-8 { grid-column: span 8; }
+    .span-6 { grid-column: span 6; }
+    .span-4 { grid-column: span 4; }
+    .span-3 { grid-column: span 3; }
+
+    .card-title {
+      font-size: 12px;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--gold);
+      margin-bottom: 14px;
+    }
+
+    .card-heading {
+      font-size: 24px;
+      font-weight: 800;
+      margin-bottom: 10px;
+    }
+
+    .card-copy {
+      color: var(--muted);
+      line-height: 1.6;
+      font-size: 14px;
+    }
+
+    .big-number {
+      font-size: 42px;
+      font-weight: 800;
+      line-height: 1;
+      margin-bottom: 8px;
+    }
+
+    .muted {
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    .status-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 14px;
+      border-radius: 999px;
+      background: var(--gold-soft);
+      color: var(--gold);
+      border: 1px solid rgba(212, 175, 55, 0.22);
+      font-size: 13px;
+      font-weight: 700;
+      width: fit-content;
+      margin-top: 12px;
+    }
+
+    .mini-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 14px;
+      margin-top: 18px;
+    }
+
+    .mini-stat {
+      background: rgba(255,255,255,0.02);
+      border: 1px solid rgba(255,255,255,0.04);
+      border-radius: 14px;
+      padding: 16px;
+    }
+
+    .mini-label {
+      color: var(--muted);
+      font-size: 12px;
+      margin-bottom: 8px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+
+    .mini-value {
+      font-size: 22px;
+      font-weight: 800;
+    }
+
+    .data-list {
+      display: grid;
+      gap: 14px;
+      margin-top: 10px;
+    }
+
+    .data-row {
+      display: flex;
+      justify-content: space-between;
+      gap: 16px;
+      align-items: center;
+      border-bottom: 1px solid rgba(255,255,255,0.05);
+      padding-bottom: 12px;
+    }
+
+    .data-row:last-child {
+      border-bottom: none;
+      padding-bottom: 0;
+    }
+
+    .data-label {
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    .data-value {
+      font-weight: 700;
+      text-align: right;
+      word-break: break-word;
+    }
+
+    .ref-box {
+      margin-top: 16px;
+      background: #0b0b0b;
+      border: 1px solid rgba(212, 175, 55, 0.15);
+      border-radius: 14px;
+      padding: 14px;
+      font-size: 14px;
+      color: #f3f3f3;
+      line-height: 1.6;
+      word-break: break-all;
+    }
+
+    .card-actions {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin-top: 16px;
+    }
+
+    .tier-badge {
+      display: inline-block;
+      margin-top: 14px;
+      padding: 8px 12px;
+      border-radius: 999px;
+      background: rgba(212, 175, 55, 0.12);
+      border: 1px solid rgba(212, 175, 55, 0.22);
+      color: var(--gold);
+      font-size: 12px;
+      font-weight: 800;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .progress-wrap {
+      margin-top: 18px;
+    }
+
+    .progress-label {
+      display: flex;
+      justify-content: space-between;
+      gap: 16px;
+      font-size: 13px;
+      color: var(--muted);
+      margin-bottom: 8px;
+    }
+
+    .progress-bar {
+      height: 12px;
+      width: 100%;
+      background: rgba(255,255,255,0.06);
+      border-radius: 999px;
+      overflow: hidden;
+      border: 1px solid rgba(255,255,255,0.04);
+    }
+
+    .progress-fill {
+      height: 100%;
+      width: 33%;
+      background: linear-gradient(90deg, #8d6b12, #d4af37, #f0d77a);
+      border-radius: 999px;
+      transition: width 0.25s ease;
+    }
+
+    .notice {
+      margin-top: 18px;
+      background: rgba(212, 175, 55, 0.07);
+      border: 1px solid rgba(212, 175, 55, 0.16);
+      color: #f0e2a8;
+      border-radius: 14px;
+      padding: 14px;
+      line-height: 1.6;
+      font-size: 14px;
+    }
+
+    .coming-list {
+      display: grid;
+      gap: 12px;
+      margin-top: 12px;
+    }
+
+    .coming-item {
+      padding: 14px;
+      border-radius: 14px;
+      background: rgba(255,255,255,0.02);
+      border: 1px solid rgba(255,255,255,0.05);
+    }
+
+    .coming-item strong {
+      display: block;
+      margin-bottom: 6px;
+      color: #fff;
+    }
+
+    .coming-item span {
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.5;
+    }
+
+    #dashboardError {
+      display: none;
+      margin-bottom: 20px;
+      border: 1px solid rgba(255, 92, 92, 0.2);
+      background: rgba(255, 92, 92, 0.08);
+      color: #ffb3b3;
+      padding: 14px 16px;
+      border-radius: 14px;
+      font-size: 14px;
+      line-height: 1.5;
+    }
+
+    @media (max-width: 1024px) {
+      .hero-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .span-8,
+      .span-6,
+      .span-4,
+      .span-3 {
+        grid-column: span 12;
+      }
+    }
+
+    @media (max-width: 640px) {
+      body {
+        padding: 16px;
+      }
+
+      .card {
+        padding: 18px;
+      }
+
+      .mini-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .data-row {
+        flex-direction: column;
+        align-items: flex-start;
+      }
+
+      .data-value {
+        text-align: left;
+      }
+
+      .topbar {
+        align-items: flex-start;
+      }
+
+      .topbar-actions {
+        width: 100%;
+      }
+
+      .topbar-actions .btn {
+        width: 100%;
+      }
+    }
+  </style>
 </head>
-
 <body>
-
-<header class="site-header">
-<div class="container nav-wrap">
-
-<div class="brand-block">
-<div class="brand-kicker">ELEVATE AUTOMATION</div>
-<div class="brand-sub">User Dashboard</div>
-</div>
-
-<nav class="main-nav">
-<a href="index.html">Main Site</a>
-<a href="beta.html">Beta Portal</a>
-</nav>
-
-</div>
-</header>
-
-<main>
-
-<section class="hero-section beta-hero">
-
-<div class="container">
-
-<div class="section-heading">
-
-<div class="section-kicker">
-DASHBOARD
-</div>
-
-<h2>
-Access your account, license, usage limits and referral tools.
-</h2>
-
-<p>
-Enter the email used during checkout to load your dashboard.
-</p>
-
-</div>
-
-
-<div class="portal-box">
-
-<form id="dashboard-lookup-form" class="beta-form">
-
-<div class="beta-form-grid">
-
-<input
-type="email"
-id="lookup-email"
-placeholder="Enter your account email"
-required
->
-
-<button
-type="submit"
-class="btn btn-gold"
->
-Load Dashboard
-</button>
-
-</div>
-
-<div id="dashboard-status" class="feedback-status"></div>
-
-</form>
-
-</div>
-
-</div>
-
-</section>
-
-
-<section class="section">
-
-<div class="container">
-
-<div id="dashboard-content" class="hidden">
-
-<div class="resource-grid">
-
-<div class="portal-box">
-
-<div class="card-kicker">ACCOUNT</div>
-
-<h3>Profile</h3>
-
-<div class="dashboard-list">
-
-<div>
-<strong>Name:</strong>
-<span id="dash-name">—</span>
-</div>
-
-<div>
-<strong>Email:</strong>
-<span id="dash-email">—</span>
-</div>
-
-<div>
-<strong>Company:</strong>
-<span id="dash-company">—</span>
-</div>
-
-<div>
-<strong>Province:</strong>
-<span id="dash-province">—</span>
-</div>
-
-</div>
-
-</div>
-
-
-<div class="portal-box">
-
-<div class="card-kicker">SUBSCRIPTION</div>
-
-<h3>Plan Status</h3>
-
-<div class="dashboard-list">
-
-<div>
-<strong>Plan:</strong>
-<span id="dash-plan">—</span>
-</div>
-
-<div>
-<strong>Subscription:</strong>
-<span id="dash-subscription-status">—</span>
-</div>
-
-<div>
-<strong>Billing:</strong>
-<span id="dash-billing-status">—</span>
-</div>
-
-</div>
-
-</div>
-
-</div>
-
-
-
-<div class="resource-grid dashboard-spacing-top">
-
-<div class="portal-box">
-
-<div class="card-kicker">LICENSE</div>
-
-<h3>Access Key</h3>
-
-<div class="dashboard-list">
-
-<div>
-<strong>License Key:</strong>
-<span id="dash-license-key">—</span>
-</div>
-
-<div>
-<strong>Access Type:</strong>
-<span id="dash-access-type">—</span>
-</div>
-
-<div>
-<strong>Status:</strong>
-<span id="dash-license-status">—</span>
-</div>
-
-</div>
-
-</div>
-
-
-
-<div class="portal-box">
-
-<div class="card-kicker">USAGE LIMITS</div>
-
-<h3>Posting Limits</h3>
-
-<div class="dashboard-list">
-
-<div>
-<strong>Daily Limit:</strong>
-<span id="dash-daily-limit">—</span>
-</div>
-
-<div>
-<strong>Weekly Limit:</strong>
-<span id="dash-weekly-limit">—</span>
-</div>
-
-<div>
-<strong>Cooldown:</strong>
-<span id="dash-cooldown">—</span>
-</div>
-
-<div>
-<strong>Posts Today:</strong>
-<span id="dash-posts-today">—</span>
-</div>
-
-<div>
-<strong>Posts This Week:</strong>
-<span id="dash-posts-week">—</span>
-</div>
-
-<div>
-<strong>Remaining Today:</strong>
-<span id="dash-remaining-today">—</span>
-</div>
-
-<div>
-<strong>Remaining Week:</strong>
-<span id="dash-remaining-week">—</span>
-</div>
-
-</div>
-
-</div>
-
-</div>
-
-
-
-<div class="resource-grid dashboard-spacing-top">
-
-<div class="portal-box">
-
-<div class="card-kicker">REFERRALS</div>
-
-<h3>Your Referral Code</h3>
-
-<div class="dashboard-list">
-
-<div>
-<strong>Code:</strong>
-<span id="dash-referral-code">—</span>
-</div>
-
-<div>
-<strong>Eligible:</strong>
-<span id="dash-referral-eligible">—</span>
-</div>
-
-<div>
-<strong>Referral Link:</strong>
-<span id="dash-referral-link">—</span>
-</div>
-
-</div>
-
-<div class="dashboard-actions">
-
-<button
-id="copy-referral-btn"
-class="btn btn-outline"
-type="button"
->
-Copy Referral Link
-</button>
-
-<div id="copy-referral-status" class="feedback-status"></div>
-
-</div>
-
-</div>
-
-
-<div class="portal-box">
-
-<div class="card-kicker">RESOURCES</div>
-
-<h3>Quick Access</h3>
-
-<div class="portal-links">
-
-<a class="portal-link" href="beta.html">
-<span>Open Beta Portal</span>
-<span>→</span>
-</a>
-
-<a class="portal-link" href="#">
-<span>Download Extension</span>
-<span>→</span>
-</a>
-
-<a class="portal-link" href="#">
-<span>Install Guide</span>
-<span>→</span>
-</a>
-
-<a class="portal-link" href="mailto:ElevateGPmarketing@gmail.com">
-<span>Support</span>
-<span>→</span>
-</a>
-
-</div>
-
-</div>
-
-</div>
-
-</div>
-
-</div>
-
-</section>
-
-</main>
-
-<script src="dashboard.js"></script>
-
+  <div class="dashboard-shell">
+    <div class="topbar">
+      <div class="brand-wrap">
+        <div class="eyebrow">Elevate Automation</div>
+        <div class="brand-title">Founder Beta Dashboard</div>
+        <div class="brand-subtitle">
+          Control center for your account, referral access, invite progression, and future automation expansion.
+        </div>
+      </div>
+
+      <div class="topbar-actions">
+        <button class="btn" onclick="window.location.href='/'">Main Site</button>
+        <button class="btn btn-gold" id="copyReferralBtn">Copy Referral Link</button>
+      </div>
+    </div>
+
+    <div id="dashboardError"></div>
+
+    <div class="hero-grid">
+      <div class="card">
+        <div class="card-title">Founder Access</div>
+        <div class="card-heading">Beta growth engine is live</div>
+        <div class="card-copy">
+          Your dashboard tracks account status, invite progression, referral activity, and founder access as Elevate Automation scales into a full sales platform.
+        </div>
+
+        <div class="status-pill">
+          Founder Pricing:
+          <span id="founderPricing">-</span>
+        </div>
+
+        <div class="mini-grid">
+          <div class="mini-stat">
+            <div class="mini-label">Plan</div>
+            <div class="mini-value" id="userPlan">-</div>
+          </div>
+          <div class="mini-stat">
+            <div class="mini-label">Status</div>
+            <div class="mini-value" id="userStatus">-</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Account Snapshot</div>
+        <div class="data-list">
+          <div class="data-row">
+            <div class="data-label">Email</div>
+            <div class="data-value" id="userEmail">-</div>
+          </div>
+          <div class="data-row">
+            <div class="data-label">Referral Code</div>
+            <div class="data-value" id="referralCode">-</div>
+          </div>
+          <div class="data-row">
+            <div class="data-label">Invite Tier</div>
+            <div class="data-value" id="inviteTier">-</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="grid">
+      <div class="card span-8">
+        <div class="card-title">Referral System</div>
+        <div class="card-heading">Your private referral link</div>
+        <div class="card-copy">
+          Share this link with qualified users. Invite access is limited and unlocks progressively through activation, contribution, and successful referrals.
+        </div>
+
+        <div class="ref-box" id="refLink">-</div>
+
+        <div class="card-actions">
+          <button class="btn btn-gold" id="copyReferralBtnSecondary">Copy Link</button>
+        </div>
+      </div>
+
+      <div class="card span-4">
+        <div class="card-title">Referral Results</div>
+        <div class="big-number" id="referralCount">0</div>
+        <div class="muted">Successful referrals tracked inside the beta system.</div>
+      </div>
+
+      <div class="card span-4">
+        <div class="card-title">Unlocked Invites</div>
+        <div class="big-number" id="unlockedInvites">1</div>
+        <div class="muted">Invite spots currently unlocked on your account.</div>
+      </div>
+
+      <div class="card span-4">
+        <div class="card-title">Used Invites</div>
+        <div class="big-number" id="usedInvites">0</div>
+        <div class="muted">Invite spots already used by your referrals.</div>
+      </div>
+
+      <div class="card span-4">
+        <div class="card-title">Remaining Invites</div>
+        <div class="big-number" id="remainingInvites">1</div>
+        <div class="muted">Available spots left before your current cap is reached.</div>
+      </div>
+
+      <div class="card span-8">
+        <div class="card-title">Invite Progression</div>
+        <div class="card-heading">Controlled beta unlock system</div>
+        <div class="card-copy">
+          Testers begin with 1 invite. Additional invite access unlocks through activation, feedback, contribution, and real user growth.
+        </div>
+
+        <div class="tier-badge" id="inviteTierBadge">Tester</div>
+
+        <div class="progress-wrap">
+          <div class="progress-label">
+            <span>Invite Unlock Progress</span>
+            <span id="inviteProgressLabel">1 of 3 unlocked</span>
+          </div>
+          <div class="progress-bar">
+            <div class="progress-fill" id="inviteProgressFill"></div>
+          </div>
+        </div>
+
+        <div class="notice" id="unlockMessage">
+          Complete activation, feedback, or beta participation to unlock invite #2.
+        </div>
+      </div>
+
+      <div class="card span-4">
+        <div class="card-title">Beta Positioning</div>
+        <div class="coming-list">
+          <div class="coming-item">
+            <strong>Tester</strong>
+            <span>Entry access with 1 invite spot.</span>
+          </div>
+          <div class="coming-item">
+            <strong>Contributor</strong>
+            <span>Unlock invite #2 through meaningful engagement.</span>
+          </div>
+          <div class="coming-item">
+            <strong>Founding Partner</strong>
+            <span>Unlock full 3-invite access through results.</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="card span-12">
+        <div class="card-title">Platform Expansion</div>
+        <div class="coming-list">
+          <div class="coming-item">
+            <strong>Posting Dashboard</strong>
+            <span>Queued vehicles, posted vehicles, failed posts, and daily posting visibility.</span>
+          </div>
+          <div class="coming-item">
+            <strong>CRM + Follow-Up</strong>
+            <span>Lead capture, automated follow-up logic, pipeline visibility, and conversation tracking.</span>
+          </div>
+          <div class="coming-item">
+            <strong>Affiliate + Team Growth</strong>
+            <span>Partner dashboard, referral analytics, leaderboard systems, and dealership/team expansion tools.</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="/js/dashboard.js"></script>
+  <script>
+    document.addEventListener("DOMContentLoaded", function () {
+      const secondaryCopyBtn = document.getElementById("copyReferralBtnSecondary");
+      if (secondaryCopyBtn && typeof copyReferralLink === "function") {
+        secondaryCopyBtn.addEventListener("click", copyReferralLink);
+      }
+
+      const observer = new MutationObserver(() => {
+        const unlockedEl = document.getElementById("unlockedInvites");
+        const badgeEl = document.getElementById("inviteTierBadge");
+        const labelEl = document.getElementById("inviteProgressLabel");
+        const fillEl = document.getElementById("inviteProgressFill");
+        const tierTextEl = document.getElementById("inviteTier");
+
+        if (!unlockedEl || !badgeEl || !labelEl || !fillEl || !tierTextEl) return;
+
+        const unlocked = parseInt(unlockedEl.textContent || "1", 10);
+
+        let tier = "Tester";
+        let width = "33%";
+
+        if (unlocked >= 3) {
+          tier = "Founding Partner";
+          width = "100%";
+        } else if (unlocked >= 2) {
+          tier = "Contributor";
+          width = "66%";
+        }
+
+        badgeEl.textContent = tier;
+        tierTextEl.textContent = tier;
+        labelEl.textContent = `${Math.min(unlocked, 3)} of 3 unlocked`;
+        fillEl.style.width = width;
+      });
+
+      observer.observe(document.body, {
+        childList: true,
+        subtree: true,
+        characterData: true
+      });
+    });
+  </script>
 </body>
 </html>
