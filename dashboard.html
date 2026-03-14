@@ -74,7 +74,7 @@
     .brand-subtitle {
       color: var(--muted);
       font-size: 14px;
-      max-width: 700px;
+      max-width: 720px;
       line-height: 1.5;
     }
 
@@ -143,7 +143,6 @@
     .span-8 { grid-column: span 8; }
     .span-6 { grid-column: span 6; }
     .span-4 { grid-column: span 4; }
-    .span-3 { grid-column: span 3; }
 
     .card-title {
       font-size: 12px;
@@ -362,6 +361,10 @@
       line-height: 1.5;
     }
 
+    .hidden {
+      display: none !important;
+    }
+
     @media (max-width: 1024px) {
       .hero-grid {
         grid-template-columns: 1fr;
@@ -369,8 +372,7 @@
 
       .span-8,
       .span-6,
-      .span-4,
-      .span-3 {
+      .span-4 {
         grid-column: span 12;
       }
     }
@@ -418,13 +420,14 @@
         <div class="eyebrow">Elevate Automation</div>
         <div class="brand-title">Founder Beta Dashboard</div>
         <div class="brand-subtitle">
-          Control center for your account, referral access, invite progression, and future automation expansion.
+          Control center for account access, referral growth, invite progression, and future automation tools.
         </div>
       </div>
 
       <div class="topbar-actions">
-        <button class="btn" onclick="window.location.href='/'">Main Site</button>
+        <button class="btn" id="homeBtn">Main Site</button>
         <button class="btn btn-gold" id="copyReferralBtn">Copy Referral Link</button>
+        <button class="btn" id="logoutBtn">Logout</button>
       </div>
     </div>
 
@@ -433,9 +436,9 @@
     <div class="hero-grid">
       <div class="card">
         <div class="card-title">Founder Access</div>
-        <div class="card-heading">Beta growth engine is live</div>
+        <div class="card-heading">Beta growth engine is active</div>
         <div class="card-copy">
-          Your dashboard tracks account status, invite progression, referral activity, and founder access as Elevate Automation scales into a full sales platform.
+          Your dashboard tracks subscription state, founder pricing, referral activity, and controlled beta invite progression.
         </div>
 
         <div class="status-pill">
@@ -479,7 +482,7 @@
         <div class="card-title">Referral System</div>
         <div class="card-heading">Your private referral link</div>
         <div class="card-copy">
-          Share this link with qualified users. Invite access is limited and unlocks progressively through activation, contribution, and successful referrals.
+          Share this link with qualified users. Additional invite access unlocks through activation, contribution, and successful referrals.
         </div>
 
         <div class="ref-box" id="refLink">-</div>
@@ -492,7 +495,7 @@
       <div class="card span-4">
         <div class="card-title">Referral Results</div>
         <div class="big-number" id="referralCount">0</div>
-        <div class="muted">Successful referrals tracked inside the beta system.</div>
+        <div class="muted">Successful referrals tracked in the beta system.</div>
       </div>
 
       <div class="card span-4">
@@ -504,20 +507,20 @@
       <div class="card span-4">
         <div class="card-title">Used Invites</div>
         <div class="big-number" id="usedInvites">0</div>
-        <div class="muted">Invite spots already used by your referrals.</div>
+        <div class="muted">Invite spots already consumed by accepted referrals.</div>
       </div>
 
       <div class="card span-4">
         <div class="card-title">Remaining Invites</div>
         <div class="big-number" id="remainingInvites">1</div>
-        <div class="muted">Available spots left before your current cap is reached.</div>
+        <div class="muted">Available invite spots before you hit your current cap.</div>
       </div>
 
       <div class="card span-8">
         <div class="card-title">Invite Progression</div>
         <div class="card-heading">Controlled beta unlock system</div>
         <div class="card-copy">
-          Testers begin with 1 invite. Additional invite access unlocks through activation, feedback, contribution, and real user growth.
+          Testers start with 1 invite. More access unlocks through real participation and actual results.
         </div>
 
         <div class="tier-badge" id="inviteTierBadge">Tester</div>
@@ -546,11 +549,11 @@
           </div>
           <div class="coming-item">
             <strong>Contributor</strong>
-            <span>Unlock invite #2 through meaningful engagement.</span>
+            <span>Unlock invite #2 through real engagement.</span>
           </div>
           <div class="coming-item">
             <strong>Founding Partner</strong>
-            <span>Unlock full 3-invite access through results.</span>
+            <span>Unlock full 3-invite access through performance.</span>
           </div>
         </div>
       </div>
@@ -560,63 +563,24 @@
         <div class="coming-list">
           <div class="coming-item">
             <strong>Posting Dashboard</strong>
-            <span>Queued vehicles, posted vehicles, failed posts, and daily posting visibility.</span>
+            <span>Queued vehicles, posted vehicles, failures, and daily posting visibility.</span>
           </div>
           <div class="coming-item">
             <strong>CRM + Follow-Up</strong>
-            <span>Lead capture, automated follow-up logic, pipeline visibility, and conversation tracking.</span>
+            <span>Lead tracking, follow-up sequences, automation triggers, and sales visibility.</span>
           </div>
           <div class="coming-item">
             <strong>Affiliate + Team Growth</strong>
-            <span>Partner dashboard, referral analytics, leaderboard systems, and dealership/team expansion tools.</span>
+            <span>Partner metrics, team invites, leaderboard systems, and dealership expansion tools.</span>
           </div>
         </div>
       </div>
     </div>
   </div>
 
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="/js/supabase-client.js"></script>
+  <script src="/js/auth.js"></script>
   <script src="/js/dashboard.js"></script>
-  <script>
-    document.addEventListener("DOMContentLoaded", function () {
-      const secondaryCopyBtn = document.getElementById("copyReferralBtnSecondary");
-      if (secondaryCopyBtn && typeof copyReferralLink === "function") {
-        secondaryCopyBtn.addEventListener("click", copyReferralLink);
-      }
-
-      const observer = new MutationObserver(() => {
-        const unlockedEl = document.getElementById("unlockedInvites");
-        const badgeEl = document.getElementById("inviteTierBadge");
-        const labelEl = document.getElementById("inviteProgressLabel");
-        const fillEl = document.getElementById("inviteProgressFill");
-        const tierTextEl = document.getElementById("inviteTier");
-
-        if (!unlockedEl || !badgeEl || !labelEl || !fillEl || !tierTextEl) return;
-
-        const unlocked = parseInt(unlockedEl.textContent || "1", 10);
-
-        let tier = "Tester";
-        let width = "33%";
-
-        if (unlocked >= 3) {
-          tier = "Founding Partner";
-          width = "100%";
-        } else if (unlocked >= 2) {
-          tier = "Contributor";
-          width = "66%";
-        }
-
-        badgeEl.textContent = tier;
-        tierTextEl.textContent = tier;
-        labelEl.textContent = `${Math.min(unlocked, 3)} of 3 unlocked`;
-        fillEl.style.width = width;
-      });
-
-      observer.observe(document.body, {
-        childList: true,
-        subtree: true,
-        characterData: true
-      });
-    });
-  </script>
 </body>
 </html>
