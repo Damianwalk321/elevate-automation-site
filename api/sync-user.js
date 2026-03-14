@@ -7,8 +7,12 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY
 );
 
+function normalizeEmail(email) {
+  return String(email || "").trim().toLowerCase();
+}
+
 function generateReferralCode(email) {
-  const clean = (email || "user")
+  const clean = normalizeEmail(email)
     .split("@")[0]
     .replace(/[^a-zA-Z0-9]/g, "")
     .toLowerCase()
@@ -21,7 +25,7 @@ function generateReferralCode(email) {
 async function generateUniqueReferralCode(email) {
   let attempts = 0;
 
-  while (attempts < 10) {
+  while (attempts < 20) {
     const code = generateReferralCode(email);
 
     const { data, error } = await supabase
@@ -30,8 +34,13 @@ async function generateUniqueReferralCode(email) {
       .eq("referral_code", code)
       .maybeSingle();
 
-    if (error) throw new Error(error.message);
-    if (!data) return code;
+    if (error) {
+      throw new Error(`Referral lookup failed: ${error.message}`);
+    }
+
+    if (!data) {
+      return code;
+    }
 
     attempts += 1;
   }
@@ -48,91 +57,101 @@ export default async function handler(req, res) {
     const { auth_user_id, email, full_name } = req.body || {};
 
     if (!auth_user_id || !email) {
-      return res.status(400).json({ error: "Missing auth_user_id or email" });
+      return res.status(400).json({
+        error: "Missing auth_user_id or email"
+      });
     }
 
-    const normalizedEmail = String(email).trim().toLowerCase();
-    const displayName = full_name || normalizedEmail.split("@")[0];
+    const normalizedEmail = normalizeEmail(email);
+    const displayName = (full_name || normalizedEmail.split("@")[0] || "User").trim();
 
-    // 1) Try linked row first
-    const { data: linkedUser, error: linkedError } = await supabase
+    // 1) Look for exact auth-linked row first
+    const { data: authMatch, error: authMatchError } = await supabase
       .from("users")
       .select("*")
       .eq("auth_user_id", auth_user_id)
       .maybeSingle();
 
-    if (linkedError) {
-      return res.status(500).json({ error: linkedError.message });
+    if (authMatchError) {
+      throw new Error(`Auth match lookup failed: ${authMatchError.message}`);
     }
 
-    if (linkedUser) {
+    if (authMatch) {
       const updatePayload = {
         email: normalizedEmail,
         name: displayName
       };
 
-      if (!linkedUser.referral_code) {
+      if (!authMatch.referral_code) {
         updatePayload.referral_code = await generateUniqueReferralCode(normalizedEmail);
       }
 
       const { error: updateError } = await supabase
         .from("users")
         .update(updatePayload)
-        .eq("id", linkedUser.id);
+        .eq("id", authMatch.id);
 
       if (updateError) {
-        return res.status(500).json({ error: updateError.message });
+        throw new Error(`Updating auth-linked row failed: ${updateError.message}`);
       }
 
       return res.status(200).json({
         success: true,
-        action: "updated_linked_user"
+        action: "updated_auth_linked_row",
+        user_id: authMatch.id
       });
     }
 
-    // 2) Try existing row by email
-    const { data: emailMatches, error: emailError } = await supabase
+    // 2) Find rows by email
+    const { data: emailRows, error: emailRowsError } = await supabase
       .from("users")
       .select("*")
-      .eq("email", normalizedEmail)
-      .order("id", { ascending: true });
+      .eq("email", normalizedEmail);
 
-    if (emailError) {
-      return res.status(500).json({ error: emailError.message });
+    if (emailRowsError) {
+      throw new Error(`Email lookup failed: ${emailRowsError.message}`);
     }
 
-    if (emailMatches && emailMatches.length > 0) {
-      const bestMatch = emailMatches.find((row) => !row.auth_user_id) || emailMatches[0];
+    if (emailRows && emailRows.length > 0) {
+      // Prefer a row without auth_user_id so we can safely claim it
+      const unclaimedRow = emailRows.find((row) => !row.auth_user_id);
+      const alreadyClaimedRow = emailRows.find((row) => row.auth_user_id === auth_user_id);
+      const bestRow = alreadyClaimedRow || unclaimedRow || emailRows[0];
 
       const updatePayload = {
-        auth_user_id,
         email: normalizedEmail,
         name: displayName
       };
 
-      if (!bestMatch.referral_code) {
+      // Only attach auth_user_id if row is unclaimed or already belongs to this auth user
+      if (!bestRow.auth_user_id || bestRow.auth_user_id === auth_user_id) {
+        updatePayload.auth_user_id = auth_user_id;
+      }
+
+      if (!bestRow.referral_code) {
         updatePayload.referral_code = await generateUniqueReferralCode(normalizedEmail);
       }
 
       const { error: claimError } = await supabase
         .from("users")
         .update(updatePayload)
-        .eq("id", bestMatch.id);
+        .eq("id", bestRow.id);
 
       if (claimError) {
-        return res.status(500).json({ error: claimError.message });
+        throw new Error(`Claiming existing email row failed: ${claimError.message}`);
       }
 
       return res.status(200).json({
         success: true,
-        action: "claimed_existing_email_row"
+        action: "claimed_or_updated_email_row",
+        user_id: bestRow.id
       });
     }
 
-    // 3) Insert brand new row
+    // 3) Insert fresh row
     const referralCode = await generateUniqueReferralCode(normalizedEmail);
 
-    const { error: insertError } = await supabase
+    const { data: insertedRows, error: insertError } = await supabase
       .from("users")
       .insert([
         {
@@ -147,18 +166,22 @@ export default async function handler(req, res) {
           used_invites: 0,
           founder_pricing_locked: true
         }
-      ]);
+      ])
+      .select();
 
     if (insertError) {
-      return res.status(500).json({ error: insertError.message });
+      throw new Error(`Inserting new user row failed: ${insertError.message}`);
     }
 
     return res.status(200).json({
       success: true,
-      action: "inserted_new_user"
+      action: "inserted_new_user",
+      user_id: insertedRows?.[0]?.id || null
     });
   } catch (err) {
-    return res.status(500).json({ error: err.message });
+    console.error("sync-user error:", err);
+    return res.status(500).json({
+      error: err.message || "sync-user failed"
+    });
   }
 }
-
