@@ -19,25 +19,20 @@ function generateReferralCode(email) {
 }
 
 async function generateUniqueReferralCode(email) {
-  let code = generateReferralCode(email);
   let attempts = 0;
 
   while (attempts < 10) {
+    const code = generateReferralCode(email);
+
     const { data, error } = await supabase
       .from("users")
       .select("id")
       .eq("referral_code", code)
       .maybeSingle();
 
-    if (error) {
-      throw new Error(error.message);
-    }
+    if (error) throw new Error(error.message);
+    if (!data) return code;
 
-    if (!data) {
-      return code;
-    }
-
-    code = generateReferralCode(email);
     attempts += 1;
   }
 
@@ -50,36 +45,40 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { auth_user_id, email, full_name } = req.body;
+    const { auth_user_id, email, full_name } = req.body || {};
 
     if (!auth_user_id || !email) {
       return res.status(400).json({ error: "Missing auth_user_id or email" });
     }
 
-    const { data: existingUser, error: existingError } = await supabase
+    const normalizedEmail = String(email).trim().toLowerCase();
+    const displayName = full_name || normalizedEmail.split("@")[0];
+
+    // 1) Try linked row first
+    const { data: linkedUser, error: linkedError } = await supabase
       .from("users")
-      .select("id, auth_user_id, email, referral_code")
+      .select("*")
       .eq("auth_user_id", auth_user_id)
       .maybeSingle();
 
-    if (existingError) {
-      return res.status(500).json({ error: existingError.message });
+    if (linkedError) {
+      return res.status(500).json({ error: linkedError.message });
     }
 
-    if (existingUser) {
+    if (linkedUser) {
       const updatePayload = {
-        email,
-        name: full_name || email.split("@")[0]
+        email: normalizedEmail,
+        name: displayName
       };
 
-      if (!existingUser.referral_code) {
-        updatePayload.referral_code = await generateUniqueReferralCode(email);
+      if (!linkedUser.referral_code) {
+        updatePayload.referral_code = await generateUniqueReferralCode(normalizedEmail);
       }
 
       const { error: updateError } = await supabase
         .from("users")
         .update(updatePayload)
-        .eq("auth_user_id", auth_user_id);
+        .eq("id", linkedUser.id);
 
       if (updateError) {
         return res.status(500).json({ error: updateError.message });
@@ -87,20 +86,59 @@ export default async function handler(req, res) {
 
       return res.status(200).json({
         success: true,
-        action: "updated",
-        referral_code: updatePayload.referral_code || existingUser.referral_code || null
+        action: "updated_linked_user"
       });
     }
 
-    const referralCode = await generateUniqueReferralCode(email);
+    // 2) Try existing row by email
+    const { data: emailMatches, error: emailError } = await supabase
+      .from("users")
+      .select("*")
+      .eq("email", normalizedEmail)
+      .order("id", { ascending: true });
+
+    if (emailError) {
+      return res.status(500).json({ error: emailError.message });
+    }
+
+    if (emailMatches && emailMatches.length > 0) {
+      const bestMatch = emailMatches.find((row) => !row.auth_user_id) || emailMatches[0];
+
+      const updatePayload = {
+        auth_user_id,
+        email: normalizedEmail,
+        name: displayName
+      };
+
+      if (!bestMatch.referral_code) {
+        updatePayload.referral_code = await generateUniqueReferralCode(normalizedEmail);
+      }
+
+      const { error: claimError } = await supabase
+        .from("users")
+        .update(updatePayload)
+        .eq("id", bestMatch.id);
+
+      if (claimError) {
+        return res.status(500).json({ error: claimError.message });
+      }
+
+      return res.status(200).json({
+        success: true,
+        action: "claimed_existing_email_row"
+      });
+    }
+
+    // 3) Insert brand new row
+    const referralCode = await generateUniqueReferralCode(normalizedEmail);
 
     const { error: insertError } = await supabase
       .from("users")
       .insert([
         {
           auth_user_id,
-          email,
-          name: full_name || email.split("@")[0],
+          email: normalizedEmail,
+          name: displayName,
           plan: "Beta",
           subscription_status: "active",
           referral_code: referralCode,
@@ -117,10 +155,10 @@ export default async function handler(req, res) {
 
     return res.status(200).json({
       success: true,
-      action: "inserted",
-      referral_code: referralCode
+      action: "inserted_new_user"
     });
   } catch (err) {
     return res.status(500).json({ error: err.message });
   }
 }
+
