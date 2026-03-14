@@ -2,20 +2,35 @@
 
 function setText(id, value, fallback = "-") {
   const el = document.getElementById(id);
-  if (el) {
-    if (value === null || value === undefined || value === "") {
-      el.textContent = fallback;
-    } else {
-      el.textContent = value;
-    }
-  }
+  if (!el) return;
+  el.textContent = value === null || value === undefined || value === "" ? fallback : value;
+}
+
+function showLoading(message = "Loading dashboard...") {
+  const loadingEl = document.getElementById("dashboardLoading");
+  if (!loadingEl) return;
+  loadingEl.textContent = message;
+  loadingEl.classList.add("show");
+}
+
+function hideLoading() {
+  const loadingEl = document.getElementById("dashboardLoading");
+  if (!loadingEl) return;
+  loadingEl.classList.remove("show");
 }
 
 function showError(message) {
   const errorEl = document.getElementById("dashboardError");
   if (!errorEl) return;
   errorEl.textContent = message || "Something went wrong loading the dashboard.";
-  errorEl.style.display = "block";
+  errorEl.classList.add("show");
+}
+
+function clearError() {
+  const errorEl = document.getElementById("dashboardError");
+  if (!errorEl) return;
+  errorEl.textContent = "";
+  errorEl.classList.remove("show");
 }
 
 function getBillingReadableStatus(status) {
@@ -51,13 +66,11 @@ function updateBillingUI(data) {
   setText("billingReady", hasStripeCustomer ? "Yes" : "No");
 
   let accessState = "Pending";
-  if ((data.subscription_status || "").toLowerCase() === "active") {
-    accessState = "Live";
-  } else if ((data.subscription_status || "").toLowerCase() === "past_due") {
-    accessState = "Attention Needed";
-  } else if ((data.subscription_status || "").toLowerCase() === "cancelled") {
-    accessState = "Cancelled";
-  }
+  const normalized = (data.subscription_status || "").toLowerCase();
+
+  if (normalized === "active") accessState = "Live";
+  if (normalized === "past_due") accessState = "Attention Needed";
+  if (normalized === "cancelled") accessState = "Cancelled";
 
   setText("accessState", accessState);
 
@@ -65,7 +78,6 @@ function updateBillingUI(data) {
   if (billingStatusPill) {
     billingStatusPill.classList.remove("success", "warning", "danger");
 
-    const normalized = (data.subscription_status || "").toLowerCase();
     if (normalized === "active" || normalized === "trialing") {
       billingStatusPill.classList.add("success");
     } else if (normalized === "past_due" || normalized === "incomplete") {
@@ -88,19 +100,16 @@ function updateInviteUI(unlockedInvites, usedInvites) {
   let tier = "Tester";
   let width = "33%";
   let label = `${Math.min(unlocked, 3)} of 3 unlocked`;
-  let unlockMessage =
-    "Complete activation, feedback, or beta participation to unlock invite #2.";
+  let unlockMessage = "Complete activation, feedback, or beta participation to unlock invite #2.";
 
   if (unlocked >= 3) {
     tier = "Founding Partner";
     width = "100%";
-    unlockMessage =
-      "All 3 invite spots unlocked. Founder-level beta access is active.";
+    unlockMessage = "All 3 invite spots unlocked. Founder-level beta access is active.";
   } else if (unlocked >= 2) {
     tier = "Contributor";
     width = "66%";
-    unlockMessage =
-      "Bring in 1 qualified user or complete the next contribution milestone to unlock invite #3.";
+    unlockMessage = "Bring in 1 qualified user or complete the next contribution milestone to unlock invite #3.";
   }
 
   setText("inviteTier", tier);
@@ -117,29 +126,54 @@ function buildReferralLink(referralCode) {
   return `${window.location.origin}/?ref=${referralCode}`;
 }
 
+async function fetchDashboardData(user) {
+  const response = await fetch("/api/get-user-data", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      email: user.email,
+      auth_user_id: user.id
+    })
+  });
+
+  const text = await response.text();
+
+  let data;
+  try {
+    data = JSON.parse(text);
+  } catch {
+    throw new Error(`Dashboard API returned non-JSON response: ${text}`);
+  }
+
+  if (!response.ok) {
+    throw new Error(data.details || data.error || "Failed to load dashboard data.");
+  }
+
+  return data;
+}
+
 async function loadDashboard() {
   try {
+    clearError();
+    showLoading("Checking session...");
+
+    if (typeof requireAuth !== "function") {
+      throw new Error("requireAuth() is not available. auth.js may not be loaded.");
+    }
+
     const user = await requireAuth();
-    if (!user || !user.email) return;
+
+    if (!user || !user.email) {
+      throw new Error("Authenticated user not found.");
+    }
 
     localStorage.setItem("user_email", user.email);
 
-    const response = await fetch("/api/get-user-data", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        email: user.email,
-        auth_user_id: user.id
-      })
-    });
+    showLoading("Loading dashboard data...");
 
-    const data = await response.json();
-
-    if (!response.ok) {
-      throw new Error(data.error || "Failed to load dashboard.");
-    }
+    const data = await fetchDashboardData(user);
 
     setText("userEmail", data.email || user.email);
     setText("userPlan", data.plan || "Beta");
@@ -155,8 +189,11 @@ async function loadDashboard() {
       Number(data.unlocked_invites || 1),
       Number(data.used_invites || 0)
     );
+
+    hideLoading();
   } catch (error) {
     console.error("Dashboard load error:", error);
+    hideLoading();
     showError(error.message || "Could not load dashboard.");
   }
 }
@@ -192,6 +229,10 @@ async function copyReferralLink() {
 
 async function logoutUser() {
   try {
+    if (typeof signOutUser !== "function") {
+      throw new Error("signOutUser() is not available.");
+    }
+
     await signOutUser();
     window.location.href = "/login.html";
   } catch (error) {
