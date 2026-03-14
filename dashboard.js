@@ -129,7 +129,10 @@ async function loadDashboard() {
       headers: {
         "Content-Type": "application/json"
       },
-      body: JSON.stringify({ email: user.email })
+      body: JSON.stringify({
+        email: user.email,
+        auth_user_id: user.id
+      })
     });
 
     const data = await response.json();
@@ -223,4 +226,5 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   await loadDashboard();
 });
+
 
