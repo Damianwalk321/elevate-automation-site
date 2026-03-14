@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Login | Elevate Automation</title>
+  <style>
+    body {
+      margin: 0;
+      font-family: Arial, sans-serif;
+      background: #070707;
+      color: #fff;
+      display: grid;
+      place-items: center;
+      min-height: 100vh;
+      padding: 24px;
+    }
+    .wrap {
+      width: 100%;
+      max-width: 460px;
+      background: #111;
+      border: 1px solid rgba(212,175,55,0.2);
+      border-radius: 18px;
+      padding: 28px;
+    }
+    h1 { margin: 0 0 10px; color: #d4af37; }
+    p { color: #aaa; line-height: 1.5; }
+    .field { margin-top: 16px; }
+    label { display: block; margin-bottom: 8px; font-size: 14px; color: #ccc; }
+    input {
+      width: 100%;
+      padding: 14px;
+      border-radius: 12px;
+      border: 1px solid #2a2a2a;
+      background: #0b0b0b;
+      color: #fff;
+      box-sizing: border-box;
+    }
+    button {
+      width: 100%;
+      margin-top: 18px;
+      padding: 14px;
+      border: none;
+      border-radius: 12px;
+      background: #d4af37;
+      color: #111;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    .msg { margin-top: 16px; font-size: 14px; line-height: 1.5; }
+    a { color: #d4af37; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Login</h1>
+    <p>Access your Elevate Automation dashboard.</p>
+
+    <form id="loginForm">
+      <div class="field">
+        <label for="email">Email</label>
+        <input id="email" type="email" placeholder="you@example.com" required />
+      </div>
+
+      <div class="field">
+        <label for="password">Password</label>
+        <input id="password" type="password" placeholder="Your password" required />
+      </div>
+
+      <button type="submit">Log In</button>
+    </form>
+
+    <div class="msg" id="message"></div>
+    <div class="msg"><a href="/reset-password.html">Forgot password?</a></div>
+    <div class="msg"><a href="/signup.html">Need an account? Sign up</a></div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="/js/supabase-client.js"></script>
+  <script src="/js/auth.js"></script>
+  <script>
+    document.getElementById("loginForm").addEventListener("submit", async (e) => {
+      e.preventDefault();
+
+      const message = document.getElementById("message");
+      message.textContent = "Logging in...";
+
+      try {
+        const email = document.getElementById("email").value.trim();
+        const password = document.getElementById("password").value;
+
+        await signInWithEmail(email, password);
+
+        window.location.href = "/dashboard.html";
+      } catch (err) {
+        message.textContent = err.message || "Login failed.";
+      }
+    });
+  </script>
+</body>
+</html>
