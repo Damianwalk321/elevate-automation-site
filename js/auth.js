@@ -1,5 +1,11 @@
-
 // /js/auth.js
+
+function getSupabaseClient() {
+  if (!window.supabaseClient) {
+    throw new Error("Supabase client is not initialized.");
+  }
+  return window.supabaseClient;
+}
 
 async function syncUserToAppTable(user) {
   if (!user || !user.id || !user.email) return;
@@ -22,7 +28,7 @@ async function syncUserToAppTable(user) {
 }
 
 async function signUpWithEmail(email, password, fullName = "") {
-  const supabase = window.supabaseClient;
+  const supabase = getSupabaseClient();
 
   const { data, error } = await supabase.auth.signUp({
     email: email,
@@ -45,7 +51,7 @@ async function signUpWithEmail(email, password, fullName = "") {
 }
 
 async function signInWithEmail(email, password) {
-  const supabase = window.supabaseClient;
+  const supabase = getSupabaseClient();
 
   const { data, error } = await supabase.auth.signInWithPassword({
     email: email,
@@ -63,7 +69,7 @@ async function signInWithEmail(email, password) {
 }
 
 async function signOutUser() {
-  const supabase = window.supabaseClient;
+  const supabase = getSupabaseClient();
 
   const { error } = await supabase.auth.signOut();
 
@@ -73,7 +79,7 @@ async function signOutUser() {
 }
 
 async function sendResetPassword(email) {
-  const supabase = window.supabaseClient;
+  const supabase = getSupabaseClient();
 
   const { error } = await supabase.auth.resetPasswordForEmail(email, {
     redirectTo: `${window.location.origin}/reset-password.html`
@@ -83,7 +89,7 @@ async function sendResetPassword(email) {
 }
 
 async function updatePassword(newPassword) {
-  const supabase = window.supabaseClient;
+  const supabase = getSupabaseClient();
 
   const { error } = await supabase.auth.updateUser({
     password: newPassword
@@ -93,7 +99,7 @@ async function updatePassword(newPassword) {
 }
 
 async function getCurrentUser() {
-  const supabase = window.supabaseClient;
+  const supabase = getSupabaseClient();
 
   const { data, error } = await supabase.auth.getUser();
 
@@ -126,10 +132,12 @@ async function requireAuth() {
 }
 
 document.addEventListener("DOMContentLoaded", () => {
-  const supabase = window.supabaseClient;
-  if (!supabase) return;
+  if (!window.supabaseClient) {
+    console.error("Supabase client missing on page.");
+    return;
+  }
 
-  supabase.auth.onAuthStateChange(async (event, session) => {
+  window.supabaseClient.auth.onAuthStateChange(async (event, session) => {
     if (session?.user?.email) {
       localStorage.setItem("user_email", session.user.email);
       await syncUserToAppTable(session.user);
