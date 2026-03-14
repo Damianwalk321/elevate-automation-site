@@ -70,6 +70,7 @@
       margin-top: 18px;
       min-height: 22px;
       color: #dddddd;
+      line-height: 1.5;
     }
   </style>
 </head>
@@ -92,22 +93,32 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="/js/supabase-client.js"></script>
   <script src="/js/auth.js"></script>
-  <script>
-    document.getElementById("loginForm").addEventListener("submit", async (e) => {
-      e.preventDefault();
 
-      const email = document.getElementById("email").value.trim();
-      const password = document.getElementById("password").value;
+  <script>
+    document.addEventListener("DOMContentLoaded", function () {
+      const form = document.getElementById("loginForm");
       const message = document.getElementById("message");
 
-      message.textContent = "Logging in...";
+      form.addEventListener("submit", async function (e) {
+        e.preventDefault();
 
-      try {
-        await signInWithEmail(email, password);
-        window.location.href = "/dashboard.html";
-      } catch (err) {
-        message.textContent = err.message || "Login failed.";
-      }
+        const email = document.getElementById("email").value.trim();
+        const password = document.getElementById("password").value;
+
+        message.textContent = "Logging in...";
+
+        try {
+          if (typeof window.signInWithEmail !== "function") {
+            throw new Error("signInWithEmail is not available. auth.js may not be loading.");
+          }
+
+          await window.signInWithEmail(email, password);
+          window.location.href = "/dashboard.html";
+        } catch (err) {
+          console.error("Login error:", err);
+          message.textContent = err.message || "Login failed.";
+        }
+      });
     });
   </script>
 </body>
