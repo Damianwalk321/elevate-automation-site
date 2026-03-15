@@ -1,5 +1,5 @@
 // dashboard.js
-// Full replacement with dealer website / inventory URL / scanner type support
+// Full replacement with extension control panel + dealer routing + setup state
 
 const SUPABASE_URL = "https://teixblbxkoershwgqpym.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRlaXhibGJ4a29lcnNod2dxcHltIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMwODUzMDMsImV4cCI6MjA4ODY2MTMwM30.wxt9zjKhsBuflaFZZT9awZiwckRzYkEl-OLm_4q8qF4";
@@ -7,6 +7,7 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 let supabaseClient = null;
 let currentUser = null;
 let currentProfile = null;
+let currentAccountData = null;
 
 document.addEventListener("DOMContentLoaded", async () => {
   try {
@@ -76,7 +77,6 @@ function bindDashboardUI() {
   if (saveBtn) {
     saveBtn.type = "button";
     saveBtn.removeAttribute("onclick");
-
     saveBtn.addEventListener("click", async (event) => {
       event.preventDefault();
       event.stopPropagation();
@@ -98,6 +98,49 @@ function bindDashboardUI() {
       await loadAccountData(currentUser);
     });
   }
+
+  const refreshExtensionStateBtn = document.getElementById("refreshExtensionStateBtn");
+  if (refreshExtensionStateBtn) {
+    refreshExtensionStateBtn.addEventListener("click", async () => {
+      if (!currentUser) return;
+      await loadAccountData(currentUser);
+      setStatus("extensionActionStatus", "Extension state refreshed.");
+    });
+  }
+
+  const openMarketplaceBtn = document.getElementById("openMarketplaceBtn");
+  if (openMarketplaceBtn) {
+    openMarketplaceBtn.addEventListener("click", () => {
+      window.open("https://www.facebook.com/marketplace/create/vehicle", "_blank");
+    });
+  }
+
+  const openInventoryBtn = document.getElementById("openInventoryBtn");
+  if (openInventoryBtn) {
+    openInventoryBtn.addEventListener("click", () => {
+      const inventoryUrl = getFieldValue("inventory_url") || currentProfile?.inventory_url || "";
+      if (!inventoryUrl) {
+        setStatus("extensionActionStatus", "No inventory URL saved yet.");
+        return;
+      }
+      window.open(normalizeUrlInput(inventoryUrl), "_blank");
+      setStatus("extensionActionStatus", "Opening inventory URL...");
+    });
+  }
+
+  const copySetupStepsBtn = document.getElementById("copySetupStepsBtn");
+  if (copySetupStepsBtn) {
+    copySetupStepsBtn.addEventListener("click", async () => {
+      const setupText = buildSetupStepsText();
+      try {
+        await navigator.clipboard.writeText(setupText);
+        setStatus("extensionActionStatus", "Setup steps copied.");
+      } catch (error) {
+        console.error("Clipboard error:", error);
+        setStatus("extensionActionStatus", "Could not copy setup steps.");
+      }
+    });
+  }
 }
 
 async function onSaveProfilePressed() {
@@ -110,6 +153,10 @@ async function onSaveProfilePressed() {
     }
 
     await submitProfileSave(currentUser);
+
+    if (currentUser) {
+      await loadAccountData(currentUser);
+    }
   } catch (error) {
     console.error("onSaveProfilePressed error:", error);
     setStatus("profileStatus", `Save failed: ${error.message || "Unknown error"}`);
@@ -132,6 +179,7 @@ function showSection(sectionId) {
   const titleMap = {
     overview: "Founder Beta Dashboard",
     profile: "Profile & Dealer Setup",
+    extension: "Extension Control",
     compliance: "Compliance",
     affiliate: "Affiliate Center",
     billing: "Billing & Access",
@@ -168,6 +216,7 @@ async function loadProfile(userId) {
       console.warn("Profile load failed:", result);
       currentProfile = null;
       renderProfileSummary(null);
+      updateSetupStates(null, currentAccountData);
       setStatus("profileStatus", "No profile loaded yet.");
       return;
     }
@@ -175,6 +224,7 @@ async function loadProfile(userId) {
     if (!result.data) {
       currentProfile = null;
       renderProfileSummary(null);
+      updateSetupStates(null, currentAccountData);
       setStatus("profileStatus", "No profile found yet.");
       return;
     }
@@ -197,6 +247,7 @@ async function loadProfile(userId) {
     setFieldValue("software_license_key", result.data.software_license_key || "");
 
     renderProfileSummary(result.data);
+    updateSetupStates(currentProfile, currentAccountData);
     setStatus("profileStatus", "Profile loaded.");
   } catch (error) {
     console.error("loadProfile error:", error);
@@ -226,9 +277,6 @@ async function submitProfileSave(user) {
       scanner_type: getFieldValue("scanner_type")
     };
 
-    console.log("PROFILE SAVE PAYLOAD:", payload);
-    setStatus("profileStatus", "Sending profile save request...");
-
     const response = await fetch("/api/profile", {
       method: "POST",
       headers: {
@@ -241,10 +289,7 @@ async function submitProfileSave(user) {
 
     if (!response.ok) {
       console.error("Profile save failed:", result);
-      setStatus(
-        "profileStatus",
-        `Save failed: ${result.error || result.message || "Unknown error"}`
-      );
+      setStatus("profileStatus", `Save failed: ${result.error || result.message || "Unknown error"}`);
       return;
     }
 
@@ -255,6 +300,7 @@ async function submitProfileSave(user) {
     }
 
     renderProfileSummary(currentProfile);
+    updateSetupStates(currentProfile, currentAccountData);
     setStatus("profileStatus", "Profile saved successfully.");
   } catch (error) {
     console.error("submitProfileSave error:", error);
@@ -308,21 +354,32 @@ async function loadAccountData(user) {
   try {
     setStatus("accountStatus", "Loading account data...");
     setStatus("accountStatusBilling", "Loading account data...");
+    setStatus("extensionAccessStatus", "Loading extension state...");
 
-    const response = await fetch(`/api/get-user-data?email=${encodeURIComponent(user.email)}`);
+    const response = await fetch(`/api/extension-state?email=${encodeURIComponent(user.email)}`);
     const result = await response.json();
 
     if (!response.ok) {
-      console.warn("Account data load failed:", result);
+      console.warn("Extension/account data load failed:", result);
+      currentAccountData = null;
       renderAccessState(null);
+      renderExtensionControl(null, currentProfile);
+      updateSetupStates(currentProfile, null);
       setStatus("accountStatus", "Could not load account data.");
       setStatus("accountStatusBilling", "Could not load account data.");
+      setStatus("extensionAccessStatus", "Could not load extension state.");
       return;
     }
 
+    currentAccountData = result || null;
+
     renderAccessState(result);
+    renderExtensionControl(result, currentProfile);
+    updateSetupStates(currentProfile, result);
+
     setStatus("accountStatus", "Account data loaded.");
     setStatus("accountStatusBilling", "Account data loaded.");
+    setStatus("extensionAccessStatus", "Extension state loaded.");
 
     const softwareLicenseKey = result?.license_key || "Not assigned";
     setTextByIdForAll("licenseKeyDisplay", softwareLicenseKey);
@@ -332,20 +389,13 @@ async function loadAccountData(user) {
     setTextByIdForAll("referralCode", referral);
     setTextByIdForAll("referralCodeAffiliate", referral);
 
-    setTextByIdForAll("planNameBilling", result?.plan_name || "Founder Beta");
+    setTextByIdForAll("planNameBilling", result?.plan || result?.plan_name || "Founder Beta");
     setTextByIdForAll("subscriptionStatusBilling", result?.status || "inactive");
 
-    const access = Boolean(
-      result &&
-      (result.access === true ||
-        result.active === true ||
-        result.subscription_active === true ||
-        result.status === "active")
-    );
-
+    const access = Boolean(result?.access);
     setTextByIdForAll("accessBadgeBilling", access ? "Active Access" : "Inactive Access");
     document.querySelectorAll("#accessBadgeBilling").forEach((el) => {
-      el.classList.remove("active", "inactive");
+      el.classList.remove("active", "inactive", "warn");
       el.classList.add(access ? "active" : "inactive");
     });
 
@@ -360,29 +410,120 @@ async function loadAccountData(user) {
     }
   } catch (error) {
     console.error("loadAccountData error:", error);
+    currentAccountData = null;
     renderAccessState(null);
+    renderExtensionControl(null, currentProfile);
+    updateSetupStates(currentProfile, null);
     setStatus("accountStatus", "Failed to load account data.");
     setStatus("accountStatusBilling", "Failed to load account data.");
+    setStatus("extensionAccessStatus", "Failed to load extension state.");
   }
 }
 
 function renderAccessState(data) {
-  const hasAccess = Boolean(
-    data &&
-      (data.access === true ||
-        data.active === true ||
-        data.subscription_active === true ||
-        data.status === "active")
-  );
+  const hasAccess = Boolean(data?.access);
 
   setTextByIdForAll("accessBadge", hasAccess ? "Active Access" : "Inactive Access");
-  setTextByIdForAll("planName", data?.plan_name || data?.plan || data?.price_id || "Founder Beta");
+  setTextByIdForAll("planName", data?.plan || data?.plan_name || "Founder Beta");
   setTextByIdForAll("subscriptionStatus", data?.status || (hasAccess ? "active" : "inactive"));
 
   document.querySelectorAll("#accessBadge").forEach((el) => {
-    el.classList.remove("active", "inactive");
+    el.classList.remove("active", "inactive", "warn");
     el.classList.add(hasAccess ? "active" : "inactive");
   });
+}
+
+function renderExtensionControl(data, profile) {
+  const mergedProfile = profile || {};
+  const extensionData = data || {};
+  const hasAccess = Boolean(extensionData?.access);
+  const limit = Number(extensionData?.posting_limit || 0);
+  const used = Number(extensionData?.posts_today || 0);
+  const remaining = Math.max(limit - used, 0);
+
+  const dealerWebsite = extensionData?.dealer_site || mergedProfile?.dealer_website || "Not set";
+  const inventoryUrl = extensionData?.inventory_url || mergedProfile?.inventory_url || "Not set";
+  const scannerType = extensionData?.scanner_type || mergedProfile?.scanner_type || "Not set";
+  const listingLocation = mergedProfile?.listing_location || "Not set";
+  const complianceMode = mergedProfile?.compliance_mode || mergedProfile?.province || "Not set";
+  const plan = extensionData?.plan || extensionData?.plan_name || "Founder Beta";
+
+  setTextByIdForAll("extensionRemainingPosts", String(remaining));
+  setTextByIdForAll("extensionScannerType", scannerType);
+  setTextByIdForAll("extensionDealerWebsite", dealerWebsite);
+  setTextByIdForAll("extensionInventoryUrl", inventoryUrl);
+  setTextByIdForAll("extensionListingLocation", listingLocation);
+  setTextByIdForAll("extensionComplianceMode", complianceMode);
+  setTextByIdForAll("extensionPlan", plan);
+  setTextByIdForAll("extensionPostsUsed", String(used));
+  setTextByIdForAll("extensionPostLimit", String(limit));
+
+  const accessText = !data
+    ? "Unavailable"
+    : !hasAccess
+      ? "Inactive Access"
+      : remaining <= 0
+        ? "Limit Reached"
+        : "Active Access";
+
+  setTextByIdForAll("extensionAccessBadge", accessText);
+  document.querySelectorAll("#extensionAccessBadge").forEach((el) => {
+    el.classList.remove("active", "inactive", "warn");
+    if (!data) el.classList.add("warn");
+    else if (!hasAccess) el.classList.add("inactive");
+    else if (remaining <= 0) el.classList.add("warn");
+    else el.classList.add("active");
+  });
+}
+
+function updateSetupStates(profile, accountData) {
+  setSetupState("setupDealerWebsite", !!profile?.dealer_website);
+  setSetupState("setupInventoryUrl", !!profile?.inventory_url);
+  setSetupState("setupScannerType", !!profile?.scanner_type);
+  setSetupState("setupListingLocation", !!profile?.listing_location);
+  setSetupState("setupComplianceMode", !!(profile?.compliance_mode || profile?.province));
+  setSetupState("setupAccess", !!accountData?.access);
+
+  setSetupState("extSetupDealerWebsite", !!profile?.dealer_website);
+  setSetupState("extSetupInventoryUrl", !!profile?.inventory_url);
+  setSetupState("extSetupScannerType", !!profile?.scanner_type);
+  setSetupState("extSetupListingLocation", !!profile?.listing_location);
+  setSetupState("extSetupComplianceMode", !!(profile?.compliance_mode || profile?.province));
+  setSetupState("extSetupAccess", !!accountData?.access);
+}
+
+function setSetupState(id, isGood) {
+  const el = document.getElementById(id);
+  if (!el) return;
+
+  el.textContent = isGood ? "Ready" : "Needs Setup";
+  el.classList.remove("good", "warn");
+  el.classList.add(isGood ? "good" : "warn");
+}
+
+function buildSetupStepsText() {
+  const profile = currentProfile || {};
+  const account = currentAccountData || {};
+
+  return [
+    "Elevate Automation Setup",
+    "",
+    `Access: ${account?.access ? "Active" : "Inactive"}`,
+    `Plan: ${account?.plan || account?.plan_name || "Founder Beta"}`,
+    `Dealer Website: ${profile?.dealer_website || "Not set"}`,
+    `Inventory URL: ${profile?.inventory_url || "Not set"}`,
+    `Scanner Type: ${profile?.scanner_type || "Not set"}`,
+    `Listing Location: ${profile?.listing_location || "Not set"}`,
+    `Compliance Mode: ${profile?.compliance_mode || profile?.province || "Not set"}`,
+    "",
+    "Steps:",
+    "1. Install or reload the Elevate Automation extension.",
+    "2. Refresh extension access in the popup.",
+    "3. Open your saved inventory URL.",
+    "4. Run scan and queue a vehicle.",
+    "5. Open Facebook Marketplace vehicle creation.",
+    "6. Load next queued vehicle and run autofill."
+  ].join("\n");
 }
 
 async function syncUserIfNeeded(user) {
@@ -455,11 +596,7 @@ function setTextByIdForAll(id, text) {
 function normalizeUrlInput(value) {
   const raw = String(value || "").trim();
   if (!raw) return "";
-
-  if (raw.startsWith("http://") || raw.startsWith("https://")) {
-    return raw;
-  }
-
+  if (raw.startsWith("http://") || raw.startsWith("https://")) return raw;
   return `https://${raw}`;
 }
 
