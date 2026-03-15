@@ -1,40 +1,28 @@
 // dashboard.js
-// Full replacement matched to current dashboard.html
+// Full replacement with stronger save binding + debug-safe status flow
 
-// =========================
-// CONFIG
-// =========================
 const SUPABASE_URL = "https://teixblbxkoershwgqpym.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRlaXhibGJ4a29lcnNod2dxcHltIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMwODUzMDMsImV4cCI6MjA4ODY2MTMwM30.wxt9zjKhsBuflaFZZT9awZiwckRzYkEl-OLm_4q8qF4";
 
-// =========================
-// GLOBAL STATE
-// =========================
 let supabaseClient = null;
 let currentUser = null;
 let currentProfile = null;
 
-// =========================
-// BOOT
-// =========================
 document.addEventListener("DOMContentLoaded", async () => {
   try {
     setBootStatus("Loading dashboard...");
 
     if (!window.supabase || !window.supabase.createClient) {
-      console.error("Supabase library not found.");
       setBootStatus("Supabase library missing.");
       return;
     }
 
     if (!SUPABASE_URL || SUPABASE_URL === "YOUR_SUPABASE_URL") {
-      console.error("Missing SUPABASE_URL in dashboard.js");
       setBootStatus("Missing Supabase URL.");
       return;
     }
 
     if (!SUPABASE_ANON_KEY || SUPABASE_ANON_KEY === "YOUR_SUPABASE_ANON_KEY") {
-      console.error("Missing SUPABASE_ANON_KEY in dashboard.js");
       setBootStatus("Missing Supabase anon key.");
       return;
     }
@@ -68,7 +56,6 @@ document.addEventListener("DOMContentLoaded", async () => {
     await loadAccountData(currentUser);
 
     showSection("overview");
-
     setBootStatus("");
   } catch (error) {
     console.error("Dashboard boot failed:", error);
@@ -76,9 +63,6 @@ document.addEventListener("DOMContentLoaded", async () => {
   }
 });
 
-// =========================
-// UI WIRING
-// =========================
 function wireUI() {
   const navButtons = document.querySelectorAll("[data-section]");
   navButtons.forEach((button) => {
@@ -90,10 +74,18 @@ function wireUI() {
 
   const saveProfileBtn = document.getElementById("saveProfileBtn");
   if (saveProfileBtn) {
-    saveProfileBtn.addEventListener("click", async () => {
-      if (!currentUser) return;
-      await saveProfile(currentUser);
+    saveProfileBtn.type = "button";
+
+    saveProfileBtn.addEventListener("click", async (event) => {
+      event.preventDefault();
+      await handleProfileSaveClick();
     });
+
+    // extra fallback for Safari / mobile weirdness
+    saveProfileBtn.onclick = async (event) => {
+      if (event) event.preventDefault();
+      await handleProfileSaveClick();
+    };
   }
 
   const logoutBtn = document.getElementById("logoutBtn");
@@ -112,9 +104,22 @@ function wireUI() {
   }
 }
 
-// =========================
-// SECTION CONTROL
-// =========================
+async function handleProfileSaveClick() {
+  try {
+    setStatus("profileStatus", "Save button clicked...");
+
+    if (!currentUser) {
+      setStatus("profileStatus", "No authenticated user found.");
+      return;
+    }
+
+    await saveProfile(currentUser);
+  } catch (error) {
+    console.error("handleProfileSaveClick error:", error);
+    setStatus("profileStatus", `Save click failed: ${error.message || "Unknown error"}`);
+  }
+}
+
 function showSection(sectionId) {
   const sections = document.querySelectorAll(".dashboard-section");
   const navButtons = document.querySelectorAll("[data-section]");
@@ -143,9 +148,6 @@ function showSection(sectionId) {
   }
 }
 
-// =========================
-// USER BASICS
-// =========================
 function renderUserBasics(user) {
   setTextForAll(".user-email", user.email || "");
   setTextForAll(".user-id", user.id || "");
@@ -156,14 +158,14 @@ function renderUserBasics(user) {
   }
 }
 
-// =========================
-// PROFILE
-// =========================
 async function loadProfile(userId) {
   try {
     setStatus("profileStatus", "Loading profile...");
 
-    const response = await fetch(`/api/profile?id=${encodeURIComponent(userId)}`);
+    const response = await fetch(`/api/profile?id=${encodeURIComponent(userId)}`, {
+      method: "GET"
+    });
+
     const result = await response.json();
 
     if (!response.ok) {
@@ -177,7 +179,6 @@ async function loadProfile(userId) {
 
     if (!result.data) {
       currentProfile = null;
-      clearProfileFields();
       renderProfileSummary(null);
       setStatus("profileStatus", "No profile found yet.");
       return;
@@ -206,7 +207,7 @@ async function loadProfile(userId) {
 
 async function saveProfile(user) {
   try {
-    setStatus("profileStatus", "Saving profile...");
+    setStatus("profileStatus", "Preparing profile payload...");
 
     const payload = {
       id: user.id,
@@ -223,6 +224,9 @@ async function saveProfile(user) {
       compliance_mode: getFieldValue("compliance_mode")
     };
 
+    console.log("SAVE PROFILE PAYLOAD:", payload);
+    setStatus("profileStatus", "Sending profile save request...");
+
     const response = await fetch("/api/profile", {
       method: "POST",
       headers: {
@@ -235,16 +239,19 @@ async function saveProfile(user) {
 
     if (!response.ok) {
       console.error("Profile save failed:", result);
-      setStatus("profileStatus", `Save failed: ${result.error || "Unknown error"}`);
+      setStatus(
+        "profileStatus",
+        `Save failed: ${result.error || result.message || "Unknown error"}`
+      );
       return;
     }
 
-    currentProfile = payload;
-    renderProfileSummary(payload);
+    currentProfile = result.data || payload;
+    renderProfileSummary(currentProfile);
     setStatus("profileStatus", "Profile saved successfully.");
   } catch (error) {
     console.error("saveProfile error:", error);
-    setStatus("profileStatus", "Failed to save profile.");
+    setStatus("profileStatus", `Failed to save profile: ${error.message || "Unknown error"}`);
   }
 }
 
@@ -299,9 +306,6 @@ function renderProfileSummary(profile) {
   `;
 }
 
-// =========================
-// ACCOUNT / BILLING / ACCESS
-// =========================
 async function loadAccountData(user) {
   try {
     setStatus("accountStatus", "Loading account data...");
@@ -328,12 +332,10 @@ async function loadAccountData(user) {
 function renderAccessState(data) {
   const hasAccess = Boolean(
     data &&
-    (
-      data.access === true ||
-      data.active === true ||
-      data.subscription_active === true ||
-      data.status === "active"
-    )
+      (data.access === true ||
+        data.active === true ||
+        data.subscription_active === true ||
+        data.status === "active")
   );
 
   setTextByIdForAll("accessBadge", hasAccess ? "Active Access" : "Inactive Access");
@@ -348,9 +350,6 @@ function renderAccessState(data) {
   });
 }
 
-// =========================
-// USER SYNC
-// =========================
 async function syncUserIfNeeded(user) {
   try {
     await fetch("/api/sync-user", {
@@ -368,9 +367,6 @@ async function syncUserIfNeeded(user) {
   }
 }
 
-// =========================
-// AUTH
-// =========================
 async function signOutUser() {
   try {
     if (!supabaseClient) return;
@@ -386,9 +382,6 @@ function redirectToLogin() {
   window.location.href = "/login.html";
 }
 
-// =========================
-// HELPERS
-// =========================
 function getFieldValue(id) {
   const el = document.getElementById(id);
   if (!el) return "";
@@ -433,9 +426,6 @@ function escapeHtml(str) {
     .replaceAll("'", "&#039;");
 }
 
-// =========================
-// OPTIONAL GLOBAL EXPOSURE
-// =========================
 window.showSection = showSection;
 window.saveProfile = () => {
   if (!currentUser) return;
