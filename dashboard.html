@@ -399,7 +399,7 @@
         <div class="brand-eyebrow">Elevate Automation</div>
         <div class="brand-title">Founder Beta Dashboard</div>
         <div class="brand-subtitle">
-          Control center for access, profile setup, compliance, billing, referrals, and upcoming sales tools.
+          Control center for access, profile setup, compliance, billing, dealer configuration, and extension-linked posting.
         </div>
       </div>
 
@@ -430,7 +430,6 @@
         <div id="welcomeText" class="mini-note">Loading dashboard...</div>
       </div>
 
-      <!-- OVERVIEW -->
       <section id="overview" class="dashboard-section">
         <div class="grid-3">
           <div class="card">
@@ -442,13 +441,13 @@
           <div class="card">
             <div class="stat-label">Current Plan</div>
             <div id="planName" class="stat-value">Loading...</div>
-            <p class="mini-note">Founder beta and live access status sync from your account data.</p>
+            <p class="mini-note">Plan, license, and extension access sync from your backend account.</p>
           </div>
 
           <div class="card">
             <div class="stat-label">Subscription State</div>
             <div id="subscriptionStatus" class="stat-value" style="font-size:22px;">Loading...</div>
-            <p class="mini-note">Use Refresh Access after Stripe/webhook or account changes.</p>
+            <p class="mini-note">Refresh after Stripe, webhook, or access changes.</p>
           </div>
         </div>
 
@@ -458,7 +457,7 @@
             <div class="list-block">
               <div><strong>Email:</strong> <span class="user-email">Loading...</span></div>
               <div><strong>Referral Code:</strong> <span id="referralCode">Loading...</span></div>
-              <div><strong>License / Unlock:</strong> <span id="licenseKeyDisplay">Loading...</span></div>
+              <div><strong>Software License Key:</strong> <span id="licenseKeyDisplay">Loading...</span></div>
               <div><strong>User ID:</strong> <span class="user-id">Loading...</span></div>
             </div>
           </div>
@@ -466,31 +465,30 @@
           <div class="card">
             <h2>Launch Priorities</h2>
             <div class="list-block">
-              <div>• Finish profile data wiring</div>
-              <div>• Lock Alberta + BC compliance outputs</div>
-              <div>• Connect account access to extension unlock</div>
-              <div>• Confirm scan, queue, Next, and Publish stability</div>
-              <div>• Align extension UI with current Elevate branding</div>
+              <div>• Profile and dealer setup powering captions</div>
+              <div>• Account-linked extension unlock</div>
+              <div>• Posting limits enforced in backend</div>
+              <div>• Scanner type and dealer site onboarding</div>
+              <div>• Compliance-aware Alberta / BC output</div>
             </div>
           </div>
         </div>
 
         <div class="card">
-          <h2>Beta Focus</h2>
+          <h2>Dealer System Direction</h2>
           <p>
-            The purpose of this dashboard is to centralize the account layer behind the extension:
-            user setup, dealer information, compliance state, subscription access, and future platform modules.
+            Each user should save a dealer website, inventory URL, and scanner type so the extension knows
+            which domain to scan and which parser logic to use. This dashboard is the control layer for that.
           </p>
         </div>
       </section>
 
-      <!-- PROFILE -->
       <section id="profile" class="dashboard-section">
         <div class="card">
           <h2>Profile & Dealer Setup</h2>
           <p>
-            Save the information that powers listing location defaults, salesperson identity,
-            compliance text, and future AI-generated descriptions/captions.
+            Save the information that powers listing defaults, salesperson identity, dealer website targeting,
+            compliance output, and future AI-generated descriptions/captions.
           </p>
 
           <div class="form-grid">
@@ -524,8 +522,8 @@
             </div>
 
             <div class="field">
-              <label for="license_number">License Number</label>
-              <input id="license_number" type="text" placeholder="AMVIC / Dealer License / Salesperson License" />
+              <label for="license_number">Salesperson / Dealer License Number</label>
+              <input id="license_number" type="text" placeholder="AMVIC / dealer / salesperson license number" />
             </div>
 
             <div class="field">
@@ -553,7 +551,35 @@
             </div>
 
             <div class="field field-full">
-              <button id="saveProfileBtn" class="btn-primary">Save Profile</button>
+              <label for="dealer_website">Dealer Website</label>
+              <input id="dealer_website" type="url" placeholder="https://www.yourdealer.com" />
+            </div>
+
+            <div class="field field-full">
+              <label for="inventory_url">Inventory URL</label>
+              <input id="inventory_url" type="url" placeholder="https://www.yourdealer.com/new-inventory" />
+            </div>
+
+            <div class="field">
+              <label for="scanner_type">Scanner Type</label>
+              <select id="scanner_type">
+                <option value="">Select Scanner Type</option>
+                <option value="sargenttoyota">Sargent Toyota</option>
+                <option value="dealerfire">DealerFire</option>
+                <option value="dealerinspire">Dealer Inspire</option>
+                <option value="vicimus">Vicimus</option>
+                <option value="wordpress_custom">WordPress / Custom</option>
+                <option value="custom">Custom / Manual Mapping</option>
+              </select>
+            </div>
+
+            <div class="field">
+              <label for="software_license_key">Software License Key</label>
+              <input id="software_license_key" type="text" placeholder="Loaded from subscription" readonly />
+            </div>
+
+            <div class="field field-full">
+              <button id="saveProfileBtn" type="button" class="btn-primary">Save Profile</button>
             </div>
           </div>
 
@@ -562,144 +588,125 @@
         </div>
       </section>
 
-      <!-- COMPLIANCE -->
       <section id="compliance" class="dashboard-section">
         <div class="grid-2">
           <div class="card">
             <h2>Compliance Settings</h2>
             <p>
-              This section will drive listing description logic based on province,
-              profile information, and dealer/salesperson data.
+              This profile data feeds your Marketplace descriptions, caption footers, dealer contact block,
+              and province-specific compliance logic.
             </p>
 
             <div class="list-block">
-              <div><strong>Primary Province Logic:</strong> Alberta + BC</div>
+              <div><strong>Primary Modes:</strong> Alberta + BC</div>
               <div><strong>Data Source:</strong> Profile & Dealer Setup</div>
-              <div><strong>Planned Output Use:</strong> Descriptions, captions, location defaults, account-linked listing text</div>
+              <div><strong>Extension Use:</strong> Captions, footer blocks, posting metadata, dealer identity</div>
             </div>
           </div>
 
           <div class="card">
-            <h2>Current Beta Compliance Direction</h2>
+            <h2>Scanner / Dealer Onboarding</h2>
             <div class="list-block">
-              <div>• Alberta support must work before beta launch</div>
-              <div>• BC support must work before beta launch</div>
-              <div>• Dealer info should auto-pair into generated copy</div>
-              <div>• License and location details should persist through the account</div>
+              <div>• Each client adds their dealer website</div>
+              <div>• Inventory URL tells the scanner where to start</div>
+              <div>• Scanner type determines parsing logic</div>
+              <div>• Extension should only scan the saved dealer domain</div>
             </div>
           </div>
         </div>
-
-        <div class="card">
-          <h2>Compliance Output Intent</h2>
-          <p>
-            The dashboard will feed profile data into the extension so listing copy,
-            location, and seller/dealer details can be inserted automatically based on user setup.
-          </p>
-        </div>
       </section>
 
-      <!-- AFFILIATE -->
       <section id="affiliate" class="dashboard-section">
         <div class="grid-2">
           <div class="card">
             <h2>Affiliate Center</h2>
-            <p>
-              This section is positioned for the Elevate Automation referral and founding affiliate structure.
-            </p>
-
             <div class="list-block">
-              <div><strong>Your Referral Code:</strong> <span id="referralCode">Loading...</span></div>
+              <div><strong>Your Referral Code:</strong> <span id="referralCodeAffiliate">Loading...</span></div>
               <div><strong>Direct Referral Commission:</strong> 20% recurring</div>
-              <div><strong>Second-Level Override:</strong> 5% planned structure</div>
-              <div><strong>Positioning:</strong> referral / partner program, not MLM-style messaging</div>
+              <div><strong>Second-Level Override:</strong> 5% planned</div>
+              <div><strong>Positioning:</strong> referral / partner program</div>
             </div>
           </div>
 
           <div class="card">
-            <h2>Partner Growth Notes</h2>
+            <h2>Partner Notes</h2>
             <div class="list-block">
-              <div>• Founding affiliates and beta users can feed launch momentum</div>
-              <div>• Dealership managers can become team-level partners</div>
-              <div>• Promo kit, dashboard visibility, and transparent payouts come later</div>
+              <div>• Founding affiliates help seed demand</div>
+              <div>• Dealer managers can become team partners</div>
+              <div>• Promo kit and dashboard visibility come later</div>
             </div>
           </div>
         </div>
       </section>
 
-      <!-- BILLING -->
       <section id="billing" class="dashboard-section">
         <div class="grid-2">
           <div class="card">
             <h2>Billing & Access</h2>
-            <p>
-              This section confirms whether the account is active and ready to unlock the extension.
-            </p>
-
             <div class="list-block">
-              <div><strong>Access:</strong> <span id="accessBadge" class="badge">Loading...</span></div>
-              <div><strong>Plan:</strong> <span id="planName">Loading...</span></div>
-              <div><strong>Status:</strong> <span id="subscriptionStatus">Loading...</span></div>
-              <div><strong>License / Unlock State:</strong> <span id="licenseKeyDisplay">Loading...</span></div>
+              <div><strong>Access:</strong> <span id="accessBadgeBilling" class="badge">Loading...</span></div>
+              <div><strong>Plan:</strong> <span id="planNameBilling">Loading...</span></div>
+              <div><strong>Status:</strong> <span id="subscriptionStatusBilling">Loading...</span></div>
+              <div><strong>Software License Key:</strong> <span id="licenseKeyDisplayBilling">Loading...</span></div>
             </div>
 
-            <div id="accountStatus" class="status-line"></div>
+            <div id="accountStatusBilling" class="status-line"></div>
           </div>
 
           <div class="card">
             <h2>Extension Unlock Direction</h2>
             <div class="list-block">
-              <div>• Account login should control extension access</div>
-              <div>• Users should not need to manually input a product key every session</div>
-              <div>• Extension should validate active access from the backend</div>
-              <div>• Profile and dealer setup should be tied to the authenticated user</div>
+              <div>• Dashboard login controls extension access</div>
+              <div>• Software license key stays in subscriptions as source of truth</div>
+              <div>• Extension reads merged backend state</div>
+              <div>• Profile stays focused on dealer/compliance data</div>
             </div>
           </div>
         </div>
       </section>
 
-      <!-- TOOLS -->
       <section id="tools" class="dashboard-section">
         <div class="card">
           <h2>Tools & Modules</h2>
           <p>
-            This section gives beta users visibility into the platform roadmap without exposing unfinished systems as broken.
+            The extension should read dealer onboarding settings here, then scan only the correct dealer site,
+            enforce posting limits, and inject profile/compliance data into the posting flow.
           </p>
 
           <div class="tools-grid">
             <div class="tool-tile">
               <h3>Vehicle Poster</h3>
-              <p>Main beta engine for dealer inventory scan, queue build, Marketplace fill, and posting flow.</p>
+              <p>Inventory scan, queue build, Marketplace fill, and posting engine.</p>
               <div class="tool-status">Beta Core</div>
             </div>
 
             <div class="tool-tile">
-              <h3>Compliance Engine</h3>
-              <p>Province-based copy logic using user profile, dealer setup, and listing defaults.</p>
+              <h3>Dealer Scanner Routing</h3>
+              <p>Dealer website, inventory URL, and scanner type stored per account.</p>
               <div class="tool-status">In Progress</div>
             </div>
 
             <div class="tool-tile">
-              <h3>AI Captions & Descriptions</h3>
-              <p>Future generation layer for platform-assisted listing text and branded sales copy.</p>
+              <h3>Compliance Engine</h3>
+              <p>AB / BC output blocks powered by saved profile data.</p>
+              <div class="tool-status">In Progress</div>
+            </div>
+
+            <div class="tool-tile">
+              <h3>Posting Limits</h3>
+              <p>Daily plan enforcement and post registration through backend APIs.</p>
+              <div class="tool-status">In Progress</div>
+            </div>
+
+            <div class="tool-tile">
+              <h3>CRM / Follow-Up</h3>
+              <p>Future lead tracking and automation modules.</p>
               <div class="tool-status">Planned</div>
             </div>
 
             <div class="tool-tile">
-              <h3>CRM</h3>
-              <p>Lead tracking, follow-up visibility, and connected workflow across listings and pipeline.</p>
-              <div class="tool-status">Planned</div>
-            </div>
-
-            <div class="tool-tile">
-              <h3>Mass SMS / Follow-Up</h3>
-              <p>Campaign sending, follow-up sequencing, and sales workflow automation.</p>
-              <div class="tool-status">Planned</div>
-            </div>
-
-            <div class="tool-tile">
-              <h3>AI Media Tools</h3>
-              <p>Banner templates, branded overlays, photo editing, and future social media output features.</p>
+              <h3>AI Caption Layer</h3>
+              <p>Profile-aware caption and description generation.</p>
               <div class="tool-status">Planned</div>
             </div>
           </div>
