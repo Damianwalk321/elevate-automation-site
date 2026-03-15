@@ -428,7 +428,5 @@ function escapeHtml(str) {
 
 window.showSection = showSection;
 window.saveProfile = () => {
-  if (!currentUser) return;
-  return saveProfile(currentUser);
 };
 window.signOutUser = signOutUser;
