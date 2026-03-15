@@ -1,114 +1,57 @@
-// /api/get-user-data.js
-
 import { createClient } from "@supabase/supabase-js";
-
-if (!process.env.SUPABASE_URL) {
-  throw new Error("Missing env: SUPABASE_URL");
-}
-
-if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
-  throw new Error("Missing env: SUPABASE_SERVICE_ROLE_KEY");
-}
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
   process.env.SUPABASE_SERVICE_ROLE_KEY
 );
 
-function pickBestUserRow(rows = []) {
-  if (!Array.isArray(rows) || rows.length === 0) return null;
-  const linkedRow = rows.find((row) => row.auth_user_id);
-  return linkedRow || rows[0];
-}
-
 export default async function handler(req, res) {
-  if (req.method !== "POST") {
-    return res.status(405).json({ error: "Method not allowed" });
-  }
-
   try {
-    const { email, auth_user_id } = req.body || {};
+    const { email } = req.query;
 
-    if (!email && !auth_user_id) {
-      return res.status(400).json({ error: "Missing email or auth_user_id" });
-    }
-
-    let rows = [];
-    let queryError = null;
-
-    if (auth_user_id) {
-      const result = await supabase
-        .from("users")
-        .select(`
-          id,
-          auth_user_id,
-          email,
-          name,
-          plan,
-          subscription_status,
-          referral_code,
-          referral_count,
-          unlocked_invites,
-          used_invites,
-          founder_pricing_locked,
-          stripe_customer_id,
-          stripe_subscription_id,
-          stripe_price_id
-        `)
-        .eq("auth_user_id", auth_user_id);
-
-      rows = result.data || [];
-      queryError = result.error;
-    }
-
-    if ((!rows || rows.length === 0) && email) {
-      const normalizedEmail = String(email).trim().toLowerCase();
-
-      const result = await supabase
-        .from("users")
-        .select(`
-          id,
-          auth_user_id,
-          email,
-          name,
-          plan,
-          subscription_status,
-          referral_code,
-          referral_count,
-          unlocked_invites,
-          used_invites,
-          founder_pricing_locked,
-          stripe_customer_id,
-          stripe_subscription_id,
-          stripe_price_id
-        `)
-        .eq("email", normalizedEmail);
-
-      rows = result.data || [];
-      queryError = result.error;
-    }
-
-    if (queryError) {
-      return res.status(500).json({
-        error: "Supabase query failed",
-        details: queryError.message
+    if (!email) {
+      return res.status(400).json({
+        error: "Missing email"
       });
     }
 
-    const user = pickBestUserRow(rows);
+    // Get subscription record
+    const { data: subscription, error: subError } = await supabase
+      .from("subscriptions")
+      .select("*")
+      .eq("email", email)
+      .maybeSingle();
 
-    if (!user) {
-      return res.status(404).json({ error: "User row not found" });
+    if (subError) {
+      console.error("Subscription lookup error:", subError);
     }
 
-    return res.status(200).json(user);
-  } catch (err) {
-    console.error("get-user-data error:", err);
+    // Get referral code
+    const { data: referral, error: refError } = await supabase
+      .from("affiliates")
+      .select("referral_code")
+      .eq("email", email)
+      .maybeSingle();
+
+    if (refError) {
+      console.error("Referral lookup error:", refError);
+    }
+
+    const active = subscription?.status === "active";
+
+    return res.status(200).json({
+      access: active,
+      plan_name: subscription?.plan_name || "Founder Beta",
+      status: subscription?.status || "inactive",
+      license_key: subscription?.license_key || null,
+      referral_code: referral?.referral_code || null
+    });
+
+  } catch (error) {
+    console.error("get-user-data error:", error);
+
     return res.status(500).json({
-      error: "get-user-data failed",
-      details: err.message
+      error: "Internal server error"
     });
   }
 }
-
-
