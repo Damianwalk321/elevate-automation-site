@@ -3,1211 +3,711 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Elevate Automation | Dashboard</title>
+  <title>Elevate Automation Dashboard</title>
+
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
   <style>
-    :root {
-      --bg: #050505;
-      --bg-2: #090909;
-      --panel: #0d0d10;
-      --panel-2: #111114;
-      --line: rgba(212, 175, 55, 0.16);
-      --line-strong: rgba(212, 175, 55, 0.28);
-      --gold: #d4af37;
-      --gold-2: #f0d46b;
-      --text: #f5f5f5;
-      --muted: #a1a1aa;
-      --green: #86efac;
-      --red: #f87171;
-      --blue: #93c5fd;
-      --shadow: 0 16px 40px rgba(0,0,0,0.28);
-      --radius: 24px;
-    }
-
-    * { box-sizing: border-box; }
-
-    html, body {
+    * {
+      box-sizing: border-box;
       margin: 0;
       padding: 0;
-      background:
-        radial-gradient(circle at top right, rgba(212,175,55,0.08), transparent 24%),
-        linear-gradient(180deg, #060606 0%, #000 100%);
-      color: var(--text);
-      font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     }
 
-    a {
-      color: inherit;
-      text-decoration: none;
-    }
-
-    .app-shell {
+    body {
+      font-family: Arial, Helvetica, sans-serif;
+      background: #0b0b0b;
+      color: #f5f5f5;
       min-height: 100vh;
-      display: grid;
-      grid-template-columns: 280px 1fr;
+    }
+
+    .dashboard-shell {
+      display: flex;
+      min-height: 100vh;
     }
 
     .sidebar {
-      border-right: 1px solid rgba(255,255,255,0.04);
-      background: rgba(7,7,8,0.96);
-      padding: 20px 16px;
-      position: sticky;
-      top: 0;
-      height: 100vh;
+      width: 280px;
+      background: #111111;
+      border-right: 1px solid rgba(212, 175, 55, 0.18);
+      padding: 28px 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
     }
 
-    .brand-card {
-      border: 1px solid var(--line);
-      background: linear-gradient(180deg, rgba(18,18,18,0.95), rgba(10,10,10,0.98));
-      border-radius: 26px;
-      padding: 18px;
-      box-shadow: var(--shadow);
-      margin-bottom: 18px;
+    .brand-wrap {
+      padding-bottom: 18px;
+      border-bottom: 1px solid rgba(212, 175, 55, 0.18);
     }
 
-    .eyebrow {
-      font-size: 11px;
-      letter-spacing: 0.22em;
+    .brand-eyebrow {
+      font-size: 12px;
+      letter-spacing: 1.8px;
       text-transform: uppercase;
-      color: var(--gold);
-      margin-bottom: 10px;
+      color: #d4af37;
+      margin-bottom: 6px;
     }
 
     .brand-title {
-      font-size: 20px;
-      font-weight: 800;
-      line-height: 1.1;
-      margin-bottom: 4px;
-    }
-
-    .brand-sub {
-      color: var(--muted);
-      font-size: 13px;
-      line-height: 1.45;
-    }
-
-    .workspace-card {
-      margin-top: 14px;
-      border: 1px solid rgba(255,255,255,0.05);
-      background: rgba(255,255,255,0.02);
-      border-radius: 18px;
-      padding: 14px;
-    }
-
-    .workspace-card .label {
-      font-size: 11px;
-      letter-spacing: 0.14em;
-      text-transform: uppercase;
-      color: #8a8a93;
-      margin-bottom: 8px;
-    }
-
-    .workspace-card .value {
+      font-size: 22px;
       font-weight: 700;
-      font-size: 15px;
-      margin-bottom: 4px;
+      line-height: 1.2;
     }
 
-    .workspace-card .sub {
-      color: var(--muted);
-      font-size: 13px;
-    }
-
-    .nav-group {
-      margin-top: 18px;
-    }
-
-    .nav-label {
-      font-size: 11px;
-      letter-spacing: 0.18em;
-      text-transform: uppercase;
-      color: #8a8a93;
-      padding: 0 10px 10px;
-    }
-
-    .nav-list {
-      display: grid;
-      gap: 8px;
-    }
-
-    .nav-item {
-      width: 100%;
-      border: 1px solid transparent;
-      background: transparent;
-      color: #d4d4d8;
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      border-radius: 18px;
-      padding: 13px 14px;
-      cursor: pointer;
-      transition: 0.18s ease;
-      text-align: left;
+    .brand-subtitle {
+      margin-top: 8px;
+      color: #a8a8a8;
       font-size: 14px;
-      font-weight: 600;
-    }
-
-    .nav-item:hover {
-      background: rgba(255,255,255,0.03);
-      color: #fff;
-      border-color: rgba(255,255,255,0.05);
-    }
-
-    .nav-item.active {
-      background: linear-gradient(180deg, var(--gold-2), var(--gold));
-      color: #121212;
-      border-color: transparent;
-      box-shadow: 0 10px 24px rgba(212,175,55,0.16);
-    }
-
-    .nav-icon {
-      width: 18px;
-      text-align: center;
-      font-size: 15px;
-      line-height: 1;
-      opacity: 0.95;
-    }
-
-    .sidebar-footer {
-      margin-top: 18px;
-      display: grid;
-      gap: 10px;
-    }
-
-    .side-btn {
-      border: 1px solid var(--line);
-      background: linear-gradient(180deg, #131313, #0b0b0d);
-      color: #fff;
-      padding: 12px 14px;
-      border-radius: 16px;
-      font-size: 14px;
-      font-weight: 700;
-      cursor: pointer;
-      transition: 0.18s ease;
-      text-align: center;
-    }
-
-    .side-btn:hover {
-      transform: translateY(-1px);
-      border-color: var(--line-strong);
-    }
-
-    .side-btn.gold {
-      background: linear-gradient(180deg, var(--gold-2), var(--gold));
-      color: #111;
-      border: none;
-    }
-
-    .main {
-      padding: 22px;
-    }
-
-    .topbar {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      gap: 16px;
-      flex-wrap: wrap;
-      margin-bottom: 18px;
-    }
-
-    .page-head h1 {
-      margin: 0;
-      font-size: clamp(34px, 5vw, 56px);
-      line-height: 1;
-      font-weight: 800;
-      letter-spacing: -0.03em;
-    }
-
-    .page-head p {
-      margin: 10px 0 0;
-      color: var(--muted);
-      max-width: 840px;
       line-height: 1.5;
     }
 
-    .top-actions {
-      display: flex;
-      gap: 12px;
-      flex-wrap: wrap;
+    .user-card {
+      background: #151515;
+      border: 1px solid rgba(212, 175, 55, 0.14);
+      border-radius: 14px;
+      padding: 16px;
     }
 
-    .btn {
-      border: 1px solid var(--line);
-      background: linear-gradient(180deg, #131313, #0b0b0d);
-      color: #fff;
-      padding: 12px 16px;
-      border-radius: 16px;
-      cursor: pointer;
-      font-weight: 700;
+    .user-card-label {
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 1.2px;
+      color: #d4af37;
+      margin-bottom: 8px;
+    }
+
+    .user-email {
       font-size: 14px;
-      transition: 0.18s ease;
+      color: #f5f5f5;
+      word-break: break-word;
     }
 
-    .btn:hover {
-      transform: translateY(-1px);
-      border-color: var(--line-strong);
+    .sidebar-nav {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
     }
 
-    .btn.gold {
-      background: linear-gradient(180deg, var(--gold-2), var(--gold));
-      color: #111;
+    .nav-btn {
+      width: 100%;
+      text-align: left;
+      background: #161616;
+      color: #f3f3f3;
+      border: 1px solid rgba(212, 175, 55, 0.08);
+      padding: 14px 16px;
+      border-radius: 12px;
+      cursor: pointer;
+      font-size: 15px;
+      transition: 0.2s ease;
+    }
+
+    .nav-btn:hover {
+      border-color: rgba(212, 175, 55, 0.45);
+      background: #1a1a1a;
+    }
+
+    .nav-btn.active {
+      background: linear-gradient(135deg, rgba(212, 175, 55, 0.18), rgba(212, 175, 55, 0.08));
+      border-color: rgba(212, 175, 55, 0.55);
+      color: #fff;
+    }
+
+    .sidebar-actions {
+      margin-top: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .btn-secondary,
+    .btn-primary,
+    .btn-danger {
       border: none;
+      border-radius: 12px;
+      padding: 14px 16px;
+      font-size: 14px;
+      cursor: pointer;
+      transition: 0.2s ease;
     }
 
-    .status-banner {
+    .btn-primary {
+      background: #d4af37;
+      color: #0b0b0b;
+      font-weight: 700;
+    }
+
+    .btn-primary:hover {
+      opacity: 0.92;
+    }
+
+    .btn-secondary {
+      background: #1c1c1c;
+      color: #f3f3f3;
+      border: 1px solid rgba(255,255,255,0.08);
+    }
+
+    .btn-secondary:hover {
+      background: #232323;
+    }
+
+    .btn-danger {
+      background: #221414;
+      color: #ffb3b3;
+      border: 1px solid rgba(255, 99, 99, 0.18);
+    }
+
+    .btn-danger:hover {
+      background: #2a1717;
+    }
+
+    .main {
+      flex: 1;
+      padding: 34px;
+      overflow-x: hidden;
+    }
+
+    .main-header {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      margin-bottom: 28px;
+    }
+
+    .main-header h1 {
+      font-size: 30px;
+      line-height: 1.15;
+    }
+
+    #bootStatus {
+      color: #d4af37;
+      font-size: 14px;
+      min-height: 20px;
+    }
+
+    .dashboard-section {
       display: none;
-      margin-bottom: 18px;
-      border-radius: 18px;
-      padding: 16px 18px;
-      border: 1px solid var(--line);
-      background: linear-gradient(180deg, rgba(212,175,55,0.08), rgba(212,175,55,0.03));
-      color: #f4d976;
     }
 
-    .status-banner.show {
-      display: block;
-    }
-
-    .status-banner.success {
-      color: var(--green);
-      border-color: rgba(134,239,172,0.2);
-      background: rgba(134,239,172,0.08);
-    }
-
-    .status-banner.error {
-      color: var(--red);
-      border-color: rgba(248,113,113,0.2);
-      background: rgba(248,113,113,0.08);
-    }
-
-    .section {
-      display: none;
-    }
-
-    .section.active {
-      display: block;
+    .grid-2,
+    .grid-3 {
+      display: grid;
+      gap: 18px;
+      margin-bottom: 20px;
     }
 
     .grid-2 {
-      display: grid;
-      grid-template-columns: 1.5fr 1fr;
-      gap: 18px;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
     }
 
     .grid-3 {
-      display: grid;
       grid-template-columns: repeat(3, minmax(0, 1fr));
-      gap: 18px;
-    }
-
-    .grid-4 {
-      display: grid;
-      grid-template-columns: repeat(4, minmax(0, 1fr));
-      gap: 18px;
-    }
-
-    .stack {
-      display: grid;
-      gap: 18px;
     }
 
     .card {
-      border: 1px solid var(--line);
-      background: linear-gradient(180deg, rgba(14,14,16,0.96), rgba(8,8,10,0.98));
-      border-radius: var(--radius);
-      padding: 20px;
-      box-shadow: var(--shadow);
+      background: #121212;
+      border: 1px solid rgba(212, 175, 55, 0.14);
+      border-radius: 18px;
+      padding: 22px;
     }
 
-    .card-title {
-      color: var(--gold);
-      text-transform: uppercase;
-      letter-spacing: 0.18em;
-      font-size: 12px;
-      margin-bottom: 12px;
-    }
-
-    .card h2 {
-      margin: 0 0 10px;
-      font-size: 18px;
+    .card h2,
+    .card h3 {
+      margin-bottom: 10px;
       line-height: 1.2;
     }
 
     .card p {
-      margin: 0;
-      color: var(--muted);
-      line-height: 1.55;
+      color: #b7b7b7;
+      line-height: 1.6;
       font-size: 14px;
     }
 
-    .metric-card .metric-value {
-      font-size: 42px;
-      line-height: 1;
-      font-weight: 800;
-      margin-bottom: 8px;
-      letter-spacing: -0.03em;
-    }
-
-    .metric-sub {
-      color: var(--gold);
-      font-size: 13px;
-      font-weight: 700;
-    }
-
-    .pill-row {
-      display: flex;
-      gap: 10px;
-      flex-wrap: wrap;
-      margin-top: 18px;
-    }
-
-    .pill {
-      padding: 10px 14px;
-      border-radius: 999px;
-      font-size: 13px;
-      font-weight: 700;
-      border: 1px solid var(--line);
-      background: rgba(255,255,255,0.02);
-      color: #fff;
-    }
-
-    .pill.gold {
-      background: rgba(212,175,55,0.12);
-      color: #f0d46b;
-    }
-
-    .pill.green {
-      background: rgba(134,239,172,0.10);
-      color: var(--green);
-      border-color: rgba(134,239,172,0.18);
-    }
-
-    .pill.blue {
-      background: rgba(147,197,253,0.10);
-      color: var(--blue);
-      border-color: rgba(147,197,253,0.18);
-    }
-
-    .kpi-row {
-      display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 16px;
-      margin-top: 18px;
-    }
-
-    .mini-panel {
-      border-radius: 18px;
-      background: rgba(255,255,255,0.02);
-      border: 1px solid rgba(255,255,255,0.05);
-      padding: 16px;
-    }
-
-    .mini-label {
-      color: #9a9aa2;
+    .stat-label {
       font-size: 12px;
-      letter-spacing: 0.14em;
       text-transform: uppercase;
+      letter-spacing: 1.4px;
+      color: #d4af37;
       margin-bottom: 10px;
     }
 
-    .mini-value {
-      font-size: 26px;
-      font-weight: 800;
-      line-height: 1;
-    }
-
-    .meta-list {
-      display: grid;
-      gap: 12px;
-      margin-top: 16px;
-    }
-
-    .meta {
-      display: flex;
-      justify-content: space-between;
-      gap: 16px;
-      padding-bottom: 12px;
-      border-bottom: 1px solid rgba(255,255,255,0.05);
-      font-size: 14px;
-    }
-
-    .meta:last-child {
-      border-bottom: none;
-      padding-bottom: 0;
-    }
-
-    .meta .key {
-      color: var(--muted);
-    }
-
-    .meta .val {
-      color: #fff;
+    .stat-value {
+      font-size: 28px;
       font-weight: 700;
-      text-align: right;
+      line-height: 1.1;
     }
 
-    .warn-list {
-      display: grid;
-      gap: 12px;
-      margin-top: 16px;
-    }
-
-    .warn-item {
-      border: 1px solid rgba(212,175,55,0.14);
-      background: rgba(212,175,55,0.08);
-      border-radius: 18px;
-      padding: 14px;
-      color: #f2e3a1;
-      font-size: 14px;
-      line-height: 1.45;
-    }
-
-    .action-grid {
-      display: grid;
-      gap: 12px;
-      margin-top: 16px;
-    }
-
-    .action-btn {
-      border: 1px solid rgba(255,255,255,0.05);
-      background: rgba(255,255,255,0.02);
-      color: #fff;
-      border-radius: 16px;
-      padding: 14px 16px;
-      cursor: pointer;
-      font-weight: 700;
-      text-align: left;
-      transition: 0.18s ease;
-    }
-
-    .action-btn:hover {
-      border-color: var(--line);
-      transform: translateY(-1px);
-    }
-
-    .list {
-      display: grid;
-      gap: 12px;
-      margin-top: 16px;
-    }
-
-    .list-item {
-      border: 1px solid rgba(255,255,255,0.05);
-      background: rgba(255,255,255,0.02);
-      border-radius: 18px;
-      padding: 14px 16px;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      gap: 16px;
-    }
-
-    .list-item strong {
-      display: block;
-      margin-bottom: 4px;
-      font-size: 14px;
-    }
-
-    .list-item span {
-      color: var(--muted);
+    .status-line {
+      margin-top: 10px;
       font-size: 13px;
+      color: #d4af37;
+      min-height: 18px;
     }
 
     .badge {
+      display: inline-block;
       padding: 8px 12px;
       border-radius: 999px;
-      font-size: 12px;
-      font-weight: 800;
-      white-space: nowrap;
+      font-size: 13px;
+      font-weight: 700;
+      background: #1c1c1c;
+      color: #f0f0f0;
+      border: 1px solid rgba(255,255,255,0.08);
     }
 
-    .badge.gold {
-      background: rgba(212,175,55,0.12);
-      color: #f0d46b;
-      border: 1px solid rgba(212,175,55,0.18);
+    .badge.active {
+      background: rgba(46, 125, 50, 0.18);
+      color: #9df0a1;
+      border-color: rgba(157, 240, 161, 0.22);
     }
 
-    .badge.green {
-      background: rgba(134,239,172,0.10);
-      color: var(--green);
-      border: 1px solid rgba(134,239,172,0.18);
+    .badge.inactive {
+      background: rgba(183, 28, 28, 0.16);
+      color: #ffb3b3;
+      border-color: rgba(255, 179, 179, 0.2);
     }
 
-    .badge.red {
-      background: rgba(248,113,113,0.10);
-      color: var(--red);
-      border: 1px solid rgba(248,113,113,0.18);
-    }
-
-    .feature-grid {
+    .form-grid {
       display: grid;
       grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 18px;
+      gap: 16px;
+      margin-top: 18px;
     }
 
-    .feature-box {
-      border-radius: 20px;
-      border: 1px solid rgba(255,255,255,0.05);
-      background: rgba(255,255,255,0.02);
-      padding: 18px;
+    .field {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
     }
 
-    .feature-box h3 {
-      margin: 0 0 8px;
-      font-size: 16px;
+    .field label {
+      font-size: 13px;
+      color: #d4af37;
+      font-weight: 600;
     }
 
-    .feature-box p {
-      margin: 0;
-      color: var(--muted);
+    .field input,
+    .field select,
+    .field textarea {
+      width: 100%;
+      background: #1a1a1a;
+      border: 1px solid rgba(255,255,255,0.08);
+      color: #f4f4f4;
+      border-radius: 12px;
+      padding: 14px;
+      font-size: 14px;
+      outline: none;
+    }
+
+    .field input:focus,
+    .field select:focus,
+    .field textarea:focus {
+      border-color: rgba(212, 175, 55, 0.6);
+    }
+
+    .field-full {
+      grid-column: 1 / -1;
+    }
+
+    .profile-summary {
+      margin-top: 18px;
+      background: #171717;
+      border: 1px solid rgba(212, 175, 55, 0.12);
+      border-radius: 14px;
+      padding: 16px;
+      display: grid;
+      gap: 10px;
       font-size: 14px;
       line-height: 1.5;
     }
 
-    .placeholder-note {
-      margin-top: 16px;
-      padding: 14px 16px;
-      border-radius: 16px;
-      background: rgba(147,197,253,0.08);
-      border: 1px solid rgba(147,197,253,0.14);
-      color: #d8e7ff;
+    .list-block {
+      display: grid;
+      gap: 10px;
+      margin-top: 12px;
+      color: #d0d0d0;
       font-size: 14px;
-      line-height: 1.45;
+      line-height: 1.55;
     }
 
-    .footer-space {
-      height: 20px;
+    .mini-note {
+      color: #a8a8a8;
+      font-size: 13px;
+      line-height: 1.55;
+      margin-top: 10px;
     }
 
-    @media (max-width: 1200px) {
-      .grid-4 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-      .grid-3 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-      .grid-2 { grid-template-columns: 1fr; }
+    .tools-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 18px;
+      margin-top: 18px;
     }
 
-    @media (max-width: 900px) {
-      .app-shell {
+    .tool-tile {
+      background: #151515;
+      border: 1px solid rgba(212, 175, 55, 0.12);
+      border-radius: 16px;
+      padding: 18px;
+    }
+
+    .tool-tile h3 {
+      margin-bottom: 8px;
+    }
+
+    .tool-status {
+      display: inline-block;
+      margin-top: 14px;
+      font-size: 12px;
+      padding: 6px 10px;
+      border-radius: 999px;
+      background: rgba(212, 175, 55, 0.12);
+      color: #f4dea0;
+      border: 1px solid rgba(212, 175, 55, 0.18);
+    }
+
+    @media (max-width: 1080px) {
+      .grid-2,
+      .grid-3,
+      .tools-grid,
+      .form-grid {
         grid-template-columns: 1fr;
+      }
+    }
+
+    @media (max-width: 860px) {
+      .dashboard-shell {
+        flex-direction: column;
       }
 
       .sidebar {
-        position: static;
-        height: auto;
+        width: 100%;
         border-right: none;
-        border-bottom: 1px solid rgba(255,255,255,0.04);
+        border-bottom: 1px solid rgba(212, 175, 55, 0.18);
       }
 
-      .nav-list {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-      }
-    }
-
-    @media (max-width: 700px) {
       .main {
-        padding: 16px;
-      }
-
-      .grid-4,
-      .grid-3,
-      .feature-grid,
-      .nav-list {
-        grid-template-columns: 1fr;
-      }
-
-      .kpi-row {
-        grid-template-columns: 1fr;
-      }
-
-      .topbar {
-        align-items: flex-start;
-      }
-
-      .page-head h1 {
-        font-size: 36px;
+        padding: 22px;
       }
     }
   </style>
 </head>
 <body>
-  <div class="app-shell">
+  <div class="dashboard-shell">
     <aside class="sidebar">
-      <div class="brand-card">
-        <div class="eyebrow">Elevate Automation</div>
+      <div class="brand-wrap">
+        <div class="brand-eyebrow">Elevate Automation</div>
         <div class="brand-title">Founder Beta Dashboard</div>
-        <div class="brand-sub">
-          Premium control center for platform access, posting workflows, compliance, AI content, referrals, and future automation tools.
-        </div>
-
-        <div class="workspace-card">
-          <div class="label">Workspace</div>
-          <div id="sidebarWorkspaceName" class="value">Sean Sargent Toyota</div>
-          <div id="sidebarWorkspaceMeta" class="sub">Grande Prairie, Alberta</div>
+        <div class="brand-subtitle">
+          Control center for access, profile setup, compliance, billing, referrals, and upcoming sales tools.
         </div>
       </div>
 
-      <div class="nav-group">
-        <div class="nav-label">Navigation</div>
-        <div class="nav-list">
-          <button class="nav-item active" data-section="overview">
-            <span class="nav-icon">⌂</span>
-            <span>Overview</span>
-          </button>
-
-          <button class="nav-item" data-section="poster">
-            <span class="nav-icon">🚘</span>
-            <span>Vehicle Poster</span>
-          </button>
-
-          <button class="nav-item" data-section="profile">
-            <span class="nav-icon">👤</span>
-            <span>Profile & Setup</span>
-          </button>
-
-          <button class="nav-item" data-section="compliance">
-            <span class="nav-icon">🛡️</span>
-            <span>Compliance</span>
-          </button>
-
-          <button class="nav-item" data-section="ai">
-            <span class="nav-icon">✨</span>
-            <span>AI Studio</span>
-          </button>
-
-          <button class="nav-item" data-section="referrals">
-            <span class="nav-icon">🔗</span>
-            <span>Referrals</span>
-          </button>
-
-          <button class="nav-item" data-section="billing">
-            <span class="nav-icon">💳</span>
-            <span>Billing</span>
-          </button>
-
-          <button class="nav-item" data-section="settings">
-            <span class="nav-icon">⚙️</span>
-            <span>Settings</span>
-          </button>
-        </div>
+      <div class="user-card">
+        <div class="user-card-label">Logged In</div>
+        <div class="user-email">Loading...</div>
       </div>
 
-      <div class="sidebar-footer">
-        <a href="/" class="side-btn">Main Site</a>
-        <button id="copyReferralSidebarBtn" class="side-btn gold">Copy Referral Link</button>
-        <button id="logoutBtn" class="side-btn">Logout</button>
+      <nav class="sidebar-nav">
+        <button class="nav-btn active" data-section="overview">Overview</button>
+        <button class="nav-btn" data-section="profile">Profile & Dealer Setup</button>
+        <button class="nav-btn" data-section="compliance">Compliance</button>
+        <button class="nav-btn" data-section="affiliate">Affiliate Center</button>
+        <button class="nav-btn" data-section="billing">Billing & Access</button>
+        <button class="nav-btn" data-section="tools">Tools & Modules</button>
+      </nav>
+
+      <div class="sidebar-actions">
+        <button id="refreshAccessBtn" class="btn-secondary">Refresh Access</button>
+        <button id="logoutBtn" class="btn-danger">Logout</button>
       </div>
     </aside>
 
     <main class="main">
-      <div class="topbar">
-        <div class="page-head">
-          <div class="eyebrow">Elevate Automation</div>
-          <h1 id="pageTitle">Founder Beta Dashboard</h1>
-          <p id="pageSubtitle">
-            Control center for account access, referral growth, billing status, invite progression, and future Elevate automation tools.
-          </p>
-        </div>
-
-        <div class="top-actions">
-          <a href="/" class="btn">Main Site</a>
-          <button id="copyReferralTopBtn" class="btn gold">Copy Referral Link</button>
-          <button id="logoutTopBtn" class="btn">Logout</button>
-        </div>
+      <div class="main-header">
+        <div id="bootStatus"></div>
+        <h1 id="dashboardPageTitle">Founder Beta Dashboard</h1>
+        <div id="welcomeText" class="mini-note">Loading dashboard...</div>
       </div>
 
-      <div id="statusBanner" class="status-banner"></div>
-
       <!-- OVERVIEW -->
-      <section id="section-overview" class="section active">
+      <section id="overview" class="dashboard-section">
+        <div class="grid-3">
+          <div class="card">
+            <div class="stat-label">Access Status</div>
+            <div id="accessBadge" class="badge">Loading...</div>
+            <div class="status-line" id="accountStatus"></div>
+          </div>
+
+          <div class="card">
+            <div class="stat-label">Current Plan</div>
+            <div id="planName" class="stat-value">Loading...</div>
+            <p class="mini-note">Founder beta and live access status sync from your account data.</p>
+          </div>
+
+          <div class="card">
+            <div class="stat-label">Subscription State</div>
+            <div id="subscriptionStatus" class="stat-value" style="font-size:22px;">Loading...</div>
+            <p class="mini-note">Use Refresh Access after Stripe/webhook or account changes.</p>
+          </div>
+        </div>
+
         <div class="grid-2">
           <div class="card">
-            <div class="card-title">Account Overview</div>
-            <h2>Your account is active in the platform</h2>
-            <p>
-              This dashboard reflects your live plan, account state, referral link, invite progression, and upcoming access to posting, compliance, and AI features as Elevate Automation scales into a broader sales platform.
-            </p>
-
-            <div class="pill-row">
-              <div class="pill gold">Founder Pricing: <span id="founderPricingValue">-</span></div>
-              <div class="pill green">Billing Status: <span id="billingStatusValue">-</span></div>
-              <div class="pill blue">Current Plan: <span id="currentPlanValue">-</span></div>
-            </div>
-
-            <div class="kpi-row">
-              <div class="mini-panel">
-                <div class="mini-label">Plan</div>
-                <div id="planValue" class="mini-value">-</div>
-              </div>
-              <div class="mini-panel">
-                <div class="mini-label">Subscription Status</div>
-                <div id="subscriptionStatusValue" class="mini-value">-</div>
-              </div>
+            <h2>Account Snapshot</h2>
+            <div class="list-block">
+              <div><strong>Email:</strong> <span class="user-email">Loading...</span></div>
+              <div><strong>Referral Code:</strong> <span id="referralCode">Loading...</span></div>
+              <div><strong>License / Unlock:</strong> <span id="licenseKeyDisplay">Loading...</span></div>
+              <div><strong>User ID:</strong> <span class="user-id">Loading...</span></div>
             </div>
           </div>
 
           <div class="card">
-            <div class="card-title">Account Snapshot</div>
-            <h2>Current user data</h2>
-            <p>Live values from your authenticated platform account.</p>
-
-            <div class="meta-list">
-              <div class="meta"><div class="key">Email</div><div id="snapshotEmail" class="val">-</div></div>
-              <div class="meta"><div class="key">Referral Code</div><div id="snapshotReferralCode" class="val">-</div></div>
-              <div class="meta"><div class="key">Invite Tier</div><div id="snapshotInviteTier" class="val">-</div></div>
-              <div class="meta"><div class="key">Stripe Customer</div><div id="snapshotStripeCustomer" class="val">-</div></div>
+            <h2>Launch Priorities</h2>
+            <div class="list-block">
+              <div>• Finish profile data wiring</div>
+              <div>• Lock Alberta + BC compliance outputs</div>
+              <div>• Connect account access to extension unlock</div>
+              <div>• Confirm scan, queue, Next, and Publish stability</div>
+              <div>• Align extension UI with current Elevate branding</div>
             </div>
           </div>
         </div>
 
-        <div class="grid-2" style="margin-top: 18px;">
-          <div class="card">
-            <div class="card-title">Referral System</div>
-            <h2>Your private referral link</h2>
-            <p>
-              Share this link with qualified users. Additional invite access unlocks through activation, contribution, and successful referrals.
-            </p>
-
-            <div class="mini-panel" style="margin-top: 16px;">
-              <div id="privateReferralLink" class="mini-value" style="font-size:16px; line-height:1.4; word-break:break-all;">-</div>
-            </div>
-
-            <div class="pill-row">
-              <button id="copyReferralInlineBtn" class="btn gold">Copy Link</button>
-            </div>
-          </div>
-
-          <div class="card metric-card">
-            <div class="card-title">Referral Results</div>
-            <h2>Successful referrals tracked</h2>
-            <div id="referralCount" class="metric-value">0</div>
-            <div class="metric-sub">Successful referrals tracked in the beta system.</div>
-          </div>
-        </div>
-
-        <div class="grid-4" style="margin-top: 18px;">
-          <div class="card metric-card">
-            <div class="card-title">Unlocked Invites</div>
-            <div id="unlockedInvites" class="metric-value">1</div>
-            <div class="metric-sub">Invite access earned so far</div>
-          </div>
-
-          <div class="card metric-card">
-            <div class="card-title">Used Invites</div>
-            <div id="usedInvites" class="metric-value">0</div>
-            <div class="metric-sub">Invite slots already used</div>
-          </div>
-
-          <div class="card metric-card">
-            <div class="card-title">Remaining Invites</div>
-            <div id="remainingInvites" class="metric-value">1</div>
-            <div class="metric-sub">Current available invite spots</div>
-          </div>
-
-          <div class="card metric-card">
-            <div class="card-title">Billing Readiness</div>
-            <div id="billingReadiness" class="metric-value">-</div>
-            <div class="metric-sub">Subscription and account readiness</div>
-          </div>
-        </div>
-      </section>
-
-      <!-- VEHICLE POSTER -->
-      <section id="section-poster" class="section">
-        <div class="grid-2">
-          <div class="card">
-            <div class="card-title">Vehicle Poster</div>
-            <h2>Marketplace execution layer</h2>
-            <p>
-              Core posting engine for inventory scan, queue flow, autofill, next, publish, and future posting analytics. This is where the extension and platform will connect more tightly over time.
-            </p>
-
-            <div class="action-grid">
-              <button class="action-btn">Open Vehicle Poster Extension Guide</button>
-              <button class="action-btn">View Posting Workflow Status</button>
-              <button class="action-btn">Open Queue / Posting Logs</button>
-              <button class="action-btn">View Last 10 Successful Posts</button>
-            </div>
-
-            <div class="placeholder-note">
-              Current confirmed status: Marketplace V5.3 is working end-to-end with autofill, Next, and Publish flow functioning. Next hardening focus is upstream data quality and helper-feed accuracy.
-            </div>
-          </div>
-
-          <div class="card">
-            <div class="card-title">Poster Status</div>
-            <h2>Core engine readiness</h2>
-            <div class="meta-list">
-              <div class="meta"><div class="key">Autofill</div><div class="val">Working</div></div>
-              <div class="meta"><div class="key">Next Flow</div><div class="val">Working</div></div>
-              <div class="meta"><div class="key">Publish Flow</div><div class="val">Working</div></div>
-              <div class="meta"><div class="key">Mapping Stability</div><div class="val">Improved</div></div>
-              <div class="meta"><div class="key">Detection Hardening</div><div class="val">Next Priority</div></div>
-            </div>
-          </div>
-        </div>
-
-        <div class="card" style="margin-top: 18px;">
-          <div class="card-title">Planned Expansion</div>
-          <h2>What this module will become</h2>
-          <div class="feature-grid" style="margin-top:16px;">
-            <div class="feature-box">
-              <h3>Queue + Posting History</h3>
-              <p>Track posted units, failed runs, average post time, and future rep-level performance data.</p>
-            </div>
-            <div class="feature-box">
-              <h3>Dealer Setup</h3>
-              <p>Connect profile, compliance, location defaults, and seller identity directly into the poster flow.</p>
-            </div>
-            <div class="feature-box">
-              <h3>AI Description Injection</h3>
-              <p>Feed province-safe, salesperson-branded descriptions into the posting sequence automatically.</p>
-            </div>
-            <div class="feature-box">
-              <h3>Analytics Layer</h3>
-              <p>Long-term listing data, conversion insights, and pricing/title intelligence across the system.</p>
-            </div>
-          </div>
+        <div class="card">
+          <h2>Beta Focus</h2>
+          <p>
+            The purpose of this dashboard is to centralize the account layer behind the extension:
+            user setup, dealer information, compliance state, subscription access, and future platform modules.
+          </p>
         </div>
       </section>
 
       <!-- PROFILE -->
-      <section id="section-profile" class="section">
-        <div class="grid-2">
-          <div class="card">
-            <div class="card-title">Profile & Setup</div>
-            <h2>Salesperson and dealership defaults</h2>
-            <p>
-              Save user identity, dealership context, province, CTA defaults, and compliance preferences for AI captions, descriptions, and future CRM infrastructure.
-            </p>
+      <section id="profile" class="dashboard-section">
+        <div class="card">
+          <h2>Profile & Dealer Setup</h2>
+          <p>
+            Save the information that powers listing location defaults, salesperson identity,
+            compliance text, and future AI-generated descriptions/captions.
+          </p>
 
-            <div class="pill-row">
-              <a href="/profile.html" class="btn gold">Open Profile Module</a>
+          <div class="form-grid">
+            <div class="field">
+              <label for="full_name">Full Name</label>
+              <input id="full_name" type="text" placeholder="Damian Walker" />
             </div>
 
-            <div class="meta-list">
-              <div class="meta"><div class="key">Module Status</div><div class="val">Ready to wire</div></div>
-              <div class="meta"><div class="key">Auth Strategy</div><div class="val">Uses current login</div></div>
-              <div class="meta"><div class="key">Data Store</div><div class="val">Supabase user_profiles</div></div>
+            <div class="field">
+              <label for="dealership">Dealership / Company</label>
+              <input id="dealership" type="text" placeholder="Sean Sargent Toyota" />
+            </div>
+
+            <div class="field">
+              <label for="city">City</label>
+              <input id="city" type="text" placeholder="Grande Prairie" />
+            </div>
+
+            <div class="field">
+              <label for="province">Province</label>
+              <select id="province">
+                <option value="">Select Province</option>
+                <option value="AB">Alberta</option>
+                <option value="BC">British Columbia</option>
+              </select>
+            </div>
+
+            <div class="field">
+              <label for="phone">Your Phone</label>
+              <input id="phone" type="text" placeholder="780-000-0000" />
+            </div>
+
+            <div class="field">
+              <label for="license_number">License Number</label>
+              <input id="license_number" type="text" placeholder="AMVIC / Dealer License / Salesperson License" />
+            </div>
+
+            <div class="field">
+              <label for="listing_location">Default Listing Location</label>
+              <input id="listing_location" type="text" placeholder="Grande Prairie, Alberta" />
+            </div>
+
+            <div class="field">
+              <label for="dealer_phone">Dealer Phone</label>
+              <input id="dealer_phone" type="text" placeholder="Dealership main line" />
+            </div>
+
+            <div class="field">
+              <label for="dealer_email">Dealer Email</label>
+              <input id="dealer_email" type="email" placeholder="dealer@email.com" />
+            </div>
+
+            <div class="field">
+              <label for="compliance_mode">Compliance Mode</label>
+              <select id="compliance_mode">
+                <option value="">Select Mode</option>
+                <option value="AB">AB / Alberta</option>
+                <option value="BC">BC / British Columbia</option>
+              </select>
+            </div>
+
+            <div class="field field-full">
+              <button id="saveProfileBtn" class="btn-primary">Save Profile</button>
             </div>
           </div>
 
-          <div class="card">
-            <div class="card-title">What Saves Here</div>
-            <h2>Base layer for the platform</h2>
-            <div class="list">
-              <div class="list-item"><div><strong>Salesperson Identity</strong><span>Name, phone, email, booking link, CTA</span></div><div class="badge gold">Core</div></div>
-              <div class="list-item"><div><strong>Dealership Defaults</strong><span>Store name, website, city, province, logo</span></div><div class="badge gold">Core</div></div>
-              <div class="list-item"><div><strong>Compliance Defaults</strong><span>Mode, disclaimer, province context</span></div><div class="badge gold">Core</div></div>
-              <div class="list-item"><div><strong>Listing Behavior</strong><span>Trades, financing, delivery, CARFAX toggles</span></div><div class="badge green">Next</div></div>
-            </div>
-          </div>
+          <div id="profileStatus" class="status-line"></div>
+          <div id="profileSummary" class="profile-summary"></div>
         </div>
       </section>
 
       <!-- COMPLIANCE -->
-      <section id="section-compliance" class="section">
+      <section id="compliance" class="dashboard-section">
         <div class="grid-2">
           <div class="card">
-            <div class="card-title">Compliance Center</div>
-            <h2>Province-aware posting safeguards</h2>
+            <h2>Compliance Settings</h2>
             <p>
-              This module will govern description rules, blocked phrases, default disclaimers, and province-specific safe posting logic for automotive content.
+              This section will drive listing description logic based on province,
+              profile information, and dealer/salesperson data.
             </p>
 
-            <div class="warn-list">
-              <div class="warn-item">AMVIC and province-based wording controls should sit upstream of generated content, not only at final review.</div>
-              <div class="warn-item">Blocked phrases like “guaranteed approval” or vague fee wording should be flagged before text reaches publish flow.</div>
-              <div class="warn-item">Default dealership disclaimer should be saved once and injected consistently.</div>
+            <div class="list-block">
+              <div><strong>Primary Province Logic:</strong> Alberta + BC</div>
+              <div><strong>Data Source:</strong> Profile & Dealer Setup</div>
+              <div><strong>Planned Output Use:</strong> Descriptions, captions, location defaults, account-linked listing text</div>
             </div>
           </div>
 
           <div class="card">
-            <div class="card-title">Planned Controls</div>
-            <h2>Core rule categories</h2>
-            <div class="list">
-              <div class="list-item"><div><strong>Province Presets</strong><span>Alberta, B.C., Saskatchewan, Ontario</span></div><div class="badge gold">Planned</div></div>
-              <div class="list-item"><div><strong>Disclosure Blocks</strong><span>Reusable dealership-approved disclaimer templates</span></div><div class="badge gold">Planned</div></div>
-              <div class="list-item"><div><strong>Blocked Phrases</strong><span>High-risk language detection before publish</span></div><div class="badge gold">Planned</div></div>
-              <div class="list-item"><div><strong>Safe Mode Logic</strong><span>Strict / balanced / custom generation rules</span></div><div class="badge green">Next</div></div>
+            <h2>Current Beta Compliance Direction</h2>
+            <div class="list-block">
+              <div>• Alberta support must work before beta launch</div>
+              <div>• BC support must work before beta launch</div>
+              <div>• Dealer info should auto-pair into generated copy</div>
+              <div>• License and location details should persist through the account</div>
             </div>
           </div>
         </div>
-      </section>
 
-      <!-- AI -->
-      <section id="section-ai" class="section">
-        <div class="grid-2">
-          <div class="card">
-            <div class="card-title">AI Studio</div>
-            <h2>Caption and description generation</h2>
-            <p>
-              Generate Marketplace descriptions, Facebook captions, Instagram captions, and short CTA variations using vehicle data, salesperson profile, dealership defaults, and compliance context.
-            </p>
-
-            <div class="feature-grid" style="margin-top:16px;">
-              <div class="feature-box">
-                <h3>Marketplace Descriptions</h3>
-                <p>Vehicle-specific, salesperson-branded, province-aware listing copy.</p>
-              </div>
-              <div class="feature-box">
-                <h3>Social Captions</h3>
-                <p>Facebook and Instagram content with tone and CTA control.</p>
-              </div>
-              <div class="feature-box">
-                <h3>CTA Builder</h3>
-                <p>Custom message, call, booking, trade appraisal, or finance prompts.</p>
-              </div>
-              <div class="feature-box">
-                <h3>Platform Templates</h3>
-                <p>Short, medium, long, story, and reel-ready copy outputs.</p>
-              </div>
-            </div>
-          </div>
-
-          <div class="card">
-            <div class="card-title">AI Readiness</div>
-            <h2>Dependency chain</h2>
-            <div class="meta-list">
-              <div class="meta"><div class="key">Needs profile data</div><div class="val">Yes</div></div>
-              <div class="meta"><div class="key">Needs compliance context</div><div class="val">Yes</div></div>
-              <div class="meta"><div class="key">Needs vehicle data</div><div class="val">Yes</div></div>
-              <div class="meta"><div class="key">Best next order</div><div class="val">Profile → Compliance → AI</div></div>
-            </div>
-          </div>
+        <div class="card">
+          <h2>Compliance Output Intent</h2>
+          <p>
+            The dashboard will feed profile data into the extension so listing copy,
+            location, and seller/dealer details can be inserted automatically based on user setup.
+          </p>
         </div>
       </section>
 
-      <!-- REFERRALS -->
-      <section id="section-referrals" class="section">
+      <!-- AFFILIATE -->
+      <section id="affiliate" class="dashboard-section">
         <div class="grid-2">
           <div class="card">
-            <div class="card-title">Referrals</div>
-            <h2>Growth loop and invite system</h2>
+            <h2>Affiliate Center</h2>
             <p>
-              Beta access, referral growth, and invite progression remain a core part of controlled expansion before wider launch.
+              This section is positioned for the Elevate Automation referral and founding affiliate structure.
             </p>
 
-            <div class="meta-list">
-              <div class="meta"><div class="key">Referral Link</div><div id="referralLinkSectionValue" class="val">-</div></div>
-              <div class="meta"><div class="key">Referral Code</div><div id="referralCodeSectionValue" class="val">-</div></div>
-              <div class="meta"><div class="key">Successful Referrals</div><div id="referralCountSectionValue" class="val">0</div></div>
-              <div class="meta"><div class="key">Remaining Invites</div><div id="remainingInvitesSectionValue" class="val">0</div></div>
-            </div>
-
-            <div class="pill-row">
-              <button id="copyReferralSectionBtn" class="btn gold">Copy Referral Link</button>
+            <div class="list-block">
+              <div><strong>Your Referral Code:</strong> <span id="referralCode">Loading...</span></div>
+              <div><strong>Direct Referral Commission:</strong> 20% recurring</div>
+              <div><strong>Second-Level Override:</strong> 5% planned structure</div>
+              <div><strong>Positioning:</strong> referral / partner program, not MLM-style messaging</div>
             </div>
           </div>
 
           <div class="card">
-            <div class="card-title">Invite Logic</div>
-            <h2>Current structure</h2>
-            <div class="list">
-              <div class="list-item"><div><strong>Base Access</strong><span>Testers start with limited invite availability</span></div><div class="badge gold">Live</div></div>
-              <div class="list-item"><div><strong>Unlock Progression</strong><span>More invites unlock through activation, feedback, or successful referrals</span></div><div class="badge gold">Live</div></div>
-              <div class="list-item"><div><strong>Referral Attribution</strong><span>Tracks user growth inside the beta system</span></div><div class="badge green">Growing</div></div>
+            <h2>Partner Growth Notes</h2>
+            <div class="list-block">
+              <div>• Founding affiliates and beta users can feed launch momentum</div>
+              <div>• Dealership managers can become team-level partners</div>
+              <div>• Promo kit, dashboard visibility, and transparent payouts come later</div>
             </div>
           </div>
         </div>
       </section>
 
       <!-- BILLING -->
-      <section id="section-billing" class="section">
+      <section id="billing" class="dashboard-section">
         <div class="grid-2">
           <div class="card">
-            <div class="card-title">Billing</div>
-            <h2>Subscription and founder pricing visibility</h2>
+            <h2>Billing & Access</h2>
             <p>
-              Billing state should remain tightly connected to the founder beta dashboard so users can clearly see plan access, status, and future upgrades.
+              This section confirms whether the account is active and ready to unlock the extension.
             </p>
 
-            <div class="meta-list">
-              <div class="meta"><div class="key">Current Plan</div><div id="billingPlanValue" class="val">-</div></div>
-              <div class="meta"><div class="key">Billing Status</div><div id="billingStatusSectionValue" class="val">-</div></div>
-              <div class="meta"><div class="key">Founder Pricing</div><div id="billingFounderValue" class="val">-</div></div>
-              <div class="meta"><div class="key">Stripe Customer</div><div id="billingStripeValue" class="val">-</div></div>
+            <div class="list-block">
+              <div><strong>Access:</strong> <span id="accessBadge" class="badge">Loading...</span></div>
+              <div><strong>Plan:</strong> <span id="planName">Loading...</span></div>
+              <div><strong>Status:</strong> <span id="subscriptionStatus">Loading...</span></div>
+              <div><strong>License / Unlock State:</strong> <span id="licenseKeyDisplay">Loading...</span></div>
             </div>
+
+            <div id="accountStatus" class="status-line"></div>
           </div>
 
           <div class="card">
-            <div class="card-title">Commercial Direction</div>
-            <h2>Near-term monetization path</h2>
-            <div class="list">
-              <div class="list-item"><div><strong>Founder Beta</strong><span>Locked pricing for early users</span></div><div class="badge gold">Active</div></div>
-              <div class="list-item"><div><strong>Starter Tier</strong><span>Core poster + profile + compliance base</span></div><div class="badge green">Next</div></div>
-              <div class="list-item"><div><strong>Pro Tier</strong><span>AI, workflow expansion, CRM, advanced automation</span></div><div class="badge green">Next</div></div>
+            <h2>Extension Unlock Direction</h2>
+            <div class="list-block">
+              <div>• Account login should control extension access</div>
+              <div>• Users should not need to manually input a product key every session</div>
+              <div>• Extension should validate active access from the backend</div>
+              <div>• Profile and dealer setup should be tied to the authenticated user</div>
             </div>
           </div>
         </div>
       </section>
 
-      <!-- SETTINGS -->
-      <section id="section-settings" class="section">
-        <div class="grid-2">
-          <div class="card">
-            <div class="card-title">Settings</div>
-            <h2>Platform controls</h2>
-            <p>
-              This area will eventually hold account settings, automation behavior toggles, compliance-safe defaults, and team-level configuration.
-            </p>
+      <!-- TOOLS -->
+      <section id="tools" class="dashboard-section">
+        <div class="card">
+          <h2>Tools & Modules</h2>
+          <p>
+            This section gives beta users visibility into the platform roadmap without exposing unfinished systems as broken.
+          </p>
 
-            <div class="list">
-              <div class="list-item"><div><strong>Auto Next After Fill</strong><span>Poster workflow control</span></div><div class="badge green">Planned</div></div>
-              <div class="list-item"><div><strong>Auto Publish</strong><span>Poster workflow control</span></div><div class="badge green">Planned</div></div>
-              <div class="list-item"><div><strong>Strict Compliance Gate</strong><span>Content generation safety mode</span></div><div class="badge gold">Planned</div></div>
-              <div class="list-item"><div><strong>AI Caption Defaults</strong><span>Tone, CTA, length, channel presets</span></div><div class="badge green">Planned</div></div>
+          <div class="tools-grid">
+            <div class="tool-tile">
+              <h3>Vehicle Poster</h3>
+              <p>Main beta engine for dealer inventory scan, queue build, Marketplace fill, and posting flow.</p>
+              <div class="tool-status">Beta Core</div>
             </div>
-          </div>
 
-          <div class="card">
-            <div class="card-title">Architecture Note</div>
-            <h2>One login, many modules</h2>
-            <p>
-              This dashboard should remain the single authenticated shell for the Elevate platform. Profile, compliance, AI, poster, billing, and referrals all sit under the same login and user identity.
-            </p>
+            <div class="tool-tile">
+              <h3>Compliance Engine</h3>
+              <p>Province-based copy logic using user profile, dealer setup, and listing defaults.</p>
+              <div class="tool-status">In Progress</div>
+            </div>
 
-            <div class="placeholder-note">
-              Recommended structure: keep this page as the primary control center, then wire deeper modules like Profile & Setup into sub-pages or loaded panels without introducing a second auth flow.
+            <div class="tool-tile">
+              <h3>AI Captions & Descriptions</h3>
+              <p>Future generation layer for platform-assisted listing text and branded sales copy.</p>
+              <div class="tool-status">Planned</div>
+            </div>
+
+            <div class="tool-tile">
+              <h3>CRM</h3>
+              <p>Lead tracking, follow-up visibility, and connected workflow across listings and pipeline.</p>
+              <div class="tool-status">Planned</div>
+            </div>
+
+            <div class="tool-tile">
+              <h3>Mass SMS / Follow-Up</h3>
+              <p>Campaign sending, follow-up sequencing, and sales workflow automation.</p>
+              <div class="tool-status">Planned</div>
+            </div>
+
+            <div class="tool-tile">
+              <h3>AI Media Tools</h3>
+              <p>Banner templates, branded overlays, photo editing, and future social media output features.</p>
+              <div class="tool-status">Planned</div>
             </div>
           </div>
         </div>
       </section>
-
-      <div class="footer-space"></div>
     </main>
   </div>
 
-  <script>
-    const sectionMeta = {
-      overview: {
-        title: "Founder Beta Dashboard",
-        subtitle: "Control center for account access, referral growth, billing status, invite progression, and future Elevate automation tools."
-      },
-      poster: {
-        title: "Vehicle Poster",
-        subtitle: "Execution layer for Marketplace posting, queue flow, helper logic, next/publish controls, and future posting analytics."
-      },
-      profile: {
-        title: "Profile & Setup",
-        subtitle: "Save salesperson identity, dealership defaults, compliance preferences, and listing behavior inside the current authenticated dashboard."
-      },
-      compliance: {
-        title: "Compliance Center",
-        subtitle: "Province-aware posting safeguards, rule presets, blocked phrase controls, and disclaimer infrastructure."
-      },
-      ai: {
-        title: "AI Studio",
-        subtitle: "Generate descriptions, captions, CTAs, and platform-specific copy from vehicle, user, and dealership data."
-      },
-      referrals: {
-        title: "Referral System",
-        subtitle: "Manage invite growth, referral links, beta expansion, and tracked successful referrals."
-      },
-      billing: {
-        title: "Billing",
-        subtitle: "View founder pricing, plan status, billing readiness, and future commercial tier access."
-      },
-      settings: {
-        title: "Settings",
-        subtitle: "Platform configuration, automation defaults, account controls, and future team-level system settings."
-      }
-    };
-
-    const navItems = document.querySelectorAll(".nav-item");
-    const sections = document.querySelectorAll(".section");
-    const pageTitle = document.getElementById("pageTitle");
-    const pageSubtitle = document.getElementById("pageSubtitle");
-
-    function setActiveSection(sectionKey) {
-      navItems.forEach(btn => {
-        btn.classList.toggle("active", btn.dataset.section === sectionKey);
-      });
-
-      sections.forEach(section => {
-        section.classList.toggle("active", section.id === `section-${sectionKey}`);
-      });
-
-      const meta = sectionMeta[sectionKey];
-      if (meta) {
-        pageTitle.textContent = meta.title;
-        pageSubtitle.textContent = meta.subtitle;
-      }
-    }
-
-    navItems.forEach(btn => {
-      btn.addEventListener("click", () => {
-        setActiveSection(btn.dataset.section);
-      });
-    });
-
-    // Placeholder wiring hooks for your existing dashboard.js data population
-    // Keep these IDs stable if your current JS already targets similar fields.
-    function setText(id, value) {
-      const node = document.getElementById(id);
-      if (node) node.textContent = value ?? "-";
-    }
-
-    // Example placeholder values so layout doesn't look empty if dashboard.js loads later.
-    setText("snapshotEmail", "-");
-    setText("snapshotReferralCode", "-");
-    setText("snapshotInviteTier", "-");
-    setText("snapshotStripeCustomer", "-");
-    setText("founderPricingValue", "-");
-    setText("billingStatusValue", "-");
-    setText("currentPlanValue", "-");
-    setText("planValue", "-");
-    setText("subscriptionStatusValue", "-");
-    setText("privateReferralLink", "-");
-    setText("referralCount", "0");
-    setText("unlockedInvites", "1");
-    setText("usedInvites", "0");
-    setText("remainingInvites", "1");
-    setText("billingReadiness", "-");
-    setText("referralLinkSectionValue", "-");
-    setText("referralCodeSectionValue", "-");
-    setText("referralCountSectionValue", "0");
-    setText("remainingInvitesSectionValue", "1");
-    setText("billingPlanValue", "-");
-    setText("billingStatusSectionValue", "-");
-    setText("billingFounderValue", "-");
-    setText("billingStripeValue", "-");
-
-    // Copy referral buttons placeholder
-    function copyReferralLink() {
-      const link = document.getElementById("privateReferralLink")?.textContent?.trim();
-      if (!link || link === "-") {
-        showStatus("Referral link is not available yet.", "error");
-        return;
-      }
-
-      navigator.clipboard.writeText(link)
-        .then(() => showStatus("Referral link copied.", "success"))
-        .catch(() => showStatus("Failed to copy referral link.", "error"));
-    }
-
-    document.getElementById("copyReferralTopBtn")?.addEventListener("click", copyReferralLink);
-    document.getElementById("copyReferralSidebarBtn")?.addEventListener("click", copyReferralLink);
-    document.getElementById("copyReferralInlineBtn")?.addEventListener("click", copyReferralLink);
-    document.getElementById("copyReferralSectionBtn")?.addEventListener("click", copyReferralLink);
-
-    function showStatus(message, type = "") {
-      const banner = document.getElementById("statusBanner");
-      banner.textContent = message;
-      banner.className = "status-banner show";
-      if (type) banner.classList.add(type);
-    }
-
-    // Logout placeholder hooks - replace or keep if your existing dashboard.js already wires these
-    function handleLogout() {
-      window.location.href = "/login.html";
-    }
-
-    document.getElementById("logoutBtn")?.addEventListener("click", handleLogout);
-    document.getElementById("logoutTopBtn")?.addEventListener("click", handleLogout);
-  </script>
-
-  <!-- Keep your existing dashboard logic file here if you already have one -->
   <script src="/dashboard.js"></script>
 </body>
 </html>
-
