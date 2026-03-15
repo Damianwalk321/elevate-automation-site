@@ -1,5 +1,5 @@
 // dashboard.js
-// Full replacement - profile save flow renamed to avoid global collisions
+// Full replacement with dealer website / inventory URL / scanner type support
 
 const SUPABASE_URL = "https://teixblbxkoershwgqpym.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRlaXhibGJ4a29lcnNod2dxcHltIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMwODUzMDMsImV4cCI6MjA4ODY2MTMwM30.wxt9zjKhsBuflaFZZT9awZiwckRzYkEl-OLm_4q8qF4";
@@ -191,6 +191,10 @@ async function loadProfile(userId) {
     setFieldValue("dealer_phone", result.data.dealer_phone);
     setFieldValue("dealer_email", result.data.dealer_email);
     setFieldValue("compliance_mode", result.data.compliance_mode || result.data.province);
+    setFieldValue("dealer_website", result.data.dealer_website);
+    setFieldValue("inventory_url", result.data.inventory_url);
+    setFieldValue("scanner_type", result.data.scanner_type);
+    setFieldValue("software_license_key", result.data.software_license_key || "");
 
     renderProfileSummary(result.data);
     setStatus("profileStatus", "Profile loaded.");
@@ -216,7 +220,10 @@ async function submitProfileSave(user) {
       listing_location: getFieldValue("listing_location"),
       dealer_phone: getFieldValue("dealer_phone"),
       dealer_email: getFieldValue("dealer_email"),
-      compliance_mode: getFieldValue("compliance_mode")
+      compliance_mode: getFieldValue("compliance_mode"),
+      dealer_website: normalizeUrlInput(getFieldValue("dealer_website")),
+      inventory_url: normalizeUrlInput(getFieldValue("inventory_url")),
+      scanner_type: getFieldValue("scanner_type")
     };
 
     console.log("PROFILE SAVE PAYLOAD:", payload);
@@ -242,6 +249,11 @@ async function submitProfileSave(user) {
     }
 
     currentProfile = result.data || payload;
+
+    if (currentProfile?.software_license_key) {
+      setFieldValue("software_license_key", currentProfile.software_license_key);
+    }
+
     renderProfileSummary(currentProfile);
     setStatus("profileStatus", "Profile saved successfully.");
   } catch (error) {
@@ -261,11 +273,15 @@ function renderProfileSummary(profile) {
       <div><strong>City:</strong> Not set</div>
       <div><strong>Province:</strong> Not set</div>
       <div><strong>Phone:</strong> Not set</div>
-      <div><strong>License:</strong> Not set</div>
+      <div><strong>Compliance License Number:</strong> Not set</div>
       <div><strong>Default Listing Location:</strong> Not set</div>
       <div><strong>Dealer Phone:</strong> Not set</div>
       <div><strong>Dealer Email:</strong> Not set</div>
       <div><strong>Compliance Mode:</strong> Not set</div>
+      <div><strong>Dealer Website:</strong> Not set</div>
+      <div><strong>Inventory URL:</strong> Not set</div>
+      <div><strong>Scanner Type:</strong> Not set</div>
+      <div><strong>Software License Key:</strong> Not loaded</div>
     `;
     return;
   }
@@ -276,17 +292,22 @@ function renderProfileSummary(profile) {
     <div><strong>City:</strong> ${escapeHtml(profile.city || "Not set")}</div>
     <div><strong>Province:</strong> ${escapeHtml(profile.province || "Not set")}</div>
     <div><strong>Phone:</strong> ${escapeHtml(profile.phone || "Not set")}</div>
-    <div><strong>License:</strong> ${escapeHtml(profile.license_number || "Not set")}</div>
+    <div><strong>Compliance License Number:</strong> ${escapeHtml(profile.license_number || "Not set")}</div>
     <div><strong>Default Listing Location:</strong> ${escapeHtml(profile.listing_location || "Not set")}</div>
     <div><strong>Dealer Phone:</strong> ${escapeHtml(profile.dealer_phone || "Not set")}</div>
     <div><strong>Dealer Email:</strong> ${escapeHtml(profile.dealer_email || "Not set")}</div>
     <div><strong>Compliance Mode:</strong> ${escapeHtml(profile.compliance_mode || profile.province || "Not set")}</div>
+    <div><strong>Dealer Website:</strong> ${escapeHtml(profile.dealer_website || "Not set")}</div>
+    <div><strong>Inventory URL:</strong> ${escapeHtml(profile.inventory_url || "Not set")}</div>
+    <div><strong>Scanner Type:</strong> ${escapeHtml(profile.scanner_type || "Not set")}</div>
+    <div><strong>Software License Key:</strong> ${escapeHtml(profile.software_license_key || "Not loaded")}</div>
   `;
 }
 
 async function loadAccountData(user) {
   try {
     setStatus("accountStatus", "Loading account data...");
+    setStatus("accountStatusBilling", "Loading account data...");
 
     const response = await fetch(`/api/get-user-data?email=${encodeURIComponent(user.email)}`);
     const result = await response.json();
@@ -295,15 +316,53 @@ async function loadAccountData(user) {
       console.warn("Account data load failed:", result);
       renderAccessState(null);
       setStatus("accountStatus", "Could not load account data.");
+      setStatus("accountStatusBilling", "Could not load account data.");
       return;
     }
 
     renderAccessState(result);
     setStatus("accountStatus", "Account data loaded.");
+    setStatus("accountStatusBilling", "Account data loaded.");
+
+    const softwareLicenseKey = result?.license_key || "Not assigned";
+    setTextByIdForAll("licenseKeyDisplay", softwareLicenseKey);
+    setTextByIdForAll("licenseKeyDisplayBilling", softwareLicenseKey);
+
+    const referral = result?.referral_code || "Not assigned yet";
+    setTextByIdForAll("referralCode", referral);
+    setTextByIdForAll("referralCodeAffiliate", referral);
+
+    setTextByIdForAll("planNameBilling", result?.plan_name || "Founder Beta");
+    setTextByIdForAll("subscriptionStatusBilling", result?.status || "inactive");
+
+    const access = Boolean(
+      result &&
+      (result.access === true ||
+        result.active === true ||
+        result.subscription_active === true ||
+        result.status === "active")
+    );
+
+    setTextByIdForAll("accessBadgeBilling", access ? "Active Access" : "Inactive Access");
+    document.querySelectorAll("#accessBadgeBilling").forEach((el) => {
+      el.classList.remove("active", "inactive");
+      el.classList.add(access ? "active" : "inactive");
+    });
+
+    const softwareLicenseInput = document.getElementById("software_license_key");
+    if (softwareLicenseInput) {
+      softwareLicenseInput.value = result?.license_key || "";
+    }
+
+    if (currentProfile) {
+      currentProfile.software_license_key = result?.license_key || "";
+      renderProfileSummary(currentProfile);
+    }
   } catch (error) {
     console.error("loadAccountData error:", error);
     renderAccessState(null);
     setStatus("accountStatus", "Failed to load account data.");
+    setStatus("accountStatusBilling", "Failed to load account data.");
   }
 }
 
@@ -319,8 +378,6 @@ function renderAccessState(data) {
   setTextByIdForAll("accessBadge", hasAccess ? "Active Access" : "Inactive Access");
   setTextByIdForAll("planName", data?.plan_name || data?.plan || data?.price_id || "Founder Beta");
   setTextByIdForAll("subscriptionStatus", data?.status || (hasAccess ? "active" : "inactive"));
-  setTextByIdForAll("referralCode", data?.referral_code || data?.refCode || "Not assigned yet");
-  setTextByIdForAll("licenseKeyDisplay", data?.license_key || data?.licenseKey || "Account-based access enabled");
 
   document.querySelectorAll("#accessBadge").forEach((el) => {
     el.classList.remove("active", "inactive");
@@ -393,6 +450,17 @@ function setTextByIdForAll(id, text) {
   document.querySelectorAll(`#${id}`).forEach((el) => {
     el.textContent = text || "";
   });
+}
+
+function normalizeUrlInput(value) {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+
+  if (raw.startsWith("http://") || raw.startsWith("https://")) {
+    return raw;
+  }
+
+  return `https://${raw}`;
 }
 
 function escapeHtml(str) {
