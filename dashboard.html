@@ -235,6 +235,7 @@
       font-size: 28px;
       font-weight: 700;
       line-height: 1.1;
+      word-break: break-word;
     }
 
     .status-line {
@@ -265,6 +266,12 @@
       background: rgba(183, 28, 28, 0.16);
       color: #ffb3b3;
       border-color: rgba(255, 179, 179, 0.2);
+    }
+
+    .badge.warn {
+      background: rgba(212, 175, 55, 0.14);
+      color: #f4dea0;
+      border-color: rgba(212, 175, 55, 0.2);
     }
 
     .form-grid {
@@ -366,11 +373,79 @@
       border: 1px solid rgba(212, 175, 55, 0.18);
     }
 
+    .action-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+      margin-top: 16px;
+    }
+
+    .action-btn {
+      border: none;
+      border-radius: 12px;
+      padding: 14px 16px;
+      font-size: 14px;
+      cursor: pointer;
+      transition: 0.2s ease;
+      background: #1c1c1c;
+      color: #f3f3f3;
+      border: 1px solid rgba(255,255,255,0.08);
+      text-align: left;
+    }
+
+    .action-btn:hover {
+      background: #232323;
+      border-color: rgba(212,175,55,0.35);
+    }
+
+    .setup-grid {
+      display: grid;
+      gap: 10px;
+      margin-top: 14px;
+    }
+
+    .setup-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 12px 14px;
+      border-radius: 12px;
+      background: #171717;
+      border: 1px solid rgba(255,255,255,0.06);
+    }
+
+    .setup-item-label {
+      color: #f4f4f4;
+      font-size: 14px;
+    }
+
+    .setup-state {
+      font-size: 12px;
+      font-weight: 700;
+      border-radius: 999px;
+      padding: 6px 10px;
+      border: 1px solid rgba(255,255,255,0.08);
+    }
+
+    .setup-state.good {
+      background: rgba(46, 125, 50, 0.18);
+      color: #9df0a1;
+      border-color: rgba(157,240,161,0.22);
+    }
+
+    .setup-state.warn {
+      background: rgba(212,175,55,0.14);
+      color: #f4dea0;
+      border-color: rgba(212,175,55,0.2);
+    }
+
     @media (max-width: 1080px) {
       .grid-2,
       .grid-3,
       .tools-grid,
-      .form-grid {
+      .form-grid,
+      .action-grid {
         grid-template-columns: 1fr;
       }
     }
@@ -399,7 +474,7 @@
         <div class="brand-eyebrow">Elevate Automation</div>
         <div class="brand-title">Founder Beta Dashboard</div>
         <div class="brand-subtitle">
-          Control center for access, profile setup, compliance, billing, dealer configuration, and extension-linked posting.
+          Control center for access, profile setup, compliance, dealer routing, extension connection, and posting readiness.
         </div>
       </div>
 
@@ -411,6 +486,7 @@
       <nav class="sidebar-nav">
         <button class="nav-btn active" data-section="overview">Overview</button>
         <button class="nav-btn" data-section="profile">Profile & Dealer Setup</button>
+        <button class="nav-btn" data-section="extension">Extension Control</button>
         <button class="nav-btn" data-section="compliance">Compliance</button>
         <button class="nav-btn" data-section="affiliate">Affiliate Center</button>
         <button class="nav-btn" data-section="billing">Billing & Access</button>
@@ -441,7 +517,7 @@
           <div class="card">
             <div class="stat-label">Current Plan</div>
             <div id="planName" class="stat-value">Loading...</div>
-            <p class="mini-note">Plan, license, and extension access sync from your backend account.</p>
+            <p class="mini-note">Plan, license, posting limits, and extension state sync from your backend account.</p>
           </div>
 
           <div class="card">
@@ -465,21 +541,43 @@
           <div class="card">
             <h2>Launch Priorities</h2>
             <div class="list-block">
-              <div>• Profile and dealer setup powering captions</div>
               <div>• Account-linked extension unlock</div>
-              <div>• Posting limits enforced in backend</div>
-              <div>• Scanner type and dealer site onboarding</div>
-              <div>• Compliance-aware Alberta / BC output</div>
+              <div>• Dealer website + scanner routing</div>
+              <div>• Queue → Marketplace reliability</div>
+              <div>• AB / BC compliance output</div>
+              <div>• Posting limit enforcement</div>
             </div>
           </div>
         </div>
 
         <div class="card">
-          <h2>Dealer System Direction</h2>
-          <p>
-            Each user should save a dealer website, inventory URL, and scanner type so the extension knows
-            which domain to scan and which parser logic to use. This dashboard is the control layer for that.
-          </p>
+          <h2>Setup Progress</h2>
+          <div class="setup-grid">
+            <div class="setup-item">
+              <div class="setup-item-label">Dealer website saved</div>
+              <div id="setupDealerWebsite" class="setup-state warn">Checking...</div>
+            </div>
+            <div class="setup-item">
+              <div class="setup-item-label">Inventory URL saved</div>
+              <div id="setupInventoryUrl" class="setup-state warn">Checking...</div>
+            </div>
+            <div class="setup-item">
+              <div class="setup-item-label">Scanner type selected</div>
+              <div id="setupScannerType" class="setup-state warn">Checking...</div>
+            </div>
+            <div class="setup-item">
+              <div class="setup-item-label">Listing location set</div>
+              <div id="setupListingLocation" class="setup-state warn">Checking...</div>
+            </div>
+            <div class="setup-item">
+              <div class="setup-item-label">Compliance mode set</div>
+              <div id="setupComplianceMode" class="setup-state warn">Checking...</div>
+            </div>
+            <div class="setup-item">
+              <div class="setup-item-label">Extension account active</div>
+              <div id="setupAccess" class="setup-state warn">Checking...</div>
+            </div>
+          </div>
         </div>
       </section>
 
@@ -487,8 +585,8 @@
         <div class="card">
           <h2>Profile & Dealer Setup</h2>
           <p>
-            Save the information that powers listing defaults, salesperson identity, dealer website targeting,
-            compliance output, and future AI-generated descriptions/captions.
+            Save the information that powers listing defaults, salesperson identity, dealer routing,
+            compliance output, and extension-linked descriptions/captions.
           </p>
 
           <div class="form-grid">
@@ -588,24 +686,105 @@
         </div>
       </section>
 
+      <section id="extension" class="dashboard-section">
+        <div class="grid-3">
+          <div class="card">
+            <div class="stat-label">Extension Access</div>
+            <div id="extensionAccessBadge" class="badge">Loading...</div>
+            <div id="extensionAccessStatus" class="status-line"></div>
+          </div>
+
+          <div class="card">
+            <div class="stat-label">Posts Remaining Today</div>
+            <div id="extensionRemainingPosts" class="stat-value">Loading...</div>
+            <p class="mini-note">Driven by backend usage + plan limits.</p>
+          </div>
+
+          <div class="card">
+            <div class="stat-label">Scanner Type</div>
+            <div id="extensionScannerType" class="stat-value" style="font-size:22px;">Loading...</div>
+            <p class="mini-note">This determines which inventory parser the extension uses.</p>
+          </div>
+        </div>
+
+        <div class="grid-2">
+          <div class="card">
+            <h2>Extension Control</h2>
+            <div class="list-block">
+              <div><strong>Dealer Website:</strong> <span id="extensionDealerWebsite">Loading...</span></div>
+              <div><strong>Inventory URL:</strong> <span id="extensionInventoryUrl">Loading...</span></div>
+              <div><strong>Listing Location:</strong> <span id="extensionListingLocation">Loading...</span></div>
+              <div><strong>Compliance Mode:</strong> <span id="extensionComplianceMode">Loading...</span></div>
+              <div><strong>Current Plan:</strong> <span id="extensionPlan">Loading...</span></div>
+              <div><strong>Posts Used Today:</strong> <span id="extensionPostsUsed">Loading...</span></div>
+              <div><strong>Daily Limit:</strong> <span id="extensionPostLimit">Loading...</span></div>
+            </div>
+
+            <div class="action-grid">
+              <button id="openMarketplaceBtn" class="action-btn" type="button">Open Marketplace</button>
+              <button id="openInventoryBtn" class="action-btn" type="button">Open Inventory URL</button>
+              <button id="refreshExtensionStateBtn" class="action-btn" type="button">Refresh Extension State</button>
+              <button id="copySetupStepsBtn" class="action-btn" type="button">Copy Setup Steps</button>
+            </div>
+
+            <div id="extensionActionStatus" class="status-line"></div>
+          </div>
+
+          <div class="card">
+            <h2>Extension Setup Status</h2>
+            <div class="setup-grid">
+              <div class="setup-item">
+                <div class="setup-item-label">Account access active</div>
+                <div id="extSetupAccess" class="setup-state warn">Checking...</div>
+              </div>
+              <div class="setup-item">
+                <div class="setup-item-label">Dealer website connected</div>
+                <div id="extSetupDealerWebsite" class="setup-state warn">Checking...</div>
+              </div>
+              <div class="setup-item">
+                <div class="setup-item-label">Inventory URL connected</div>
+                <div id="extSetupInventoryUrl" class="setup-state warn">Checking...</div>
+              </div>
+              <div class="setup-item">
+                <div class="setup-item-label">Scanner type selected</div>
+                <div id="extSetupScannerType" class="setup-state warn">Checking...</div>
+              </div>
+              <div class="setup-item">
+                <div class="setup-item-label">Listing location ready</div>
+                <div id="extSetupListingLocation" class="setup-state warn">Checking...</div>
+              </div>
+              <div class="setup-item">
+                <div class="setup-item-label">Compliance mode ready</div>
+                <div id="extSetupComplianceMode" class="setup-state warn">Checking...</div>
+              </div>
+            </div>
+
+            <div class="mini-note">
+              The dashboard cannot force-open the Chrome extension popup, but this control panel gives users
+              one clean place to verify setup, open the correct pages, and sync state before posting.
+            </div>
+          </div>
+        </div>
+      </section>
+
       <section id="compliance" class="dashboard-section">
         <div class="grid-2">
           <div class="card">
             <h2>Compliance Settings</h2>
             <p>
-              This profile data feeds your Marketplace descriptions, caption footers, dealer contact block,
+              This profile data feeds Marketplace descriptions, caption footers, dealer contact block,
               and province-specific compliance logic.
             </p>
 
             <div class="list-block">
               <div><strong>Primary Modes:</strong> Alberta + BC</div>
               <div><strong>Data Source:</strong> Profile & Dealer Setup</div>
-              <div><strong>Extension Use:</strong> Captions, footer blocks, posting metadata, dealer identity</div>
+              <div><strong>Extension Use:</strong> Descriptions, footer blocks, posting metadata, dealer identity</div>
             </div>
           </div>
 
           <div class="card">
-            <h2>Scanner / Dealer Onboarding</h2>
+            <h2>Dealer Onboarding</h2>
             <div class="list-block">
               <div>• Each client adds their dealer website</div>
               <div>• Inventory URL tells the scanner where to start</div>
@@ -669,8 +848,8 @@
         <div class="card">
           <h2>Tools & Modules</h2>
           <p>
-            The extension should read dealer onboarding settings here, then scan only the correct dealer site,
-            enforce posting limits, and inject profile/compliance data into the posting flow.
+            The extension reads dealer onboarding settings here, then scans only the correct dealer site,
+            enforces posting limits, and injects profile/compliance data into the posting flow.
           </p>
 
           <div class="tools-grid">
@@ -699,14 +878,14 @@
             </div>
 
             <div class="tool-tile">
-              <h3>CRM / Follow-Up</h3>
-              <p>Future lead tracking and automation modules.</p>
-              <div class="tool-status">Planned</div>
+              <h3>Queue Manager</h3>
+              <p>Queue integrity, next vehicle loading, and post-flow stability.</p>
+              <div class="tool-status">In Progress</div>
             </div>
 
             <div class="tool-tile">
-              <h3>AI Caption Layer</h3>
-              <p>Profile-aware caption and description generation.</p>
+              <h3>AI/Resolver Layer</h3>
+              <p>Future fallback for ambiguous fields like fuel, type, and body style.</p>
               <div class="tool-status">Planned</div>
             </div>
           </div>
