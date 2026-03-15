@@ -1,5 +1,5 @@
 // dashboard.js
-// Full replacement with stronger save binding + debug-safe status flow
+// Full replacement - profile save flow renamed to avoid global collisions
 
 const SUPABASE_URL = "https://teixblbxkoershwgqpym.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRlaXhibGJ4a29lcnNod2dxcHltIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMwODUzMDMsImV4cCI6MjA4ODY2MTMwM30.wxt9zjKhsBuflaFZZT9awZiwckRzYkEl-OLm_4q8qF4";
@@ -29,7 +29,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-    wireUI();
+    bindDashboardUI();
 
     const {
       data: { session },
@@ -63,7 +63,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   }
 });
 
-function wireUI() {
+function bindDashboardUI() {
   const navButtons = document.querySelectorAll("[data-section]");
   navButtons.forEach((button) => {
     button.addEventListener("click", () => {
@@ -72,20 +72,16 @@ function wireUI() {
     });
   });
 
-  const saveProfileBtn = document.getElementById("saveProfileBtn");
-  if (saveProfileBtn) {
-    saveProfileBtn.type = "button";
+  const saveBtn = document.getElementById("saveProfileBtn");
+  if (saveBtn) {
+    saveBtn.type = "button";
+    saveBtn.removeAttribute("onclick");
 
-    saveProfileBtn.addEventListener("click", async (event) => {
+    saveBtn.addEventListener("click", async (event) => {
       event.preventDefault();
-      await handleProfileSaveClick();
+      event.stopPropagation();
+      await onSaveProfilePressed();
     });
-
-    // extra fallback for Safari / mobile weirdness
-    saveProfileBtn.onclick = async (event) => {
-      if (event) event.preventDefault();
-      await handleProfileSaveClick();
-    };
   }
 
   const logoutBtn = document.getElementById("logoutBtn");
@@ -104,7 +100,7 @@ function wireUI() {
   }
 }
 
-async function handleProfileSaveClick() {
+async function onSaveProfilePressed() {
   try {
     setStatus("profileStatus", "Save button clicked...");
 
@@ -113,10 +109,10 @@ async function handleProfileSaveClick() {
       return;
     }
 
-    await saveProfile(currentUser);
+    await submitProfileSave(currentUser);
   } catch (error) {
-    console.error("handleProfileSaveClick error:", error);
-    setStatus("profileStatus", `Save click failed: ${error.message || "Unknown error"}`);
+    console.error("onSaveProfilePressed error:", error);
+    setStatus("profileStatus", `Save failed: ${error.message || "Unknown error"}`);
   }
 }
 
@@ -171,7 +167,6 @@ async function loadProfile(userId) {
     if (!response.ok) {
       console.warn("Profile load failed:", result);
       currentProfile = null;
-      clearProfileFields();
       renderProfileSummary(null);
       setStatus("profileStatus", "No profile loaded yet.");
       return;
@@ -205,7 +200,7 @@ async function loadProfile(userId) {
   }
 }
 
-async function saveProfile(user) {
+async function submitProfileSave(user) {
   try {
     setStatus("profileStatus", "Preparing profile payload...");
 
@@ -224,7 +219,7 @@ async function saveProfile(user) {
       compliance_mode: getFieldValue("compliance_mode")
     };
 
-    console.log("SAVE PROFILE PAYLOAD:", payload);
+    console.log("PROFILE SAVE PAYLOAD:", payload);
     setStatus("profileStatus", "Sending profile save request...");
 
     const response = await fetch("/api/profile", {
@@ -250,26 +245,9 @@ async function saveProfile(user) {
     renderProfileSummary(currentProfile);
     setStatus("profileStatus", "Profile saved successfully.");
   } catch (error) {
-    console.error("saveProfile error:", error);
+    console.error("submitProfileSave error:", error);
     setStatus("profileStatus", `Failed to save profile: ${error.message || "Unknown error"}`);
   }
-}
-
-function clearProfileFields() {
-  const fieldIds = [
-    "full_name",
-    "dealership",
-    "city",
-    "province",
-    "phone",
-    "license_number",
-    "listing_location",
-    "dealer_phone",
-    "dealer_email",
-    "compliance_mode"
-  ];
-
-  fieldIds.forEach((id) => setFieldValue(id, ""));
 }
 
 function renderProfileSummary(profile) {
@@ -427,6 +405,4 @@ function escapeHtml(str) {
 }
 
 window.showSection = showSection;
-window.saveProfile = () => {
-};
 window.signOutUser = signOutUser;
