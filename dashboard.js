@@ -1,601 +1,453 @@
-(function () {
-  "use strict";
+// dashboard.js
+// Full replacement for Elevate Automation dashboard logic
 
-  // =========================================================
-  // Elevate Automation Dashboard
-  // Matches rebuilt sidebar dashboard.html
-  // =========================================================
+// =========================
+// CONFIG
+// =========================
+const SUPABASE_URL = "https://teixblbxkoershwgqpym.supabase.co";
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRlaXhibGJ4a29lcnNod2dxcHltIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMwODUzMDMsImV4cCI6MjA4ODY2MTMwM30.wxt9zjKhsBuflaFZZT9awZiwckRzYkEl-OLm_4q8qF4";
 
-  const SUPABASE_URL =
-    window.SUPABASE_URL ||
-    window.__SUPABASE_URL__ ||
-    "https://teixblbxkoershwgqpym.supabase.co";
+// =========================
+// GLOBALS
+// =========================
+let supabaseClient = null;
+let currentUser = null;
+let currentProfile = null;
 
-  const SUPABASE_ANON_KEY =
-    window.SUPABASE_ANON_KEY ||
-    window.__SUPABASE_ANON_KEY__ ||
-    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRlaXhibGJ4a29lcnNod2dxcHltIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMwODUzMDMsImV4cCI6MjA4ODY2MTMwM30.wxt9zjKhsBuflaFZZT9awZiwckRzYkEl-OLm_4q8qF4";
+// =========================
+// STARTUP
+// =========================
+document.addEventListener("DOMContentLoaded", async () => {
+  try {
+    bootStatus("Loading dashboard...");
 
-  const LOGIN_PATH = "/login.html";
-  const DEFAULT_HOME_PATH = "/";
-  const DEFAULT_PROFILE_PATH = "/profile.html";
+    if (!window.supabase || !window.supabase.createClient) {
+      console.error("Supabase library not found on window.");
+      bootStatus("Supabase library missing.");
+      return;
+    }
 
-  let supabaseClient = null;
-  let currentUser = null;
-  let currentAccountData = null;
+    if (!SUPABASE_URL || SUPABASE_URL === "YOUR_SUPABASE_URL") {
+      console.error("SUPABASE_URL missing in dashboard.js");
+      bootStatus("Supabase config missing: URL");
+      return;
+    }
 
-  // ---------------------------------------------------------
-  // DOM helpers
-  // ---------------------------------------------------------
-  const $ = (id) => document.getElementById(id);
+    if (!SUPABASE_ANON_KEY || SUPABASE_ANON_KEY === "YOUR_SUPABASE_ANON_KEY") {
+      console.error("SUPABASE_ANON_KEY missing in dashboard.js");
+      bootStatus("Supabase config missing: ANON KEY");
+      return;
+    }
 
-  function setText(id, value, fallback = "-") {
-    const node = $(id);
-    if (!node) return;
-    const finalValue =
-      value === undefined || value === null || value === ""
-        ? fallback
-        : String(value);
-    node.textContent = finalValue;
+    supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+    await initializeDashboard();
+    wireUI();
+
+    bootStatus("");
+  } catch (error) {
+    console.error("Dashboard boot error:", error);
+    bootStatus("Dashboard failed to load.");
+  }
+});
+
+// =========================
+// INITIALIZE
+// =========================
+async function initializeDashboard() {
+  const {
+    data: { session },
+    error: sessionError
+  } = await supabaseClient.auth.getSession();
+
+  if (sessionError) {
+    console.error("Session error:", sessionError);
+    bootStatus("Session error.");
+    return;
   }
 
-  function setHref(id, href) {
-    const node = $(id);
-    if (!node) return;
-    node.href = href;
+  if (!session || !session.user) {
+    redirectToLogin();
+    return;
   }
 
-  function showStatus(message, type = "") {
-    const banner = $("statusBanner");
-    if (!banner) return;
+  currentUser = session.user;
 
-    banner.textContent = message;
-    banner.className = "status-banner show";
+  renderUserBasics(currentUser);
 
-    if (type) banner.classList.add(type);
-  }
+  await syncUserIfNeeded(currentUser);
+  await loadProfile(currentUser.id);
+  await loadAccountData(currentUser);
 
-  function clearStatus() {
-    const banner = $("statusBanner");
-    if (!banner) return;
-    banner.textContent = "";
-    banner.className = "status-banner";
-  }
+  showSection("overview");
+}
 
-  function formatBool(value) {
-    return value ? "Yes" : "No";
-  }
-
-  function safeUpper(str) {
-    return String(str || "").trim().toUpperCase();
-  }
-
-  function clip(str, max = 42) {
-    const s = String(str || "");
-    if (s.length <= max) return s;
-    return `${s.slice(0, max)}...`;
-  }
-
-  function buildReferralLink(code) {
-    if (!code) return "";
-    const origin = window.location.origin || "";
-    return `${origin}/?ref=${encodeURIComponent(code)}`;
-  }
-
-  // ---------------------------------------------------------
-  // Sidebar / section navigation
-  // ---------------------------------------------------------
-  const sectionMeta = {
-    overview: {
-      title: "Founder Beta Dashboard",
-      subtitle:
-        "Control center for account access, referral growth, billing status, invite progression, and future Elevate automation tools.",
-    },
-    poster: {
-      title: "Vehicle Poster",
-      subtitle:
-        "Execution layer for Marketplace posting, queue flow, helper logic, next/publish controls, and future posting analytics.",
-    },
-    profile: {
-      title: "Profile & Setup",
-      subtitle:
-        "Save salesperson identity, dealership defaults, compliance preferences, and listing behavior inside the current authenticated dashboard.",
-    },
-    compliance: {
-      title: "Compliance Center",
-      subtitle:
-        "Province-aware posting safeguards, rule presets, blocked phrase controls, and disclaimer infrastructure.",
-    },
-    ai: {
-      title: "AI Studio",
-      subtitle:
-        "Generate descriptions, captions, CTAs, and platform-specific copy from vehicle, user, and dealership data.",
-    },
-    referrals: {
-      title: "Referral System",
-      subtitle:
-        "Manage invite growth, referral links, beta expansion, and tracked successful referrals.",
-    },
-    billing: {
-      title: "Billing",
-      subtitle:
-        "View founder pricing, plan status, billing readiness, and future commercial tier access.",
-    },
-    settings: {
-      title: "Settings",
-      subtitle:
-        "Platform configuration, automation defaults, account controls, and future team-level system settings.",
-    },
-  };
-
-  function setActiveSection(sectionKey) {
-    const navItems = document.querySelectorAll(".nav-item");
-    const sections = document.querySelectorAll(".section");
-    const pageTitle = $("pageTitle");
-    const pageSubtitle = $("pageSubtitle");
-
-    navItems.forEach((btn) => {
-      btn.classList.toggle("active", btn.dataset.section === sectionKey);
+// =========================
+// UI WIRING
+// =========================
+function wireUI() {
+  // Sidebar / nav section buttons
+  const navButtons = document.querySelectorAll("[data-section]");
+  navButtons.forEach((button) => {
+    button.addEventListener("click", () => {
+      const target = button.getAttribute("data-section");
+      showSection(target);
     });
+  });
 
-    sections.forEach((section) => {
-      section.classList.toggle("active", section.id === `section-${sectionKey}`);
+  // Save profile button
+  const saveBtn = document.getElementById("saveProfileBtn");
+  if (saveBtn) {
+    saveBtn.addEventListener("click", async () => {
+      if (!currentUser) return;
+      await saveProfile(currentUser);
     });
-
-    const meta = sectionMeta[sectionKey] || sectionMeta.overview;
-
-    if (pageTitle) pageTitle.textContent = meta.title;
-    if (pageSubtitle) pageSubtitle.textContent = meta.subtitle;
-
-    try {
-      window.history.replaceState(null, "", `#${sectionKey}`);
-    } catch (err) {
-      console.warn("Failed to update hash:", err);
-    }
   }
 
-  function initSectionNavigation() {
-    const navItems = document.querySelectorAll(".nav-item");
+  // Logout button
+  const logoutBtn = document.getElementById("logoutBtn");
+  if (logoutBtn) {
+    logoutBtn.addEventListener("click", signOutUser);
+  }
 
-    navItems.forEach((btn) => {
-      btn.addEventListener("click", () => {
-        const sectionKey = btn.dataset.section || "overview";
-        setActiveSection(sectionKey);
-      });
+  // Refresh account/access button
+  const refreshBtn = document.getElementById("refreshAccessBtn");
+  if (refreshBtn) {
+    refreshBtn.addEventListener("click", async () => {
+      if (!currentUser) return;
+      await loadAccountData(currentUser);
     });
-
-    const initialHash = (window.location.hash || "").replace("#", "").trim();
-    const initialSection = sectionMeta[initialHash] ? initialHash : "overview";
-    setActiveSection(initialSection);
   }
+}
 
-  // ---------------------------------------------------------
-  // Auth
-  // ---------------------------------------------------------
-  function initSupabase() {
-    if (
-      !window.supabase ||
-      !SUPABASE_URL ||
-      SUPABASE_URL === "YOUR_SUPABASE_URL" ||
-      !SUPABASE_ANON_KEY ||
-      SUPABASE_ANON_KEY === "YOUR_SUPABASE_ANON_KEY"
-    ) {
-      console.warn("Supabase config missing on dashboard.");
-      return false;
-    }
+// =========================
+// SECTION SWITCHING
+// =========================
+function showSection(sectionId) {
+  const sections = document.querySelectorAll(".dashboard-section");
+  const navButtons = document.querySelectorAll("[data-section]");
 
-    try {
-      supabaseClient = window.supabase.createClient(
-        SUPABASE_URL,
-        SUPABASE_ANON_KEY
-      );
-      return true;
-    } catch (err) {
-      console.error("Failed to initialize Supabase:", err);
-      return false;
-    }
+  sections.forEach((section) => {
+    section.style.display = section.id === sectionId ? "block" : "none";
+  });
+
+  navButtons.forEach((button) => {
+    const isActive = button.getAttribute("data-section") === sectionId;
+    button.classList.toggle("active", isActive);
+  });
+
+  const pageTitle = document.getElementById("dashboardPageTitle");
+  if (pageTitle) {
+    const titles = {
+      overview: "Founder Beta Dashboard",
+      profile: "Profile & Dealer Setup",
+      compliance: "Compliance Settings",
+      affiliate: "Affiliate Center",
+      billing: "Billing & Access",
+      tools: "Tools & Modules"
+    };
+
+    pageTitle.textContent = titles[sectionId] || "Dashboard";
   }
+}
 
-  async function getCurrentUser() {
-    if (!supabaseClient) return null;
+// =========================
+// USER BASICS
+// =========================
+function renderUserBasics(user) {
+  const emailEls = document.querySelectorAll(".user-email");
+  emailEls.forEach((el) => {
+    el.textContent = user.email || "";
+  });
 
-    try {
-      const {
-        data: { user },
-        error,
-      } = await supabaseClient.auth.getUser();
+  const idEls = document.querySelectorAll(".user-id");
+  idEls.forEach((el) => {
+    el.textContent = user.id || "";
+  });
 
-      if (error) {
-        console.warn("getUser error:", error.message);
-        return null;
-      }
-
-      return user || null;
-    } catch (err) {
-      console.error("Failed to get current user:", err);
-      return null;
-    }
+  const welcomeEl = document.getElementById("welcomeText");
+  if (welcomeEl) {
+    welcomeEl.textContent = `Welcome${user.email ? `, ${user.email}` : ""}`;
   }
+}
 
-  async function handleLogout() {
-    try {
-      if (supabaseClient) {
-        await supabaseClient.auth.signOut();
-      }
-    } catch (err) {
-      console.warn("Sign out error:", err);
-    }
+// =========================
+// PROFILE LOAD / SAVE
+// =========================
+async function loadProfile(userId) {
+  try {
+    setStatus("profileStatus", "Loading profile...");
 
-    window.location.href = LOGIN_PATH;
-  }
-
-  // ---------------------------------------------------------
-  // Data loading
-  // ---------------------------------------------------------
-  async function fetchJson(url, options = {}) {
-    const res = await fetch(url, options);
-    let json = null;
-
-    try {
-      json = await res.json();
-    } catch (err) {
-      json = null;
-    }
+    const res = await fetch(`/api/profile?id=${encodeURIComponent(userId)}`);
+    const result = await res.json();
 
     if (!res.ok) {
-      const message =
-        json?.error || json?.message || `Request failed: ${res.status}`;
-      throw new Error(message);
-    }
-
-    return json;
-  }
-
-  async function fetchUserData(email) {
-    if (!email) throw new Error("Missing user email");
-
-    const attempts = [
-      async () =>
-        fetchJson(`/api/get-user-data?email=${encodeURIComponent(email)}`),
-      async () =>
-        fetchJson(`/api/get-user-data?user_email=${encodeURIComponent(email)}`),
-      async () =>
-        fetchJson("/api/get-user-data", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email }),
-        }),
-      async () =>
-        fetchJson("/api/get-user-data", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ user_email: email }),
-        }),
-    ];
-
-    let lastError = null;
-
-    for (const attempt of attempts) {
-      try {
-        const data = await attempt();
-        return data;
-      } catch (err) {
-        lastError = err;
-      }
-    }
-
-    throw lastError || new Error("Failed to load user data");
-  }
-
-  async function fetchProfileData(email) {
-    if (!email) return null;
-
-    try {
-      const json = await fetchJson(
-        `/api/profile?user_email=${encodeURIComponent(email)}`
-      );
-      return json?.profile || null;
-    } catch (err) {
-      console.warn("Profile load skipped/failed:", err.message);
-      return null;
-    }
-  }
-
-  // ---------------------------------------------------------
-  // Normalization
-  // ---------------------------------------------------------
-  function normalizeAccountData(raw, userEmail) {
-    const account = raw?.user || raw?.account || raw?.data || raw || {};
-
-    const email =
-      account.email ||
-      account.user_email ||
-      account.customer_email ||
-      userEmail ||
-      "";
-
-    const referralCode =
-      account.referral_code ||
-      account.referralCode ||
-      account.ref_code ||
-      account.code ||
-      "";
-
-    const referralLink =
-      account.referral_link ||
-      account.referralLink ||
-      buildReferralLink(referralCode);
-
-    const inviteTier =
-      account.invite_tier ||
-      account.inviteTier ||
-      account.tier ||
-      "Founder Beta";
-
-    const stripeCustomer =
-      account.stripe_customer_id ||
-      account.stripeCustomerId ||
-      account.stripe_customer ||
-      "";
-
-    const plan =
-      account.plan ||
-      account.plan_name ||
-      account.subscription_plan ||
-      "Founder Beta";
-
-    const subscriptionStatus =
-      account.subscription_status ||
-      account.status ||
-      account.billing_status ||
-      "active";
-
-    const founderPricing =
-      account.founder_pricing ||
-      account.founderPricing ||
-      "Locked";
-
-    const billingStatus =
-      account.billing_status ||
-      account.subscription_status ||
-      "active";
-
-    const successfulReferrals = Number(
-      account.successful_referrals ||
-        account.referrals_count ||
-        account.referral_count ||
-        account.referrals ||
-        0
-    );
-
-    const unlockedInvites = Number(
-      account.unlocked_invites ||
-        account.invites_unlocked ||
-        account.max_invites ||
-        1
-    );
-
-    const usedInvites = Number(
-      account.used_invites || account.invites_used || 0
-    );
-
-    const remainingInvites = Math.max(
-      0,
-      Number(
-        account.remaining_invites ??
-          account.invites_remaining ??
-          unlockedInvites - usedInvites
-      )
-    );
-
-    const billingReadiness =
-      account.billing_readiness ||
-      account.billingReady ||
-      (stripeCustomer ? "Ready" : "Pending");
-
-    return {
-      email,
-      referralCode,
-      referralLink,
-      inviteTier,
-      stripeCustomer,
-      plan,
-      subscriptionStatus,
-      founderPricing,
-      billingStatus,
-      successfulReferrals,
-      unlockedInvites,
-      usedInvites,
-      remainingInvites,
-      billingReadiness,
-      raw: account,
-    };
-  }
-
-  function normalizeProfile(profile, emailFallback) {
-    if (!profile) {
-      return {
-        full_name: "",
-        dealership_name: "",
-        city: "",
-        province: "",
-        compliance_mode: "",
-        display_email: emailFallback || "",
-      };
-    }
-
-    return {
-      full_name: profile.full_name || "",
-      dealership_name: profile.dealership_name || "",
-      city: profile.city || "",
-      province: profile.province || "",
-      compliance_mode: profile.compliance_mode || "",
-      display_email:
-        profile.display_email || profile.user_email || emailFallback || "",
-    };
-  }
-
-  // ---------------------------------------------------------
-  // Render
-  // ---------------------------------------------------------
-  function renderAccount(account, profile) {
-    currentAccountData = account;
-
-    // Overview
-    setText("founderPricingValue", account.founderPricing);
-    setText("billingStatusValue", safeUpper(account.billingStatus));
-    setText("currentPlanValue", account.plan);
-    setText("planValue", account.plan);
-    setText("subscriptionStatusValue", safeUpper(account.subscriptionStatus));
-    setText("privateReferralLink", account.referralLink || "-");
-    setText("referralCount", account.successfulReferrals);
-    setText("unlockedInvites", account.unlockedInvites);
-    setText("usedInvites", account.usedInvites);
-    setText("remainingInvites", account.remainingInvites);
-    setText("billingReadiness", account.billingReadiness);
-
-    // Snapshot
-    setText("snapshotEmail", account.email || profile.display_email || "-");
-    setText("snapshotReferralCode", account.referralCode || "-");
-    setText("snapshotInviteTier", account.inviteTier || "-");
-    setText("snapshotStripeCustomer", clip(account.stripeCustomer || "-", 28));
-
-    // Sidebar workspace
-    const workspaceName =
-      profile.dealership_name || "Elevate Automation Workspace";
-    const workspaceMeta = [profile.city, profile.province]
-      .filter(Boolean)
-      .join(", ");
-
-    setText("sidebarWorkspaceName", workspaceName);
-    setText("sidebarWorkspaceMeta", workspaceMeta || "Founder Beta");
-
-    // Referrals section
-    setText("referralLinkSectionValue", clip(account.referralLink || "-", 36));
-    setText("referralCodeSectionValue", account.referralCode || "-");
-    setText("referralCountSectionValue", account.successfulReferrals);
-    setText("remainingInvitesSectionValue", account.remainingInvites);
-
-    // Billing section
-    setText("billingPlanValue", account.plan);
-    setText("billingStatusSectionValue", safeUpper(account.billingStatus));
-    setText("billingFounderValue", account.founderPricing);
-    setText(
-      "billingStripeValue",
-      clip(account.stripeCustomer || "Not created yet", 28)
-    );
-  }
-
-  // ---------------------------------------------------------
-  // Referral copy
-  // ---------------------------------------------------------
-  async function copyReferralLink() {
-    const link = currentAccountData?.referralLink || "";
-
-    if (!link) {
-      showStatus("Referral link is not available yet.", "error");
+      console.warn("Profile load failed:", result);
+      setStatus("profileStatus", "No profile loaded yet.");
       return;
     }
 
-    try {
-      await navigator.clipboard.writeText(link);
-      showStatus("Referral link copied.", "success");
-    } catch (err) {
-      console.error("Copy failed:", err);
-      showStatus("Failed to copy referral link.", "error");
+    if (!result.data) {
+      setStatus("profileStatus", "No profile found yet.");
+      return;
     }
+
+    currentProfile = result.data;
+
+    setFieldValue("full_name", result.data.full_name);
+    setFieldValue("dealership", result.data.dealership);
+    setFieldValue("city", result.data.city);
+    setFieldValue("province", result.data.province);
+    setFieldValue("phone", result.data.phone);
+    setFieldValue("license_number", result.data.license_number);
+    setFieldValue("listing_location", result.data.listing_location);
+
+    // Optional fields for future-proofing
+    setFieldValue("dealer_phone", result.data.dealer_phone);
+    setFieldValue("dealer_email", result.data.dealer_email);
+    setFieldValue("compliance_mode", result.data.compliance_mode);
+
+    renderProfileSummary(result.data);
+    setStatus("profileStatus", "Profile loaded.");
+  } catch (error) {
+    console.error("loadProfile error:", error);
+    setStatus("profileStatus", "Failed to load profile.");
   }
+}
 
-  function wireButtons() {
-    $("copyReferralTopBtn")?.addEventListener("click", copyReferralLink);
-    $("copyReferralSidebarBtn")?.addEventListener("click", copyReferralLink);
-    $("copyReferralInlineBtn")?.addEventListener("click", copyReferralLink);
-    $("copyReferralSectionBtn")?.addEventListener("click", copyReferralLink);
+async function saveProfile(user) {
+  try {
+    setStatus("profileStatus", "Saving profile...");
 
-    $("logoutBtn")?.addEventListener("click", handleLogout);
-    $("logoutTopBtn")?.addEventListener("click", handleLogout);
+    const payload = {
+      id: user.id,
+      email: user.email || "",
+      full_name: getFieldValue("full_name"),
+      dealership: getFieldValue("dealership"),
+      city: getFieldValue("city"),
+      province: getFieldValue("province"),
+      phone: getFieldValue("phone"),
+      license_number: getFieldValue("license_number"),
+      listing_location: getFieldValue("listing_location"),
 
-    // Optional quick route helpers if you add these later
-    const profileLinkTargets = document.querySelectorAll(
-      '[data-go-profile="true"]'
-    );
-    profileLinkTargets.forEach((btn) => {
-      btn.addEventListener("click", () => {
-        window.location.href = DEFAULT_PROFILE_PATH;
-      });
+      // Optional/future-safe fields
+      dealer_phone: getFieldValue("dealer_phone"),
+      dealer_email: getFieldValue("dealer_email"),
+      compliance_mode: getFieldValue("compliance_mode")
+    };
+
+    const res = await fetch("/api/profile", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(payload)
     });
+
+    const result = await res.json();
+
+    if (!res.ok) {
+      console.error("Profile save failed:", result);
+      setStatus("profileStatus", `Save failed: ${result.error || "Unknown error"}`);
+      return;
+    }
+
+    currentProfile = payload;
+    renderProfileSummary(payload);
+    setStatus("profileStatus", "Profile saved successfully.");
+  } catch (error) {
+    console.error("saveProfile error:", error);
+    setStatus("profileStatus", "Failed to save profile.");
+  }
+}
+
+function renderProfileSummary(profile) {
+  const summaryEl = document.getElementById("profileSummary");
+  if (!summaryEl) return;
+
+  const fullName = profile.full_name || "Not set";
+  const dealership = profile.dealership || "Not set";
+  const city = profile.city || "Not set";
+  const province = profile.province || "Not set";
+  const phone = profile.phone || "Not set";
+  const license = profile.license_number || "Not set";
+  const listingLocation = profile.listing_location || "Not set";
+
+  summaryEl.innerHTML = `
+    <div><strong>Name:</strong> ${escapeHtml(fullName)}</div>
+    <div><strong>Dealership:</strong> ${escapeHtml(dealership)}</div>
+    <div><strong>City:</strong> ${escapeHtml(city)}</div>
+    <div><strong>Province:</strong> ${escapeHtml(province)}</div>
+    <div><strong>Phone:</strong> ${escapeHtml(phone)}</div>
+    <div><strong>License:</strong> ${escapeHtml(license)}</div>
+    <div><strong>Default Listing Location:</strong> ${escapeHtml(listingLocation)}</div>
+  `;
+}
+
+// =========================
+// ACCOUNT / BILLING / ACCESS
+// =========================
+async function loadAccountData(user) {
+  try {
+    setStatus("accountStatus", "Loading account data...");
+
+    const res = await fetch(`/api/get-user-data?email=${encodeURIComponent(user.email)}`);
+    const result = await res.json();
+
+    if (!res.ok) {
+      console.warn("Account data load failed:", result);
+      setStatus("accountStatus", "Could not load account data.");
+      renderAccessState(null);
+      return;
+    }
+
+    renderAccessState(result);
+    setStatus("accountStatus", "Account data loaded.");
+  } catch (error) {
+    console.error("loadAccountData error:", error);
+    setStatus("accountStatus", "Failed to load account data.");
+    renderAccessState(null);
+  }
+}
+
+function renderAccessState(data) {
+  const accessBadge = document.getElementById("accessBadge");
+  const planEl = document.getElementById("planName");
+  const statusEl = document.getElementById("subscriptionStatus");
+  const referralEl = document.getElementById("referralCode");
+  const licenseEl = document.getElementById("licenseKeyDisplay");
+
+  if (!data) {
+    if (accessBadge) accessBadge.textContent = "Unknown";
+    if (planEl) planEl.textContent = "Not available";
+    if (statusEl) statusEl.textContent = "Not available";
+    if (referralEl) referralEl.textContent = "Not available";
+    if (licenseEl) licenseEl.textContent = "Not available";
+    return;
   }
 
-  // ---------------------------------------------------------
-  // Session watcher
-  // ---------------------------------------------------------
-  function wireAuthWatcher() {
+  const hasAccess =
+    data.access === true ||
+    data.active === true ||
+    data.subscription_active === true ||
+    data.status === "active";
+
+  if (accessBadge) {
+    accessBadge.textContent = hasAccess ? "Active Access" : "Inactive Access";
+    accessBadge.classList.toggle("active", hasAccess);
+    accessBadge.classList.toggle("inactive", !hasAccess);
+  }
+
+  if (planEl) {
+    planEl.textContent =
+      data.plan_name ||
+      data.plan ||
+      data.price_id ||
+      "Founder Beta";
+  }
+
+  if (statusEl) {
+    statusEl.textContent =
+      data.status ||
+      (hasAccess ? "active" : "inactive");
+  }
+
+  if (referralEl) {
+    referralEl.textContent =
+      data.referral_code ||
+      data.refCode ||
+      "Not assigned yet";
+  }
+
+  if (licenseEl) {
+    licenseEl.textContent =
+      data.license_key ||
+      data.licenseKey ||
+      "Account-based access enabled";
+  }
+}
+
+// =========================
+// USER SYNC
+// =========================
+async function syncUserIfNeeded(user) {
+  try {
+    await fetch("/api/sync-user", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        id: user.id,
+        email: user.email
+      })
+    });
+  } catch (error) {
+    console.warn("syncUserIfNeeded warning:", error);
+  }
+}
+
+// =========================
+// AUTH
+// =========================
+async function signOutUser() {
+  try {
     if (!supabaseClient) return;
 
-    supabaseClient.auth.onAuthStateChange((event, session) => {
-      if (event === "SIGNED_OUT" || !session?.user) {
-        window.location.href = LOGIN_PATH;
-      }
-    });
+    await supabaseClient.auth.signOut();
+    redirectToLogin();
+  } catch (error) {
+    console.error("Logout error:", error);
+    alert("Failed to sign out.");
   }
+}
 
-  // ---------------------------------------------------------
-  // Init
-  // ---------------------------------------------------------
-  async function initDashboard() {
-    initSectionNavigation();
-    wireButtons();
+function redirectToLogin() {
+  window.location.href = "/login.html";
+}
 
-    showStatus("Loading dashboard...", "");
+// =========================
+// HELPERS
+// =========================
+function getFieldValue(id) {
+  const el = document.getElementById(id);
+  if (!el) return "";
+  return el.value ? el.value.trim() : "";
+}
 
-    const supabaseReady = initSupabase();
+function setFieldValue(id, value) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.value = value || "";
+}
 
-    if (!supabaseReady) {
-      showStatus(
-        "Supabase config missing in dashboard.js. Set SUPABASE_URL and SUPABASE_ANON_KEY first.",
-        "error"
-      );
-      return;
-    }
+function setStatus(id, text) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.textContent = text || "";
+}
 
-    wireAuthWatcher();
+function bootStatus(text) {
+  const el = document.getElementById("bootStatus");
+  if (!el) return;
+  el.textContent = text || "";
+}
 
-    currentUser = await getCurrentUser();
+function escapeHtml(str) {
+  return String(str || "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
 
-    if (!currentUser) {
-      window.location.href = LOGIN_PATH;
-      return;
-    }
-
-    try {
-      const [userDataRaw, profileRaw] = await Promise.all([
-        fetchUserData(currentUser.email),
-        fetchProfileData(currentUser.email),
-      ]);
-
-      const account = normalizeAccountData(userDataRaw, currentUser.email);
-      const profile = normalizeProfile(profileRaw, currentUser.email);
-
-      renderAccount(account, profile);
-      clearStatus();
-    } catch (err) {
-      console.error("Dashboard load failed:", err);
-
-      // still render a partial safe state using session info
-      const fallbackAccount = normalizeAccountData({}, currentUser.email);
-      const fallbackProfile = normalizeProfile(null, currentUser.email);
-
-      renderAccount(fallbackAccount, fallbackProfile);
-
-      showStatus(
-        `Dashboard loaded partially. ${err.message || "Some account data could not be loaded."}`,
-        "error"
-      );
-    }
-  }
-
-  document.addEventListener("DOMContentLoaded", initDashboard);
-})();
-
-
-
+// =========================
+// EXPOSE OPTIONAL GLOBALS
+// =========================
+window.showSection = showSection;
+window.saveProfile = () => {
+  if (!currentUser) return;
+  saveProfile(currentUser);
+};
+window.signOutUser = signOutUser;
