@@ -1,5 +1,9 @@
 // dashboard.js
-// Full replacement with extension control + auto profile sync bridge
+// Full replacement
+// Multi-tenant SaaS bridge version
+// Supports both:
+// 1) legacy flat /api/extension-state payloads
+// 2) new nested { ok, session: {...} } payloads
 
 const SUPABASE_URL = "https://teixblbxkoershwgqpym.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRlaXhibGJ4a29lcnNod2dxcHltIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMwODUzMDMsImV4cCI6MjA4ODY2MTMwM30.wxt9zjKhsBuflaFZZT9awZiwckRzYkEl-OLm_4q8qF4";
@@ -8,6 +12,7 @@ let supabaseClient = null;
 let currentUser = null;
 let currentProfile = null;
 let currentAccountData = null;
+let currentNormalizedSession = null;
 
 document.addEventListener("DOMContentLoaded", async () => {
   try {
@@ -18,12 +23,12 @@ document.addEventListener("DOMContentLoaded", async () => {
       return;
     }
 
-    if (!SUPABASE_URL || SUPABASE_URL === "YOUR_SUPABASE_URL") {
+    if (!SUPABASE_URL) {
       setBootStatus("Missing Supabase URL.");
       return;
     }
 
-    if (!SUPABASE_ANON_KEY || SUPABASE_ANON_KEY === "YOUR_SUPABASE_ANON_KEY") {
+    if (!SUPABASE_ANON_KEY) {
       setBootStatus("Missing Supabase anon key.");
       return;
     }
@@ -95,7 +100,7 @@ function bindDashboardUI() {
   if (refreshAccessBtn) {
     refreshAccessBtn.addEventListener("click", async () => {
       if (!currentUser) return;
-      await loadAccountData(currentUser);
+      await loadAccountData(currentUser, true);
       await pushExtensionProfileSync();
     });
   }
@@ -104,7 +109,7 @@ function bindDashboardUI() {
   if (refreshExtensionStateBtn) {
     refreshExtensionStateBtn.addEventListener("click", async () => {
       if (!currentUser) return;
-      await loadAccountData(currentUser);
+      await loadAccountData(currentUser, true);
       await pushExtensionProfileSync();
       setStatus("extensionActionStatus", "Extension state refreshed.");
     });
@@ -120,7 +125,11 @@ function bindDashboardUI() {
   const openInventoryBtn = document.getElementById("openInventoryBtn");
   if (openInventoryBtn) {
     openInventoryBtn.addEventListener("click", () => {
-      const inventoryUrl = getFieldValue("inventory_url") || currentProfile?.inventory_url || "";
+      const inventoryUrl =
+        getFieldValue("inventory_url") ||
+        currentProfile?.inventory_url ||
+        currentNormalizedSession?.dealership?.inventory_url ||
+        "";
       if (!inventoryUrl) {
         setStatus("extensionActionStatus", "No inventory URL saved yet.");
         return;
@@ -157,7 +166,7 @@ async function onSaveProfilePressed() {
     await submitProfileSave(currentUser);
 
     if (currentUser) {
-      await loadAccountData(currentUser);
+      await loadAccountData(currentUser, true);
     }
 
     await pushExtensionProfileSync();
@@ -171,26 +180,11 @@ async function pushExtensionProfileSync() {
   try {
     if (!currentUser) return;
 
-    const payload = {
-      email: currentUser.email || "",
-      access: !!currentAccountData?.access,
-      active: !!currentAccountData?.active,
-      status: currentAccountData?.status || "inactive",
-      plan: currentAccountData?.plan || currentAccountData?.plan_name || "Founder Beta",
-      user_id: currentAccountData?.user_id || currentUser.id || "",
-      license_key: currentAccountData?.license_key || "",
-      posting_limit: Number(currentAccountData?.posting_limit || 0),
-      posts_today: Number(currentAccountData?.posts_today || 0),
-      posts_remaining: Number(currentAccountData?.posts_remaining || 0),
-      dealer_site: currentAccountData?.dealer_site || currentProfile?.dealer_website || "",
-      inventory_url: currentAccountData?.inventory_url || currentProfile?.inventory_url || "",
-      scanner_type: currentAccountData?.scanner_type || currentProfile?.scanner_type || "custom",
-      profile: currentProfile || {}
-    };
+    const normalized = currentNormalizedSession || buildFallbackSessionFromLocalState();
 
     window.postMessage({
       type: "ELEVATE_PROFILE_SYNC",
-      payload
+      payload: normalized
     }, "*");
 
     setStatus("extensionActionStatus", "Dealer profile sync pushed to extension.");
@@ -244,7 +238,8 @@ async function loadProfile(userId) {
     setStatus("profileStatus", "Loading profile...");
 
     const response = await fetch(`/api/profile?id=${encodeURIComponent(userId)}`, {
-      method: "GET"
+      method: "GET",
+      cache: "no-store"
     });
 
     const result = await response.json();
@@ -252,7 +247,7 @@ async function loadProfile(userId) {
     if (!response.ok || !result.data) {
       currentProfile = null;
       renderProfileSummary(null);
-      updateSetupStates(null, currentAccountData);
+      updateSetupStates(null, currentNormalizedSession);
       setStatus("profileStatus", "No profile loaded yet.");
       return;
     }
@@ -275,7 +270,7 @@ async function loadProfile(userId) {
     setFieldValue("software_license_key", result.data.software_license_key || "");
 
     renderProfileSummary(result.data);
-    updateSetupStates(currentProfile, currentAccountData);
+    updateSetupStates(currentProfile, currentNormalizedSession);
     setStatus("profileStatus", "Profile loaded.");
   } catch (error) {
     console.error("loadProfile error:", error);
@@ -325,7 +320,7 @@ async function submitProfileSave(user) {
     }
 
     renderProfileSummary(currentProfile);
-    updateSetupStates(currentProfile, currentAccountData);
+    updateSetupStates(currentProfile, currentNormalizedSession);
     setStatus("profileStatus", "Profile saved successfully.");
   } catch (error) {
     console.error("submitProfileSave error:", error);
@@ -336,6 +331,14 @@ async function submitProfileSave(user) {
 function renderProfileSummary(profile) {
   const summaryEl = document.getElementById("profileSummary");
   if (!summaryEl) return;
+
+  const merged = {
+    ...(profile || {}),
+    software_license_key:
+      profile?.software_license_key ||
+      currentNormalizedSession?.subscription?.license_key ||
+      ""
+  };
 
   if (!profile) {
     summaryEl.innerHTML = `
@@ -358,34 +361,47 @@ function renderProfileSummary(profile) {
   }
 
   summaryEl.innerHTML = `
-    <div><strong>Name:</strong> ${escapeHtml(profile.full_name || "Not set")}</div>
-    <div><strong>Dealership:</strong> ${escapeHtml(profile.dealership || "Not set")}</div>
-    <div><strong>City:</strong> ${escapeHtml(profile.city || "Not set")}</div>
-    <div><strong>Province:</strong> ${escapeHtml(profile.province || "Not set")}</div>
-    <div><strong>Phone:</strong> ${escapeHtml(profile.phone || "Not set")}</div>
-    <div><strong>Compliance License Number:</strong> ${escapeHtml(profile.license_number || "Not set")}</div>
-    <div><strong>Default Listing Location:</strong> ${escapeHtml(profile.listing_location || "Not set")}</div>
-    <div><strong>Dealer Phone:</strong> ${escapeHtml(profile.dealer_phone || "Not set")}</div>
-    <div><strong>Dealer Email:</strong> ${escapeHtml(profile.dealer_email || "Not set")}</div>
-    <div><strong>Compliance Mode:</strong> ${escapeHtml(profile.compliance_mode || profile.province || "Not set")}</div>
-    <div><strong>Dealer Website:</strong> ${escapeHtml(profile.dealer_website || "Not set")}</div>
-    <div><strong>Inventory URL:</strong> ${escapeHtml(profile.inventory_url || "Not set")}</div>
-    <div><strong>Scanner Type:</strong> ${escapeHtml(profile.scanner_type || "Not set")}</div>
-    <div><strong>Software License Key:</strong> ${escapeHtml(profile.software_license_key || currentAccountData?.license_key || "Auto-assignment pending")}</div>
+    <div><strong>Name:</strong> ${escapeHtml(merged.full_name || "Not set")}</div>
+    <div><strong>Dealership:</strong> ${escapeHtml(merged.dealership || "Not set")}</div>
+    <div><strong>City:</strong> ${escapeHtml(merged.city || "Not set")}</div>
+    <div><strong>Province:</strong> ${escapeHtml(merged.province || "Not set")}</div>
+    <div><strong>Phone:</strong> ${escapeHtml(merged.phone || "Not set")}</div>
+    <div><strong>Compliance License Number:</strong> ${escapeHtml(merged.license_number || "Not set")}</div>
+    <div><strong>Default Listing Location:</strong> ${escapeHtml(merged.listing_location || "Not set")}</div>
+    <div><strong>Dealer Phone:</strong> ${escapeHtml(merged.dealer_phone || "Not set")}</div>
+    <div><strong>Dealer Email:</strong> ${escapeHtml(merged.dealer_email || "Not set")}</div>
+    <div><strong>Compliance Mode:</strong> ${escapeHtml(merged.compliance_mode || merged.province || "Not set")}</div>
+    <div><strong>Dealer Website:</strong> ${escapeHtml(merged.dealer_website || "Not set")}</div>
+    <div><strong>Inventory URL:</strong> ${escapeHtml(merged.inventory_url || "Not set")}</div>
+    <div><strong>Scanner Type:</strong> ${escapeHtml(merged.scanner_type || "Not set")}</div>
+    <div><strong>Software License Key:</strong> ${escapeHtml(merged.software_license_key || "Auto-assignment pending")}</div>
   `;
 }
 
-async function loadAccountData(user) {
+async function loadAccountData(user, forceFresh = false) {
   try {
     setStatus("accountStatus", "Loading account data...");
     setStatus("accountStatusBilling", "Loading account data...");
     setStatus("extensionAccessStatus", "Loading extension state...");
 
-    const response = await fetch(`/api/extension-state?email=${encodeURIComponent(user.email)}`);
+    const url = new URL("/api/extension-state", window.location.origin);
+    url.searchParams.set("email", user.email || "");
+    if (window.location.hostname) {
+      url.searchParams.set("hostname", window.location.hostname);
+    }
+    if (forceFresh) {
+      url.searchParams.set("_ts", String(Date.now()));
+    }
+
+    const response = await fetch(url.toString(), {
+      cache: "no-store"
+    });
+
     const result = await response.json();
 
-    if (!response.ok) {
+    if (!response.ok || !result) {
       currentAccountData = null;
+      currentNormalizedSession = null;
       renderAccessState(null);
       renderExtensionControl(null, currentProfile);
       updateSetupStates(currentProfile, null);
@@ -396,27 +412,34 @@ async function loadAccountData(user) {
     }
 
     currentAccountData = result || null;
+    currentNormalizedSession = normalizeExtensionStateResponse(result, currentUser, currentProfile);
 
-    renderAccessState(result);
-    renderExtensionControl(result, currentProfile);
-    updateSetupStates(currentProfile, result);
+    renderAccessState(currentNormalizedSession);
+    renderExtensionControl(currentNormalizedSession, currentProfile);
+    updateSetupStates(currentProfile, currentNormalizedSession);
 
     setStatus("accountStatus", "Account data loaded.");
     setStatus("accountStatusBilling", "Account data loaded.");
     setStatus("extensionAccessStatus", "Extension state loaded.");
 
-    const softwareLicenseKey = result?.license_key || "Auto-assignment pending";
-    setTextByIdForAll("licenseKeyDisplay", softwareLicenseKey);
-    setTextByIdForAll("licenseKeyDisplayBilling", softwareLicenseKey);
+    const licenseKey = currentNormalizedSession?.subscription?.license_key || "Auto-assignment pending";
+    setTextByIdForAll("licenseKeyDisplay", licenseKey);
+    setTextByIdForAll("licenseKeyDisplayBilling", licenseKey);
 
-    const referral = result?.referral_code || "Not assigned yet";
+    const referral =
+      result?.referral_code ||
+      result?.session?.referral_code ||
+      "Not assigned yet";
     setTextByIdForAll("referralCode", referral);
     setTextByIdForAll("referralCodeAffiliate", referral);
 
-    setTextByIdForAll("planNameBilling", result?.plan || result?.plan_name || "Founder Beta");
-    setTextByIdForAll("subscriptionStatusBilling", result?.status || "inactive");
+    setTextByIdForAll("planNameBilling", currentNormalizedSession?.subscription?.plan || "Founder Beta");
+    setTextByIdForAll(
+      "subscriptionStatusBilling",
+      currentNormalizedSession?.subscription?.status || "inactive"
+    );
 
-    const access = Boolean(result?.access);
+    const access = Boolean(currentNormalizedSession?.subscription?.active);
     setTextByIdForAll("accessBadgeBilling", access ? "Active Access" : "Inactive Access");
     document.querySelectorAll("#accessBadgeBilling").forEach((el) => {
       el.classList.remove("active", "inactive", "warn");
@@ -425,17 +448,20 @@ async function loadAccountData(user) {
 
     const softwareLicenseInput = document.getElementById("software_license_key");
     if (softwareLicenseInput) {
-      softwareLicenseInput.value = result?.license_key || "";
-      softwareLicenseInput.placeholder = result?.license_key ? "" : "Auto-assignment pending";
+      softwareLicenseInput.value = currentNormalizedSession?.subscription?.license_key || "";
+      softwareLicenseInput.placeholder = currentNormalizedSession?.subscription?.license_key
+        ? ""
+        : "Auto-assignment pending";
     }
 
     if (currentProfile) {
-      currentProfile.software_license_key = result?.license_key || "";
+      currentProfile.software_license_key = currentNormalizedSession?.subscription?.license_key || "";
       renderProfileSummary(currentProfile);
     }
   } catch (error) {
     console.error("loadAccountData error:", error);
     currentAccountData = null;
+    currentNormalizedSession = null;
     renderAccessState(null);
     renderExtensionControl(null, currentProfile);
     updateSetupStates(currentProfile, null);
@@ -445,12 +471,14 @@ async function loadAccountData(user) {
   }
 }
 
-function renderAccessState(data) {
-  const hasAccess = Boolean(data?.access);
+function renderAccessState(session) {
+  const hasAccess = Boolean(session?.subscription?.active);
+  const plan = session?.subscription?.plan || "Founder Beta";
+  const status = session?.subscription?.status || (hasAccess ? "active" : "inactive");
 
   setTextByIdForAll("accessBadge", hasAccess ? "Active Access" : "Inactive Access");
-  setTextByIdForAll("planName", data?.plan || data?.plan_name || "Founder Beta");
-  setTextByIdForAll("subscriptionStatus", data?.status || (hasAccess ? "active" : "inactive"));
+  setTextByIdForAll("planName", plan);
+  setTextByIdForAll("subscriptionStatus", status);
 
   document.querySelectorAll("#accessBadge").forEach((el) => {
     el.classList.remove("active", "inactive", "warn");
@@ -458,20 +486,42 @@ function renderAccessState(data) {
   });
 }
 
-function renderExtensionControl(data, profile) {
+function renderExtensionControl(session, profile) {
   const mergedProfile = profile || {};
-  const extensionData = data || {};
-  const hasAccess = Boolean(extensionData?.access);
-  const limit = Number(extensionData?.posting_limit || 0);
-  const used = Number(extensionData?.posts_today || 0);
-  const remaining = Math.max(limit - used, 0);
+  const hasAccess = Boolean(session?.subscription?.active);
+  const limit = Number(session?.subscription?.posting_limit || 0);
+  const used = Number(session?.subscription?.posts_today || 0);
+  const remaining = Number(session?.subscription?.posts_remaining ?? Math.max(limit - used, 0));
 
-  const dealerWebsite = extensionData?.dealer_site || mergedProfile?.dealer_website || "Not set";
-  const inventoryUrl = extensionData?.inventory_url || mergedProfile?.inventory_url || "Not set";
-  const scannerType = extensionData?.scanner_type || mergedProfile?.scanner_type || "Not set";
-  const listingLocation = mergedProfile?.listing_location || "Not set";
-  const complianceMode = mergedProfile?.compliance_mode || mergedProfile?.province || "Not set";
-  const plan = extensionData?.plan || extensionData?.plan_name || "Founder Beta";
+  const dealerWebsite =
+    session?.dealership?.website ||
+    mergedProfile?.dealer_website ||
+    "Not set";
+
+  const inventoryUrl =
+    session?.dealership?.inventory_url ||
+    mergedProfile?.inventory_url ||
+    "Not set";
+
+  const scannerType =
+    session?.scanner_config?.scanner_type ||
+    session?.dealership?.scanner_type ||
+    mergedProfile?.scanner_type ||
+    "Not set";
+
+  const listingLocation =
+    session?.profile?.listing_location ||
+    mergedProfile?.listing_location ||
+    "Not set";
+
+  const complianceMode =
+    session?.profile?.compliance_mode ||
+    mergedProfile?.compliance_mode ||
+    mergedProfile?.province ||
+    session?.dealership?.province ||
+    "Not set";
+
+  const plan = session?.subscription?.plan || "Founder Beta";
 
   setTextByIdForAll("extensionRemainingPosts", String(remaining));
   setTextByIdForAll("extensionScannerType", scannerType);
@@ -483,7 +533,7 @@ function renderExtensionControl(data, profile) {
   setTextByIdForAll("extensionPostsUsed", String(used));
   setTextByIdForAll("extensionPostLimit", String(limit));
 
-  const accessText = !data
+  const accessText = !session
     ? "Unavailable"
     : !hasAccess
       ? "Inactive Access"
@@ -494,27 +544,49 @@ function renderExtensionControl(data, profile) {
   setTextByIdForAll("extensionAccessBadge", accessText);
   document.querySelectorAll("#extensionAccessBadge").forEach((el) => {
     el.classList.remove("active", "inactive", "warn");
-    if (!data) el.classList.add("warn");
+    if (!session) el.classList.add("warn");
     else if (!hasAccess) el.classList.add("inactive");
     else if (remaining <= 0) el.classList.add("warn");
     else el.classList.add("active");
   });
 }
 
-function updateSetupStates(profile, accountData) {
-  setSetupState("setupDealerWebsite", !!profile?.dealer_website);
-  setSetupState("setupInventoryUrl", !!profile?.inventory_url);
-  setSetupState("setupScannerType", !!profile?.scanner_type);
-  setSetupState("setupListingLocation", !!profile?.listing_location);
-  setSetupState("setupComplianceMode", !!(profile?.compliance_mode || profile?.province));
-  setSetupState("setupAccess", !!accountData?.access);
+function updateSetupStates(profile, session) {
+  const websiteReady = Boolean(
+    profile?.dealer_website || session?.dealership?.website
+  );
+  const inventoryReady = Boolean(
+    profile?.inventory_url || session?.dealership?.inventory_url
+  );
+  const scannerReady = Boolean(
+    profile?.scanner_type ||
+    session?.scanner_config?.scanner_type ||
+    session?.dealership?.scanner_type
+  );
+  const listingReady = Boolean(
+    profile?.listing_location || session?.profile?.listing_location
+  );
+  const complianceReady = Boolean(
+    profile?.compliance_mode ||
+    profile?.province ||
+    session?.profile?.compliance_mode ||
+    session?.dealership?.province
+  );
+  const accessReady = Boolean(session?.subscription?.active);
 
-  setSetupState("extSetupDealerWebsite", !!profile?.dealer_website);
-  setSetupState("extSetupInventoryUrl", !!profile?.inventory_url);
-  setSetupState("extSetupScannerType", !!profile?.scanner_type);
-  setSetupState("extSetupListingLocation", !!profile?.listing_location);
-  setSetupState("extSetupComplianceMode", !!(profile?.compliance_mode || profile?.province));
-  setSetupState("extSetupAccess", !!accountData?.access);
+  setSetupState("setupDealerWebsite", websiteReady);
+  setSetupState("setupInventoryUrl", inventoryReady);
+  setSetupState("setupScannerType", scannerReady);
+  setSetupState("setupListingLocation", listingReady);
+  setSetupState("setupComplianceMode", complianceReady);
+  setSetupState("setupAccess", accessReady);
+
+  setSetupState("extSetupDealerWebsite", websiteReady);
+  setSetupState("extSetupInventoryUrl", inventoryReady);
+  setSetupState("extSetupScannerType", scannerReady);
+  setSetupState("extSetupListingLocation", listingReady);
+  setSetupState("extSetupComplianceMode", complianceReady);
+  setSetupState("extSetupAccess", accessReady);
 }
 
 function setSetupState(id, isGood) {
@@ -528,18 +600,19 @@ function setSetupState(id, isGood) {
 
 function buildSetupStepsText() {
   const profile = currentProfile || {};
-  const account = currentAccountData || {};
+  const session = currentNormalizedSession || buildFallbackSessionFromLocalState();
+  const active = Boolean(session?.subscription?.active);
 
   return [
     "Elevate Automation Setup",
     "",
-    `Access: ${account?.access ? "Active" : "Inactive"}`,
-    `Plan: ${account?.plan || account?.plan_name || "Founder Beta"}`,
-    `Dealer Website: ${profile?.dealer_website || "Not set"}`,
-    `Inventory URL: ${profile?.inventory_url || "Not set"}`,
-    `Scanner Type: ${profile?.scanner_type || "Not set"}`,
-    `Listing Location: ${profile?.listing_location || "Not set"}`,
-    `Compliance Mode: ${profile?.compliance_mode || profile?.province || "Not set"}`,
+    `Access: ${active ? "Active" : "Inactive"}`,
+    `Plan: ${session?.subscription?.plan || "Founder Beta"}`,
+    `Dealer Website: ${profile?.dealer_website || session?.dealership?.website || "Not set"}`,
+    `Inventory URL: ${profile?.inventory_url || session?.dealership?.inventory_url || "Not set"}`,
+    `Scanner Type: ${profile?.scanner_type || session?.scanner_config?.scanner_type || session?.dealership?.scanner_type || "Not set"}`,
+    `Listing Location: ${profile?.listing_location || session?.profile?.listing_location || "Not set"}`,
+    `Compliance Mode: ${profile?.compliance_mode || profile?.province || session?.profile?.compliance_mode || session?.dealership?.province || "Not set"}`,
     "",
     "Steps:",
     "1. Install or reload the Elevate Automation extension.",
@@ -632,6 +705,196 @@ function escapeHtml(str) {
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&#039;");
+}
+
+function clean(value) {
+  return String(value || "").replace(/\s+/g, " ").trim();
+}
+
+function normalizeEmail(value) {
+  return clean(value).toLowerCase();
+}
+
+function firstNonEmpty(...values) {
+  for (const value of values) {
+    if (typeof value === "string" && value.trim()) return value.trim();
+    if (value !== undefined && value !== null && typeof value !== "string") return value;
+  }
+  return "";
+}
+
+function normalizeBoolean(value) {
+  return value === true || value === "true" || value === 1 || value === "1";
+}
+
+function activeFromStatus(value) {
+  const status = clean(value).toLowerCase();
+  return ["active", "trialing", "paid", "founder", "beta"].includes(status);
+}
+
+function normalizeExtensionStateResponse(raw, user, profile) {
+  if (!raw) return null;
+
+  // New nested format
+  if (raw.session && typeof raw.session === "object") {
+    const session = raw.session;
+
+    return {
+      user: {
+        id: clean(session?.user?.id || user?.id || ""),
+        email: normalizeEmail(session?.user?.email || user?.email || ""),
+        full_name: clean(session?.user?.full_name || user?.user_metadata?.full_name || ""),
+        phone: clean(session?.user?.phone || "")
+      },
+      organization: {
+        id: clean(session?.organization?.id || ""),
+        name: clean(session?.organization?.name || ""),
+        membership_role: clean(session?.organization?.membership_role || "owner")
+      },
+      dealership: {
+        id: clean(session?.dealership?.id || ""),
+        organization_id: clean(session?.dealership?.organization_id || ""),
+        name: clean(session?.dealership?.name || profile?.dealership || ""),
+        website: clean(session?.dealership?.website || profile?.dealer_website || ""),
+        inventory_url: clean(session?.dealership?.inventory_url || profile?.inventory_url || ""),
+        province: clean(session?.dealership?.province || profile?.province || ""),
+        city: clean(session?.dealership?.city || profile?.city || ""),
+        timezone: clean(session?.dealership?.timezone || "America/Edmonton"),
+        scanner_type: clean(session?.dealership?.scanner_type || profile?.scanner_type || "generic"),
+        active: session?.dealership?.active !== false
+      },
+      profile: {
+        id: clean(session?.profile?.id || ""),
+        email: normalizeEmail(session?.profile?.email || user?.email || ""),
+        full_name: clean(session?.profile?.full_name || profile?.full_name || ""),
+        phone: clean(session?.profile?.phone || profile?.phone || ""),
+        license_number: clean(session?.profile?.license_number || profile?.license_number || ""),
+        listing_location: clean(session?.profile?.listing_location || profile?.listing_location || ""),
+        dealer_phone: clean(session?.profile?.dealer_phone || profile?.dealer_phone || ""),
+        dealer_email: clean(session?.profile?.dealer_email || profile?.dealer_email || user?.email || ""),
+        compliance_mode: clean(session?.profile?.compliance_mode || profile?.compliance_mode || profile?.province || ""),
+        city: clean(session?.profile?.city || profile?.city || ""),
+        province: clean(session?.profile?.province || profile?.province || "")
+      },
+      subscription: {
+        id: clean(session?.subscription?.id || ""),
+        plan: clean(session?.subscription?.plan || "Founder Beta"),
+        status: clean(session?.subscription?.status || "inactive").toLowerCase(),
+        active: Boolean(session?.subscription?.active),
+        posting_limit: Number(session?.subscription?.posting_limit || 0),
+        posts_today: Number(session?.subscription?.posts_today || 0),
+        posts_remaining: Number(session?.subscription?.posts_remaining || 0),
+        license_key: clean(session?.subscription?.license_key || "")
+      },
+      scanner_config: {
+        id: clean(session?.scanner_config?.id || ""),
+        scanner_type: clean(
+          session?.scanner_config?.scanner_type ||
+          session?.dealership?.scanner_type ||
+          profile?.scanner_type ||
+          "generic"
+        ),
+        card_selectors: Array.isArray(session?.scanner_config?.card_selectors) ? session.scanner_config.card_selectors : [],
+        title_selectors: Array.isArray(session?.scanner_config?.title_selectors) ? session.scanner_config.title_selectors : [],
+        price_selectors: Array.isArray(session?.scanner_config?.price_selectors) ? session.scanner_config.price_selectors : [],
+        mileage_selectors: Array.isArray(session?.scanner_config?.mileage_selectors) ? session.scanner_config.mileage_selectors : [],
+        image_selectors: Array.isArray(session?.scanner_config?.image_selectors) ? session.scanner_config.image_selectors : [],
+        link_selectors: Array.isArray(session?.scanner_config?.link_selectors) ? session.scanner_config.link_selectors : [],
+        stock_selectors: Array.isArray(session?.scanner_config?.stock_selectors) ? session.scanner_config.stock_selectors : [],
+        vin_selectors: Array.isArray(session?.scanner_config?.vin_selectors) ? session.scanner_config.vin_selectors : [],
+        field_map: session?.scanner_config?.field_map || {},
+        pagination_rules: session?.scanner_config?.pagination_rules || {}
+      },
+      meta: session?.meta || raw?.meta || {}
+    };
+  }
+
+  // Legacy flat format bridge
+  const active =
+    normalizeBoolean(raw?.access) ||
+    normalizeBoolean(raw?.active) ||
+    activeFromStatus(raw?.status);
+
+  const postingLimit = Number(raw?.posting_limit || 0);
+  const postsToday = Number(raw?.posts_today || 0);
+  const postsRemaining =
+    raw?.posts_remaining !== undefined
+      ? Number(raw.posts_remaining || 0)
+      : Math.max(postingLimit - postsToday, 0);
+
+  return {
+    user: {
+      id: clean(raw?.user_id || user?.id || ""),
+      email: normalizeEmail(raw?.email || user?.email || ""),
+      full_name: clean(profile?.full_name || ""),
+      phone: clean(profile?.phone || "")
+    },
+    organization: {
+      id: clean(raw?.organization_id || `solo-${user?.id || ""}`),
+      name: clean(profile?.dealership || user?.email || "Solo Account"),
+      membership_role: "owner"
+    },
+    dealership: {
+      id: clean(raw?.dealership_id || `dealer-${user?.id || ""}`),
+      organization_id: clean(raw?.organization_id || `solo-${user?.id || ""}`),
+      name: clean(profile?.dealership || "Primary Dealership"),
+      website: clean(raw?.dealer_site || profile?.dealer_website || ""),
+      inventory_url: clean(raw?.inventory_url || profile?.inventory_url || ""),
+      province: clean(profile?.province || ""),
+      city: clean(profile?.city || ""),
+      timezone: "America/Edmonton",
+      scanner_type: clean(raw?.scanner_type || profile?.scanner_type || "generic"),
+      active: true
+    },
+    profile: {
+      id: clean(profile?.id || ""),
+      email: normalizeEmail(raw?.email || user?.email || ""),
+      full_name: clean(profile?.full_name || ""),
+      phone: clean(profile?.phone || ""),
+      license_number: clean(profile?.license_number || ""),
+      listing_location: clean(profile?.listing_location || ""),
+      dealer_phone: clean(profile?.dealer_phone || ""),
+      dealer_email: clean(profile?.dealer_email || user?.email || ""),
+      compliance_mode: clean(profile?.compliance_mode || profile?.province || ""),
+      city: clean(profile?.city || ""),
+      province: clean(profile?.province || "")
+    },
+    subscription: {
+      id: clean(raw?.subscription_id || ""),
+      plan: clean(raw?.plan || raw?.plan_name || "Founder Beta"),
+      status: active ? "active" : clean(raw?.status || "inactive").toLowerCase(),
+      active,
+      posting_limit: postingLimit,
+      posts_today: postsToday,
+      posts_remaining: postsRemaining,
+      license_key: clean(raw?.license_key || "")
+    },
+    scanner_config: {
+      id: "",
+      scanner_type: clean(raw?.scanner_type || profile?.scanner_type || "generic"),
+      card_selectors: [],
+      title_selectors: [],
+      price_selectors: [],
+      mileage_selectors: [],
+      image_selectors: [],
+      link_selectors: [],
+      stock_selectors: [],
+      vin_selectors: [],
+      field_map: {},
+      pagination_rules: {}
+    },
+    meta: {
+      mode: "legacy_bridge"
+    }
+  };
+}
+
+function buildFallbackSessionFromLocalState() {
+  return normalizeExtensionStateResponse(
+    currentAccountData || {},
+    currentUser,
+    currentProfile
+  );
 }
 
 window.showSection = showSection;
