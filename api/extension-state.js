@@ -7,7 +7,6 @@ const supabase = createClient(
 
 function setCors(req, res) {
   const origin = req.headers.origin || "*";
-
   res.setHeader("Access-Control-Allow-Origin", origin);
   res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
@@ -42,42 +41,42 @@ function firstNonEmpty(...values) {
   return "";
 }
 
-function buildSubscriptionPayload(subscription) {
-  const status = clean(
-    subscription?.status ||
-    subscription?.subscription_status ||
-    "inactive"
-  ).toLowerCase();
-
-  const postingLimit = Number(
-    subscription?.posting_limit ??
-    subscription?.daily_posting_limit ??
-    25
-  );
-
-  const postsToday = Number(
-    subscription?.posts_today ??
-    subscription?.usage_today ??
-    0
-  );
-
-  const postsRemaining = Math.max(postingLimit - postsToday, 0);
-
-  return {
-    id: subscription?.id || "",
-    plan: clean(subscription?.plan || subscription?.plan_name || "Starter"),
-    status,
-    active: ["active", "trialing", "paid"].includes(status),
-    posting_limit: postingLimit,
-    posts_today: postsToday,
-    posts_remaining: postsRemaining,
-    stripe_customer_id: clean(subscription?.stripe_customer_id || ""),
-    stripe_subscription_id: clean(subscription?.stripe_subscription_id || "")
-  };
+function normalizeBoolean(value) {
+  if (value === true || value === "true" || value === 1 || value === "1") return true;
+  return false;
 }
 
-function buildProfilePayload(user, profileRow, legacyProfileRow, dealership) {
-  const source = profileRow || legacyProfileRow || {};
+function isActiveStatus(value) {
+  const status = clean(value).toLowerCase();
+  return ["active", "trialing", "paid", "founder", "beta"].includes(status);
+}
+
+function dealershipMatchesHostname(dealership, hostname) {
+  if (!dealership || !hostname) return false;
+
+  const websiteHost = safeHostname(dealership.website || "");
+  const inventoryHost = safeHostname(dealership.inventory_url || "");
+
+  return (
+    (websiteHost &&
+      (hostname === websiteHost ||
+        hostname.endsWith(`.${websiteHost}`) ||
+        websiteHost.endsWith(`.${hostname}`))) ||
+    (inventoryHost &&
+      (hostname === inventoryHost ||
+        hostname.endsWith(`.${inventoryHost}`) ||
+        inventoryHost.endsWith(`.${hostname}`)))
+  );
+}
+
+function buildProfilePayload(user, userProfileRow, legacyProfileRow, dealership) {
+  const source = userProfileRow || legacyProfileRow || {};
+
+  const city = clean(
+    source?.city ||
+    dealership?.city ||
+    ""
+  );
 
   const province = clean(
     source?.province ||
@@ -86,22 +85,24 @@ function buildProfilePayload(user, profileRow, legacyProfileRow, dealership) {
     ""
   );
 
-  const city = clean(
-    source?.city ||
-    dealership?.city ||
-    ""
-  );
-
   return {
-    id: source?.id || "",
-    email: normalizeEmail(user?.email || source?.email || ""),
+    id: clean(source?.id || ""),
+    email: normalizeEmail(
+      source?.email ||
+      user?.email ||
+      ""
+    ),
     full_name: clean(
       source?.full_name ||
       source?.salesperson_name ||
       user?.full_name ||
       ""
     ),
-    phone: clean(source?.phone || user?.phone || ""),
+    phone: clean(
+      source?.phone ||
+      user?.phone ||
+      ""
+    ),
     license_number: clean(source?.license_number || ""),
     listing_location: clean(
       source?.listing_location ||
@@ -109,19 +110,98 @@ function buildProfilePayload(user, profileRow, legacyProfileRow, dealership) {
       (city && province ? `${city}, ${province}` : city)
     ),
     dealer_phone: clean(source?.dealer_phone || ""),
-    dealer_email: clean(source?.dealer_email || user?.email || ""),
-    compliance_mode: province,
+    dealer_email: clean(
+      source?.dealer_email ||
+      user?.email ||
+      ""
+    ),
+    compliance_mode: clean(
+      source?.compliance_mode ||
+      province ||
+      ""
+    ),
     city,
     province
   };
 }
 
-function buildScannerConfigPayload(scannerConfig, dealership) {
+function buildSubscriptionPayload(subscriptionRow, postingLimitRow, postingUsageRow, licenseRow, licenseKeyRow) {
+  const rawStatus = firstNonEmpty(
+    subscriptionRow?.status,
+    subscriptionRow?.subscription_status,
+    licenseRow?.status,
+    licenseKeyRow?.status,
+    "inactive"
+  );
+
+  const active =
+    normalizeBoolean(subscriptionRow?.active) ||
+    normalizeBoolean(subscriptionRow?.access_active) ||
+    normalizeBoolean(licenseRow?.active) ||
+    normalizeBoolean(licenseKeyRow?.active) ||
+    isActiveStatus(rawStatus);
+
+  const postingLimit = Number(
+    firstNonEmpty(
+      postingLimitRow?.daily_limit,
+      postingLimitRow?.posting_limit,
+      subscriptionRow?.posting_limit,
+      subscriptionRow?.daily_posting_limit,
+      25
+    )
+  ) || 25;
+
+  const postsToday = Number(
+    firstNonEmpty(
+      postingUsageRow?.posts_today,
+      postingUsageRow?.used_today,
+      0
+    )
+  ) || 0;
+
+  const postsRemaining = Math.max(postingLimit - postsToday, 0);
+
   return {
-    id: scannerConfig?.id || "",
+    id: clean(subscriptionRow?.id || ""),
+    plan: clean(
+      firstNonEmpty(
+        subscriptionRow?.plan,
+        subscriptionRow?.plan_name,
+        licenseRow?.plan,
+        "Founder Beta"
+      )
+    ),
+    status: active ? "active" : clean(rawStatus || "inactive").toLowerCase(),
+    active,
+    posting_limit: postingLimit,
+    posts_today: postsToday,
+    posts_remaining: postsRemaining,
+    stripe_customer_id: clean(subscriptionRow?.stripe_customer_id || ""),
+    stripe_subscription_id: clean(subscriptionRow?.stripe_subscription_id || ""),
+    license_key: clean(
+      firstNonEmpty(
+        licenseKeyRow?.license_key,
+        licenseRow?.license_key,
+        subscriptionRow?.license_key,
+        ""
+      )
+    )
+  };
+}
+
+function buildScannerConfigPayload(scannerConfig, dealership, legacyProfile) {
+  const legacyScanner = clean(
+    legacyProfile?.scanner_type ||
+    legacyProfile?.dealer_scanner_type ||
+    dealership?.scanner_type ||
+    "generic"
+  );
+
+  return {
+    id: clean(scannerConfig?.id || ""),
     scanner_type: clean(
       scannerConfig?.scanner_type ||
-      dealership?.scanner_type ||
+      legacyScanner ||
       "generic"
     ),
     card_selectors: Array.isArray(scannerConfig?.card_selectors) ? scannerConfig.card_selectors : [],
@@ -137,16 +217,60 @@ function buildScannerConfigPayload(scannerConfig, dealership) {
   };
 }
 
-function dealershipMatchesHostname(dealership, hostname) {
-  if (!dealership || !hostname) return false;
+function buildFallbackOrganization(user, legacyProfile) {
+  return {
+    id: `solo-${user.id}`,
+    name: clean(
+      legacyProfile?.dealership ||
+      legacyProfile?.dealer_name ||
+      legacyProfile?.company_name ||
+      user?.full_name ||
+      user?.email ||
+      "Solo Account"
+    ),
+    owner_user_id: user.id,
+    membership_role: "owner"
+  };
+}
 
-  const websiteHost = safeHostname(dealership.website || "");
-  const inventoryHost = safeHostname(dealership.inventory_url || "");
-
-  return (
-    (websiteHost && (hostname === websiteHost || hostname.endsWith(`.${websiteHost}`) || websiteHost.endsWith(`.${hostname}`))) ||
-    (inventoryHost && (hostname === inventoryHost || hostname.endsWith(`.${inventoryHost}`) || inventoryHost.endsWith(`.${hostname}`)))
+function buildFallbackDealership(user, legacyProfile) {
+  const website = clean(
+    legacyProfile?.dealer_website ||
+    legacyProfile?.dealer_site ||
+    legacyProfile?.website ||
+    ""
   );
+
+  const inventoryUrl = clean(
+    legacyProfile?.inventory_url ||
+    legacyProfile?.inventoryUrl ||
+    ""
+  );
+
+  return {
+    id: website ? `dealer-${safeHostname(website)}` : `dealer-${user.id}`,
+    organization_id: `solo-${user.id}`,
+    name: clean(
+      legacyProfile?.dealership ||
+      legacyProfile?.dealer_name ||
+      "Primary Dealership"
+    ),
+    website,
+    inventory_url: inventoryUrl,
+    province: clean(
+      legacyProfile?.province ||
+      legacyProfile?.compliance_mode ||
+      ""
+    ),
+    city: clean(legacyProfile?.city || ""),
+    timezone: "America/Edmonton",
+    scanner_type: clean(
+      legacyProfile?.scanner_type ||
+      legacyProfile?.dealer_scanner_type ||
+      "generic"
+    ),
+    active: true
+  };
 }
 
 export default async function handler(req, res) {
@@ -195,23 +319,82 @@ export default async function handler(req, res) {
       });
     }
 
-    const { data: memberships, error: membershipsError } = await supabase
-      .from("organization_members")
-      .select(`
-        *,
-        organizations (*),
-        dealerships (*)
-      `)
-      .eq("user_id", user.id);
+    const [
+      membershipsResult,
+      legacyProfileResult,
+      userProfileResult,
+      subscriptionResult,
+      postingLimitResult,
+      postingUsageResult,
+      licenseResult,
+      licenseKeyResult
+    ] = await Promise.all([
+      supabase
+        .from("organization_members")
+        .select(`
+          *,
+          organizations (*),
+          dealerships (*)
+        `)
+        .eq("user_id", user.id),
+      supabase
+        .from("profiles")
+        .select("*")
+        .eq("email", email)
+        .maybeSingle(),
+      supabase
+        .from("user_profiles")
+        .select("*")
+        .eq("user_id", user.id)
+        .maybeSingle(),
+      supabase
+        .from("subscriptions")
+        .select("*")
+        .or(`user_id.eq.${user.id},email.eq.${email}`)
+        .limit(1)
+        .maybeSingle(),
+      supabase
+        .from("posting_limits")
+        .select("*")
+        .or(`user_id.eq.${user.id},email.eq.${email}`)
+        .limit(1)
+        .maybeSingle(),
+      supabase
+        .from("posting_usage")
+        .select("*")
+        .or(`user_id.eq.${user.id},email.eq.${email}`)
+        .limit(1)
+        .maybeSingle(),
+      supabase
+        .from("licenses")
+        .select("*")
+        .or(`user_id.eq.${user.id},email.eq.${email}`)
+        .limit(1)
+        .maybeSingle(),
+      supabase
+        .from("license_keys")
+        .select("*")
+        .or(`user_id.eq.${user.id},email.eq.${email}`)
+        .limit(1)
+        .maybeSingle()
+    ]);
 
-    if (membershipsError) {
+    if (membershipsResult.error) {
       return res.status(500).json({
         ok: false,
-        error: `Organization memberships lookup failed: ${membershipsError.message}`
+        error: `Organization memberships lookup failed: ${membershipsResult.error.message}`
       });
     }
 
-    const membershipList = Array.isArray(memberships) ? memberships : [];
+    const legacyProfile = legacyProfileResult.data || null;
+    const userProfile = userProfileResult.data || null;
+    const subscriptionRow = subscriptionResult.data || null;
+    const postingLimitRow = postingLimitResult.data || null;
+    const postingUsageRow = postingUsageResult.data || null;
+    const licenseRow = licenseResult.data || null;
+    const licenseKeyRow = licenseKeyResult.data || null;
+
+    const membershipList = Array.isArray(membershipsResult.data) ? membershipsResult.data : [];
 
     let selectedMembership =
       membershipList.find((m) => dealershipMatchesHostname(m?.dealerships, hostname)) ||
@@ -229,60 +412,53 @@ export default async function handler(req, res) {
         .eq("owner_user_id", user.id)
         .maybeSingle();
 
-      organization = ownedOrganization || null;
-    }
+      if (ownedOrganization) {
+        organization = ownedOrganization;
 
-    if (!dealership && organization?.id) {
-      const { data: dealerships } = await supabase
-        .from("dealerships")
-        .select("*")
-        .eq("organization_id", organization.id)
-        .eq("active", true);
-
-      const dealershipList = Array.isArray(dealerships) ? dealerships : [];
-      dealership =
-        dealershipList.find((d) => dealershipMatchesHostname(d, hostname)) ||
-        dealershipList[0] ||
-        null;
-    }
-
-    if (!organization) {
-      return res.status(404).json({
-        ok: false,
-        error: "No organization found for user"
-      });
-    }
-
-    const { data: scannerConfig } = dealership?.id
-      ? await supabase
-          .from("scanner_configs")
+        const { data: ownedDealerships } = await supabase
+          .from("dealerships")
           .select("*")
-          .eq("dealership_id", dealership.id)
-          .eq("active", true)
-          .maybeSingle()
-      : { data: null };
+          .eq("organization_id", ownedOrganization.id)
+          .eq("active", true);
 
-    const { data: userProfile } = await supabase
-      .from("user_profiles")
-      .select("*")
-      .eq("user_id", user.id)
-      .maybeSingle();
+        const ownedList = Array.isArray(ownedDealerships) ? ownedDealerships : [];
+        dealership =
+          ownedList.find((d) => dealershipMatchesHostname(d, hostname)) ||
+          ownedList[0] ||
+          null;
+      }
+    }
 
-    const { data: legacyProfile } = await supabase
-      .from("profiles")
-      .select("*")
-      .eq("email", email)
-      .maybeSingle();
+    // Bridge mode for early solo users
+    if (!organization) {
+      organization = buildFallbackOrganization(user, legacyProfile || {});
+    }
 
-    const { data: subscription } = await supabase
-      .from("subscriptions")
-      .select("*")
-      .eq("organization_id", organization.id)
-      .maybeSingle();
+    if (!dealership) {
+      dealership = buildFallbackDealership(user, legacyProfile || {});
+    }
+
+    let scannerConfig = null;
+    if (dealership?.id && !String(dealership.id).startsWith("dealer-")) {
+      const { data } = await supabase
+        .from("scanner_configs")
+        .select("*")
+        .eq("dealership_id", dealership.id)
+        .eq("active", true)
+        .maybeSingle();
+
+      scannerConfig = data || null;
+    }
 
     const profile = buildProfilePayload(user, userProfile, legacyProfile, dealership || {});
-    const subscriptionPayload = buildSubscriptionPayload(subscription || {});
-    const scannerConfigPayload = buildScannerConfigPayload(scannerConfig || {}, dealership || {});
+    const subscription = buildSubscriptionPayload(
+      subscriptionRow,
+      postingLimitRow,
+      postingUsageRow,
+      licenseRow,
+      licenseKeyRow
+    );
+    const scannerConfigPayload = buildScannerConfigPayload(scannerConfig, dealership || {}, legacyProfile || {});
 
     const session = {
       user: {
@@ -293,31 +469,30 @@ export default async function handler(req, res) {
         active: user.active !== false
       },
       organization: {
-        id: organization.id,
+        id: clean(organization.id || ""),
         name: clean(organization.name || ""),
-        owner_user_id: organization.owner_user_id || "",
-        membership_role: clean(selectedMembership?.role || "salesperson")
+        owner_user_id: clean(organization.owner_user_id || user.id),
+        membership_role: clean(selectedMembership?.role || organization.membership_role || "owner")
       },
-      dealership: dealership
-        ? {
-            id: dealership.id,
-            organization_id: dealership.organization_id,
-            name: clean(dealership.name || ""),
-            website: clean(dealership.website || ""),
-            inventory_url: clean(dealership.inventory_url || ""),
-            province: clean(dealership.province || ""),
-            city: clean(dealership.city || ""),
-            timezone: clean(dealership.timezone || "America/Edmonton"),
-            scanner_type: clean(dealership.scanner_type || scannerConfigPayload.scanner_type || "generic"),
-            active: dealership.active !== false
-          }
-        : null,
+      dealership: {
+        id: clean(dealership.id || ""),
+        organization_id: clean(dealership.organization_id || organization.id),
+        name: clean(dealership.name || ""),
+        website: clean(dealership.website || ""),
+        inventory_url: clean(dealership.inventory_url || ""),
+        province: clean(dealership.province || ""),
+        city: clean(dealership.city || ""),
+        timezone: clean(dealership.timezone || "America/Edmonton"),
+        scanner_type: clean(dealership.scanner_type || scannerConfigPayload.scanner_type || "generic"),
+        active: dealership.active !== false
+      },
       profile,
-      subscription: subscriptionPayload,
+      subscription,
       scanner_config: scannerConfigPayload,
       meta: {
         requested_hostname: hostname,
-        requested_page_url: pageUrl
+        requested_page_url: pageUrl,
+        mode: membershipList.length ? "multi_tenant" : "solo_bridge"
       }
     };
 
