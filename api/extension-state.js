@@ -42,8 +42,7 @@ function firstNonEmpty(...values) {
 }
 
 function normalizeBoolean(value) {
-  if (value === true || value === "true" || value === 1 || value === "1") return true;
-  return false;
+  return value === true || value === "true" || value === 1 || value === "1";
 }
 
 function isActiveStatus(value) {
@@ -74,72 +73,82 @@ function buildProfilePayload(user, userProfileRow, legacyProfileRow, dealership)
 
   const city = clean(
     source?.city ||
-    dealership?.city ||
-    ""
+      dealership?.city ||
+      ""
   );
 
   const province = clean(
     source?.province ||
-    source?.compliance_mode ||
-    dealership?.province ||
-    ""
+      source?.compliance_mode ||
+      dealership?.province ||
+      ""
   );
 
   return {
     id: clean(source?.id || ""),
     email: normalizeEmail(
       source?.email ||
-      user?.email ||
-      ""
+        user?.email ||
+        ""
     ),
     full_name: clean(
       source?.full_name ||
-      source?.salesperson_name ||
-      user?.full_name ||
-      ""
+        source?.salesperson_name ||
+        user?.full_name ||
+        ""
     ),
     phone: clean(
       source?.phone ||
-      user?.phone ||
-      ""
+        user?.phone ||
+        ""
     ),
     license_number: clean(source?.license_number || ""),
     listing_location: clean(
       source?.listing_location ||
-      source?.location ||
-      (city && province ? `${city}, ${province}` : city)
+        source?.location ||
+        (city && province ? `${city}, ${province}` : city)
     ),
     dealer_phone: clean(source?.dealer_phone || ""),
     dealer_email: clean(
       source?.dealer_email ||
-      user?.email ||
-      ""
+        user?.email ||
+        ""
     ),
     compliance_mode: clean(
       source?.compliance_mode ||
-      province ||
-      ""
+        province ||
+        ""
     ),
     city,
     province
   };
 }
 
-function buildSubscriptionPayload(subscriptionRow, postingLimitRow, postingUsageRow, licenseRow, licenseKeyRow) {
-  const rawStatus = firstNonEmpty(
-    subscriptionRow?.status,
-    subscriptionRow?.subscription_status,
-    licenseRow?.status,
-    licenseKeyRow?.status,
-    "inactive"
+function buildSubscriptionPayload(
+  subscriptionRow,
+  postingLimitRow,
+  postingUsageRow,
+  licenseRow,
+  licenseKeyRow,
+  legacyProfileRow
+) {
+  const rawPlan = firstNonEmpty(
+    subscriptionRow?.plan,
+    subscriptionRow?.plan_name,
+    licenseRow?.plan,
+    licenseKeyRow?.plan,
+    "Founder Beta"
   );
 
-  const active =
-    normalizeBoolean(subscriptionRow?.active) ||
-    normalizeBoolean(subscriptionRow?.access_active) ||
-    normalizeBoolean(licenseRow?.active) ||
-    normalizeBoolean(licenseKeyRow?.active) ||
-    isActiveStatus(rawStatus);
+  const rawStatus = clean(
+    firstNonEmpty(
+      subscriptionRow?.status,
+      subscriptionRow?.subscription_status,
+      licenseRow?.status,
+      licenseKeyRow?.status,
+      ""
+    )
+  ).toLowerCase();
 
   const postingLimit = Number(
     firstNonEmpty(
@@ -161,48 +170,79 @@ function buildSubscriptionPayload(subscriptionRow, postingLimitRow, postingUsage
 
   const postsRemaining = Math.max(postingLimit - postsToday, 0);
 
+  const licenseKey = clean(
+    firstNonEmpty(
+      licenseKeyRow?.license_key,
+      licenseRow?.license_key,
+      subscriptionRow?.license_key,
+      ""
+    )
+  );
+
+  const explicitPositive =
+    normalizeBoolean(subscriptionRow?.active) ||
+    normalizeBoolean(subscriptionRow?.access) ||
+    normalizeBoolean(subscriptionRow?.access_active) ||
+    normalizeBoolean(subscriptionRow?.is_active) ||
+    normalizeBoolean(licenseRow?.active) ||
+    normalizeBoolean(licenseRow?.access) ||
+    normalizeBoolean(licenseKeyRow?.active) ||
+    normalizeBoolean(licenseKeyRow?.assigned) ||
+    isActiveStatus(rawStatus);
+
+  const explicitNegative = [
+    "canceled",
+    "cancelled",
+    "unpaid",
+    "past_due",
+    "expired",
+    "suspended",
+    "inactive"
+  ].includes(rawStatus);
+
+  const hasProfileSetup = Boolean(
+    legacyProfileRow?.dealer_website ||
+      legacyProfileRow?.inventory_url ||
+      legacyProfileRow?.dealership
+  );
+
+  const founderLikePlan = /founder|beta|starter/i.test(rawPlan);
+
+  const bridgeActive =
+    !explicitNegative &&
+    founderLikePlan &&
+    hasProfileSetup;
+
+  const active = explicitPositive || bridgeActive;
+
   return {
     id: clean(subscriptionRow?.id || ""),
-    plan: clean(
-      firstNonEmpty(
-        subscriptionRow?.plan,
-        subscriptionRow?.plan_name,
-        licenseRow?.plan,
-        "Founder Beta"
-      )
-    ),
-    status: active ? "active" : clean(rawStatus || "inactive").toLowerCase(),
+    plan: clean(rawPlan || "Founder Beta"),
+    status: active ? "active" : (rawStatus || "inactive"),
     active,
     posting_limit: postingLimit,
     posts_today: postsToday,
     posts_remaining: postsRemaining,
     stripe_customer_id: clean(subscriptionRow?.stripe_customer_id || ""),
     stripe_subscription_id: clean(subscriptionRow?.stripe_subscription_id || ""),
-    license_key: clean(
-      firstNonEmpty(
-        licenseKeyRow?.license_key,
-        licenseRow?.license_key,
-        subscriptionRow?.license_key,
-        ""
-      )
-    )
+    license_key: licenseKey
   };
 }
 
 function buildScannerConfigPayload(scannerConfig, dealership, legacyProfile) {
   const legacyScanner = clean(
     legacyProfile?.scanner_type ||
-    legacyProfile?.dealer_scanner_type ||
-    dealership?.scanner_type ||
-    "generic"
+      legacyProfile?.dealer_scanner_type ||
+      dealership?.scanner_type ||
+      "generic"
   );
 
   return {
     id: clean(scannerConfig?.id || ""),
     scanner_type: clean(
       scannerConfig?.scanner_type ||
-      legacyScanner ||
-      "generic"
+        legacyScanner ||
+        "generic"
     ),
     card_selectors: Array.isArray(scannerConfig?.card_selectors) ? scannerConfig.card_selectors : [],
     title_selectors: Array.isArray(scannerConfig?.title_selectors) ? scannerConfig.title_selectors : [],
@@ -222,11 +262,11 @@ function buildFallbackOrganization(user, legacyProfile) {
     id: `solo-${user.id}`,
     name: clean(
       legacyProfile?.dealership ||
-      legacyProfile?.dealer_name ||
-      legacyProfile?.company_name ||
-      user?.full_name ||
-      user?.email ||
-      "Solo Account"
+        legacyProfile?.dealer_name ||
+        legacyProfile?.company_name ||
+        user?.full_name ||
+        user?.email ||
+        "Solo Account"
     ),
     owner_user_id: user.id,
     membership_role: "owner"
@@ -236,15 +276,15 @@ function buildFallbackOrganization(user, legacyProfile) {
 function buildFallbackDealership(user, legacyProfile) {
   const website = clean(
     legacyProfile?.dealer_website ||
-    legacyProfile?.dealer_site ||
-    legacyProfile?.website ||
-    ""
+      legacyProfile?.dealer_site ||
+      legacyProfile?.website ||
+      ""
   );
 
   const inventoryUrl = clean(
     legacyProfile?.inventory_url ||
-    legacyProfile?.inventoryUrl ||
-    ""
+      legacyProfile?.inventoryUrl ||
+      ""
   );
 
   return {
@@ -252,22 +292,22 @@ function buildFallbackDealership(user, legacyProfile) {
     organization_id: `solo-${user.id}`,
     name: clean(
       legacyProfile?.dealership ||
-      legacyProfile?.dealer_name ||
-      "Primary Dealership"
+        legacyProfile?.dealer_name ||
+        "Primary Dealership"
     ),
     website,
     inventory_url: inventoryUrl,
     province: clean(
       legacyProfile?.province ||
-      legacyProfile?.compliance_mode ||
-      ""
+        legacyProfile?.compliance_mode ||
+        ""
     ),
     city: clean(legacyProfile?.city || ""),
     timezone: "America/Edmonton",
     scanner_type: clean(
       legacyProfile?.scanner_type ||
-      legacyProfile?.dealer_scanner_type ||
-      "generic"
+        legacyProfile?.dealer_scanner_type ||
+        "generic"
     ),
     active: true
   };
@@ -429,7 +469,6 @@ export default async function handler(req, res) {
       }
     }
 
-    // Bridge mode for early solo users
     if (!organization) {
       organization = buildFallbackOrganization(user, legacyProfile || {});
     }
@@ -456,7 +495,8 @@ export default async function handler(req, res) {
       postingLimitRow,
       postingUsageRow,
       licenseRow,
-      licenseKeyRow
+      licenseKeyRow,
+      legacyProfile
     );
     const scannerConfigPayload = buildScannerConfigPayload(scannerConfig, dealership || {}, legacyProfile || {});
 
