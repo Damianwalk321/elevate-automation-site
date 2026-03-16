@@ -6,7 +6,7 @@
 // 2) new nested { ok, session: {...} } payloads
 
 const SUPABASE_URL = "https://teixblbxkoershwgqpym.supabase.co";
-const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRlaXhibGJ4a29lcnNod2dxcHltIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMwODUzMDMsImV4cCI6MjA4ODY2MTMwM30.wxt9zjKhsBuflaFZZT9awZiwckRzYkEl-OLm_4q8qF4";
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJodHRwczovL3RlaXhibGJ4a29lcnNod2dxcHltLnN1cGFiYXNlLmNvL2F1dGgvdjEiLCJzdWIiOiJhbm9uLWtleSIsImF1ZCI6ImF1dGhlbnRpY2F0ZWQiLCJleHAiOjIwODg2NjEzMDMsImlhdCI6MTc3MzA4NTMwMywiaXNzIjoiaHR0cHM6Ly90ZWl4YmxieGtvZXJzaHdncXB5bS5zdXBhYmFzZS5jby9hdXRoL3YxIiwianRpIjoiOWRmNzE2NmEtZjcxMC00MzQ0LTkwOWEtZjIyM2ZkZjI5NzY2Iiwicm9sZSI6ImFub24ifQ.5kX1L0r3gSMX1mN1V7zI2XHevNdf2gZl5ZLMbYh2v0Y";
 
 let supabaseClient = null;
 let currentUser = null;
