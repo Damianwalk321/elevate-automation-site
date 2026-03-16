@@ -1,57 +1,21 @@
-// /api/sync-user.js
-
+// api/sync-user.js
 import { createClient } from "@supabase/supabase-js";
 
-if (!process.env.SUPABASE_URL) {
+const SUPABASE_URL = process.env.SUPABASE_URL;
+const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+if (!SUPABASE_URL) {
   throw new Error("Missing env: SUPABASE_URL");
 }
 
-if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
+if (!SUPABASE_SERVICE_ROLE_KEY) {
   throw new Error("Missing env: SUPABASE_SERVICE_ROLE_KEY");
 }
 
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-);
+const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
-function normalizeEmail(email) {
-  return String(email || "").trim().toLowerCase();
-}
-
-function generateReferralCode(email) {
-  const clean = normalizeEmail(email)
-    .split("@")[0]
-    .replace(/[^a-zA-Z0-9]/g, "")
-    .toLowerCase()
-    .slice(0, 12);
-
-  const rand = Math.floor(1000 + Math.random() * 9000);
-  return `${clean}${rand}`;
-}
-
-async function generateUniqueReferralCode(email) {
-  let attempts = 0;
-
-  while (attempts < 20) {
-    const code = generateReferralCode(email);
-
-    const { data, error } = await supabase
-      .from("users")
-      .select("id")
-      .eq("referral_code", code)
-      .maybeSingle();
-
-    if (error) {
-      throw new Error(`Referral lookup failed: ${error.message}`);
-    }
-
-    if (!data) return code;
-
-    attempts += 1;
-  }
-
-  throw new Error("Could not generate a unique referral code.");
+function clean(value) {
+  return String(value || "").trim();
 }
 
 export default async function handler(req, res) {
@@ -60,130 +24,115 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { auth_user_id, email, full_name } = req.body || {};
+    const body = typeof req.body === "string" ? JSON.parse(req.body || "{}") : (req.body || {});
+    const id = clean(body.id);
+    const email = clean(body.email).toLowerCase();
 
-    if (!auth_user_id || !email) {
-      return res.status(400).json({
-        error: "Missing auth_user_id or email"
+    if (!id || !email) {
+      // make this non-fatal to avoid poisoning dashboard/extension boot
+      return res.status(200).json({
+        ok: false,
+        skipped: true,
+        reason: "Missing id or email"
       });
     }
 
-    const normalizedEmail = normalizeEmail(email);
-    const displayName = (full_name || normalizedEmail.split("@")[0] || "User").trim();
-
-    const { data: authMatch, error: authMatchError } = await supabase
+    // 1) ensure users row exists
+    const { error: userUpsertError } = await supabase
       .from("users")
-      .select("*")
-      .eq("auth_user_id", auth_user_id)
+      .upsert(
+        [
+          {
+            id,
+            email,
+            updated_at: new Date().toISOString()
+          }
+        ],
+        {
+          onConflict: "id"
+        }
+      );
+
+    if (userUpsertError) {
+      console.error("sync-user users upsert error:", userUpsertError);
+      return res.status(200).json({
+        ok: false,
+        skipped: true,
+        reason: "Users upsert failed",
+        detail: userUpsertError.message
+      });
+    }
+
+    // 2) ensure profile row exists
+    const { data: existingProfile, error: profileLookupError } = await supabase
+      .from("profiles")
+      .select("id,email")
+      .eq("id", id)
       .maybeSingle();
 
-    if (authMatchError) {
-      throw new Error(`Auth match lookup failed: ${authMatchError.message}`);
-    }
-
-    if (authMatch) {
-      const updatePayload = {
-        email: normalizedEmail,
-        name: displayName
-      };
-
-      if (!authMatch.referral_code) {
-        updatePayload.referral_code = await generateUniqueReferralCode(normalizedEmail);
-      }
-
-      const { error: updateError } = await supabase
-        .from("users")
-        .update(updatePayload)
-        .eq("id", authMatch.id);
-
-      if (updateError) {
-        throw new Error(`Updating auth-linked row failed: ${updateError.message}`);
-      }
-
+    if (profileLookupError) {
+      console.error("sync-user profile lookup error:", profileLookupError);
       return res.status(200).json({
-        success: true,
-        action: "updated_auth_linked_row",
-        user_id: authMatch.id
+        ok: false,
+        skipped: true,
+        reason: "Profile lookup failed",
+        detail: profileLookupError.message
       });
     }
 
-    const { data: emailRows, error: emailRowsError } = await supabase
-      .from("users")
-      .select("*")
-      .eq("email", normalizedEmail);
+    if (!existingProfile) {
+      const { error: profileInsertError } = await supabase
+        .from("profiles")
+        .insert([
+          {
+            id,
+            email,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          }
+        ]);
 
-    if (emailRowsError) {
-      throw new Error(`Email lookup failed: ${emailRowsError.message}`);
-    }
-
-    if (emailRows && emailRows.length > 0) {
-      const unclaimedRow = emailRows.find((row) => !row.auth_user_id);
-      const alreadyClaimedRow = emailRows.find((row) => row.auth_user_id === auth_user_id);
-      const bestRow = alreadyClaimedRow || unclaimedRow || emailRows[0];
-
-      const updatePayload = {
-        email: normalizedEmail,
-        name: displayName
-      };
-
-      if (!bestRow.auth_user_id || bestRow.auth_user_id === auth_user_id) {
-        updatePayload.auth_user_id = auth_user_id;
+      if (profileInsertError) {
+        console.error("sync-user profile insert error:", profileInsertError);
+        return res.status(200).json({
+          ok: false,
+          skipped: true,
+          reason: "Profile insert failed",
+          detail: profileInsertError.message
+        });
       }
+    } else if (!existingProfile.email) {
+      const { error: profileUpdateError } = await supabase
+        .from("profiles")
+        .update({
+          email,
+          updated_at: new Date().toISOString()
+        })
+        .eq("id", id);
 
-      if (!bestRow.referral_code) {
-        updatePayload.referral_code = await generateUniqueReferralCode(normalizedEmail);
+      if (profileUpdateError) {
+        console.error("sync-user profile update error:", profileUpdateError);
+        return res.status(200).json({
+          ok: false,
+          skipped: true,
+          reason: "Profile update failed",
+          detail: profileUpdateError.message
+        });
       }
-
-      const { error: claimError } = await supabase
-        .from("users")
-        .update(updatePayload)
-        .eq("id", bestRow.id);
-
-      if (claimError) {
-        throw new Error(`Claiming existing email row failed: ${claimError.message}`);
-      }
-
-      return res.status(200).json({
-        success: true,
-        action: "claimed_or_updated_email_row",
-        user_id: bestRow.id
-      });
-    }
-
-    const referralCode = await generateUniqueReferralCode(normalizedEmail);
-
-    const { data: insertedRows, error: insertError } = await supabase
-      .from("users")
-      .insert([
-        {
-          auth_user_id,
-          email: normalizedEmail,
-          name: displayName,
-          plan: "Beta",
-          subscription_status: "active",
-          referral_code: referralCode,
-          referral_count: 0,
-          unlocked_invites: 1,
-          used_invites: 0,
-          founder_pricing_locked: true
-        }
-      ])
-      .select();
-
-    if (insertError) {
-      throw new Error(`Inserting new user row failed: ${insertError.message}`);
     }
 
     return res.status(200).json({
-      success: true,
-      action: "inserted_new_user",
-      user_id: insertedRows?.[0]?.id || null
+      ok: true,
+      id,
+      email
     });
-  } catch (err) {
-    console.error("sync-user error:", err);
-    return res.status(500).json({
-      error: "sync-user failed",
-      details: err.message
+  } catch (error) {
+    console.error("sync-user fatal error:", error);
+    return res.status(200).json({
+      ok: false,
+      skipped: true,
+      reason: "Unexpected sync-user error",
+      detail: error.message || "Unknown error"
     });
   }
 }
