@@ -1,5 +1,5 @@
 // dashboard.js
-// Full replacement with extension control panel + dealer routing + setup state
+// Full replacement with extension control + auto profile sync bridge
 
 const SUPABASE_URL = "https://teixblbxkoershwgqpym.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRlaXhibGJ4a29lcnNod2dxcHltIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMwODUzMDMsImV4cCI6MjA4ODY2MTMwM30.wxt9zjKhsBuflaFZZT9awZiwckRzYkEl-OLm_4q8qF4";
@@ -96,6 +96,7 @@ function bindDashboardUI() {
     refreshAccessBtn.addEventListener("click", async () => {
       if (!currentUser) return;
       await loadAccountData(currentUser);
+      await pushExtensionProfileSync();
     });
   }
 
@@ -104,6 +105,7 @@ function bindDashboardUI() {
     refreshExtensionStateBtn.addEventListener("click", async () => {
       if (!currentUser) return;
       await loadAccountData(currentUser);
+      await pushExtensionProfileSync();
       setStatus("extensionActionStatus", "Extension state refreshed.");
     });
   }
@@ -145,7 +147,7 @@ function bindDashboardUI() {
 
 async function onSaveProfilePressed() {
   try {
-    setStatus("profileStatus", "Save button clicked...");
+    setStatus("profileStatus", "Saving profile...");
 
     if (!currentUser) {
       setStatus("profileStatus", "No authenticated user found.");
@@ -157,9 +159,44 @@ async function onSaveProfilePressed() {
     if (currentUser) {
       await loadAccountData(currentUser);
     }
+
+    await pushExtensionProfileSync();
   } catch (error) {
     console.error("onSaveProfilePressed error:", error);
     setStatus("profileStatus", `Save failed: ${error.message || "Unknown error"}`);
+  }
+}
+
+async function pushExtensionProfileSync() {
+  try {
+    if (!currentUser) return;
+
+    const payload = {
+      email: currentUser.email || "",
+      access: !!currentAccountData?.access,
+      active: !!currentAccountData?.active,
+      status: currentAccountData?.status || "inactive",
+      plan: currentAccountData?.plan || currentAccountData?.plan_name || "Founder Beta",
+      user_id: currentAccountData?.user_id || currentUser.id || "",
+      license_key: currentAccountData?.license_key || "",
+      posting_limit: Number(currentAccountData?.posting_limit || 0),
+      posts_today: Number(currentAccountData?.posts_today || 0),
+      posts_remaining: Number(currentAccountData?.posts_remaining || 0),
+      dealer_site: currentAccountData?.dealer_site || currentProfile?.dealer_website || "",
+      inventory_url: currentAccountData?.inventory_url || currentProfile?.inventory_url || "",
+      scanner_type: currentAccountData?.scanner_type || currentProfile?.scanner_type || "custom",
+      profile: currentProfile || {}
+    };
+
+    window.postMessage({
+      type: "ELEVATE_PROFILE_SYNC",
+      payload
+    }, "*");
+
+    setStatus("extensionActionStatus", "Dealer profile sync pushed to extension.");
+  } catch (error) {
+    console.error("pushExtensionProfileSync error:", error);
+    setStatus("extensionActionStatus", "Failed to push profile sync.");
   }
 }
 
@@ -212,20 +249,11 @@ async function loadProfile(userId) {
 
     const result = await response.json();
 
-    if (!response.ok) {
-      console.warn("Profile load failed:", result);
+    if (!response.ok || !result.data) {
       currentProfile = null;
       renderProfileSummary(null);
       updateSetupStates(null, currentAccountData);
       setStatus("profileStatus", "No profile loaded yet.");
-      return;
-    }
-
-    if (!result.data) {
-      currentProfile = null;
-      renderProfileSummary(null);
-      updateSetupStates(null, currentAccountData);
-      setStatus("profileStatus", "No profile found yet.");
       return;
     }
 
@@ -257,8 +285,6 @@ async function loadProfile(userId) {
 
 async function submitProfileSave(user) {
   try {
-    setStatus("profileStatus", "Preparing profile payload...");
-
     const payload = {
       id: user.id,
       email: user.email || "",
@@ -288,7 +314,6 @@ async function submitProfileSave(user) {
     const result = await response.json();
 
     if (!response.ok) {
-      console.error("Profile save failed:", result);
       setStatus("profileStatus", `Save failed: ${result.error || result.message || "Unknown error"}`);
       return;
     }
@@ -327,7 +352,7 @@ function renderProfileSummary(profile) {
       <div><strong>Dealer Website:</strong> Not set</div>
       <div><strong>Inventory URL:</strong> Not set</div>
       <div><strong>Scanner Type:</strong> Not set</div>
-      <div><strong>Software License Key:</strong> Not loaded</div>
+      <div><strong>Software License Key:</strong> Auto-assignment pending</div>
     `;
     return;
   }
@@ -346,7 +371,7 @@ function renderProfileSummary(profile) {
     <div><strong>Dealer Website:</strong> ${escapeHtml(profile.dealer_website || "Not set")}</div>
     <div><strong>Inventory URL:</strong> ${escapeHtml(profile.inventory_url || "Not set")}</div>
     <div><strong>Scanner Type:</strong> ${escapeHtml(profile.scanner_type || "Not set")}</div>
-    <div><strong>Software License Key:</strong> ${escapeHtml(profile.software_license_key || "Not loaded")}</div>
+    <div><strong>Software License Key:</strong> ${escapeHtml(profile.software_license_key || currentAccountData?.license_key || "Auto-assignment pending")}</div>
   `;
 }
 
@@ -360,7 +385,6 @@ async function loadAccountData(user) {
     const result = await response.json();
 
     if (!response.ok) {
-      console.warn("Extension/account data load failed:", result);
       currentAccountData = null;
       renderAccessState(null);
       renderExtensionControl(null, currentProfile);
@@ -381,7 +405,7 @@ async function loadAccountData(user) {
     setStatus("accountStatusBilling", "Account data loaded.");
     setStatus("extensionAccessStatus", "Extension state loaded.");
 
-    const softwareLicenseKey = result?.license_key || "Not assigned";
+    const softwareLicenseKey = result?.license_key || "Auto-assignment pending";
     setTextByIdForAll("licenseKeyDisplay", softwareLicenseKey);
     setTextByIdForAll("licenseKeyDisplayBilling", softwareLicenseKey);
 
@@ -402,6 +426,7 @@ async function loadAccountData(user) {
     const softwareLicenseInput = document.getElementById("software_license_key");
     if (softwareLicenseInput) {
       softwareLicenseInput.value = result?.license_key || "";
+      softwareLicenseInput.placeholder = result?.license_key ? "" : "Auto-assignment pending";
     }
 
     if (currentProfile) {
@@ -518,7 +543,7 @@ function buildSetupStepsText() {
     "",
     "Steps:",
     "1. Install or reload the Elevate Automation extension.",
-    "2. Refresh extension access in the popup.",
+    "2. Refresh extension access in the dashboard.",
     "3. Open your saved inventory URL.",
     "4. Run scan and queue a vehicle.",
     "5. Open Facebook Marketplace vehicle creation.",
