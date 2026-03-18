@@ -1,5 +1,3 @@
-// /api/create-billing-portal-session.js
-
 import Stripe from "stripe";
 import { createClient } from "@supabase/supabase-js";
 
