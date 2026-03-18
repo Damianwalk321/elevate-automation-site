@@ -15,6 +15,18 @@ const SITE_URL =
   process.env.SITE_URL ||
   "http://localhost:3000";
 
+// 🔥 CONFIG — CHANGE THESE
+const FOUNDER_PRICE_ID = process.env.STRIPE_FOUNDER_PRICE_ID;
+const STARTER_PRICE_ID = process.env.STRIPE_STARTER_PRICE_ID;
+
+// Founder cutoff (NO ONE gets founder after this)
+const FOUNDER_CUTOFF = new Date("2026-04-02T00:00:00Z");
+
+// Everyone billed on this exact date
+const FOUNDER_TRIAL_END = Math.floor(
+  new Date("2026-04-02T00:00:00Z").getTime() / 1000
+);
+
 function normalizePlanName(planType, accessType) {
   if (planType === "founder_starter") return "Founder Starter";
   if (planType === "founder_pro") return "Founder Pro";
@@ -34,7 +46,6 @@ export default async function handler(req, res) {
 
   try {
     const {
-      priceId,
       email,
       referralCode = "",
       planType = "",
@@ -42,19 +53,28 @@ export default async function handler(req, res) {
       accessType = ""
     } = req.body || {};
 
-    if (!priceId) {
-      return res.status(400).json({ error: "Missing priceId" });
-    }
-
     if (!email) {
       return res.status(400).json({ error: "Missing email" });
     }
 
     const normalizedEmail = String(email).trim().toLowerCase();
 
+    // 🔥 DETERMINE IF FOUNDER IS STILL OPEN
+    const now = new Date();
+    const founderWindowOpen = now < FOUNDER_CUTOFF;
+
+    // 🔥 FORCE PRICE (NO FRONTEND CONTROL)
+    const selectedPriceId = founderWindowOpen
+      ? FOUNDER_PRICE_ID
+      : STARTER_PRICE_ID;
+
+    // 🔥 FORCE ACCESS TYPE
+    const finalAccessType = founderWindowOpen ? "founder" : "standard";
+
+    // 🔍 CHECK EXISTING USER
     const { data: existingUser, error: userLookupError } = await supabase
       .from("users")
-      .select("id, email, stripe_customer_id, referral_code")
+      .select("id, email, stripe_customer_id")
       .eq("email", normalizedEmail)
       .maybeSingle();
 
@@ -91,13 +111,29 @@ export default async function handler(req, res) {
     const successUrl = `${SITE_URL}/dashboard.html?checkout=success`;
     const cancelUrl = `${SITE_URL}/index.html?checkout=cancelled`;
 
+    // 🔥 SUBSCRIPTION CONFIG
+    let subscriptionData = {
+      metadata: {
+        email: normalizedEmail,
+        referral_code: referralCode || "",
+        plan_type: planType || "",
+        user_type: userType || "",
+        access_type: finalAccessType
+      }
+    };
+
+    // 🔥 APPLY FOUNDER TRIAL (ONLY BEFORE APRIL 2)
+    if (founderWindowOpen) {
+      subscriptionData.trial_end = FOUNDER_TRIAL_END;
+    }
+
     const session = await stripe.checkout.sessions.create({
       mode: "subscription",
       customer: customerId,
       customer_email: customerId ? undefined : normalizedEmail,
       line_items: [
         {
-          price: priceId,
+          price: selectedPriceId,
           quantity: 1
         }
       ],
@@ -110,20 +146,15 @@ export default async function handler(req, res) {
         referral_code: referralCode || "",
         plan_type: planType || "",
         user_type: userType || "",
-        access_type: accessType || ""
+        access_type: finalAccessType
       },
-      subscription_data: {
-        metadata: {
-          email: normalizedEmail,
-          referral_code: referralCode || "",
-          plan_type: planType || "",
-          user_type: userType || "",
-          access_type: accessType || ""
-        }
-      },
+      subscription_data: subscriptionData,
       custom_text: {
         submit: {
-          message: `You are subscribing to ${normalizePlanName(planType, accessType)}.`
+          message: `You are subscribing to ${normalizePlanName(
+            planType,
+            finalAccessType
+          )}.`
         }
       }
     });
