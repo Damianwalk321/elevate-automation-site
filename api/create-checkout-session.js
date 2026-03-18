@@ -15,16 +15,13 @@ const SITE_URL =
   process.env.SITE_URL ||
   "http://localhost:3000";
 
-// 🔥 CONFIG — CHANGE THESE
 const FOUNDER_PRICE_ID = process.env.STRIPE_FOUNDER_PRICE_ID;
 const STARTER_PRICE_ID = process.env.STRIPE_STARTER_PRICE_ID;
 
-// Founder cutoff (NO ONE gets founder after this)
-const FOUNDER_CUTOFF = new Date("2026-04-02T00:00:00Z");
-
-// Everyone billed on this exact date
+// Use Alberta-friendly midnight switch if you want founder open through Apr 1 local time
+const FOUNDER_CUTOFF = new Date("2026-04-02T06:00:00Z");
 const FOUNDER_TRIAL_END = Math.floor(
-  new Date("2026-04-02T00:00:00Z").getTime() / 1000
+  new Date("2026-04-02T06:00:00Z").getTime() / 1000
 );
 
 function normalizePlanName(planType, accessType) {
@@ -57,21 +54,24 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: "Missing email" });
     }
 
-    const normalizedEmail = String(email).trim().toLowerCase();
+    if (!FOUNDER_PRICE_ID) {
+      return res.status(500).json({ error: "Missing STRIPE_FOUNDER_PRICE_ID env variable" });
+    }
 
-    // 🔥 DETERMINE IF FOUNDER IS STILL OPEN
+    if (!STARTER_PRICE_ID) {
+      return res.status(500).json({ error: "Missing STRIPE_STARTER_PRICE_ID env variable" });
+    }
+
+    const normalizedEmail = String(email).trim().toLowerCase();
     const now = new Date();
     const founderWindowOpen = now < FOUNDER_CUTOFF;
 
-    // 🔥 FORCE PRICE (NO FRONTEND CONTROL)
     const selectedPriceId = founderWindowOpen
       ? FOUNDER_PRICE_ID
       : STARTER_PRICE_ID;
 
-    // 🔥 FORCE ACCESS TYPE
     const finalAccessType = founderWindowOpen ? "founder" : "standard";
 
-    // 🔍 CHECK EXISTING USER
     const { data: existingUser, error: userLookupError } = await supabase
       .from("users")
       .select("id, email, stripe_customer_id")
@@ -111,8 +111,7 @@ export default async function handler(req, res) {
     const successUrl = `${SITE_URL}/dashboard.html?checkout=success`;
     const cancelUrl = `${SITE_URL}/index.html?checkout=cancelled`;
 
-    // 🔥 SUBSCRIPTION CONFIG
-    let subscriptionData = {
+    const subscriptionData = {
       metadata: {
         email: normalizedEmail,
         referral_code: referralCode || "",
@@ -122,7 +121,6 @@ export default async function handler(req, res) {
       }
     };
 
-    // 🔥 APPLY FOUNDER TRIAL (ONLY BEFORE APRIL 2)
     if (founderWindowOpen) {
       subscriptionData.trial_end = FOUNDER_TRIAL_END;
     }
@@ -151,10 +149,7 @@ export default async function handler(req, res) {
       subscription_data: subscriptionData,
       custom_text: {
         submit: {
-          message: `You are subscribing to ${normalizePlanName(
-            planType,
-            finalAccessType
-          )}.`
+          message: `You are subscribing to ${normalizePlanName(planType, finalAccessType)}.`
         }
       }
     });
