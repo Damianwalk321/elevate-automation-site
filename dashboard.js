@@ -1,12 +1,10 @@
 // dashboard.js
-// Full replacement
-// Multi-tenant SaaS bridge version
-// Supports both:
-// 1) legacy flat /api/extension-state payloads
-// 2) new nested { ok, session: {...} } payloads
 
 const SUPABASE_URL = "https://teixblbxkoershwgqpym.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJodHRwczovL3RlaXhibGJ4a29lcnNod2dxcHltLnN1cGFiYXNlLmNvL2F1dGgvdjEiLCJzdWIiOiJhbm9uLWtleSIsImF1ZCI6ImF1dGhlbnRpY2F0ZWQiLCJleHAiOjIwODg2NjEzMDMsImlhdCI6MTc3MzA4NTMwMywiaXNzIjoiaHR0cHM6Ly90ZWl4YmxieGtvZXJzaHdncXB5bS5zdXBhYmFzZS5jby9hdXRoL3YxIiwianRpIjoiOWRmNzE2NmEtZjcxMC00MzQ0LTkwOWEtZjIyM2ZkZjI5NzY2Iiwicm9sZSI6ImFub24ifQ.5kX1L0r3gSMX1mN1V7zI2XHevNdf2gZl5ZLMbYh2v0Y";
+
+// Change this if your extension zip lives elsewhere.
+const EXTENSION_DOWNLOAD_URL = "/downloads/elevate-automation-extension.zip";
 
 let supabaseClient = null;
 let currentUser = null;
@@ -20,16 +18,6 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     if (!window.supabase || !window.supabase.createClient) {
       setBootStatus("Supabase library missing.");
-      return;
-    }
-
-    if (!SUPABASE_URL) {
-      setBootStatus("Missing Supabase URL.");
-      return;
-    }
-
-    if (!SUPABASE_ANON_KEY) {
-      setBootStatus("Missing Supabase anon key.");
       return;
     }
 
@@ -56,7 +44,6 @@ document.addEventListener("DOMContentLoaded", async () => {
     currentUser = session.user;
 
     renderUserBasics(currentUser);
-
     await syncUserIfNeeded(currentUser);
     await loadProfile(currentUser.id);
     await loadAccountData(currentUser);
@@ -81,10 +68,8 @@ function bindDashboardUI() {
   const saveBtn = document.getElementById("saveProfileBtn");
   if (saveBtn) {
     saveBtn.type = "button";
-    saveBtn.removeAttribute("onclick");
     saveBtn.addEventListener("click", async (event) => {
       event.preventDefault();
-      event.stopPropagation();
       await onSaveProfilePressed();
     });
   }
@@ -115,6 +100,14 @@ function bindDashboardUI() {
     });
   }
 
+  const downloadExtensionBtn = document.getElementById("downloadExtensionBtn");
+  if (downloadExtensionBtn) {
+    downloadExtensionBtn.addEventListener("click", () => {
+      window.open(EXTENSION_DOWNLOAD_URL, "_blank");
+      setStatus("extensionActionStatus", "Opening extension download...");
+    });
+  }
+
   const openMarketplaceBtn = document.getElementById("openMarketplaceBtn");
   if (openMarketplaceBtn) {
     openMarketplaceBtn.addEventListener("click", () => {
@@ -130,10 +123,12 @@ function bindDashboardUI() {
         currentProfile?.inventory_url ||
         currentNormalizedSession?.dealership?.inventory_url ||
         "";
+
       if (!inventoryUrl) {
         setStatus("extensionActionStatus", "No inventory URL saved yet.");
         return;
       }
+
       window.open(normalizeUrlInput(inventoryUrl), "_blank");
       setStatus("extensionActionStatus", "Opening inventory URL...");
     });
@@ -149,6 +144,60 @@ function bindDashboardUI() {
       } catch (error) {
         console.error("Clipboard error:", error);
         setStatus("extensionActionStatus", "Could not copy setup steps.");
+      }
+    });
+  }
+
+  const openBillingPortalBtn = document.getElementById("openBillingPortalBtn");
+  if (openBillingPortalBtn) {
+    openBillingPortalBtn.addEventListener("click", async () => {
+      try {
+        if (!currentUser?.email) {
+          setStatus("accountStatusBilling", "No logged-in user email found.");
+          return;
+        }
+
+        setStatus("accountStatusBilling", "Opening billing portal...");
+
+        const response = await fetch("/api/create-billing-portal-session", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            email: currentUser.email
+          })
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          throw new Error(data.error || "Could not open billing portal.");
+        }
+
+        if (!data.url) {
+          throw new Error("Billing portal URL missing.");
+        }
+
+        window.location.href = data.url;
+      } catch (error) {
+        console.error("Billing portal error:", error);
+        setStatus("accountStatusBilling", error.message || "Could not open billing portal.");
+      }
+    });
+  }
+
+  const refreshBillingBtn = document.getElementById("refreshBillingBtn");
+  if (refreshBillingBtn) {
+    refreshBillingBtn.addEventListener("click", async () => {
+      try {
+        if (!currentUser) return;
+        setStatus("accountStatusBilling", "Refreshing billing data...");
+        await loadAccountData(currentUser, true);
+        setStatus("accountStatusBilling", "Billing data refreshed.");
+      } catch (error) {
+        console.error("refreshBillingBtn error:", error);
+        setStatus("accountStatusBilling", "Could not refresh billing data.");
       }
     });
   }
@@ -218,9 +267,7 @@ function showSection(sectionId) {
   };
 
   const pageTitle = document.getElementById("dashboardPageTitle");
-  if (pageTitle) {
-    pageTitle.textContent = titleMap[sectionId] || "Dashboard";
-  }
+  if (pageTitle) pageTitle.textContent = titleMap[sectionId] || "Dashboard";
 }
 
 function renderUserBasics(user) {
@@ -248,6 +295,7 @@ async function loadProfile(userId) {
       currentProfile = null;
       renderProfileSummary(null);
       updateSetupStates(null, currentNormalizedSession);
+      populateComplianceSummary(null);
       setStatus("profileStatus", "No profile loaded yet.");
       return;
     }
@@ -270,6 +318,7 @@ async function loadProfile(userId) {
     setFieldValue("software_license_key", result.data.software_license_key || "");
 
     renderProfileSummary(result.data);
+    populateComplianceSummary(result.data);
     updateSetupStates(currentProfile, currentNormalizedSession);
     setStatus("profileStatus", "Profile loaded.");
   } catch (error) {
@@ -320,6 +369,7 @@ async function submitProfileSave(user) {
     }
 
     renderProfileSummary(currentProfile);
+    populateComplianceSummary(currentProfile);
     updateSetupStates(currentProfile, currentNormalizedSession);
     setStatus("profileStatus", "Profile saved successfully.");
   } catch (error) {
@@ -378,11 +428,24 @@ function renderProfileSummary(profile) {
   `;
 }
 
+function populateComplianceSummary(profile) {
+  setTextByIdForAll("complianceProvinceDisplay", profile?.province || "Not set");
+  setTextByIdForAll("complianceModeDisplay", profile?.compliance_mode || profile?.province || "Not set");
+  setTextByIdForAll("complianceLicenseDisplay", profile?.license_number || "Not set");
+
+  const contactBits = [
+    profile?.dealer_phone || null,
+    profile?.dealer_email || null
+  ].filter(Boolean);
+
+  setTextByIdForAll("complianceDealerContactDisplay", contactBits.length ? contactBits.join(" • ") : "Not set");
+}
+
 async function loadAccountData(user, forceFresh = false) {
   try {
     setStatus("accountStatus", "Loading account data...");
     setStatus("accountStatusBilling", "Loading account data...");
-    setStatus("extensionAccessStatus", "Loading extension state...");
+    setStatus("extensionActionStatus", "Loading extension state...");
 
     const url = new URL("/api/extension-state", window.location.origin);
     url.searchParams.set("email", user.email || "");
@@ -407,7 +470,7 @@ async function loadAccountData(user, forceFresh = false) {
       updateSetupStates(currentProfile, null);
       setStatus("accountStatus", "Could not load account data.");
       setStatus("accountStatusBilling", "Could not load account data.");
-      setStatus("extensionAccessStatus", "Could not load extension state.");
+      setStatus("extensionActionStatus", "Could not load extension state.");
       return;
     }
 
@@ -420,7 +483,7 @@ async function loadAccountData(user, forceFresh = false) {
 
     setStatus("accountStatus", "Account data loaded.");
     setStatus("accountStatusBilling", "Account data loaded.");
-    setStatus("extensionAccessStatus", "Extension state loaded.");
+    setStatus("extensionActionStatus", "Extension state loaded.");
 
     const licenseKey = currentNormalizedSession?.subscription?.license_key || "Auto-assignment pending";
     setTextByIdForAll("licenseKeyDisplay", licenseKey);
@@ -467,8 +530,82 @@ async function loadAccountData(user, forceFresh = false) {
     updateSetupStates(currentProfile, null);
     setStatus("accountStatus", "Failed to load account data.");
     setStatus("accountStatusBilling", "Failed to load account data.");
-    setStatus("extensionAccessStatus", "Failed to load extension state.");
+    setStatus("extensionActionStatus", "Failed to load extension state.");
   }
+}
+
+function normalizeExtensionStateResponse(result, user, profile) {
+  const raw = result?.session ? result.session : result;
+
+  const subscription = raw?.subscription || {};
+  const dealership = raw?.dealership || {};
+  const scannerConfig = raw?.scanner_config || {};
+  const profileData = raw?.profile || {};
+
+  const normalizedSubscription = {
+    active: Boolean(
+      subscription.active ||
+      subscription.status === "active" ||
+      subscription.status === "trialing"
+    ),
+    status: clean(subscription.status || (subscription.active ? "active" : "inactive")) || "inactive",
+    plan: clean(subscription.plan || subscription.plan_name || "Founder Beta") || "Founder Beta",
+    license_key: clean(subscription.license_key || subscription.software_license_key || ""),
+    posting_limit: Number(subscription.posting_limit || subscription.daily_post_limit || 0),
+    posts_today: Number(subscription.posts_today || 0),
+    posts_remaining: Number(
+      subscription.posts_remaining ??
+      Math.max(Number(subscription.posting_limit || 0) - Number(subscription.posts_today || 0), 0)
+    )
+  };
+
+  return {
+    user: {
+      id: user?.id || raw?.user?.id || "",
+      email: user?.email || raw?.user?.email || ""
+    },
+    subscription: normalizedSubscription,
+    dealership: {
+      website: clean(dealership.website || profile?.dealer_website || ""),
+      inventory_url: clean(dealership.inventory_url || profile?.inventory_url || ""),
+      province: clean(dealership.province || profile?.province || ""),
+      scanner_type: clean(dealership.scanner_type || "")
+    },
+    scanner_config: {
+      scanner_type: clean(scannerConfig.scanner_type || profile?.scanner_type || "")
+    },
+    profile: {
+      listing_location: clean(profileData.listing_location || profile?.listing_location || ""),
+      compliance_mode: clean(profileData.compliance_mode || profile?.compliance_mode || profile?.province || "")
+    }
+  };
+}
+
+function buildFallbackSessionFromLocalState() {
+  return {
+    subscription: {
+      active: false,
+      status: "inactive",
+      plan: "Founder Beta",
+      license_key: currentProfile?.software_license_key || "",
+      posting_limit: 0,
+      posts_today: 0,
+      posts_remaining: 0
+    },
+    dealership: {
+      website: currentProfile?.dealer_website || "",
+      inventory_url: currentProfile?.inventory_url || "",
+      province: currentProfile?.province || "",
+      scanner_type: currentProfile?.scanner_type || ""
+    },
+    scanner_config: {
+      scanner_type: currentProfile?.scanner_type || ""
+    },
+    profile: {
+      listing_location: currentProfile?.listing_location || "",
+      compliance_mode: currentProfile?.compliance_mode || currentProfile?.province || ""
+    }
+  };
 }
 
 function renderAccessState(session) {
@@ -541,37 +678,15 @@ function renderExtensionControl(session, profile) {
         ? "Limit Reached"
         : "Active Access";
 
-  setTextByIdForAll("extensionAccessBadge", accessText);
-  document.querySelectorAll("#extensionAccessBadge").forEach((el) => {
-    el.classList.remove("active", "inactive", "warn");
-    if (!session) el.classList.add("warn");
-    else if (!hasAccess) el.classList.add("inactive");
-    else if (remaining <= 0) el.classList.add("warn");
-    else el.classList.add("active");
-  });
+  setTextByIdForAll("extensionAccessState", accessText);
 }
 
 function updateSetupStates(profile, session) {
-  const websiteReady = Boolean(
-    profile?.dealer_website || session?.dealership?.website
-  );
-  const inventoryReady = Boolean(
-    profile?.inventory_url || session?.dealership?.inventory_url
-  );
-  const scannerReady = Boolean(
-    profile?.scanner_type ||
-    session?.scanner_config?.scanner_type ||
-    session?.dealership?.scanner_type
-  );
-  const listingReady = Boolean(
-    profile?.listing_location || session?.profile?.listing_location
-  );
-  const complianceReady = Boolean(
-    profile?.compliance_mode ||
-    profile?.province ||
-    session?.profile?.compliance_mode ||
-    session?.dealership?.province
-  );
+  const websiteReady = Boolean(profile?.dealer_website || session?.dealership?.website);
+  const inventoryReady = Boolean(profile?.inventory_url || session?.dealership?.inventory_url);
+  const scannerReady = Boolean(profile?.scanner_type || session?.scanner_config?.scanner_type || session?.dealership?.scanner_type);
+  const listingReady = Boolean(profile?.listing_location || session?.profile?.listing_location);
+  const complianceReady = Boolean(profile?.compliance_mode || profile?.province || session?.profile?.compliance_mode || session?.dealership?.province);
   const accessReady = Boolean(session?.subscription?.active);
 
   setSetupState("setupDealerWebsite", websiteReady);
@@ -592,7 +707,6 @@ function updateSetupStates(profile, session) {
 function setSetupState(id, isGood) {
   const el = document.getElementById(id);
   if (!el) return;
-
   el.textContent = isGood ? "Ready" : "Needs Setup";
   el.classList.remove("good", "warn");
   el.classList.add(isGood ? "good" : "warn");
@@ -710,192 +824,3 @@ function escapeHtml(str) {
 function clean(value) {
   return String(value || "").replace(/\s+/g, " ").trim();
 }
-
-function normalizeEmail(value) {
-  return clean(value).toLowerCase();
-}
-
-function firstNonEmpty(...values) {
-  for (const value of values) {
-    if (typeof value === "string" && value.trim()) return value.trim();
-    if (value !== undefined && value !== null && typeof value !== "string") return value;
-  }
-  return "";
-}
-
-function normalizeBoolean(value) {
-  return value === true || value === "true" || value === 1 || value === "1";
-}
-
-function activeFromStatus(value) {
-  const status = clean(value).toLowerCase();
-  return ["active", "trialing", "paid", "founder", "beta"].includes(status);
-}
-
-function normalizeExtensionStateResponse(raw, user, profile) {
-  if (!raw) return null;
-
-  // New nested format
-  if (raw.session && typeof raw.session === "object") {
-    const session = raw.session;
-
-    return {
-      user: {
-        id: clean(session?.user?.id || user?.id || ""),
-        email: normalizeEmail(session?.user?.email || user?.email || ""),
-        full_name: clean(session?.user?.full_name || user?.user_metadata?.full_name || ""),
-        phone: clean(session?.user?.phone || "")
-      },
-      organization: {
-        id: clean(session?.organization?.id || ""),
-        name: clean(session?.organization?.name || ""),
-        membership_role: clean(session?.organization?.membership_role || "owner")
-      },
-      dealership: {
-        id: clean(session?.dealership?.id || ""),
-        organization_id: clean(session?.dealership?.organization_id || ""),
-        name: clean(session?.dealership?.name || profile?.dealership || ""),
-        website: clean(session?.dealership?.website || profile?.dealer_website || ""),
-        inventory_url: clean(session?.dealership?.inventory_url || profile?.inventory_url || ""),
-        province: clean(session?.dealership?.province || profile?.province || ""),
-        city: clean(session?.dealership?.city || profile?.city || ""),
-        timezone: clean(session?.dealership?.timezone || "America/Edmonton"),
-        scanner_type: clean(session?.dealership?.scanner_type || profile?.scanner_type || "generic"),
-        active: session?.dealership?.active !== false
-      },
-      profile: {
-        id: clean(session?.profile?.id || ""),
-        email: normalizeEmail(session?.profile?.email || user?.email || ""),
-        full_name: clean(session?.profile?.full_name || profile?.full_name || ""),
-        phone: clean(session?.profile?.phone || profile?.phone || ""),
-        license_number: clean(session?.profile?.license_number || profile?.license_number || ""),
-        listing_location: clean(session?.profile?.listing_location || profile?.listing_location || ""),
-        dealer_phone: clean(session?.profile?.dealer_phone || profile?.dealer_phone || ""),
-        dealer_email: clean(session?.profile?.dealer_email || profile?.dealer_email || user?.email || ""),
-        compliance_mode: clean(session?.profile?.compliance_mode || profile?.compliance_mode || profile?.province || ""),
-        city: clean(session?.profile?.city || profile?.city || ""),
-        province: clean(session?.profile?.province || profile?.province || "")
-      },
-      subscription: {
-        id: clean(session?.subscription?.id || ""),
-        plan: clean(session?.subscription?.plan || "Founder Beta"),
-        status: clean(session?.subscription?.status || "inactive").toLowerCase(),
-        active: Boolean(session?.subscription?.active),
-        posting_limit: Number(session?.subscription?.posting_limit || 0),
-        posts_today: Number(session?.subscription?.posts_today || 0),
-        posts_remaining: Number(session?.subscription?.posts_remaining || 0),
-        license_key: clean(session?.subscription?.license_key || "")
-      },
-      scanner_config: {
-        id: clean(session?.scanner_config?.id || ""),
-        scanner_type: clean(
-          session?.scanner_config?.scanner_type ||
-          session?.dealership?.scanner_type ||
-          profile?.scanner_type ||
-          "generic"
-        ),
-        card_selectors: Array.isArray(session?.scanner_config?.card_selectors) ? session.scanner_config.card_selectors : [],
-        title_selectors: Array.isArray(session?.scanner_config?.title_selectors) ? session.scanner_config.title_selectors : [],
-        price_selectors: Array.isArray(session?.scanner_config?.price_selectors) ? session.scanner_config.price_selectors : [],
-        mileage_selectors: Array.isArray(session?.scanner_config?.mileage_selectors) ? session.scanner_config.mileage_selectors : [],
-        image_selectors: Array.isArray(session?.scanner_config?.image_selectors) ? session.scanner_config.image_selectors : [],
-        link_selectors: Array.isArray(session?.scanner_config?.link_selectors) ? session.scanner_config.link_selectors : [],
-        stock_selectors: Array.isArray(session?.scanner_config?.stock_selectors) ? session.scanner_config.stock_selectors : [],
-        vin_selectors: Array.isArray(session?.scanner_config?.vin_selectors) ? session.scanner_config.vin_selectors : [],
-        field_map: session?.scanner_config?.field_map || {},
-        pagination_rules: session?.scanner_config?.pagination_rules || {}
-      },
-      meta: session?.meta || raw?.meta || {}
-    };
-  }
-
-  // Legacy flat format bridge
-  const active =
-    normalizeBoolean(raw?.access) ||
-    normalizeBoolean(raw?.active) ||
-    activeFromStatus(raw?.status);
-
-  const postingLimit = Number(raw?.posting_limit || 0);
-  const postsToday = Number(raw?.posts_today || 0);
-  const postsRemaining =
-    raw?.posts_remaining !== undefined
-      ? Number(raw.posts_remaining || 0)
-      : Math.max(postingLimit - postsToday, 0);
-
-  return {
-    user: {
-      id: clean(raw?.user_id || user?.id || ""),
-      email: normalizeEmail(raw?.email || user?.email || ""),
-      full_name: clean(profile?.full_name || ""),
-      phone: clean(profile?.phone || "")
-    },
-    organization: {
-      id: clean(raw?.organization_id || `solo-${user?.id || ""}`),
-      name: clean(profile?.dealership || user?.email || "Solo Account"),
-      membership_role: "owner"
-    },
-    dealership: {
-      id: clean(raw?.dealership_id || `dealer-${user?.id || ""}`),
-      organization_id: clean(raw?.organization_id || `solo-${user?.id || ""}`),
-      name: clean(profile?.dealership || "Primary Dealership"),
-      website: clean(raw?.dealer_site || profile?.dealer_website || ""),
-      inventory_url: clean(raw?.inventory_url || profile?.inventory_url || ""),
-      province: clean(profile?.province || ""),
-      city: clean(profile?.city || ""),
-      timezone: "America/Edmonton",
-      scanner_type: clean(raw?.scanner_type || profile?.scanner_type || "generic"),
-      active: true
-    },
-    profile: {
-      id: clean(profile?.id || ""),
-      email: normalizeEmail(raw?.email || user?.email || ""),
-      full_name: clean(profile?.full_name || ""),
-      phone: clean(profile?.phone || ""),
-      license_number: clean(profile?.license_number || ""),
-      listing_location: clean(profile?.listing_location || ""),
-      dealer_phone: clean(profile?.dealer_phone || ""),
-      dealer_email: clean(profile?.dealer_email || user?.email || ""),
-      compliance_mode: clean(profile?.compliance_mode || profile?.province || ""),
-      city: clean(profile?.city || ""),
-      province: clean(profile?.province || "")
-    },
-    subscription: {
-      id: clean(raw?.subscription_id || ""),
-      plan: clean(raw?.plan || raw?.plan_name || "Founder Beta"),
-      status: active ? "active" : clean(raw?.status || "inactive").toLowerCase(),
-      active,
-      posting_limit: postingLimit,
-      posts_today: postsToday,
-      posts_remaining: postsRemaining,
-      license_key: clean(raw?.license_key || "")
-    },
-    scanner_config: {
-      id: "",
-      scanner_type: clean(raw?.scanner_type || profile?.scanner_type || "generic"),
-      card_selectors: [],
-      title_selectors: [],
-      price_selectors: [],
-      mileage_selectors: [],
-      image_selectors: [],
-      link_selectors: [],
-      stock_selectors: [],
-      vin_selectors: [],
-      field_map: {},
-      pagination_rules: {}
-    },
-    meta: {
-      mode: "legacy_bridge"
-    }
-  };
-}
-
-function buildFallbackSessionFromLocalState() {
-  return normalizeExtensionStateResponse(
-    currentAccountData || {},
-    currentUser,
-    currentProfile
-  );
-}
-
-window.showSection = showSection;
-window.signOutUser = signOutUser;
