@@ -47,6 +47,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     await syncUserIfNeeded(currentUser);
     await loadProfile(currentUser.id);
     await loadAccountData(currentUser);
+    await pushExtensionProfileSync();
 
     showSection("overview");
     setBootStatus("");
@@ -194,6 +195,7 @@ function bindDashboardUI() {
         if (!currentUser) return;
         setStatus("accountStatusBilling", "Refreshing billing data...");
         await loadAccountData(currentUser, true);
+        await pushExtensionProfileSync();
         setStatus("accountStatusBilling", "Billing data refreshed.");
       } catch (error) {
         console.error("refreshBillingBtn error:", error);
@@ -230,10 +232,18 @@ async function pushExtensionProfileSync() {
     if (!currentUser) return;
 
     const normalized = currentNormalizedSession || buildFallbackSessionFromLocalState();
+    const profileSnapshot = buildExtensionProfileSnapshot(normalized, currentProfile, currentUser);
+
+    persistProfileSnapshots(profileSnapshot, normalized);
 
     window.postMessage({
       type: "ELEVATE_PROFILE_SYNC",
       payload: normalized
+    }, "*");
+
+    window.postMessage({
+      type: "ELEVATE_PROFILE_SNAPSHOT",
+      payload: profileSnapshot
     }, "*");
 
     setStatus("extensionActionStatus", "Dealer profile sync pushed to extension.");
@@ -296,6 +306,7 @@ async function loadProfile(userId) {
       renderProfileSummary(null);
       updateSetupStates(null, currentNormalizedSession);
       populateComplianceSummary(null);
+      persistProfileSnapshots(buildExtensionProfileSnapshot(currentNormalizedSession, null, currentUser), currentNormalizedSession);
       setStatus("profileStatus", "No profile loaded yet.");
       return;
     }
@@ -320,6 +331,7 @@ async function loadProfile(userId) {
     renderProfileSummary(result.data);
     populateComplianceSummary(result.data);
     updateSetupStates(currentProfile, currentNormalizedSession);
+    persistProfileSnapshots(buildExtensionProfileSnapshot(currentNormalizedSession, currentProfile, currentUser), currentNormalizedSession);
     setStatus("profileStatus", "Profile loaded.");
   } catch (error) {
     console.error("loadProfile error:", error);
@@ -371,6 +383,7 @@ async function submitProfileSave(user) {
     renderProfileSummary(currentProfile);
     populateComplianceSummary(currentProfile);
     updateSetupStates(currentProfile, currentNormalizedSession);
+    persistProfileSnapshots(buildExtensionProfileSnapshot(currentNormalizedSession, currentProfile, currentUser), currentNormalizedSession);
     setStatus("profileStatus", "Profile saved successfully.");
   } catch (error) {
     console.error("submitProfileSave error:", error);
@@ -468,6 +481,7 @@ async function loadAccountData(user, forceFresh = false) {
       renderAccessState(null);
       renderExtensionControl(null, currentProfile);
       updateSetupStates(currentProfile, null);
+      persistProfileSnapshots(buildExtensionProfileSnapshot(null, currentProfile, currentUser), null);
       setStatus("accountStatus", "Could not load account data.");
       setStatus("accountStatusBilling", "Could not load account data.");
       setStatus("extensionActionStatus", "Could not load extension state.");
@@ -480,6 +494,7 @@ async function loadAccountData(user, forceFresh = false) {
     renderAccessState(currentNormalizedSession);
     renderExtensionControl(currentNormalizedSession, currentProfile);
     updateSetupStates(currentProfile, currentNormalizedSession);
+    persistProfileSnapshots(buildExtensionProfileSnapshot(currentNormalizedSession, currentProfile, currentUser), currentNormalizedSession);
 
     setStatus("accountStatus", "Account data loaded.");
     setStatus("accountStatusBilling", "Account data loaded.");
@@ -528,6 +543,7 @@ async function loadAccountData(user, forceFresh = false) {
     renderAccessState(null);
     renderExtensionControl(null, currentProfile);
     updateSetupStates(currentProfile, null);
+    persistProfileSnapshots(buildExtensionProfileSnapshot(null, currentProfile, currentUser), null);
     setStatus("accountStatus", "Failed to load account data.");
     setStatus("accountStatusBilling", "Failed to load account data.");
     setStatus("extensionActionStatus", "Failed to load extension state.");
@@ -541,6 +557,28 @@ function normalizeExtensionStateResponse(result, user, profile) {
   const dealership = raw?.dealership || {};
   const scannerConfig = raw?.scanner_config || {};
   const profileData = raw?.profile || {};
+  const rawUser = raw?.user || {};
+
+  const mergedProfile = {
+    ...(profile || {}),
+    ...(profileData || {})
+  };
+
+  const fullName = clean(
+    mergedProfile.full_name ||
+    mergedProfile.salesperson_name ||
+    rawUser.full_name ||
+    rawUser.name ||
+    ""
+  );
+
+  const dealerName = clean(
+    mergedProfile.dealership ||
+    mergedProfile.dealer_name ||
+    dealership.name ||
+    dealership.dealer_name ||
+    ""
+  );
 
   const normalizedSubscription = {
     active: Boolean(
@@ -561,28 +599,55 @@ function normalizeExtensionStateResponse(result, user, profile) {
 
   return {
     user: {
-      id: user?.id || raw?.user?.id || "",
-      email: user?.email || raw?.user?.email || ""
+      id: user?.id || rawUser?.id || "",
+      email: user?.email || rawUser?.email || "",
+      full_name: fullName || ""
     },
     subscription: normalizedSubscription,
     dealership: {
-      website: clean(dealership.website || profile?.dealer_website || ""),
-      inventory_url: clean(dealership.inventory_url || profile?.inventory_url || ""),
-      province: clean(dealership.province || profile?.province || ""),
-      scanner_type: clean(dealership.scanner_type || "")
+      name: dealerName || "",
+      dealer_name: dealerName || "",
+      website: clean(dealership.website || mergedProfile.dealer_website || ""),
+      inventory_url: clean(dealership.inventory_url || mergedProfile.inventory_url || ""),
+      province: clean(dealership.province || mergedProfile.province || ""),
+      scanner_type: clean(dealership.scanner_type || mergedProfile.scanner_type || ""),
+      phone: clean(dealership.phone || mergedProfile.dealer_phone || ""),
+      email: clean(dealership.email || mergedProfile.dealer_email || "")
     },
     scanner_config: {
-      scanner_type: clean(scannerConfig.scanner_type || profile?.scanner_type || "")
+      scanner_type: clean(scannerConfig.scanner_type || mergedProfile.scanner_type || "")
     },
     profile: {
-      listing_location: clean(profileData.listing_location || profile?.listing_location || ""),
-      compliance_mode: clean(profileData.compliance_mode || profile?.compliance_mode || profile?.province || "")
+      full_name: fullName || "",
+      salesperson_name: fullName || "",
+      dealer_name: dealerName || "",
+      dealership: dealerName || "",
+      phone: clean(mergedProfile.phone || ""),
+      dealer_phone: clean(mergedProfile.dealer_phone || dealership.phone || ""),
+      email: clean(user?.email || rawUser?.email || mergedProfile.email || ""),
+      dealer_email: clean(mergedProfile.dealer_email || dealership.email || ""),
+      city: clean(mergedProfile.city || ""),
+      province: clean(mergedProfile.province || dealership.province || ""),
+      listing_location: clean(profileData.listing_location || mergedProfile.listing_location || ""),
+      compliance_mode: clean(profileData.compliance_mode || mergedProfile.compliance_mode || mergedProfile.province || ""),
+      license_number: clean(mergedProfile.license_number || ""),
+      dealer_website: clean(mergedProfile.dealer_website || dealership.website || ""),
+      inventory_url: clean(mergedProfile.inventory_url || dealership.inventory_url || ""),
+      scanner_type: clean(mergedProfile.scanner_type || scannerConfig.scanner_type || dealership.scanner_type || "")
     }
   };
 }
 
 function buildFallbackSessionFromLocalState() {
+  const fullName = clean(currentProfile?.full_name || "");
+  const dealerName = clean(currentProfile?.dealership || currentProfile?.dealer_name || "");
+
   return {
+    user: {
+      id: currentUser?.id || "",
+      email: currentUser?.email || "",
+      full_name: fullName || ""
+    },
     subscription: {
       active: false,
       status: "inactive",
@@ -593,19 +658,97 @@ function buildFallbackSessionFromLocalState() {
       posts_remaining: 0
     },
     dealership: {
+      name: dealerName || "",
+      dealer_name: dealerName || "",
       website: currentProfile?.dealer_website || "",
       inventory_url: currentProfile?.inventory_url || "",
       province: currentProfile?.province || "",
-      scanner_type: currentProfile?.scanner_type || ""
+      scanner_type: currentProfile?.scanner_type || "",
+      phone: currentProfile?.dealer_phone || "",
+      email: currentProfile?.dealer_email || ""
     },
     scanner_config: {
       scanner_type: currentProfile?.scanner_type || ""
     },
     profile: {
+      full_name: fullName || "",
+      salesperson_name: fullName || "",
+      dealer_name: dealerName || "",
+      dealership: dealerName || "",
+      phone: currentProfile?.phone || "",
+      dealer_phone: currentProfile?.dealer_phone || "",
+      email: currentUser?.email || "",
+      dealer_email: currentProfile?.dealer_email || "",
+      city: currentProfile?.city || "",
+      province: currentProfile?.province || "",
       listing_location: currentProfile?.listing_location || "",
-      compliance_mode: currentProfile?.compliance_mode || currentProfile?.province || ""
+      compliance_mode: currentProfile?.compliance_mode || currentProfile?.province || "",
+      license_number: currentProfile?.license_number || "",
+      dealer_website: currentProfile?.dealer_website || "",
+      inventory_url: currentProfile?.inventory_url || "",
+      scanner_type: currentProfile?.scanner_type || ""
     }
   };
+}
+
+function buildExtensionProfileSnapshot(session, profile, user) {
+  const fallback = buildFallbackSessionFromLocalState();
+  const s = session || fallback || {};
+  const p = profile || currentProfile || {};
+
+  const fullName = clean(
+    s?.profile?.full_name ||
+    s?.profile?.salesperson_name ||
+    s?.user?.full_name ||
+    p?.full_name ||
+    ""
+  );
+
+  const dealerName = clean(
+    s?.profile?.dealer_name ||
+    s?.profile?.dealership ||
+    s?.dealership?.dealer_name ||
+    s?.dealership?.name ||
+    p?.dealership ||
+    p?.dealer_name ||
+    ""
+  );
+
+  return {
+    full_name: fullName || "",
+    salesperson_name: fullName || "",
+    dealer_name: dealerName || "",
+    dealership: dealerName || "",
+    phone: clean(s?.profile?.phone || p?.phone || ""),
+    email: clean(s?.profile?.email || user?.email || ""),
+    dealer_phone: clean(s?.profile?.dealer_phone || s?.dealership?.phone || p?.dealer_phone || ""),
+    dealer_email: clean(s?.profile?.dealer_email || s?.dealership?.email || p?.dealer_email || ""),
+    city: clean(s?.profile?.city || p?.city || ""),
+    province: clean(s?.profile?.province || s?.dealership?.province || p?.province || ""),
+    listing_location: clean(s?.profile?.listing_location || p?.listing_location || ""),
+    compliance_mode: clean(s?.profile?.compliance_mode || p?.compliance_mode || p?.province || ""),
+    license_number: clean(s?.profile?.license_number || p?.license_number || ""),
+    dealer_website: clean(s?.profile?.dealer_website || s?.dealership?.website || p?.dealer_website || ""),
+    inventory_url: clean(s?.profile?.inventory_url || s?.dealership?.inventory_url || p?.inventory_url || ""),
+    scanner_type: clean(s?.profile?.scanner_type || s?.scanner_config?.scanner_type || s?.dealership?.scanner_type || p?.scanner_type || ""),
+    software_license_key: clean(s?.subscription?.license_key || p?.software_license_key || "")
+  };
+}
+
+function persistProfileSnapshots(profileSnapshot, session) {
+  try {
+    const safeProfile = profileSnapshot || {};
+    const safeSession = session || buildFallbackSessionFromLocalState();
+
+    localStorage.setItem("ea_dashboard_profile_v1", JSON.stringify(safeProfile));
+    localStorage.setItem("elevate_profile_snapshot", JSON.stringify(safeProfile));
+    localStorage.setItem("ea_profile_snapshot", JSON.stringify(safeProfile));
+    localStorage.setItem("ea_user_profile", JSON.stringify(safeProfile));
+    localStorage.setItem("ea_account_profile", JSON.stringify(safeProfile));
+    localStorage.setItem("elevate_session_snapshot", JSON.stringify(safeSession));
+  } catch (error) {
+    console.warn("persistProfileSnapshots localStorage warning:", error);
+  }
 }
 
 function renderAccessState(session) {
