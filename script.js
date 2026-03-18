@@ -48,7 +48,6 @@ function showCheckoutMessage(message, isError = false) {
 
   el.textContent = message;
   el.classList.remove("hidden");
-
   el.style.color = isError ? "#ffb3b3" : "";
   el.style.borderColor = isError ? "rgba(255,92,92,0.22)" : "";
   el.style.background = isError ? "rgba(255,92,92,0.08)" : "";
@@ -186,9 +185,114 @@ function bindLogoutButton() {
   });
 }
 
+function showFormMessage(form, message, isError = false) {
+  if (!form) return;
+
+  let msgEl = form.querySelector(".dynamic-form-message");
+
+  if (!msgEl) {
+    msgEl = document.createElement("p");
+    msgEl.className = "dynamic-form-message";
+    msgEl.style.marginTop = "12px";
+    msgEl.style.fontSize = "14px";
+    msgEl.style.lineHeight = "1.5";
+    form.appendChild(msgEl);
+  }
+
+  msgEl.textContent = message;
+  msgEl.style.color = isError ? "#ffb3b3" : "#d4af37";
+}
+
+function serializeForm(form) {
+  const formData = new FormData(form);
+  const payload = {};
+
+  for (const [key, value] of formData.entries()) {
+    payload[key] = typeof value === "string" ? value.trim() : value;
+  }
+
+  return payload;
+}
+
+function bindWaitlistForms() {
+  const betaForm = document.getElementById("beta-waitlist-form");
+  const partnerForm = document.getElementById("partner-waitlist-form");
+
+  if (betaForm) {
+    betaForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+
+      const payload = serializeForm(betaForm);
+      const referralCode = loadStoredReferralCode();
+      if (referralCode) payload.referral_code = referralCode;
+      payload.list_type = "beta";
+
+      try {
+        showFormMessage(betaForm, "Submitting...");
+
+        const response = await fetch("/api/waitlist", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify(payload)
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          throw new Error(data.error || "Could not submit beta waitlist form.");
+        }
+
+        showFormMessage(betaForm, "Beta waitlist submitted.");
+        betaForm.reset();
+      } catch (error) {
+        console.error("Beta waitlist error:", error);
+        showFormMessage(betaForm, error.message || "Could not submit beta waitlist form.", true);
+      }
+    });
+  }
+
+  if (partnerForm) {
+    partnerForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+
+      const payload = serializeForm(partnerForm);
+      const referralCode = loadStoredReferralCode();
+      if (referralCode) payload.referral_code = referralCode;
+      payload.list_type = "partner";
+
+      try {
+        showFormMessage(partnerForm, "Submitting...");
+
+        const response = await fetch("/api/waitlist", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify(payload)
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          throw new Error(data.error || "Could not submit partner waitlist form.");
+        }
+
+        showFormMessage(partnerForm, "Partner waitlist submitted.");
+        partnerForm.reset();
+      } catch (error) {
+        console.error("Partner waitlist error:", error);
+        showFormMessage(partnerForm, error.message || "Could not submit partner waitlist form.", true);
+      }
+    });
+  }
+}
+
 document.addEventListener("DOMContentLoaded", async () => {
   loadStoredReferralCode();
   bindCheckoutButtons();
   bindLogoutButton();
+  bindWaitlistForms();
   await updateAuthAwareUI();
 });
