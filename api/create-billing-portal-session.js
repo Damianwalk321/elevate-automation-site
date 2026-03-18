@@ -29,7 +29,7 @@ export default async function handler(req, res) {
 
     const { data: user, error } = await supabase
       .from("users")
-      .select("stripe_customer_id")
+      .select("id, stripe_customer_id, stripe_subscription_id, subscription_status")
       .eq("email", normalizedEmail)
       .maybeSingle();
 
@@ -37,8 +37,14 @@ export default async function handler(req, res) {
       return res.status(500).json({ error: error.message });
     }
 
-    if (!user?.stripe_customer_id) {
-      return res.status(400).json({ error: "No Stripe customer found for this account." });
+    if (!user) {
+      return res.status(404).json({ error: "No user record found for this email." });
+    }
+
+    if (!user.stripe_customer_id) {
+      return res.status(400).json({
+        error: "Billing portal is not available yet. Start checkout first so a Stripe customer can be created for this account."
+      });
     }
 
     const session = await stripe.billingPortal.sessions.create({
