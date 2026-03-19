@@ -8,22 +8,26 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
   <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; }
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
 
     :root {
-      --bg: #0b0b0b;
+      --bg: #0a0a0a;
       --panel: #121212;
-      --panel-2: #171717;
-      --panel-3: #1c1c1c;
-      --line: rgba(212, 175, 55, 0.14);
-      --line-strong: rgba(212, 175, 55, 0.38);
+      --panel-2: #181818;
+      --panel-3: #1e1e1e;
+      --line: rgba(212, 175, 55, 0.15);
+      --line-strong: rgba(212, 175, 55, 0.35);
       --gold: #d4af37;
-      --gold-soft: #f4dea0;
+      --gold-soft: #f3ddb0;
       --text: #f5f5f5;
-      --muted: #b7b7b7;
-      --danger: #ffb3b3;
-      --good: #9df0a1;
-      --shadow: 0 10px 30px rgba(0,0,0,0.28);
+      --muted: #a9a9a9;
+      --danger: #ffb4b4;
+      --success: #9de8a8;
+      --shadow: 0 10px 30px rgba(0, 0, 0, 0.28);
     }
 
     body {
@@ -33,21 +37,24 @@
       min-height: 100vh;
     }
 
-    a { color: inherit; }
+    a {
+      color: inherit;
+      text-decoration: none;
+    }
 
-    .dashboard-shell {
+    .app-shell {
       display: flex;
       min-height: 100vh;
     }
 
     .sidebar {
-      width: 280px;
-      background: #111111;
+      width: 285px;
+      background: #101010;
       border-right: 1px solid var(--line);
       padding: 28px 20px;
       display: flex;
       flex-direction: column;
-      gap: 20px;
+      gap: 18px;
     }
 
     .brand-wrap {
@@ -56,42 +63,44 @@
     }
 
     .brand-eyebrow {
-      font-size: 12px;
-      letter-spacing: 1.8px;
-      text-transform: uppercase;
       color: var(--gold);
-      margin-bottom: 6px;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 1.6px;
+      text-transform: uppercase;
+      margin-bottom: 8px;
     }
 
     .brand-title {
-      font-size: 22px;
+      font-size: 23px;
       font-weight: 700;
       line-height: 1.15;
     }
 
     .brand-subtitle {
-      margin-top: 8px;
-      color: #a8a8a8;
+      margin-top: 10px;
+      color: var(--muted);
       font-size: 14px;
-      line-height: 1.5;
+      line-height: 1.55;
     }
 
-    .user-card {
+    .sidebar-card {
       background: #151515;
       border: 1px solid var(--line);
       border-radius: 14px;
-      padding: 16px;
+      padding: 15px;
     }
 
-    .user-card-label {
+    .sidebar-card-label {
       font-size: 12px;
+      color: var(--gold);
       text-transform: uppercase;
       letter-spacing: 1.2px;
-      color: var(--gold);
       margin-bottom: 8px;
+      font-weight: 700;
     }
 
-    .user-email {
+    .sidebar-card-value {
       font-size: 14px;
       color: var(--text);
       word-break: break-word;
@@ -106,25 +115,24 @@
     .nav-btn {
       width: 100%;
       text-align: left;
-      background: #161616;
-      color: #f3f3f3;
-      border: 1px solid rgba(212, 175, 55, 0.08);
       padding: 14px 16px;
       border-radius: 12px;
+      border: 1px solid rgba(255,255,255,0.06);
+      background: #151515;
+      color: #f3f3f3;
       cursor: pointer;
-      font-size: 15px;
+      font-size: 14px;
       transition: 0.2s ease;
     }
 
     .nav-btn:hover {
-      border-color: rgba(212, 175, 55, 0.45);
+      border-color: var(--line-strong);
       background: #1a1a1a;
     }
 
     .nav-btn.active {
-      background: linear-gradient(135deg, rgba(212, 175, 55, 0.18), rgba(212, 175, 55, 0.08));
-      border-color: rgba(212, 175, 55, 0.55);
-      color: #fff;
+      background: linear-gradient(135deg, rgba(212,175,55,0.18), rgba(212,175,55,0.06));
+      border-color: rgba(212,175,55,0.52);
     }
 
     .sidebar-actions {
@@ -134,54 +142,54 @@
       gap: 10px;
     }
 
-    .btn-secondary,
     .btn-primary,
+    .btn-secondary,
     .btn-danger,
-    .btn-linkish,
     .action-btn {
-      border: none;
-      border-radius: 12px;
       padding: 14px 16px;
+      border-radius: 12px;
       font-size: 14px;
       cursor: pointer;
       transition: 0.2s ease;
-      text-decoration: none;
     }
 
     .btn-primary {
       background: var(--gold);
       color: #0b0b0b;
+      border: none;
       font-weight: 700;
     }
 
-    .btn-primary:hover { opacity: 0.92; }
+    .btn-primary:hover {
+      opacity: 0.92;
+    }
 
     .btn-secondary,
-    .action-btn,
-    .btn-linkish {
-      background: #1c1c1c;
-      color: #f3f3f3;
+    .action-btn {
+      background: #1a1a1a;
+      color: #f2f2f2;
       border: 1px solid rgba(255,255,255,0.08);
     }
 
     .btn-secondary:hover,
-    .action-btn:hover,
-    .btn-linkish:hover {
-      background: #232323;
+    .action-btn:hover {
       border-color: var(--line-strong);
+      background: #212121;
     }
 
     .btn-danger {
       background: #221414;
       color: var(--danger);
-      border: 1px solid rgba(255, 99, 99, 0.18);
+      border: 1px solid rgba(255, 110, 110, 0.18);
     }
 
-    .btn-danger:hover { background: #2a1717; }
+    .btn-danger:hover {
+      background: #2a1717;
+    }
 
     .main {
       flex: 1;
-      padding: 34px;
+      padding: 32px;
       overflow-x: hidden;
     }
 
@@ -197,13 +205,21 @@
       line-height: 1.15;
     }
 
+    .subtext {
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.55;
+    }
+
     #bootStatus {
       color: var(--gold);
       font-size: 14px;
       min-height: 20px;
     }
 
-    .dashboard-section { display: none; }
+    .dashboard-section {
+      display: none;
+    }
 
     .grid-2,
     .grid-3,
@@ -234,16 +250,17 @@
     }
 
     .card p {
+      font-size: 14px;
       color: var(--muted);
       line-height: 1.6;
-      font-size: 14px;
     }
 
     .stat-label {
       font-size: 12px;
       text-transform: uppercase;
-      letter-spacing: 1.4px;
+      letter-spacing: 1.2px;
       color: var(--gold);
+      font-weight: 700;
       margin-bottom: 10px;
     }
 
@@ -256,15 +273,15 @@
 
     .stat-sub {
       margin-top: 8px;
-      color: var(--muted);
       font-size: 13px;
+      color: var(--muted);
       line-height: 1.5;
     }
 
     .status-line {
       margin-top: 10px;
-      font-size: 13px;
       color: var(--gold);
+      font-size: 13px;
       min-height: 18px;
     }
 
@@ -274,179 +291,32 @@
       border-radius: 999px;
       font-size: 13px;
       font-weight: 700;
-      background: #1c1c1c;
-      color: #f0f0f0;
       border: 1px solid rgba(255,255,255,0.08);
+      background: #1a1a1a;
     }
 
     .badge.active {
-      background: rgba(46, 125, 50, 0.18);
-      color: var(--good);
-      border-color: rgba(157, 240, 161, 0.22);
+      background: rgba(46,125,50,0.18);
+      color: var(--success);
+      border-color: rgba(157,232,168,0.22);
     }
 
     .badge.inactive {
-      background: rgba(183, 28, 28, 0.16);
+      background: rgba(183,28,28,0.18);
       color: var(--danger);
-      border-color: rgba(255, 179, 179, 0.2);
+      border-color: rgba(255,180,180,0.2);
     }
 
     .badge.warn {
-      background: rgba(212, 175, 55, 0.14);
+      background: rgba(212,175,55,0.12);
       color: var(--gold-soft);
-      border-color: rgba(212, 175, 55, 0.2);
+      border-color: rgba(212,175,55,0.2);
     }
 
     .badge.sold {
-      background: rgba(90, 90, 90, 0.22);
-      color: #ddd;
+      background: rgba(120,120,120,0.18);
+      color: #dfdfdf;
       border-color: rgba(255,255,255,0.12);
-    }
-
-    .form-grid {
-      display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 16px;
-      margin-top: 18px;
-    }
-
-    .field {
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-    }
-
-    .field label {
-      font-size: 13px;
-      color: var(--gold);
-      font-weight: 600;
-    }
-
-    .field input,
-    .field select,
-    .field textarea {
-      width: 100%;
-      background: #1a1a1a;
-      border: 1px solid rgba(255,255,255,0.08);
-      color: #f4f4f4;
-      border-radius: 12px;
-      padding: 14px;
-      font-size: 14px;
-      outline: none;
-    }
-
-    .field input:focus,
-    .field select:focus,
-    .field textarea:focus {
-      border-color: rgba(212, 175, 55, 0.6);
-    }
-
-    .field-full { grid-column: 1 / -1; }
-
-    .profile-summary {
-      margin-top: 18px;
-      background: var(--panel-2);
-      border: 1px solid rgba(212, 175, 55, 0.12);
-      border-radius: 14px;
-      padding: 16px;
-      display: grid;
-      gap: 10px;
-      font-size: 14px;
-      line-height: 1.5;
-    }
-
-    .list-block {
-      display: grid;
-      gap: 10px;
-      margin-top: 12px;
-      color: #d0d0d0;
-      font-size: 14px;
-      line-height: 1.55;
-    }
-
-    .mini-note {
-      color: #a8a8a8;
-      font-size: 13px;
-      line-height: 1.55;
-      margin-top: 10px;
-    }
-
-    .tools-grid {
-      display: grid;
-      grid-template-columns: repeat(3, minmax(0, 1fr));
-      gap: 18px;
-      margin-top: 18px;
-    }
-
-    .tool-tile {
-      background: #151515;
-      border: 1px solid rgba(212, 175, 55, 0.12);
-      border-radius: 16px;
-      padding: 18px;
-    }
-
-    .tool-tile h3 { margin-bottom: 8px; }
-
-    .tool-status {
-      display: inline-block;
-      margin-top: 14px;
-      font-size: 12px;
-      padding: 6px 10px;
-      border-radius: 999px;
-      background: rgba(212, 175, 55, 0.12);
-      color: var(--gold-soft);
-      border: 1px solid rgba(212, 175, 55, 0.18);
-    }
-
-    .action-grid {
-      display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 12px;
-      margin-top: 16px;
-    }
-
-    .action-btn { text-align: left; }
-
-    .setup-grid {
-      display: grid;
-      gap: 10px;
-      margin-top: 14px;
-    }
-
-    .setup-item {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 12px;
-      padding: 12px 14px;
-      border-radius: 12px;
-      background: #171717;
-      border: 1px solid rgba(255,255,255,0.06);
-    }
-
-    .setup-item-label {
-      color: #f4f4f4;
-      font-size: 14px;
-    }
-
-    .setup-state {
-      font-size: 12px;
-      font-weight: 700;
-      border-radius: 999px;
-      padding: 6px 10px;
-      border: 1px solid rgba(255,255,255,0.08);
-    }
-
-    .setup-state.good {
-      background: rgba(46, 125, 50, 0.18);
-      color: var(--good);
-      border-color: rgba(157,240,161,0.22);
-    }
-
-    .setup-state.warn {
-      background: rgba(212,175,55,0.14);
-      color: var(--gold-soft);
-      border-color: rgba(212,175,55,0.2);
     }
 
     .section-head {
@@ -457,10 +327,6 @@
       margin-bottom: 14px;
     }
 
-    .section-head h2 {
-      margin: 0;
-    }
-
     .toolbar {
       display: flex;
       gap: 10px;
@@ -468,31 +334,45 @@
     }
 
     .toolbar select,
-    .toolbar input {
+    .toolbar input,
+    .field input,
+    .field select,
+    .field textarea {
       background: #1a1a1a;
+      color: #f5f5f5;
       border: 1px solid rgba(255,255,255,0.08);
-      color: #f4f4f4;
       border-radius: 12px;
       padding: 12px 14px;
       font-size: 14px;
       outline: none;
+      width: 100%;
+    }
+
+    .toolbar select,
+    .toolbar input {
+      width: auto;
+      min-width: 180px;
+    }
+
+    .toolbar input {
+      min-width: 250px;
     }
 
     .analytics-shell {
       display: grid;
-      grid-template-columns: 1.4fr 0.9fr;
+      grid-template-columns: 1.45fr 0.95fr;
       gap: 18px;
       margin-bottom: 20px;
     }
 
     .graph-wrap {
-      height: 280px;
+      height: 290px;
       border-radius: 16px;
-      background:
-        linear-gradient(to top, rgba(255,255,255,0.02), rgba(255,255,255,0.00)),
-        linear-gradient(180deg, rgba(212,175,55,0.04), rgba(212,175,55,0.01));
       border: 1px solid rgba(212,175,55,0.12);
       padding: 18px;
+      background:
+        linear-gradient(to top, rgba(255,255,255,0.02), rgba(255,255,255,0)),
+        linear-gradient(180deg, rgba(212,175,55,0.04), rgba(212,175,55,0.01));
       display: flex;
       flex-direction: column;
       justify-content: space-between;
@@ -515,26 +395,26 @@
       display: flex;
       gap: 12px;
       flex-wrap: wrap;
-      font-size: 12px;
       color: var(--muted);
+      font-size: 12px;
     }
 
     .legend-dot {
       width: 10px;
       height: 10px;
-      display: inline-block;
       border-radius: 999px;
+      display: inline-block;
       margin-right: 6px;
       vertical-align: middle;
     }
 
     .legend-dot.gold { background: var(--gold); }
-    .legend-dot.soft { background: rgba(244, 222, 160, 0.75); }
+    .legend-dot.soft { background: rgba(243,221,176,0.8); }
 
     .chart-canvas-wrap {
       position: relative;
       flex: 1;
-      min-height: 180px;
+      min-height: 185px;
       border-radius: 12px;
       overflow: hidden;
       background:
@@ -558,9 +438,9 @@
       display: grid;
       grid-template-columns: repeat(7, 1fr);
       gap: 6px;
-      font-size: 11px;
-      color: #9f9f9f;
       text-align: center;
+      font-size: 11px;
+      color: #9e9e9e;
     }
 
     .top-list {
@@ -570,10 +450,10 @@
 
     .top-list-item {
       display: flex;
-      gap: 12px;
       align-items: center;
+      gap: 12px;
       background: #161616;
-      border: 1px solid rgba(212,175,55,0.10);
+      border: 1px solid rgba(212,175,55,0.1);
       border-radius: 14px;
       padding: 12px;
     }
@@ -583,13 +463,13 @@
       height: 34px;
       min-width: 34px;
       border-radius: 999px;
-      background: rgba(212,175,55,0.14);
-      color: var(--gold-soft);
       display: flex;
       align-items: center;
       justify-content: center;
-      font-weight: 700;
+      background: rgba(212,175,55,0.14);
+      color: var(--gold-soft);
       border: 1px solid rgba(212,175,55,0.18);
+      font-weight: 700;
     }
 
     .top-thumb {
@@ -628,11 +508,11 @@
     }
 
     .top-metrics {
+      display: grid;
+      gap: 4px;
       text-align: right;
       font-size: 12px;
       color: var(--gold-soft);
-      display: grid;
-      gap: 4px;
     }
 
     .listing-grid {
@@ -694,59 +574,42 @@
       line-height: 1.2;
     }
 
-    .listing-specs {
-      display: grid;
-      grid-template-columns: repeat(3, minmax(0, 1fr));
-      gap: 10px;
-    }
-
-    .spec-chip {
-      background: #181818;
-      border: 1px solid rgba(255,255,255,0.06);
-      border-radius: 12px;
-      padding: 10px;
-    }
-
-    .spec-chip-label {
-      font-size: 11px;
-      text-transform: uppercase;
-      letter-spacing: 1px;
-      color: var(--gold);
-      margin-bottom: 6px;
-    }
-
-    .spec-chip-value {
-      font-size: 13px;
-      color: #f2f2f2;
-      line-height: 1.4;
-      word-break: break-word;
-    }
-
+    .listing-specs,
     .listing-metrics {
       display: grid;
       grid-template-columns: repeat(3, minmax(0, 1fr));
       gap: 10px;
     }
 
+    .spec-chip,
     .metric-pill {
-      background: #151515;
-      border: 1px solid rgba(212,175,55,0.10);
+      background: #171717;
+      border: 1px solid rgba(255,255,255,0.06);
       border-radius: 12px;
-      padding: 10px 12px;
+      padding: 10px;
     }
 
+    .spec-chip-label,
     .metric-pill-label {
       font-size: 11px;
-      color: var(--gold);
       text-transform: uppercase;
       letter-spacing: 1px;
+      color: var(--gold);
       margin-bottom: 6px;
+      font-weight: 700;
+    }
+
+    .spec-chip-value,
+    .metric-pill-value {
+      font-size: 13px;
+      color: #f0f0f0;
+      line-height: 1.4;
+      word-break: break-word;
     }
 
     .metric-pill-value {
       font-size: 15px;
       font-weight: 700;
-      color: #f6f6f6;
     }
 
     .listing-actions {
@@ -775,7 +638,7 @@
       gap: 14px;
       align-items: flex-start;
       background: #161616;
-      border: 1px solid rgba(212,175,55,0.10);
+      border: 1px solid rgba(212,175,55,0.1);
       border-radius: 14px;
       padding: 14px;
     }
@@ -787,8 +650,8 @@
     }
 
     .activity-item-sub {
-      color: var(--muted);
       font-size: 12px;
+      color: var(--muted);
       line-height: 1.4;
     }
 
@@ -796,6 +659,128 @@
       font-size: 12px;
       color: var(--gold-soft);
       white-space: nowrap;
+    }
+
+    .form-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 16px;
+      margin-top: 18px;
+    }
+
+    .field {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .field label {
+      font-size: 13px;
+      color: var(--gold);
+      font-weight: 700;
+    }
+
+    .field-full {
+      grid-column: 1 / -1;
+    }
+
+    .profile-summary {
+      margin-top: 18px;
+      background: var(--panel-2);
+      border: 1px solid rgba(212,175,55,0.12);
+      border-radius: 14px;
+      padding: 16px;
+      display: grid;
+      gap: 10px;
+      font-size: 14px;
+      line-height: 1.5;
+    }
+
+    .list-block {
+      display: grid;
+      gap: 10px;
+      margin-top: 12px;
+      color: #d1d1d1;
+      font-size: 14px;
+      line-height: 1.55;
+    }
+
+    .setup-grid {
+      display: grid;
+      gap: 10px;
+      margin-top: 14px;
+    }
+
+    .setup-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      padding: 12px 14px;
+      border-radius: 12px;
+      background: #171717;
+      border: 1px solid rgba(255,255,255,0.06);
+    }
+
+    .setup-item-label {
+      color: #f4f4f4;
+      font-size: 14px;
+    }
+
+    .setup-state {
+      font-size: 12px;
+      font-weight: 700;
+      border-radius: 999px;
+      padding: 6px 10px;
+      border: 1px solid rgba(255,255,255,0.08);
+    }
+
+    .setup-state.good {
+      background: rgba(46,125,50,0.18);
+      color: var(--success);
+      border-color: rgba(157,232,168,0.22);
+    }
+
+    .setup-state.warn {
+      background: rgba(212,175,55,0.14);
+      color: var(--gold-soft);
+      border-color: rgba(212,175,55,0.2);
+    }
+
+    .tools-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 18px;
+      margin-top: 18px;
+    }
+
+    .tool-tile {
+      background: #151515;
+      border: 1px solid rgba(212,175,55,0.12);
+      border-radius: 16px;
+      padding: 18px;
+    }
+
+    .tool-tile h3 {
+      margin-bottom: 8px;
+    }
+
+    .tool-status {
+      display: inline-block;
+      margin-top: 14px;
+      font-size: 12px;
+      padding: 6px 10px;
+      border-radius: 999px;
+      background: rgba(212,175,55,0.12);
+      color: var(--gold-soft);
+      border: 1px solid rgba(212,175,55,0.18);
+    }
+
+    .action-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+      margin-top: 16px;
     }
 
     .kpi-card {
@@ -815,29 +800,46 @@
     }
 
     @media (max-width: 1280px) {
-      .grid-4 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-      .grid-5 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
       .listing-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .grid-5 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
       .analytics-shell { grid-template-columns: 1fr; }
     }
 
     @media (max-width: 1080px) {
-      .grid-2, .grid-3, .grid-4, .grid-5, .tools-grid, .form-grid, .action-grid {
+      .grid-2,
+      .grid-3,
+      .grid-4,
+      .grid-5,
+      .form-grid,
+      .tools-grid,
+      .action-grid {
         grid-template-columns: 1fr;
       }
     }
 
     @media (max-width: 920px) {
-      .dashboard-shell { flex-direction: column; }
+      .app-shell {
+        flex-direction: column;
+      }
+
       .sidebar {
         width: 100%;
         border-right: none;
         border-bottom: 1px solid var(--line);
       }
-      .main { padding: 22px; }
-      .listing-grid { grid-template-columns: 1fr; }
+
+      .main {
+        padding: 22px;
+      }
+
+      .listing-grid {
+        grid-template-columns: 1fr;
+      }
+
       .listing-specs,
-      .listing-metrics { grid-template-columns: 1fr 1fr; }
+      .listing-metrics {
+        grid-template-columns: 1fr 1fr;
+      }
     }
 
     @media (max-width: 640px) {
@@ -846,26 +848,29 @@
       .listing-actions {
         grid-template-columns: 1fr;
       }
-      .graph-xlabels {
-        font-size: 10px;
+
+      .toolbar input,
+      .toolbar select {
+        width: 100%;
+        min-width: 100%;
       }
     }
   </style>
 </head>
 <body>
-  <div class="dashboard-shell">
+  <div class="app-shell">
     <aside class="sidebar">
       <div class="brand-wrap">
         <div class="brand-eyebrow">Elevate Automation</div>
         <div class="brand-title">Founder Beta Dashboard</div>
         <div class="brand-subtitle">
-          Control center for access, profile setup, compliance, dealer routing, extension connection, posting memory, and listing performance visibility.
+          Control center for access, dealer routing, compliance, extension state, posting memory, and listing performance.
         </div>
       </div>
 
-      <div class="user-card">
-        <div class="user-card-label">Logged In</div>
-        <div class="user-email">Loading...</div>
+      <div class="sidebar-card">
+        <div class="sidebar-card-label">Logged In</div>
+        <div class="sidebar-card-value user-email">Loading...</div>
       </div>
 
       <nav class="sidebar-nav">
@@ -879,8 +884,8 @@
       </nav>
 
       <div class="sidebar-actions">
-        <button id="refreshAccessBtn" class="btn-secondary">Refresh Access</button>
-        <button id="logoutBtn" class="btn-danger">Logout</button>
+        <button id="refreshAccessBtn" class="btn-secondary" type="button">Refresh Access</button>
+        <button id="logoutBtn" class="btn-danger" type="button">Logout</button>
       </div>
     </aside>
 
@@ -888,27 +893,28 @@
       <div class="main-header">
         <div id="bootStatus"></div>
         <h1 id="dashboardPageTitle">Founder Beta Dashboard</h1>
-        <div id="welcomeText" class="mini-note">Loading dashboard...</div>
+        <div id="welcomeText" class="subtext">Loading dashboard...</div>
       </div>
 
+      <!-- OVERVIEW -->
       <section id="overview" class="dashboard-section">
         <div class="grid-3">
           <div class="card">
             <div class="stat-label">Access Status</div>
             <div id="accessBadge" class="badge">Loading...</div>
-            <div class="status-line" id="accountStatus"></div>
+            <div id="accountStatus" class="status-line"></div>
           </div>
 
           <div class="card">
             <div class="stat-label">Current Plan</div>
             <div id="planName" class="stat-value">Loading...</div>
-            <p class="mini-note">Plan, license, posting limits, and extension state sync from your backend account.</p>
+            <div class="stat-sub">Plan, access state, posting limits, and extension unlock status.</div>
           </div>
 
           <div class="card">
-            <div class="stat-label">Subscription State</div>
+            <div class="stat-label">Subscription Status</div>
             <div id="subscriptionStatus" class="stat-value" style="font-size:22px;">Loading...</div>
-            <p class="mini-note">Refresh after Stripe, webhook, or access changes.</p>
+            <div class="stat-sub">Refresh after Stripe, webhook, or access-state changes.</div>
           </div>
         </div>
 
@@ -928,7 +934,7 @@
           <div class="card kpi-card">
             <div class="stat-label">Active Listings</div>
             <div id="kpiActiveListings" class="stat-value">0</div>
-            <div class="stat-sub">Currently active in memory</div>
+            <div class="stat-sub">Current active memory set</div>
           </div>
 
           <div class="card kpi-card">
@@ -950,16 +956,18 @@
               <div class="graph-meta">
                 <div>
                   <div class="graph-title">7-Day Activity</div>
-                  <div class="mini-note" style="margin-top:4px;">Posts and engagement trend</div>
+                  <div class="subtext" style="margin-top:4px;">Posts and traction trend</div>
                 </div>
                 <div class="graph-legend">
                   <span><span class="legend-dot gold"></span>Posts</span>
                   <span><span class="legend-dot soft"></span>Views</span>
                 </div>
               </div>
+
               <div class="chart-canvas-wrap">
                 <canvas id="activityChart"></canvas>
               </div>
+
               <div id="graphXLabels" class="graph-xlabels"></div>
             </div>
           </div>
@@ -967,33 +975,11 @@
           <div class="card">
             <div class="section-head">
               <h2>Most Popular</h2>
-              <div class="mini-note">Messages > Views > Recency</div>
+              <div class="subtext">Messages &gt; Views &gt; Recency</div>
             </div>
+
             <div id="topListings" class="top-list">
               <div class="listing-empty">No listings yet.</div>
-            </div>
-          </div>
-        </div>
-
-        <div class="grid-2">
-          <div class="card">
-            <h2>Account Snapshot</h2>
-            <div class="list-block">
-              <div><strong>Email:</strong> <span class="user-email">Loading...</span></div>
-              <div><strong>Referral Code:</strong> <span id="referralCode">Loading...</span></div>
-              <div><strong>Software License Key:</strong> <span id="licenseKeyDisplay">Loading...</span></div>
-              <div><strong>User ID:</strong> <span class="user-id">Loading...</span></div>
-            </div>
-          </div>
-
-          <div class="card">
-            <h2>Launch Priorities</h2>
-            <div class="list-block">
-              <div>• Account-linked extension unlock</div>
-              <div>• Dealer website + scanner routing</div>
-              <div>• Queue → Marketplace reliability</div>
-              <div>• AB / BC compliance output</div>
-              <div>• Posting limit enforcement</div>
             </div>
           </div>
         </div>
@@ -1011,40 +997,22 @@
               <input id="listingSearchInput" type="text" placeholder="Search make, model, VIN, stock..." />
             </div>
           </div>
+
           <div id="recentListingsGrid" class="listing-grid">
             <div class="listing-empty">No listings loaded yet.</div>
           </div>
+
           <div id="listingGridStatus" class="status-line"></div>
         </div>
 
         <div class="grid-2">
           <div class="card">
-            <h2>Setup Progress</h2>
-            <div class="setup-grid">
-              <div class="setup-item">
-                <div class="setup-item-label">Dealer website saved</div>
-                <div id="setupDealerWebsite" class="setup-state warn">Checking.</div>
-              </div>
-              <div class="setup-item">
-                <div class="setup-item-label">Inventory URL saved</div>
-                <div id="setupInventoryUrl" class="setup-state warn">Checking.</div>
-              </div>
-              <div class="setup-item">
-                <div class="setup-item-label">Scanner type selected</div>
-                <div id="setupScannerType" class="setup-state warn">Checking.</div>
-              </div>
-              <div class="setup-item">
-                <div class="setup-item-label">Listing location set</div>
-                <div id="setupListingLocation" class="setup-state warn">Checking.</div>
-              </div>
-              <div class="setup-item">
-                <div class="setup-item-label">Compliance mode configured</div>
-                <div id="setupComplianceMode" class="setup-state warn">Checking.</div>
-              </div>
-              <div class="setup-item">
-                <div class="setup-item-label">Extension account active</div>
-                <div id="setupAccess" class="setup-state warn">Checking.</div>
-              </div>
+            <h2>Account Snapshot</h2>
+            <div class="list-block">
+              <div><strong>Email:</strong> <span class="user-email">Loading...</span></div>
+              <div><strong>Referral Code:</strong> <span id="referralCode">Loading...</span></div>
+              <div><strong>Software License Key:</strong> <span id="licenseKeyDisplay">Loading...</span></div>
+              <div><strong>User ID:</strong> <span class="user-id">Loading...</span></div>
             </div>
           </div>
 
@@ -1055,14 +1023,58 @@
             </div>
           </div>
         </div>
+
+        <div class="grid-2">
+          <div class="card">
+            <h2>Setup Progress</h2>
+            <div class="setup-grid">
+              <div class="setup-item">
+                <div class="setup-item-label">Dealer website saved</div>
+                <div id="setupDealerWebsite" class="setup-state warn">Checking</div>
+              </div>
+              <div class="setup-item">
+                <div class="setup-item-label">Inventory URL saved</div>
+                <div id="setupInventoryUrl" class="setup-state warn">Checking</div>
+              </div>
+              <div class="setup-item">
+                <div class="setup-item-label">Scanner type selected</div>
+                <div id="setupScannerType" class="setup-state warn">Checking</div>
+              </div>
+              <div class="setup-item">
+                <div class="setup-item-label">Listing location set</div>
+                <div id="setupListingLocation" class="setup-state warn">Checking</div>
+              </div>
+              <div class="setup-item">
+                <div class="setup-item-label">Compliance mode configured</div>
+                <div id="setupComplianceMode" class="setup-state warn">Checking</div>
+              </div>
+              <div class="setup-item">
+                <div class="setup-item-label">Extension account active</div>
+                <div id="setupAccess" class="setup-state warn">Checking</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <h2>Launch Priorities</h2>
+            <div class="list-block">
+              <div>• Extension account-linked unlock</div>
+              <div>• Dealer routing + scanner sync</div>
+              <div>• Queue → post registration flow</div>
+              <div>• AB / BC compliance output</div>
+              <div>• Posting memory + dashboard visibility</div>
+            </div>
+          </div>
+        </div>
       </section>
 
+      <!-- PROFILE -->
       <section id="profile" class="dashboard-section">
         <div class="card">
           <h2>Profile & Dealer Setup</h2>
           <p>
-            Save the information that powers listing defaults, salesperson identity, dealer routing,
-            compliance output, and extension-linked descriptions/captions.
+            Save the data that powers listing defaults, salesperson identity, compliance output,
+            and extension-linked dealer routing.
           </p>
 
           <div class="form-grid">
@@ -1097,7 +1109,7 @@
 
             <div class="field">
               <label for="license_number">Salesperson / Dealer License Number</label>
-              <input id="license_number" type="text" placeholder="AMVIC / dealer / salesperson license number" />
+              <input id="license_number" type="text" placeholder="License number" />
             </div>
 
             <div class="field">
@@ -1107,7 +1119,7 @@
 
             <div class="field">
               <label for="dealer_phone">Dealer Phone</label>
-              <input id="dealer_phone" type="text" placeholder="Dealership main line" />
+              <input id="dealer_phone" type="text" placeholder="Dealer main line" />
             </div>
 
             <div class="field">
@@ -1153,7 +1165,7 @@
 
           <div class="action-grid">
             <button id="saveProfileBtn" class="btn-primary" type="button">Save Profile</button>
-            <a href="/profile.html" class="btn-linkish">Open Full Profile Module</a>
+            <a href="/profile.html" class="action-btn">Open Full Profile Module</a>
           </div>
 
           <div id="profileStatus" class="status-line"></div>
@@ -1162,6 +1174,7 @@
         </div>
       </section>
 
+      <!-- EXTENSION -->
       <section id="extension" class="dashboard-section">
         <div class="grid-2">
           <div class="card">
@@ -1195,46 +1208,48 @@
             <div class="setup-grid">
               <div class="setup-item">
                 <div class="setup-item-label">Account access active</div>
-                <div id="extSetupAccess" class="setup-state warn">Checking.</div>
+                <div id="extSetupAccess" class="setup-state warn">Checking</div>
               </div>
               <div class="setup-item">
                 <div class="setup-item-label">Dealer website connected</div>
-                <div id="extSetupDealerWebsite" class="setup-state warn">Checking.</div>
+                <div id="extSetupDealerWebsite" class="setup-state warn">Checking</div>
               </div>
               <div class="setup-item">
                 <div class="setup-item-label">Inventory URL connected</div>
-                <div id="extSetupInventoryUrl" class="setup-state warn">Checking.</div>
+                <div id="extSetupInventoryUrl" class="setup-state warn">Checking</div>
               </div>
               <div class="setup-item">
                 <div class="setup-item-label">Scanner type selected</div>
-                <div id="extSetupScannerType" class="setup-state warn">Checking.</div>
+                <div id="extSetupScannerType" class="setup-state warn">Checking</div>
               </div>
               <div class="setup-item">
                 <div class="setup-item-label">Listing location ready</div>
-                <div id="extSetupListingLocation" class="setup-state warn">Checking.</div>
+                <div id="extSetupListingLocation" class="setup-state warn">Checking</div>
               </div>
               <div class="setup-item">
                 <div class="setup-item-label">Compliance mode ready</div>
-                <div id="extSetupComplianceMode" class="setup-state warn">Checking.</div>
+                <div id="extSetupComplianceMode" class="setup-state warn">Checking</div>
               </div>
             </div>
 
-            <div class="mini-note">
-              The dashboard cannot force-open the Chrome extension popup, but this control panel gives users
-              one clean place to verify setup, open the correct pages, and sync state before posting.
+            <div class="subtext" style="margin-top:14px;">
+              This control panel gives users one place to verify access, confirm dealer settings,
+              and open the right pages before posting.
             </div>
           </div>
         </div>
       </section>
 
+      <!-- COMPLIANCE -->
       <section id="compliance" class="dashboard-section">
         <div class="grid-2">
           <div class="card">
             <h2>Compliance Settings</h2>
             <p>
-              This profile data feeds Marketplace descriptions, caption footers, dealer contact block,
-              and province-specific compliance logic.
+              This profile data feeds Marketplace descriptions, caption footers,
+              dealer contact blocks, and province-specific compliance logic.
             </p>
+
             <div class="list-block">
               <div><strong>Province:</strong> <span id="complianceProvinceDisplay">Loading...</span></div>
               <div><strong>Compliance Mode:</strong> <span id="complianceModeDisplay">Loading...</span></div>
@@ -1246,15 +1261,16 @@
           <div class="card">
             <h2>Dealer Onboarding</h2>
             <div class="list-block">
-              <div>• Each client adds their dealer website</div>
-              <div>• Inventory URL tells the scanner where to start</div>
-              <div>• Scanner type determines parsing logic</div>
-              <div>• Extension should only scan the saved dealer domain</div>
+              <div>• Dealer website defines valid scan domain</div>
+              <div>• Inventory URL tells scanner where to start</div>
+              <div>• Scanner type determines parsing path</div>
+              <div>• Extension should only scan approved dealer context</div>
             </div>
           </div>
         </div>
       </section>
 
+      <!-- AFFILIATE -->
       <section id="affiliate" class="dashboard-section">
         <div class="grid-2">
           <div class="card">
@@ -1270,14 +1286,15 @@
           <div class="card">
             <h2>Partner Notes</h2>
             <div class="list-block">
-              <div>• Founding affiliates help seed demand</div>
+              <div>• Founding affiliates help seed early demand</div>
               <div>• Dealer managers can become team partners</div>
-              <div>• Promo kit and dashboard visibility come later</div>
+              <div>• Promo kit and dashboard visibility can expand later</div>
             </div>
           </div>
         </div>
       </section>
 
+      <!-- BILLING -->
       <section id="billing" class="dashboard-section">
         <div class="grid-2">
           <div class="card">
@@ -1291,7 +1308,7 @@
 
             <div id="accountStatusBilling" class="status-line"></div>
 
-            <div class="action-grid" style="margin-top:16px;">
+            <div class="action-grid">
               <button id="openBillingPortalBtn" class="action-btn" type="button">Open Billing Portal</button>
               <button id="refreshBillingBtn" class="action-btn" type="button">Refresh Billing Data</button>
             </div>
@@ -1303,18 +1320,19 @@
               <div>• Dashboard login controls extension access</div>
               <div>• Software license key stays in subscriptions as source of truth</div>
               <div>• Extension reads merged backend state</div>
-              <div>• Profile stays focused on dealer/compliance data</div>
+              <div>• Profile remains focused on dealer/compliance data</div>
             </div>
           </div>
         </div>
       </section>
 
+      <!-- TOOLS -->
       <section id="tools" class="dashboard-section">
         <div class="card">
           <h2>Tools & Modules</h2>
           <p>
-            The extension reads dealer onboarding settings here, then scans only the correct dealer site,
-            enforces posting limits, and injects profile/compliance data into the posting flow.
+            The extension reads dealer onboarding settings here, then scans the correct dealer site,
+            enforces posting limits, and syncs profile/compliance data into the posting flow.
           </p>
 
           <div class="tools-grid">
