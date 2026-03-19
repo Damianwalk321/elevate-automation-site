@@ -2,14 +2,6 @@ const SUPABASE_URL = "https://teixblbxkoershwgqpym.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRlaXhibGJ4a29lcnNod2dxcHltIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMwODUzMDMsImV4cCI6MjA4ODY2MTMwM30.wxt9zjKhsBuflaFZZT9awZiwckRzYkEl-OLm_4q8qF4";
 const EXTENSION_DOWNLOAD_URL = "/downloads/elevate-automation-extension.zip";
 
-const LOCAL_LISTING_KEYS = [
-  "ea_posting_history_v1",
-  "ea_posting_history",
-  "elevate_posting_history",
-  "ea_listings",
-  "elevate_listings"
-];
-
 let supabaseClient = null;
 let currentUser = null;
 let currentProfile = null;
@@ -29,7 +21,6 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
 
     supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-
     bindDashboardUI();
 
     const {
@@ -53,8 +44,8 @@ document.addEventListener("DOMContentLoaded", async () => {
     renderUserBasics(currentUser);
     await syncUserIfNeeded(currentUser);
     await loadProfile(currentUser.id);
-    await loadAccountData(currentUser);
-    await loadListingDashboardData();
+    await loadAccountData(currentUser, true);
+    await loadListingDashboardData(true);
     await pushExtensionProfileSync();
 
     showSection("overview");
@@ -66,18 +57,16 @@ document.addEventListener("DOMContentLoaded", async () => {
 });
 
 function bindDashboardUI() {
-  const navButtons = document.querySelectorAll("[data-section]");
-  navButtons.forEach((button) => {
+  document.querySelectorAll("[data-section]").forEach((button) => {
     button.addEventListener("click", () => {
       const sectionId = button.getAttribute("data-section");
       showSection(sectionId);
     });
   });
 
-  const saveBtn = document.getElementById("saveProfileBtn");
-  if (saveBtn) {
-    saveBtn.type = "button";
-    saveBtn.addEventListener("click", async (event) => {
+  const saveProfileBtn = document.getElementById("saveProfileBtn");
+  if (saveProfileBtn) {
+    saveProfileBtn.addEventListener("click", async (event) => {
       event.preventDefault();
       await onSaveProfilePressed();
     });
@@ -242,11 +231,7 @@ async function onSaveProfilePressed() {
     }
 
     await submitProfileSave(currentUser);
-
-    if (currentUser) {
-      await loadAccountData(currentUser, true);
-    }
-
+    await loadAccountData(currentUser, true);
     await pushExtensionProfileSync();
   } catch (error) {
     console.error("onSaveProfilePressed error:", error);
@@ -259,13 +244,9 @@ async function loadListingDashboardData(forceFresh = false) {
     dashboardSummary = await fetchDashboardSummary(forceFresh);
     dashboardListings = await fetchUserListings(forceFresh);
 
-    if (!Array.isArray(dashboardListings) || !dashboardListings.length) {
-      dashboardListings = loadListingsFromLocalFallback();
-    }
-
-    dashboardListings = dashboardListings
-      .map(normalizeListingRecord)
-      .filter(Boolean);
+    dashboardListings = Array.isArray(dashboardListings)
+      ? dashboardListings.map(normalizeListingRecord).filter(Boolean)
+      : [];
 
     if (!dashboardSummary) {
       dashboardSummary = buildDashboardSummaryFromListings(dashboardListings);
@@ -279,11 +260,9 @@ async function loadListingDashboardData(forceFresh = false) {
     applyListingFiltersAndRender();
   } catch (error) {
     console.error("loadListingDashboardData error:", error);
-
-    dashboardListings = loadListingsFromLocalFallback().map(normalizeListingRecord).filter(Boolean);
+    dashboardListings = [];
     dashboardSummary = buildDashboardSummaryFromListings(dashboardListings);
-    filteredListings = [...dashboardListings];
-
+    filteredListings = [];
     renderDashboardAnalytics();
     applyListingFiltersAndRender();
   }
@@ -295,6 +274,7 @@ async function fetchDashboardSummary(forceFresh = false) {
 
     const url = new URL("/api/get-dashboard-summary", window.location.origin);
     url.searchParams.set("userId", currentUser.id);
+    if (currentUser.email) url.searchParams.set("email", currentUser.email);
     if (forceFresh) url.searchParams.set("_ts", String(Date.now()));
 
     const response = await fetch(url.toString(), {
@@ -318,6 +298,8 @@ async function fetchUserListings(forceFresh = false) {
 
     const url = new URL("/api/get-user-listings", window.location.origin);
     url.searchParams.set("userId", currentUser.id);
+    if (currentUser.email) url.searchParams.set("email", currentUser.email);
+    url.searchParams.set("limit", "100");
     if (forceFresh) url.searchParams.set("_ts", String(Date.now()));
 
     const response = await fetch(url.toString(), {
@@ -336,71 +318,24 @@ async function fetchUserListings(forceFresh = false) {
   }
 }
 
-function loadListingsFromLocalFallback() {
-  const rawRows = [];
-
-  for (const key of LOCAL_LISTING_KEYS) {
-    try {
-      const raw = localStorage.getItem(key);
-      if (!raw) continue;
-      const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed)) {
-        rawRows.push(...parsed);
-      }
-    } catch (error) {
-      console.warn("Failed reading local listing history for key:", key, error);
-    }
-  }
-
-  try {
-    const usageRaw = localStorage.getItem("ea_usage_logs_v1");
-    if (usageRaw) {
-      const usageRows = JSON.parse(usageRaw);
-      if (Array.isArray(usageRows)) {
-        usageRows
-          .filter((row) => row?.action === "post_success" || row?.action === "post_created")
-          .forEach((row) => rawRows.push(row));
-      }
-    }
-  } catch (error) {
-    console.warn("Failed reading usage log fallback:", error);
-  }
-
-  return rawRows;
-}
-
 function normalizeListingRecord(row) {
   if (!row || typeof row !== "object") return null;
 
   const year = numberOrZero(row.year);
-  const make = clean(row.make || row.vehicle_make || "");
-  const model = clean(row.model || row.vehicle_model || "");
-  const trim = clean(row.trim || row.vehicle_trim || "");
+  const make = clean(row.make || "");
+  const model = clean(row.model || "");
+  const trim = clean(row.trim || "");
   const title =
-    clean(row.title || row.listing_title || buildVehicleTitle({ year, make, model, trim })) ||
-    "Vehicle Listing";
+    clean(row.title || buildVehicleTitle({ year, make, model, trim })) || "Vehicle Listing";
 
   const postedAt =
     row.posted_at ||
     row.created_at ||
     row.timestamp ||
-    row.postedAt ||
     new Date().toISOString();
 
-  const views = numberOrZero(
-    row.views_count ??
-    row.views ??
-    row.view_count ??
-    row.metrics?.views
-  );
-
-  const messages = numberOrZero(
-    row.messages_count ??
-    row.messages ??
-    row.message_count ??
-    row.metrics?.messages
-  );
-
+  const views = numberOrZero(row.views_count ?? row.views ?? 0);
+  const messages = numberOrZero(row.messages_count ?? row.messages ?? 0);
   const price = numberOrZero(row.price);
   const mileage = numberOrZero(row.mileage || row.kilometers || row.km);
 
@@ -410,21 +345,19 @@ function normalizeListingRecord(row) {
       row.cover_photo ||
       row.coverImage ||
       row.photo ||
-      row.media?.[0]?.url ||
       row.photos?.[0] ||
       ""
     ) || placeholderVehicleImage(title);
 
-  const sourceUrl = clean(row.source_url || row.url || row.sourceUrl || "");
   const status = clean(row.status || "posted").toLowerCase();
 
   return {
-    id: clean(row.id || row.listing_id || row.marketplace_listing_id || sourceUrl || cryptoRandomFallback()),
-    user_id: clean(row.user_id || row.userId || currentUser?.id || ""),
-    dealership_id: clean(row.dealership_id || row.dealerId || ""),
+    id: clean(row.id || row.marketplace_listing_id || row.source_url || cryptoRandomFallback()),
+    user_id: clean(row.user_id || ""),
+    dealership_id: clean(row.dealership_id || ""),
     vin: clean(row.vin || ""),
     stock_number: clean(row.stock_number || row.stockNumber || ""),
-    source_url: sourceUrl,
+    source_url: clean(row.source_url || row.sourceUrl || ""),
     image_url: imageUrl,
     year,
     make,
@@ -465,7 +398,7 @@ function buildDashboardSummaryFromListings(listings) {
         postsMonth += 1;
       }
     }
-    if (item.status !== "sold" && item.status !== "deleted") activeListings += 1;
+    if (!["sold", "deleted", "inactive"].includes(item.status)) activeListings += 1;
     totalViews += numberOrZero(item.views_count);
     totalMessages += numberOrZero(item.messages_count);
   }
@@ -564,9 +497,7 @@ function renderListingsGrid(listings) {
         <div class="listing-content">
           <div>
             <div class="listing-title">${escapeHtml(item.title)}</div>
-            <div class="listing-sub">
-              ${escapeHtml(buildListingSubtitle(item))}
-            </div>
+            <div class="listing-sub">${escapeHtml(buildListingSubtitle(item))}</div>
           </div>
 
           <div class="listing-price">${formatCurrency(item.price)}</div>
@@ -603,9 +534,10 @@ function renderListingsGrid(listings) {
 
           <div class="listing-actions">
             <button class="action-btn" type="button" onclick="markListingSold('${escapeJs(item.id)}')">Mark Sold</button>
-            ${item.source_url
-              ? `<button class="action-btn" type="button" onclick="window.open('${escapeJs(item.source_url)}','_blank')">Open Source</button>`
-              : `<button class="action-btn" type="button" onclick="copyVehicleSummary('${escapeJs(item.id)}')">Copy Summary</button>`
+            ${
+              item.source_url
+                ? `<button class="action-btn" type="button" onclick="window.open('${escapeJs(item.source_url)}','_blank')">Open Source</button>`
+                : `<button class="action-btn" type="button" onclick="copyVehicleSummary('${escapeJs(item.id)}')">Copy Summary</button>`
             }
           </div>
         </div>
@@ -756,13 +688,13 @@ function drawActivityChart(series) {
   const pointsPosts = series.map((d, index) => {
     const x = padding.left + (index * xStep);
     const y = padding.top + chartHeight - ((numberOrZero(d.posts) / maxValue) * chartHeight);
-    return { x, y, value: numberOrZero(d.posts) };
+    return { x, y };
   });
 
   const pointsViews = series.map((d, index) => {
     const x = padding.left + (index * xStep);
     const y = padding.top + chartHeight - ((numberOrZero(d.views) / maxValue) * chartHeight);
-    return { x, y, value: numberOrZero(d.views) };
+    return { x, y };
   });
 
   ctx.fillStyle = "rgba(212, 175, 55, 0.10)";
@@ -773,7 +705,7 @@ function drawActivityChart(series) {
   ctx.closePath();
   ctx.fill();
 
-  ctx.strokeStyle = "rgba(244, 222, 160, 0.75)";
+  ctx.strokeStyle = "rgba(243, 221, 176, 0.78)";
   ctx.lineWidth = 2;
   ctx.beginPath();
   pointsViews.forEach((p, index) => {
@@ -1158,7 +1090,7 @@ function normalizeExtensionStateResponse(result, user, profile) {
     status: clean(subscription.status || (subscription.active ? "active" : "inactive")) || "inactive",
     plan: clean(subscription.plan || subscription.plan_name || "Founder Beta") || "Founder Beta",
     license_key: clean(subscription.license_key || subscription.software_license_key || ""),
-    posting_limit: Number(subscription.posting_limit || subscription.daily_post_limit || 0),
+    posting_limit: Number(subscription.posting_limit || subscription.daily_posting_limit || 0),
     posts_today: Number(subscription.posts_today || 0),
     posts_remaining: Number(
       subscription.posts_remaining ??
@@ -1489,28 +1421,31 @@ async function markListingSold(listingId) {
 
     row.status = "sold";
 
-    try {
-      await fetch("/api/update-listing-status", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          listingId,
-          status: "sold",
-          userId: currentUser?.id || ""
-        })
-      });
-    } catch (error) {
-      console.warn("update-listing-status fallback only:", error);
+    const response = await fetch("/api/update-listing-status", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        listingId,
+        status: "sold",
+        userId: currentUser?.id || "",
+        email: currentUser?.email || ""
+      })
+    });
+
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({}));
+      throw new Error(data.error || "Could not update listing status.");
     }
 
-    persistListingsFallback();
     dashboardSummary = buildDashboardSummaryFromListings(dashboardListings);
     renderDashboardAnalytics();
     applyListingFiltersAndRender();
+    setStatus("listingGridStatus", "Listing marked sold.");
   } catch (error) {
     console.error("markListingSold error:", error);
+    setStatus("listingGridStatus", error.message || "Could not mark listing sold.");
   }
 }
 
@@ -1530,14 +1465,6 @@ function copyVehicleSummary(listingId) {
   navigator.clipboard.writeText(text)
     .then(() => setStatus("listingGridStatus", "Vehicle summary copied."))
     .catch(() => setStatus("listingGridStatus", "Could not copy vehicle summary."));
-}
-
-function persistListingsFallback() {
-  try {
-    localStorage.setItem("ea_posting_history_v1", JSON.stringify(dashboardListings));
-  } catch (error) {
-    console.warn("persistListingsFallback warning:", error);
-  }
 }
 
 function getFieldValue(id) {
@@ -1628,7 +1555,7 @@ function renderBadgeHtml(status) {
   } else if (normalized === "sold") {
     badgeClass = "sold";
     badgeText = "Sold";
-  } else if (normalized === "inactive" || normalized === "failed") {
+  } else if (normalized === "inactive" || normalized === "failed" || normalized === "deleted") {
     badgeClass = "inactive";
   }
 
