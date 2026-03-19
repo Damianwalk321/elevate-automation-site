@@ -14,6 +14,7 @@
       --bg: #0b0b0b;
       --panel: #121212;
       --panel-2: #171717;
+      --panel-3: #1c1c1c;
       --line: rgba(212, 175, 55, 0.14);
       --line-strong: rgba(212, 175, 55, 0.38);
       --gold: #d4af37;
@@ -22,6 +23,7 @@
       --muted: #b7b7b7;
       --danger: #ffb3b3;
       --good: #9df0a1;
+      --shadow: 0 10px 30px rgba(0,0,0,0.28);
     }
 
     body {
@@ -204,7 +206,9 @@
     .dashboard-section { display: none; }
 
     .grid-2,
-    .grid-3 {
+    .grid-3,
+    .grid-4,
+    .grid-5 {
       display: grid;
       gap: 18px;
       margin-bottom: 20px;
@@ -212,12 +216,15 @@
 
     .grid-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .grid-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .grid-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+    .grid-5 { grid-template-columns: repeat(5, minmax(0, 1fr)); }
 
     .card {
       background: var(--panel);
       border: 1px solid var(--line);
       border-radius: 18px;
       padding: 22px;
+      box-shadow: var(--shadow);
     }
 
     .card h2,
@@ -245,6 +252,13 @@
       font-weight: 700;
       line-height: 1.1;
       word-break: break-word;
+    }
+
+    .stat-sub {
+      margin-top: 8px;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.5;
     }
 
     .status-line {
@@ -281,6 +295,12 @@
       background: rgba(212, 175, 55, 0.14);
       color: var(--gold-soft);
       border-color: rgba(212, 175, 55, 0.2);
+    }
+
+    .badge.sold {
+      background: rgba(90, 90, 90, 0.22);
+      color: #ddd;
+      border-color: rgba(255,255,255,0.12);
     }
 
     .form-grid {
@@ -429,8 +449,380 @@
       border-color: rgba(212,175,55,0.2);
     }
 
+    .section-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 14px;
+    }
+
+    .section-head h2 {
+      margin: 0;
+    }
+
+    .toolbar {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .toolbar select,
+    .toolbar input {
+      background: #1a1a1a;
+      border: 1px solid rgba(255,255,255,0.08);
+      color: #f4f4f4;
+      border-radius: 12px;
+      padding: 12px 14px;
+      font-size: 14px;
+      outline: none;
+    }
+
+    .analytics-shell {
+      display: grid;
+      grid-template-columns: 1.4fr 0.9fr;
+      gap: 18px;
+      margin-bottom: 20px;
+    }
+
+    .graph-wrap {
+      height: 280px;
+      border-radius: 16px;
+      background:
+        linear-gradient(to top, rgba(255,255,255,0.02), rgba(255,255,255,0.00)),
+        linear-gradient(180deg, rgba(212,175,55,0.04), rgba(212,175,55,0.01));
+      border: 1px solid rgba(212,175,55,0.12);
+      padding: 18px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+    }
+
+    .graph-meta {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 10px;
+    }
+
+    .graph-title {
+      font-size: 16px;
+      font-weight: 700;
+    }
+
+    .graph-legend {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .legend-dot {
+      width: 10px;
+      height: 10px;
+      display: inline-block;
+      border-radius: 999px;
+      margin-right: 6px;
+      vertical-align: middle;
+    }
+
+    .legend-dot.gold { background: var(--gold); }
+    .legend-dot.soft { background: rgba(244, 222, 160, 0.75); }
+
+    .chart-canvas-wrap {
+      position: relative;
+      flex: 1;
+      min-height: 180px;
+      border-radius: 12px;
+      overflow: hidden;
+      background:
+        repeating-linear-gradient(
+          to top,
+          rgba(255,255,255,0.04) 0px,
+          rgba(255,255,255,0.04) 1px,
+          transparent 1px,
+          transparent 45px
+        );
+    }
+
+    #activityChart {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+
+    .graph-xlabels {
+      margin-top: 10px;
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      gap: 6px;
+      font-size: 11px;
+      color: #9f9f9f;
+      text-align: center;
+    }
+
+    .top-list {
+      display: grid;
+      gap: 12px;
+    }
+
+    .top-list-item {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      background: #161616;
+      border: 1px solid rgba(212,175,55,0.10);
+      border-radius: 14px;
+      padding: 12px;
+    }
+
+    .top-rank {
+      width: 34px;
+      height: 34px;
+      min-width: 34px;
+      border-radius: 999px;
+      background: rgba(212,175,55,0.14);
+      color: var(--gold-soft);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      border: 1px solid rgba(212,175,55,0.18);
+    }
+
+    .top-thumb {
+      width: 72px;
+      height: 54px;
+      min-width: 72px;
+      border-radius: 10px;
+      overflow: hidden;
+      background: #202020;
+      border: 1px solid rgba(255,255,255,0.06);
+    }
+
+    .top-thumb img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+
+    .top-info {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .top-title {
+      font-size: 14px;
+      font-weight: 700;
+      line-height: 1.35;
+      margin-bottom: 4px;
+    }
+
+    .top-sub {
+      font-size: 12px;
+      color: var(--muted);
+      line-height: 1.4;
+    }
+
+    .top-metrics {
+      text-align: right;
+      font-size: 12px;
+      color: var(--gold-soft);
+      display: grid;
+      gap: 4px;
+    }
+
+    .listing-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 18px;
+    }
+
+    .listing-card {
+      background: linear-gradient(180deg, rgba(255,255,255,0.01), rgba(255,255,255,0));
+      border: 1px solid rgba(212,175,55,0.12);
+      border-radius: 18px;
+      overflow: hidden;
+      box-shadow: var(--shadow);
+    }
+
+    .listing-media {
+      position: relative;
+      height: 190px;
+      background: #171717;
+      border-bottom: 1px solid rgba(255,255,255,0.05);
+    }
+
+    .listing-media img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+
+    .listing-badge {
+      position: absolute;
+      top: 12px;
+      right: 12px;
+    }
+
+    .listing-content {
+      padding: 16px;
+      display: grid;
+      gap: 12px;
+    }
+
+    .listing-title {
+      font-size: 18px;
+      font-weight: 700;
+      line-height: 1.3;
+    }
+
+    .listing-sub {
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    .listing-price {
+      font-size: 24px;
+      font-weight: 700;
+      color: var(--gold-soft);
+      line-height: 1.2;
+    }
+
+    .listing-specs {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    .spec-chip {
+      background: #181818;
+      border: 1px solid rgba(255,255,255,0.06);
+      border-radius: 12px;
+      padding: 10px;
+    }
+
+    .spec-chip-label {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: var(--gold);
+      margin-bottom: 6px;
+    }
+
+    .spec-chip-value {
+      font-size: 13px;
+      color: #f2f2f2;
+      line-height: 1.4;
+      word-break: break-word;
+    }
+
+    .listing-metrics {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    .metric-pill {
+      background: #151515;
+      border: 1px solid rgba(212,175,55,0.10);
+      border-radius: 12px;
+      padding: 10px 12px;
+    }
+
+    .metric-pill-label {
+      font-size: 11px;
+      color: var(--gold);
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      margin-bottom: 6px;
+    }
+
+    .metric-pill-value {
+      font-size: 15px;
+      font-weight: 700;
+      color: #f6f6f6;
+    }
+
+    .listing-actions {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    .listing-empty {
+      padding: 28px;
+      border-radius: 16px;
+      border: 1px dashed rgba(212,175,55,0.18);
+      color: var(--muted);
+      background: #111111;
+      text-align: center;
+    }
+
+    .activity-feed {
+      display: grid;
+      gap: 12px;
+    }
+
+    .activity-item {
+      display: flex;
+      justify-content: space-between;
+      gap: 14px;
+      align-items: flex-start;
+      background: #161616;
+      border: 1px solid rgba(212,175,55,0.10);
+      border-radius: 14px;
+      padding: 14px;
+    }
+
+    .activity-item-title {
+      font-size: 14px;
+      font-weight: 700;
+      margin-bottom: 4px;
+    }
+
+    .activity-item-sub {
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.4;
+    }
+
+    .activity-item-time {
+      font-size: 12px;
+      color: var(--gold-soft);
+      white-space: nowrap;
+    }
+
+    .kpi-card {
+      position: relative;
+      overflow: hidden;
+    }
+
+    .kpi-card::after {
+      content: "";
+      position: absolute;
+      inset: auto -40px -40px auto;
+      width: 110px;
+      height: 110px;
+      border-radius: 999px;
+      background: radial-gradient(circle, rgba(212,175,55,0.16), rgba(212,175,55,0));
+      pointer-events: none;
+    }
+
+    @media (max-width: 1280px) {
+      .grid-4 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .grid-5 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+      .listing-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .analytics-shell { grid-template-columns: 1fr; }
+    }
+
     @media (max-width: 1080px) {
-      .grid-2, .grid-3, .tools-grid, .form-grid, .action-grid {
+      .grid-2, .grid-3, .grid-4, .grid-5, .tools-grid, .form-grid, .action-grid {
         grid-template-columns: 1fr;
       }
     }
@@ -443,6 +835,20 @@
         border-bottom: 1px solid var(--line);
       }
       .main { padding: 22px; }
+      .listing-grid { grid-template-columns: 1fr; }
+      .listing-specs,
+      .listing-metrics { grid-template-columns: 1fr 1fr; }
+    }
+
+    @media (max-width: 640px) {
+      .listing-specs,
+      .listing-metrics,
+      .listing-actions {
+        grid-template-columns: 1fr;
+      }
+      .graph-xlabels {
+        font-size: 10px;
+      }
     }
   </style>
 </head>
@@ -453,7 +859,7 @@
         <div class="brand-eyebrow">Elevate Automation</div>
         <div class="brand-title">Founder Beta Dashboard</div>
         <div class="brand-subtitle">
-          Control center for access, profile setup, compliance, dealer routing, extension connection, and posting readiness.
+          Control center for access, profile setup, compliance, dealer routing, extension connection, posting memory, and listing performance visibility.
         </div>
       </div>
 
@@ -506,6 +912,69 @@
           </div>
         </div>
 
+        <div class="grid-5">
+          <div class="card kpi-card">
+            <div class="stat-label">Posts Today</div>
+            <div id="kpiPostsToday" class="stat-value">0</div>
+            <div class="stat-sub">Vehicles posted today</div>
+          </div>
+
+          <div class="card kpi-card">
+            <div class="stat-label">Posts This Month</div>
+            <div id="kpiPostsMonth" class="stat-value">0</div>
+            <div class="stat-sub">Monthly posting volume</div>
+          </div>
+
+          <div class="card kpi-card">
+            <div class="stat-label">Active Listings</div>
+            <div id="kpiActiveListings" class="stat-value">0</div>
+            <div class="stat-sub">Currently active in memory</div>
+          </div>
+
+          <div class="card kpi-card">
+            <div class="stat-label">Views</div>
+            <div id="kpiViews" class="stat-value">0</div>
+            <div class="stat-sub">Tracked or defaulted</div>
+          </div>
+
+          <div class="card kpi-card">
+            <div class="stat-label">Messages</div>
+            <div id="kpiMessages" class="stat-value">0</div>
+            <div class="stat-sub">Tracked or defaulted</div>
+          </div>
+        </div>
+
+        <div class="analytics-shell">
+          <div class="card">
+            <div class="graph-wrap">
+              <div class="graph-meta">
+                <div>
+                  <div class="graph-title">7-Day Activity</div>
+                  <div class="mini-note" style="margin-top:4px;">Posts and engagement trend</div>
+                </div>
+                <div class="graph-legend">
+                  <span><span class="legend-dot gold"></span>Posts</span>
+                  <span><span class="legend-dot soft"></span>Views</span>
+                </div>
+              </div>
+              <div class="chart-canvas-wrap">
+                <canvas id="activityChart"></canvas>
+              </div>
+              <div id="graphXLabels" class="graph-xlabels"></div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="section-head">
+              <h2>Most Popular</h2>
+              <div class="mini-note">Messages > Views > Recency</div>
+            </div>
+            <div id="topListings" class="top-list">
+              <div class="listing-empty">No listings yet.</div>
+            </div>
+          </div>
+        </div>
+
         <div class="grid-2">
           <div class="card">
             <h2>Account Snapshot</h2>
@@ -530,31 +999,59 @@
         </div>
 
         <div class="card">
-          <h2>Setup Progress</h2>
-          <div class="setup-grid">
-            <div class="setup-item">
-              <div class="setup-item-label">Dealer website saved</div>
-              <div id="setupDealerWebsite" class="setup-state warn">Checking.</div>
+          <div class="section-head">
+            <h2>Recent Listings</h2>
+            <div class="toolbar">
+              <select id="listingSortSelect">
+                <option value="popular">Sort: Most Popular</option>
+                <option value="newest">Sort: Newest</option>
+                <option value="price_high">Sort: Price High → Low</option>
+                <option value="price_low">Sort: Price Low → High</option>
+              </select>
+              <input id="listingSearchInput" type="text" placeholder="Search make, model, VIN, stock..." />
             </div>
-            <div class="setup-item">
-              <div class="setup-item-label">Inventory URL saved</div>
-              <div id="setupInventoryUrl" class="setup-state warn">Checking.</div>
+          </div>
+          <div id="recentListingsGrid" class="listing-grid">
+            <div class="listing-empty">No listings loaded yet.</div>
+          </div>
+          <div id="listingGridStatus" class="status-line"></div>
+        </div>
+
+        <div class="grid-2">
+          <div class="card">
+            <h2>Setup Progress</h2>
+            <div class="setup-grid">
+              <div class="setup-item">
+                <div class="setup-item-label">Dealer website saved</div>
+                <div id="setupDealerWebsite" class="setup-state warn">Checking.</div>
+              </div>
+              <div class="setup-item">
+                <div class="setup-item-label">Inventory URL saved</div>
+                <div id="setupInventoryUrl" class="setup-state warn">Checking.</div>
+              </div>
+              <div class="setup-item">
+                <div class="setup-item-label">Scanner type selected</div>
+                <div id="setupScannerType" class="setup-state warn">Checking.</div>
+              </div>
+              <div class="setup-item">
+                <div class="setup-item-label">Listing location set</div>
+                <div id="setupListingLocation" class="setup-state warn">Checking.</div>
+              </div>
+              <div class="setup-item">
+                <div class="setup-item-label">Compliance mode configured</div>
+                <div id="setupComplianceMode" class="setup-state warn">Checking.</div>
+              </div>
+              <div class="setup-item">
+                <div class="setup-item-label">Extension account active</div>
+                <div id="setupAccess" class="setup-state warn">Checking.</div>
+              </div>
             </div>
-            <div class="setup-item">
-              <div class="setup-item-label">Scanner type selected</div>
-              <div id="setupScannerType" class="setup-state warn">Checking.</div>
-            </div>
-            <div class="setup-item">
-              <div class="setup-item-label">Listing location set</div>
-              <div id="setupListingLocation" class="setup-state warn">Checking.</div>
-            </div>
-            <div class="setup-item">
-              <div class="setup-item-label">Compliance mode configured</div>
-              <div id="setupComplianceMode" class="setup-state warn">Checking.</div>
-            </div>
-            <div class="setup-item">
-              <div class="setup-item-label">Extension account active</div>
-              <div id="setupAccess" class="setup-state warn">Checking.</div>
+          </div>
+
+          <div class="card">
+            <h2>Recent Activity</h2>
+            <div id="recentActivityFeed" class="activity-feed">
+              <div class="listing-empty">No activity yet.</div>
             </div>
           </div>
         </div>
@@ -852,9 +1349,9 @@
             </div>
 
             <div class="tool-tile">
-              <h3>AI/Resolver Layer</h3>
-              <p>Future fallback for ambiguous fields like fuel, type, and body style.</p>
-              <div class="tool-status">Planned</div>
+              <h3>Analytics Layer</h3>
+              <p>Listing memory, card views, performance tracking, and future attention flags.</p>
+              <div class="tool-status">Rolling In</div>
             </div>
           </div>
         </div>
