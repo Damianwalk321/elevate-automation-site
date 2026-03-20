@@ -1,10 +1,7 @@
-// /api/stripe-webhook.js
-
 import Stripe from "stripe";
 import { createClient } from "@supabase/supabase-js";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
-
 const supabase = createClient(
   process.env.SUPABASE_URL,
   process.env.SUPABASE_SERVICE_ROLE_KEY
@@ -18,11 +15,9 @@ export const config = {
 
 async function readRawBody(readable) {
   const chunks = [];
-
   for await (const chunk of readable) {
     chunks.push(typeof chunk === "string" ? Buffer.from(chunk) : chunk);
   }
-
   return Buffer.concat(chunks);
 }
 
@@ -42,6 +37,19 @@ function firstNonEmpty(...values) {
   return "";
 }
 
+function statusIsActive(status) {
+  const value = clean(status).toLowerCase();
+  return ["active", "trialing", "paid"].includes(value);
+}
+
+function getDailyPostingLimit(planName, status) {
+  if (!statusIsActive(status)) return 0;
+  const plan = clean(planName).toLowerCase();
+  if (plan.includes("starter")) return 5;
+  if (plan.includes("pro")) return 25;
+  return 25;
+}
+
 function mapPlanFromPriceId(priceId) {
   const founder = clean(process.env.STRIPE_FOUNDER_PRICE_ID);
   const starter = clean(process.env.STRIPE_STARTER_PRICE_ID);
@@ -52,19 +60,20 @@ function mapPlanFromPriceId(priceId) {
   if (priceId && founderPro && priceId === founderPro) return "Founder Pro";
   if (priceId && starter && priceId === starter) return "Starter";
   if (priceId && pro && priceId === pro) return "Pro";
-
   return "Active Plan";
 }
 
-function getDailyPostingLimit(planName) {
-  const plan = clean(planName).toLowerCase();
-  if (plan.includes("starter")) return 5;
-  if (plan.includes("pro")) return 25;
-  return 25;
-}
-
-async function findUser({ email, customerId, subscriptionId }) {
+async function findUser({ email, customerId, subscriptionId, userId }) {
   const normalizedEmail = normalizeEmail(email);
+
+  if (clean(userId)) {
+    const { data, error } = await supabase
+      .from("users")
+      .select("id,email")
+      .eq("id", clean(userId))
+      .maybeSingle();
+    if (!error && data) return data;
+  }
 
   if (normalizedEmail) {
     const { data, error } = await supabase
@@ -72,7 +81,6 @@ async function findUser({ email, customerId, subscriptionId }) {
       .select("id,email")
       .eq("email", normalizedEmail)
       .maybeSingle();
-
     if (!error && data) return data;
   }
 
@@ -82,7 +90,6 @@ async function findUser({ email, customerId, subscriptionId }) {
       .select("id,email")
       .eq("stripe_customer_id", customerId)
       .maybeSingle();
-
     if (!error && data) return data;
   }
 
@@ -92,14 +99,13 @@ async function findUser({ email, customerId, subscriptionId }) {
       .select("id,email")
       .eq("stripe_subscription_id", subscriptionId)
       .maybeSingle();
-
     if (!error && data) return data;
   }
 
   return null;
 }
 
-async function updateUsersTable({ email, customerId, subscriptionId, priceId, planName, status }) {
+async function updateUsersTable({ userId, email, customerId, subscriptionId, priceId, planName, status }) {
   const normalizedEmail = normalizeEmail(email);
   const payload = {
     stripe_customer_id: customerId || null,
@@ -110,30 +116,23 @@ async function updateUsersTable({ email, customerId, subscriptionId, priceId, pl
     updated_at: new Date().toISOString()
   };
 
-  if (normalizedEmail) {
-    const { error } = await supabase
-      .from("users")
-      .update(payload)
-      .eq("email", normalizedEmail);
+  if (clean(userId)) {
+    const { error } = await supabase.from("users").update(payload).eq("id", clean(userId));
+    if (!error) return;
+  }
 
+  if (normalizedEmail) {
+    const { error } = await supabase.from("users").update(payload).eq("email", normalizedEmail);
     if (!error) return;
   }
 
   if (customerId) {
-    const { error } = await supabase
-      .from("users")
-      .update(payload)
-      .eq("stripe_customer_id", customerId);
-
+    const { error } = await supabase.from("users").update(payload).eq("stripe_customer_id", customerId);
     if (!error) return;
   }
 
   if (subscriptionId) {
-    const { error } = await supabase
-      .from("users")
-      .update(payload)
-      .eq("stripe_subscription_id", subscriptionId);
-
+    const { error } = await supabase.from("users").update(payload).eq("stripe_subscription_id", subscriptionId);
     if (!error) return;
   }
 }
@@ -150,14 +149,14 @@ async function upsertSubscriptionsMirror({ user, email, customerId, subscription
     subscription_status: status || null,
     plan: planName || "Active Plan",
     plan_name: planName || "Active Plan",
-    access: ["active", "trialing", "paid"].includes(clean(status).toLowerCase()),
-    active: ["active", "trialing", "paid"].includes(clean(status).toLowerCase()),
-    daily_posting_limit: getDailyPostingLimit(planName),
+    access: statusIsActive(status),
+    active: statusIsActive(status),
+    daily_posting_limit: getDailyPostingLimit(planName, status),
     current_period_end: currentPeriodEnd || null,
     trial_end: trialEnd || null,
     cancel_at_period_end: Boolean(cancelAtPeriodEnd),
-    referral_code: referralCode || null,
-    access_type: accessType || null,
+    referral_code: clean(referralCode) || null,
+    access_type: clean(accessType) || null,
     updated_at: new Date().toISOString()
   };
 
@@ -170,12 +169,12 @@ async function upsertSubscriptionsMirror({ user, email, customerId, subscription
   }
 }
 
-async function mirrorPostingLimit({ user, email, planName }) {
+async function mirrorPostingLimit({ user, email, planName, status }) {
   const normalizedEmail = normalizeEmail(firstNonEmpty(email, user?.email));
   const payload = {
     user_id: user?.id || null,
     email: normalizedEmail || null,
-    daily_limit: getDailyPostingLimit(planName),
+    daily_limit: getDailyPostingLimit(planName, status),
     updated_at: new Date().toISOString()
   };
 
@@ -188,10 +187,11 @@ async function mirrorPostingLimit({ user, email, planName }) {
   }
 }
 
-async function syncBillingState({ email, customerId, subscriptionId, priceId, planName, status, currentPeriodEnd, trialEnd, cancelAtPeriodEnd, referralCode, accessType }) {
-  const user = await findUser({ email, customerId, subscriptionId });
+async function syncBillingState({ userId, email, customerId, subscriptionId, priceId, planName, status, currentPeriodEnd, trialEnd, cancelAtPeriodEnd, referralCode, accessType }) {
+  const user = await findUser({ email, customerId, subscriptionId, userId });
 
   await updateUsersTable({
+    userId: firstNonEmpty(user?.id, userId),
     email: firstNonEmpty(email, user?.email),
     customerId,
     subscriptionId,
@@ -218,8 +218,42 @@ async function syncBillingState({ email, customerId, subscriptionId, priceId, pl
   await mirrorPostingLimit({
     user,
     email: firstNonEmpty(email, user?.email),
-    planName
+    planName,
+    status
   });
+}
+
+async function getCustomerEmail(customerId) {
+  if (!customerId) return "";
+  const customer = await stripe.customers.retrieve(customerId);
+  return clean(customer?.email || customer?.metadata?.email || "");
+}
+
+async function hydrateFromSubscription(subscriptionId) {
+  if (!subscriptionId) {
+    return {
+      priceId: null,
+      planName: "Active Plan",
+      status: "active",
+      currentPeriodEnd: null,
+      trialEnd: null,
+      cancelAtPeriodEnd: false,
+      metadata: {}
+    };
+  }
+
+  const subscription = await stripe.subscriptions.retrieve(subscriptionId);
+  const priceId = subscription.items?.data?.[0]?.price?.id || null;
+
+  return {
+    priceId,
+    planName: clean(subscription.metadata?.plan_name) || mapPlanFromPriceId(priceId),
+    status: subscription.status || "active",
+    currentPeriodEnd: subscription.current_period_end ? new Date(subscription.current_period_end * 1000).toISOString() : null,
+    trialEnd: subscription.trial_end ? new Date(subscription.trial_end * 1000).toISOString() : null,
+    cancelAtPeriodEnd: Boolean(subscription.cancel_at_period_end),
+    metadata: subscription.metadata || {}
+  };
 }
 
 export default async function handler(req, res) {
@@ -228,7 +262,6 @@ export default async function handler(req, res) {
   }
 
   const signature = req.headers["stripe-signature"];
-
   if (!signature) {
     return res.status(400).json({ error: "Missing Stripe signature" });
   }
@@ -237,12 +270,7 @@ export default async function handler(req, res) {
 
   try {
     const rawBody = await readRawBody(req);
-
-    event = stripe.webhooks.constructEvent(
-      rawBody,
-      signature,
-      process.env.STRIPE_WEBHOOK_SECRET
-    );
+    event = stripe.webhooks.constructEvent(rawBody, signature, process.env.STRIPE_WEBHOOK_SECRET);
   } catch (error) {
     console.error("Webhook signature verification failed:", error.message);
     return res.status(400).send(`Webhook Error: ${error.message}`);
@@ -253,60 +281,40 @@ export default async function handler(req, res) {
       const session = event.data.object;
       const customerId = session.customer || null;
       const subscriptionId = session.subscription || null;
+      const userId = clean(session.client_reference_id || "");
       const email = firstNonEmpty(
         session.customer_details?.email,
         session.customer_email,
         session.metadata?.email
       );
 
-      let priceId = null;
-      let planName = "Active Plan";
-      let status = "active";
-      let currentPeriodEnd = null;
-      let trialEnd = null;
-      let cancelAtPeriodEnd = false;
-
-      if (subscriptionId) {
-        const subscription = await stripe.subscriptions.retrieve(subscriptionId);
-        priceId = subscription.items?.data?.[0]?.price?.id || null;
-        planName = mapPlanFromPriceId(priceId);
-        status = subscription.status || "active";
-        currentPeriodEnd = subscription.current_period_end ? new Date(subscription.current_period_end * 1000).toISOString() : null;
-        trialEnd = subscription.trial_end ? new Date(subscription.trial_end * 1000).toISOString() : null;
-        cancelAtPeriodEnd = Boolean(subscription.cancel_at_period_end);
-      }
+      const hydrated = await hydrateFromSubscription(subscriptionId);
 
       await syncBillingState({
+        userId,
         email,
         customerId,
         subscriptionId,
-        priceId,
-        planName,
-        status,
-        currentPeriodEnd,
-        trialEnd,
-        cancelAtPeriodEnd,
-        referralCode: session.metadata?.referral_code || "",
-        accessType: session.metadata?.access_type || ""
+        priceId: hydrated.priceId,
+        planName: clean(session.metadata?.plan_name) || hydrated.planName,
+        status: hydrated.status,
+        currentPeriodEnd: hydrated.currentPeriodEnd,
+        trialEnd: hydrated.trialEnd,
+        cancelAtPeriodEnd: hydrated.cancelAtPeriodEnd,
+        referralCode: session.metadata?.referral_code || hydrated.metadata?.referral_code || "",
+        accessType: session.metadata?.access_type || hydrated.metadata?.access_type || ""
       });
     }
 
-    if (event.type === "customer.subscription.created" || event.type === "customer.subscription.updated") {
+    if (["customer.subscription.created", "customer.subscription.updated"].includes(event.type)) {
       const subscription = event.data.object;
       const customerId = subscription.customer || null;
       const subscriptionId = subscription.id || null;
       const priceId = subscription.items?.data?.[0]?.price?.id || null;
-      const planName = mapPlanFromPriceId(priceId);
+      const planName = clean(subscription.metadata?.plan_name) || mapPlanFromPriceId(priceId);
       const status = subscription.status || "active";
-      const currentPeriodEnd = subscription.current_period_end ? new Date(subscription.current_period_end * 1000).toISOString() : null;
-      const trialEnd = subscription.trial_end ? new Date(subscription.trial_end * 1000).toISOString() : null;
-      const cancelAtPeriodEnd = Boolean(subscription.cancel_at_period_end);
-
       let email = clean(subscription.metadata?.email || "");
-      if (!email && customerId) {
-        const customer = await stripe.customers.retrieve(customerId);
-        email = clean(customer?.email || customer?.metadata?.email || "");
-      }
+      if (!email && customerId) email = await getCustomerEmail(customerId);
 
       await syncBillingState({
         email,
@@ -315,9 +323,9 @@ export default async function handler(req, res) {
         priceId,
         planName,
         status,
-        currentPeriodEnd,
-        trialEnd,
-        cancelAtPeriodEnd,
+        currentPeriodEnd: subscription.current_period_end ? new Date(subscription.current_period_end * 1000).toISOString() : null,
+        trialEnd: subscription.trial_end ? new Date(subscription.trial_end * 1000).toISOString() : null,
+        cancelAtPeriodEnd: Boolean(subscription.cancel_at_period_end),
         referralCode: subscription.metadata?.referral_code || "",
         accessType: subscription.metadata?.access_type || ""
       });
@@ -328,13 +336,9 @@ export default async function handler(req, res) {
       const customerId = subscription.customer || null;
       const subscriptionId = subscription.id || null;
       const priceId = subscription.items?.data?.[0]?.price?.id || null;
-      const planName = mapPlanFromPriceId(priceId);
-
+      const planName = clean(subscription.metadata?.plan_name) || mapPlanFromPriceId(priceId);
       let email = clean(subscription.metadata?.email || "");
-      if (!email && customerId) {
-        const customer = await stripe.customers.retrieve(customerId);
-        email = clean(customer?.email || customer?.metadata?.email || "");
-      }
+      if (!email && customerId) email = await getCustomerEmail(customerId);
 
       await syncBillingState({
         email,
@@ -351,50 +355,32 @@ export default async function handler(req, res) {
       });
     }
 
-    if (event.type === "invoice.payment_failed" || event.type === "invoice.payment_succeeded") {
+    if (["invoice.payment_failed", "invoice.payment_succeeded", "invoice.paid"].includes(event.type)) {
       const invoice = event.data.object;
       const customerId = invoice.customer || null;
       const subscriptionId = invoice.subscription || null;
-      const status = event.type === "invoice.payment_failed" ? "past_due" : "active";
-
+      const invoiceStatus = event.type === "invoice.payment_failed" ? "past_due" : "active";
       let email = clean(invoice.customer_email || invoice.metadata?.email || "");
-      let priceId = null;
-      let planName = "Active Plan";
-      let currentPeriodEnd = null;
-      let trialEnd = null;
-      let cancelAtPeriodEnd = false;
 
-      if (subscriptionId) {
-        const subscription = await stripe.subscriptions.retrieve(subscriptionId);
-        priceId = subscription.items?.data?.[0]?.price?.id || null;
-        planName = mapPlanFromPriceId(priceId);
-        currentPeriodEnd = subscription.current_period_end ? new Date(subscription.current_period_end * 1000).toISOString() : null;
-        trialEnd = subscription.trial_end ? new Date(subscription.trial_end * 1000).toISOString() : null;
-        cancelAtPeriodEnd = Boolean(subscription.cancel_at_period_end);
-        if (!email) email = clean(subscription.metadata?.email || "");
-      }
-
-      if (!email && customerId) {
-        const customer = await stripe.customers.retrieve(customerId);
-        email = clean(customer?.email || customer?.metadata?.email || "");
-      }
+      const hydrated = await hydrateFromSubscription(subscriptionId);
+      if (!email && customerId) email = await getCustomerEmail(customerId);
 
       await syncBillingState({
         email,
         customerId,
         subscriptionId,
-        priceId,
-        planName,
-        status,
-        currentPeriodEnd,
-        trialEnd,
-        cancelAtPeriodEnd,
-        referralCode: invoice.metadata?.referral_code || "",
-        accessType: invoice.metadata?.access_type || ""
+        priceId: hydrated.priceId,
+        planName: hydrated.planName,
+        status: invoiceStatus,
+        currentPeriodEnd: hydrated.currentPeriodEnd,
+        trialEnd: hydrated.trialEnd,
+        cancelAtPeriodEnd: hydrated.cancelAtPeriodEnd,
+        referralCode: invoice.metadata?.referral_code || hydrated.metadata?.referral_code || "",
+        accessType: invoice.metadata?.access_type || hydrated.metadata?.access_type || ""
       });
     }
 
-    return res.status(200).json({ received: true });
+    return res.status(200).json({ received: true, event_type: event.type });
   } catch (error) {
     console.error("stripe-webhook processing error:", error);
     return res.status(500).json({
