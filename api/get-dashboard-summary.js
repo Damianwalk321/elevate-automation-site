@@ -22,10 +22,9 @@ async function resolveUser({ userId, email }) {
   if (userId) {
     const { data, error } = await supabase
       .from("users")
-      .select("id,email")
+      .select("id,email,plan,subscription_status,stripe_customer_id,stripe_subscription_id")
       .eq("id", userId)
       .maybeSingle();
-
     if (error) throw error;
     if (data) return data;
   }
@@ -33,10 +32,9 @@ async function resolveUser({ userId, email }) {
   if (email) {
     const { data, error } = await supabase
       .from("users")
-      .select("id,email")
+      .select("id,email,plan,subscription_status,stripe_customer_id,stripe_subscription_id")
       .eq("email", email)
       .maybeSingle();
-
     if (error) throw error;
     if (data) return data;
   }
@@ -55,6 +53,11 @@ function dayStartIso() {
   const d = new Date();
   d.setHours(0, 0, 0, 0);
   return d.toISOString();
+}
+
+function isActiveStatus(value) {
+  const status = clean(value).toLowerCase();
+  return ["active", "trialing", "paid", "founder", "beta", "checkout_pending"].includes(status);
 }
 
 export default async function handler(req, res) {
@@ -77,21 +80,37 @@ export default async function handler(req, res) {
     }
 
     let listingQuery = supabase.from("listings").select("*");
-
     if (finalUserId) {
       listingQuery = listingQuery.eq("user_id", finalUserId);
     } else {
       listingQuery = listingQuery.eq("email", finalEmail);
     }
 
-    const { data: listings, error: listingsError } = await listingQuery.order("posted_at", { ascending: false });
+    const [
+      listingsResult,
+      subscriptionResult,
+      postingLimitResult,
+      postingUsageResult,
+      profileResult
+    ] = await Promise.all([
+      listingQuery.order("posted_at", { ascending: false }),
+      supabase.from("subscriptions").select("*").eq("email", finalEmail).maybeSingle(),
+      supabase.from("posting_limits").select("*").eq("email", finalEmail).maybeSingle(),
+      supabase.from("posting_usage").select("*").eq("email", finalEmail).maybeSingle(),
+      supabase.from("profiles").select("*").eq("id", finalUserId).maybeSingle()
+    ]);
 
-    if (listingsError) {
-      console.error("get-dashboard-summary listings error:", listingsError);
-      return res.status(500).json({ error: listingsError.message });
+    if (listingsResult.error) {
+      console.error("get-dashboard-summary listings error:", listingsResult.error);
+      return res.status(500).json({ error: listingsResult.error.message });
     }
 
-    const rows = Array.isArray(listings) ? listings : [];
+    const rows = Array.isArray(listingsResult.data) ? listingsResult.data : [];
+    const subscriptionRow = subscriptionResult.data || null;
+    const postingLimitRow = postingLimitResult.data || null;
+    const postingUsageRow = postingUsageResult.data || null;
+    const profileRow = profileResult.data || null;
+
     const todayStart = new Date(dayStartIso()).getTime();
     const monthStart = new Date(monthStartIso()).getTime();
 
@@ -145,6 +164,36 @@ export default async function handler(req, res) {
       messages_count: safeNumber(row.messages_count, 0)
     }));
 
+    const effectivePlan = clean(
+      subscriptionRow?.plan_name ||
+      subscriptionRow?.plan ||
+      user?.plan ||
+      ""
+    ) || "No Plan Yet";
+
+    const effectiveStatus = clean(
+      subscriptionRow?.status ||
+      subscriptionRow?.subscription_status ||
+      user?.subscription_status ||
+      "inactive"
+    ).toLowerCase();
+
+    const dailyLimit = safeNumber(
+      postingLimitRow?.daily_limit ?? subscriptionRow?.daily_posting_limit,
+      0
+    );
+
+    const usageToday = safeNumber(
+      postingUsageRow?.posts_today ?? postingUsageRow?.used_today,
+      postsToday
+    );
+
+    const postsRemaining = Math.max(dailyLimit - usageToday, 0);
+    const inventoryUrl = clean(profileRow?.inventory_url || "");
+    const salespersonName = clean(profileRow?.full_name || profileRow?.salesperson_name || "");
+    const dealershipName = clean(profileRow?.dealership || profileRow?.dealer_name || "");
+    const province = clean(profileRow?.province || profileRow?.compliance_mode || "");
+
     return res.status(200).json({
       success: true,
       data: {
@@ -156,7 +205,33 @@ export default async function handler(req, res) {
         total_messages: totalMessages,
         top_listing_title: topListing?.title || "None yet",
         total_listings: rows.length,
-        recent_listings: recentListings
+        recent_listings: recentListings,
+        account_snapshot: {
+          user_id: finalUserId,
+          email: finalEmail,
+          plan: effectivePlan,
+          status: effectiveStatus,
+          active: isActiveStatus(effectiveStatus),
+          stripe_customer_id: clean(subscriptionRow?.stripe_customer_id || user?.stripe_customer_id || ""),
+          stripe_subscription_id: clean(subscriptionRow?.stripe_subscription_id || user?.stripe_subscription_id || ""),
+          posting_limit: dailyLimit,
+          posts_used_today: usageToday,
+          posts_remaining: postsRemaining,
+          current_period_end: subscriptionRow?.current_period_end || null,
+          trial_end: subscriptionRow?.trial_end || null,
+          cancel_at_period_end: Boolean(subscriptionRow?.cancel_at_period_end)
+        },
+        setup_status: {
+          profile_complete: Boolean(salespersonName && inventoryUrl),
+          inventory_url_present: Boolean(inventoryUrl),
+          salesperson_name_present: Boolean(salespersonName),
+          dealership_name_present: Boolean(dealershipName),
+          compliance_mode_present: Boolean(province),
+          inventory_url: inventoryUrl,
+          salesperson_name: salespersonName,
+          dealership_name: dealershipName,
+          compliance_mode: province
+        }
       }
     });
   } catch (error) {
