@@ -1013,7 +1013,13 @@
               <div><strong>Referral Code:</strong> <span id="referralCode">Loading...</span></div>
               <div><strong>Software License Key:</strong> <span id="licenseKeyDisplay">Loading...</span></div>
               <div><strong>User ID:</strong> <span class="user-id">Loading...</span></div>
+              <div><strong>Daily Posting Limit:</strong> <span id="snapshotPostingLimit">Loading...</span></div>
+              <div><strong>Posts Remaining Today:</strong> <span id="snapshotPostsRemaining">Loading...</span></div>
+              <div><strong>Billing Source:</strong> <span id="snapshotBillingSource">Loading...</span></div>
+              <div><strong>Current Period End:</strong> <span id="snapshotCurrentPeriodEnd">Loading...</span></div>
+              <div><strong>Profile Complete:</strong> <span id="snapshotProfileComplete">Loading...</span></div>
             </div>
+            <div id="snapshotSetupSummary" class="status-line"></div>
           </div>
 
           <div class="card">
@@ -1377,6 +1383,7 @@
     </main>
   </div>
 
+  <script src="/js/supabase-client.js"></script>
   <script src="/dashboard.js"></script>
 </body>
 </html>
