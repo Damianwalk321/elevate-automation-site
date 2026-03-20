@@ -170,44 +170,55 @@ function bindDashboardUI() {
     });
   }
 
-  const openBillingPortalBtn = document.getElementById("openBillingPortalBtn");
-  if (openBillingPortalBtn) {
-    openBillingPortalBtn.addEventListener("click", async () => {
-      try {
-        if (!currentUser?.email) {
-          setStatus("accountStatusBilling", "No logged-in user email found.");
-          return;
-        }
-
-        setStatus("accountStatusBilling", "Opening billing portal...");
-
-        const response = await fetch("/api/create-billing-portal-session", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json"
-          },
-          body: JSON.stringify({
-            email: currentUser.email
-          })
-        });
-
-        const data = await response.json();
-
-        if (!response.ok) {
-          throw new Error(data.error || "Could not open billing portal.");
-        }
-
-        if (!data.url) {
-          throw new Error("Billing portal URL missing.");
-        }
-
-        window.location.href = data.url;
-      } catch (error) {
-        console.error("Billing portal error:", error);
-        setStatus("accountStatusBilling", error.message || "Could not open billing portal.");
+const openBillingPortalBtn = document.getElementById("openBillingPortalBtn");
+if (openBillingPortalBtn) {
+  openBillingPortalBtn.addEventListener("click", async () => {
+    try {
+      if (!currentUser?.id) {
+        setStatus("accountStatusBilling", "No logged-in user found.");
+        return;
       }
-    });
-  }
+
+      setStatus("accountStatusBilling", "Opening billing portal...");
+
+      const response = await fetch("/api/create-billing-portal-session", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          userId: currentUser.id,
+          email: currentUser.email
+        })
+      });
+
+      // 🔥 CRITICAL FIX — safe parsing
+      const rawText = await response.text();
+
+      let data;
+      try {
+        data = JSON.parse(rawText);
+      } catch (parseError) {
+        console.error("[billing] Non-JSON response:", rawText);
+        throw new Error("Server error (non-JSON response)");
+      }
+
+      if (!response.ok) {
+        throw new Error(data.error || "Could not open billing portal.");
+      }
+
+      if (!data.url) {
+        throw new Error("Billing portal URL missing.");
+      }
+
+      window.location.href = data.url;
+
+    } catch (error) {
+      console.error("Billing portal error:", error);
+      setStatus("accountStatusBilling", error.message || "Could not open billing portal.");
+    }
+  });
+}
 
   const refreshBillingBtn = document.getElementById("refreshBillingBtn");
   if (refreshBillingBtn) {
