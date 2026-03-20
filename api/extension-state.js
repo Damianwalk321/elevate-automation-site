@@ -47,7 +47,7 @@ function normalizeBoolean(value) {
 
 function isActiveStatus(value) {
   const status = clean(value).toLowerCase();
-  return ["active", "trialing", "paid", "founder", "beta"].includes(status);
+  return ["active", "trialing", "paid", "founder", "beta", "checkout_pending"].includes(status);
 }
 
 function dealershipMatchesHostname(dealership, hostname) {
@@ -133,8 +133,8 @@ function buildSubscriptionPayload(
   legacyProfileRow
 ) {
   const rawPlan = firstNonEmpty(
-    subscriptionRow?.plan,
     subscriptionRow?.plan_name,
+    subscriptionRow?.plan,
     licenseRow?.plan,
     licenseKeyRow?.plan,
     "Founder Beta"
@@ -150,12 +150,12 @@ function buildSubscriptionPayload(
     )
   ).toLowerCase();
 
-  const postingLimit = Number(
+  const basePostingLimit = Number(
     firstNonEmpty(
       postingLimitRow?.daily_limit,
       postingLimitRow?.posting_limit,
-      subscriptionRow?.posting_limit,
       subscriptionRow?.daily_posting_limit,
+      subscriptionRow?.posting_limit,
       25
     )
   ) || 25;
@@ -167,8 +167,6 @@ function buildSubscriptionPayload(
       0
     )
   ) || 0;
-
-  const postsRemaining = Math.max(postingLimit - postsToday, 0);
 
   const licenseKey = clean(
     firstNonEmpty(
@@ -207,22 +205,24 @@ function buildSubscriptionPayload(
   );
 
   const founderLikePlan = /founder|beta|starter/i.test(rawPlan);
-
-  const bridgeActive =
-    !explicitNegative &&
-    founderLikePlan &&
-    hasProfileSetup;
-
+  const bridgeActive = !explicitNegative && founderLikePlan && hasProfileSetup;
   const active = explicitPositive || bridgeActive;
+  const postingLimit = explicitNegative ? 0 : basePostingLimit;
+  const postsRemaining = Math.max(postingLimit - postsToday, 0);
 
   return {
     id: clean(subscriptionRow?.id || ""),
     plan: clean(rawPlan || "Founder Beta"),
-    status: active ? "active" : (rawStatus || "inactive"),
+    status: active ? (rawStatus || "active") : (rawStatus || "inactive"),
     active,
+    access_type: clean(subscriptionRow?.access_type || ""),
     posting_limit: postingLimit,
     posts_today: postsToday,
     posts_remaining: postsRemaining,
+    current_period_end: subscriptionRow?.current_period_end || null,
+    trial_end: subscriptionRow?.trial_end || null,
+    cancel_at_period_end: Boolean(subscriptionRow?.cancel_at_period_end),
+    billing_source: subscriptionRow ? "subscriptions" : (licenseRow || licenseKeyRow ? "license" : "bridge"),
     stripe_customer_id: clean(subscriptionRow?.stripe_customer_id || ""),
     stripe_subscription_id: clean(subscriptionRow?.stripe_subscription_id || ""),
     license_key: licenseKey
@@ -532,7 +532,9 @@ export default async function handler(req, res) {
       meta: {
         requested_hostname: hostname,
         requested_page_url: pageUrl,
-        mode: membershipList.length ? "multi_tenant" : "solo_bridge"
+        mode: membershipList.length ? "multi_tenant" : "solo_bridge",
+        setup_ready: Boolean(profile?.full_name && dealership?.inventory_url),
+        billing_active: Boolean(subscription?.active)
       }
     };
 
