@@ -1,8 +1,7 @@
-const SUPABASE_URL = "https://teixblbxkoershwgqpym.supabase.co";
-const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRlaXhibGJ4a29lcnNod2dxcHltIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMwODUzMDMsImV4cCI6MjA4ODY2MTMwM30.wxt9zjKhsBuflaFZZT9awZiwckRzYkEl-OLm_4q8qF4";
 const EXTENSION_DOWNLOAD_URL = "/downloads/elevate-automation-extension.zip";
+const EXTENSION_FALLBACK_URL = "https://github.com/Damianwalk321/elevate-automation-vehicle-poster/archive/refs/heads/Dev.zip";
 
-const EXTENSION_DOWNLOAD_FALLBACK_URL = "https://github.com/Damianwalk321/elevate-automation-vehicle-poster/archive/refs/heads/Dev.zip";
+let bootStages = [];
 
 let supabaseClient = null;
 let currentUser = null;
@@ -15,17 +14,28 @@ let filteredListings = [];
 
 document.addEventListener("DOMContentLoaded", async () => {
   try {
-    setBootStatus("Loading dashboard shell...");
+    setBootStatus("Booting dashboard...");
 
     if (!window.supabase || !window.supabase.createClient) {
       setBootStatus("Supabase library missing.");
       return;
     }
 
-    supabaseClient = window.supabaseClient || window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-    bindDashboardUI();
-    setBootStatus("Checking session...");
+    supabaseClient =
+      window.supabaseClient ||
+      window.supabase.createClient(
+        window.__ELEVATE_SUPABASE_URL,
+        window.__ELEVATE_SUPABASE_ANON_KEY
+      );
 
+    if (!supabaseClient) {
+      setBootStatus("Supabase client unavailable.");
+      return;
+    }
+
+    bindDashboardUI();
+
+    pushBootStage("Session", "Checking login session...");
     const {
       data: { session },
       error: sessionError
@@ -43,24 +53,28 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
 
     currentUser = session.user;
-
     renderUserBasics(currentUser);
-    setBootStatus("Syncing account...");
+
+    pushBootStage("User", "Syncing account record...");
     await syncUserIfNeeded(currentUser);
-    setBootStatus("Loading profile...");
+
+    pushBootStage("Profile", "Loading saved dealer profile...");
     await loadProfile(currentUser.id);
-    setBootStatus("Loading billing and access...");
+
+    pushBootStage("Access", "Loading billing and extension state...");
     await loadAccountData(currentUser, true);
-    setBootStatus("Loading listings and analytics...");
+
+    pushBootStage("Analytics", "Loading dashboard metrics and listings...");
     await loadListingDashboardData(true);
-    setBootStatus("Syncing extension profile...");
+
+    pushBootStage("Extension", "Pushing live profile sync to extension...");
     await pushExtensionProfileSync();
 
     showSection("overview");
-    setBootStatus("");
+    setBootStatus("Dashboard ready.");
   } catch (error) {
     console.error("Dashboard boot failed:", error);
-    setBootStatus("Dashboard failed to load.");
+    setBootStatus(`Dashboard failed to load: ${error.message || "Unknown error"}`);
   }
 });
 
@@ -110,15 +124,9 @@ function bindDashboardUI() {
   const downloadExtensionBtn = document.getElementById("downloadExtensionBtn");
   if (downloadExtensionBtn) {
     downloadExtensionBtn.addEventListener("click", async () => {
-      const downloadUrl = await resolveExtensionDownloadUrl();
-      window.open(downloadUrl, "_blank");
-      const usedFallback = downloadUrl === EXTENSION_DOWNLOAD_FALLBACK_URL;
-      setStatus(
-        "extensionActionStatus",
-        usedFallback
-          ? "Primary extension zip not found. Opening repository build instead."
-          : "Opening extension download..."
-      );
+      const target = await resolveExtensionDownloadUrl();
+      window.open(target, "_blank");
+      setStatus("extensionActionStatus", target === EXTENSION_DOWNLOAD_URL ? "Opening hosted extension download..." : "Hosted extension file missing. Opening GitHub fallback...");
     });
   }
 
@@ -272,6 +280,7 @@ async function loadListingDashboardData(forceFresh = false) {
     filteredListings = [...dashboardListings];
 
     renderDashboardAnalytics();
+    renderSetupSnapshot();
     applyListingFiltersAndRender();
   } catch (error) {
     console.error("loadListingDashboardData error:", error);
@@ -279,6 +288,7 @@ async function loadListingDashboardData(forceFresh = false) {
     dashboardSummary = buildDashboardSummaryFromListings(dashboardListings);
     filteredListings = [];
     renderDashboardAnalytics();
+    renderSetupSnapshot();
     applyListingFiltersAndRender();
   }
 }
@@ -1267,6 +1277,26 @@ function persistProfileSnapshots(profileSnapshot, session) {
   }
 }
 
+function renderSetupSnapshot() {
+  const snapshot = dashboardSummary?.account_snapshot || {};
+  const setup = dashboardSummary?.setup_status || {};
+
+  setTextByIdForAll("snapshotPostingLimit", String(numberOrZero(snapshot.posting_limit)));
+  setTextByIdForAll("snapshotPostsRemaining", String(numberOrZero(snapshot.posts_remaining)));
+  setTextByIdForAll("snapshotBillingSource", clean(currentNormalizedSession?.subscription?.billing_source || snapshot.billing_source || "subscriptions/users" ) || "subscriptions/users");
+  setTextByIdForAll("snapshotCurrentPeriodEnd", formatShortDate(snapshot.current_period_end || currentNormalizedSession?.subscription?.current_period_end || ""));
+  setTextByIdForAll("snapshotProfileComplete", setup.profile_complete ? "Ready" : "Needs setup");
+
+  const summaryBits = [
+    setup.salesperson_name_present ? null : "salesperson name missing",
+    setup.dealership_name_present ? null : "dealership missing",
+    setup.inventory_url_present ? null : "inventory URL missing",
+    setup.compliance_mode_present ? null : "compliance mode missing"
+  ].filter(Boolean);
+
+  setStatus("snapshotSetupSummary", summaryBits.length ? `Setup gaps: ${summaryBits.join(" • ")}` : "Account setup looks complete for beta use.");
+}
+
 function renderAccessState(session) {
   const hasAccess = Boolean(session?.subscription?.active);
   const plan = session?.subscription?.plan || "Founder Beta";
@@ -1341,12 +1371,15 @@ function renderExtensionControl(session, profile) {
 }
 
 function updateSetupStates(profile, session) {
+  const setup = dashboardSummary?.setup_status || {};
+  const snapshot = dashboardSummary?.account_snapshot || {};
+
   const websiteReady = Boolean(profile?.dealer_website || session?.dealership?.website);
-  const inventoryReady = Boolean(profile?.inventory_url || session?.dealership?.inventory_url);
+  const inventoryReady = Boolean(setup.inventory_url_present || profile?.inventory_url || session?.dealership?.inventory_url);
   const scannerReady = Boolean(profile?.scanner_type || session?.scanner_config?.scanner_type || session?.dealership?.scanner_type);
   const listingReady = Boolean(profile?.listing_location || session?.profile?.listing_location);
-  const complianceReady = Boolean(profile?.compliance_mode || profile?.province || session?.profile?.compliance_mode || session?.dealership?.province);
-  const accessReady = Boolean(session?.subscription?.active);
+  const complianceReady = Boolean(setup.compliance_mode_present || profile?.compliance_mode || profile?.province || session?.profile?.compliance_mode || session?.dealership?.province);
+  const accessReady = Boolean(session?.subscription?.active || snapshot.active);
 
   setSetupState("setupDealerWebsite", websiteReady);
   setSetupState("setupInventoryUrl", inventoryReady);
@@ -1412,23 +1445,6 @@ async function syncUserIfNeeded(user) {
   } catch (error) {
     console.warn("syncUserIfNeeded warning:", error);
   }
-}
-
-async function resolveExtensionDownloadUrl() {
-  try {
-    const response = await fetch(EXTENSION_DOWNLOAD_URL, {
-      method: "HEAD",
-      cache: "no-store"
-    });
-
-    if (response.ok) {
-      return EXTENSION_DOWNLOAD_URL;
-    }
-  } catch (error) {
-    console.warn("Primary extension download check failed:", error);
-  }
-
-  return EXTENSION_DOWNLOAD_FALLBACK_URL;
 }
 
 async function signOutUser() {
@@ -1515,6 +1531,23 @@ function setStatus(id, text) {
   document.querySelectorAll(`#${id}`).forEach((el) => {
     el.textContent = text || "";
   });
+}
+
+function pushBootStage(stage, detail) {
+  const line = `${stage}: ${detail}`;
+  bootStages.push(line);
+  bootStages = bootStages.slice(-5);
+  setBootStatus(bootStages.join("  |  "));
+}
+
+async function resolveExtensionDownloadUrl() {
+  try {
+    const response = await fetch(EXTENSION_DOWNLOAD_URL, { method: "HEAD", cache: "no-store" });
+    if (response.ok) return EXTENSION_DOWNLOAD_URL;
+  } catch (error) {
+    console.warn("resolveExtensionDownloadUrl fallback:", error);
+  }
+  return EXTENSION_FALLBACK_URL;
 }
 
 function setBootStatus(text) {
