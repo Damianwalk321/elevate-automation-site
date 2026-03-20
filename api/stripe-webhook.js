@@ -26,59 +26,200 @@ async function readRawBody(readable) {
   return Buffer.concat(chunks);
 }
 
-function mapPlanFromPriceId(priceId) {
-  const founderStarter = "price_1TAIiQFjHUUVl5XclBkphvUF";
-  const founderPro = "price_1TAIipFjHUUVl5XcRhx3sAvv";
-  const starter = "price_1TAIjWFjHUUVl5XciikHcOks";
-  const pro = "price_1T98thFjHUUVl5XcPZfqa4wx";
+function clean(value) {
+  return String(value || "").trim();
+}
 
-  if (priceId === founderStarter) return "Founder Starter";
-  if (priceId === founderPro) return "Founder Pro";
-  if (priceId === starter) return "Starter";
-  if (priceId === pro) return "Pro";
+function normalizeEmail(value) {
+  return clean(value).toLowerCase();
+}
+
+function firstNonEmpty(...values) {
+  for (const value of values) {
+    if (typeof value === "string" && value.trim()) return value.trim();
+    if (value !== undefined && value !== null && typeof value !== "string") return value;
+  }
+  return "";
+}
+
+function mapPlanFromPriceId(priceId) {
+  const founder = clean(process.env.STRIPE_FOUNDER_PRICE_ID);
+  const starter = clean(process.env.STRIPE_STARTER_PRICE_ID);
+  const founderPro = clean(process.env.STRIPE_FOUNDER_PRO_PRICE_ID);
+  const pro = clean(process.env.STRIPE_PRO_PRICE_ID);
+
+  if (priceId && founder && priceId === founder) return "Founder Starter";
+  if (priceId && founderPro && priceId === founderPro) return "Founder Pro";
+  if (priceId && starter && priceId === starter) return "Starter";
+  if (priceId && pro && priceId === pro) return "Pro";
 
   return "Active Plan";
 }
 
-async function updateUserByEmail(email, payload) {
-  if (!email) return;
+function getDailyPostingLimit(planName) {
+  const plan = clean(planName).toLowerCase();
+  if (plan.includes("starter")) return 5;
+  if (plan.includes("pro")) return 25;
+  return 25;
+}
 
-  const normalizedEmail = String(email).trim().toLowerCase();
+async function findUser({ email, customerId, subscriptionId }) {
+  const normalizedEmail = normalizeEmail(email);
 
-  const { error } = await supabase
-    .from("users")
-    .update(payload)
-    .eq("email", normalizedEmail);
+  if (normalizedEmail) {
+    const { data, error } = await supabase
+      .from("users")
+      .select("id,email")
+      .eq("email", normalizedEmail)
+      .maybeSingle();
 
-  if (error) {
-    throw new Error(error.message);
+    if (!error && data) return data;
+  }
+
+  if (customerId) {
+    const { data, error } = await supabase
+      .from("users")
+      .select("id,email")
+      .eq("stripe_customer_id", customerId)
+      .maybeSingle();
+
+    if (!error && data) return data;
+  }
+
+  if (subscriptionId) {
+    const { data, error } = await supabase
+      .from("users")
+      .select("id,email")
+      .eq("stripe_subscription_id", subscriptionId)
+      .maybeSingle();
+
+    if (!error && data) return data;
+  }
+
+  return null;
+}
+
+async function updateUsersTable({ email, customerId, subscriptionId, priceId, planName, status }) {
+  const normalizedEmail = normalizeEmail(email);
+  const payload = {
+    stripe_customer_id: customerId || null,
+    stripe_subscription_id: subscriptionId || null,
+    stripe_price_id: priceId || null,
+    subscription_status: status || null,
+    plan: planName || "Active Plan",
+    updated_at: new Date().toISOString()
+  };
+
+  if (normalizedEmail) {
+    const { error } = await supabase
+      .from("users")
+      .update(payload)
+      .eq("email", normalizedEmail);
+
+    if (!error) return;
+  }
+
+  if (customerId) {
+    const { error } = await supabase
+      .from("users")
+      .update(payload)
+      .eq("stripe_customer_id", customerId);
+
+    if (!error) return;
+  }
+
+  if (subscriptionId) {
+    const { error } = await supabase
+      .from("users")
+      .update(payload)
+      .eq("stripe_subscription_id", subscriptionId);
+
+    if (!error) return;
   }
 }
 
-async function updateUserByCustomerId(customerId, payload) {
-  if (!customerId) return;
+async function upsertSubscriptionsMirror({ user, email, customerId, subscriptionId, priceId, planName, status, currentPeriodEnd, trialEnd, cancelAtPeriodEnd, referralCode, accessType }) {
+  const normalizedEmail = normalizeEmail(firstNonEmpty(email, user?.email));
+  const payload = {
+    user_id: user?.id || null,
+    email: normalizedEmail || null,
+    stripe_customer_id: customerId || null,
+    stripe_subscription_id: subscriptionId || null,
+    stripe_price_id: priceId || null,
+    status: status || null,
+    subscription_status: status || null,
+    plan: planName || "Active Plan",
+    plan_name: planName || "Active Plan",
+    access: ["active", "trialing", "paid"].includes(clean(status).toLowerCase()),
+    active: ["active", "trialing", "paid"].includes(clean(status).toLowerCase()),
+    daily_posting_limit: getDailyPostingLimit(planName),
+    current_period_end: currentPeriodEnd || null,
+    trial_end: trialEnd || null,
+    cancel_at_period_end: Boolean(cancelAtPeriodEnd),
+    referral_code: referralCode || null,
+    access_type: accessType || null,
+    updated_at: new Date().toISOString()
+  };
 
   const { error } = await supabase
-    .from("users")
-    .update(payload)
-    .eq("stripe_customer_id", customerId);
+    .from("subscriptions")
+    .upsert(payload, { onConflict: "email" });
 
   if (error) {
-    throw new Error(error.message);
+    console.error("subscriptions upsert warning:", error.message);
   }
 }
 
-async function updateUserBySubscriptionId(subscriptionId, payload) {
-  if (!subscriptionId) return;
+async function mirrorPostingLimit({ user, email, planName }) {
+  const normalizedEmail = normalizeEmail(firstNonEmpty(email, user?.email));
+  const payload = {
+    user_id: user?.id || null,
+    email: normalizedEmail || null,
+    daily_limit: getDailyPostingLimit(planName),
+    updated_at: new Date().toISOString()
+  };
 
   const { error } = await supabase
-    .from("users")
-    .update(payload)
-    .eq("stripe_subscription_id", subscriptionId);
+    .from("posting_limits")
+    .upsert(payload, { onConflict: "email" });
 
   if (error) {
-    throw new Error(error.message);
+    console.error("posting_limits upsert warning:", error.message);
   }
+}
+
+async function syncBillingState({ email, customerId, subscriptionId, priceId, planName, status, currentPeriodEnd, trialEnd, cancelAtPeriodEnd, referralCode, accessType }) {
+  const user = await findUser({ email, customerId, subscriptionId });
+
+  await updateUsersTable({
+    email: firstNonEmpty(email, user?.email),
+    customerId,
+    subscriptionId,
+    priceId,
+    planName,
+    status
+  });
+
+  await upsertSubscriptionsMirror({
+    user,
+    email: firstNonEmpty(email, user?.email),
+    customerId,
+    subscriptionId,
+    priceId,
+    planName,
+    status,
+    currentPeriodEnd,
+    trialEnd,
+    cancelAtPeriodEnd,
+    referralCode,
+    accessType
+  });
+
+  await mirrorPostingLimit({
+    user,
+    email: firstNonEmpty(email, user?.email),
+    planName
+  });
 }
 
 export default async function handler(req, res) {
@@ -110,115 +251,146 @@ export default async function handler(req, res) {
   try {
     if (event.type === "checkout.session.completed") {
       const session = event.data.object;
-
       const customerId = session.customer || null;
       const subscriptionId = session.subscription || null;
-      const email =
-        session.customer_details?.email ||
-        session.customer_email ||
-        session.metadata?.email ||
-        null;
+      const email = firstNonEmpty(
+        session.customer_details?.email,
+        session.customer_email,
+        session.metadata?.email
+      );
 
       let priceId = null;
       let planName = "Active Plan";
+      let status = "active";
+      let currentPeriodEnd = null;
+      let trialEnd = null;
+      let cancelAtPeriodEnd = false;
 
       if (subscriptionId) {
         const subscription = await stripe.subscriptions.retrieve(subscriptionId);
         priceId = subscription.items?.data?.[0]?.price?.id || null;
         planName = mapPlanFromPriceId(priceId);
+        status = subscription.status || "active";
+        currentPeriodEnd = subscription.current_period_end ? new Date(subscription.current_period_end * 1000).toISOString() : null;
+        trialEnd = subscription.trial_end ? new Date(subscription.trial_end * 1000).toISOString() : null;
+        cancelAtPeriodEnd = Boolean(subscription.cancel_at_period_end);
       }
 
-      await updateUserByEmail(email, {
-        stripe_customer_id: customerId,
-        stripe_subscription_id: subscriptionId,
-        stripe_price_id: priceId,
-        subscription_status: "active",
-        plan: planName
+      await syncBillingState({
+        email,
+        customerId,
+        subscriptionId,
+        priceId,
+        planName,
+        status,
+        currentPeriodEnd,
+        trialEnd,
+        cancelAtPeriodEnd,
+        referralCode: session.metadata?.referral_code || "",
+        accessType: session.metadata?.access_type || ""
       });
     }
 
-    if (event.type === "customer.subscription.created") {
+    if (event.type === "customer.subscription.created" || event.type === "customer.subscription.updated") {
       const subscription = event.data.object;
-
       const customerId = subscription.customer || null;
       const subscriptionId = subscription.id || null;
       const priceId = subscription.items?.data?.[0]?.price?.id || null;
       const planName = mapPlanFromPriceId(priceId);
       const status = subscription.status || "active";
+      const currentPeriodEnd = subscription.current_period_end ? new Date(subscription.current_period_end * 1000).toISOString() : null;
+      const trialEnd = subscription.trial_end ? new Date(subscription.trial_end * 1000).toISOString() : null;
+      const cancelAtPeriodEnd = Boolean(subscription.cancel_at_period_end);
 
-      await updateUserByCustomerId(customerId, {
-        stripe_subscription_id: subscriptionId,
-        stripe_price_id: priceId,
-        subscription_status: status,
-        plan: planName
-      });
-    }
+      let email = clean(subscription.metadata?.email || "");
+      if (!email && customerId) {
+        const customer = await stripe.customers.retrieve(customerId);
+        email = clean(customer?.email || customer?.metadata?.email || "");
+      }
 
-    if (event.type === "customer.subscription.updated") {
-      const subscription = event.data.object;
-
-      const customerId = subscription.customer || null;
-      const subscriptionId = subscription.id || null;
-      const priceId = subscription.items?.data?.[0]?.price?.id || null;
-      const planName = mapPlanFromPriceId(priceId);
-      const status = subscription.status || "active";
-
-      await updateUserByCustomerId(customerId, {
-        stripe_subscription_id: subscriptionId,
-        stripe_price_id: priceId,
-        subscription_status: status,
-        plan: planName
-      });
-
-      await updateUserBySubscriptionId(subscriptionId, {
-        stripe_price_id: priceId,
-        subscription_status: status,
-        plan: planName
+      await syncBillingState({
+        email,
+        customerId,
+        subscriptionId,
+        priceId,
+        planName,
+        status,
+        currentPeriodEnd,
+        trialEnd,
+        cancelAtPeriodEnd,
+        referralCode: subscription.metadata?.referral_code || "",
+        accessType: subscription.metadata?.access_type || ""
       });
     }
 
     if (event.type === "customer.subscription.deleted") {
       const subscription = event.data.object;
-
-      const subscriptionId = subscription.id || null;
       const customerId = subscription.customer || null;
+      const subscriptionId = subscription.id || null;
+      const priceId = subscription.items?.data?.[0]?.price?.id || null;
+      const planName = mapPlanFromPriceId(priceId);
 
-      await updateUserBySubscriptionId(subscriptionId, {
-        subscription_status: "cancelled"
-      });
+      let email = clean(subscription.metadata?.email || "");
+      if (!email && customerId) {
+        const customer = await stripe.customers.retrieve(customerId);
+        email = clean(customer?.email || customer?.metadata?.email || "");
+      }
 
-      await updateUserByCustomerId(customerId, {
-        subscription_status: "cancelled"
+      await syncBillingState({
+        email,
+        customerId,
+        subscriptionId,
+        priceId,
+        planName,
+        status: "cancelled",
+        currentPeriodEnd: subscription.current_period_end ? new Date(subscription.current_period_end * 1000).toISOString() : null,
+        trialEnd: subscription.trial_end ? new Date(subscription.trial_end * 1000).toISOString() : null,
+        cancelAtPeriodEnd: Boolean(subscription.cancel_at_period_end),
+        referralCode: subscription.metadata?.referral_code || "",
+        accessType: subscription.metadata?.access_type || ""
       });
     }
 
-    if (event.type === "invoice.payment_failed") {
+    if (event.type === "invoice.payment_failed" || event.type === "invoice.payment_succeeded") {
       const invoice = event.data.object;
-
       const customerId = invoice.customer || null;
       const subscriptionId = invoice.subscription || null;
+      const status = event.type === "invoice.payment_failed" ? "past_due" : "active";
 
-      await updateUserBySubscriptionId(subscriptionId, {
-        subscription_status: "past_due"
-      });
+      let email = clean(invoice.customer_email || invoice.metadata?.email || "");
+      let priceId = null;
+      let planName = "Active Plan";
+      let currentPeriodEnd = null;
+      let trialEnd = null;
+      let cancelAtPeriodEnd = false;
 
-      await updateUserByCustomerId(customerId, {
-        subscription_status: "past_due"
-      });
-    }
+      if (subscriptionId) {
+        const subscription = await stripe.subscriptions.retrieve(subscriptionId);
+        priceId = subscription.items?.data?.[0]?.price?.id || null;
+        planName = mapPlanFromPriceId(priceId);
+        currentPeriodEnd = subscription.current_period_end ? new Date(subscription.current_period_end * 1000).toISOString() : null;
+        trialEnd = subscription.trial_end ? new Date(subscription.trial_end * 1000).toISOString() : null;
+        cancelAtPeriodEnd = Boolean(subscription.cancel_at_period_end);
+        if (!email) email = clean(subscription.metadata?.email || "");
+      }
 
-    if (event.type === "invoice.payment_succeeded") {
-      const invoice = event.data.object;
+      if (!email && customerId) {
+        const customer = await stripe.customers.retrieve(customerId);
+        email = clean(customer?.email || customer?.metadata?.email || "");
+      }
 
-      const customerId = invoice.customer || null;
-      const subscriptionId = invoice.subscription || null;
-
-      await updateUserBySubscriptionId(subscriptionId, {
-        subscription_status: "active"
-      });
-
-      await updateUserByCustomerId(customerId, {
-        subscription_status: "active"
+      await syncBillingState({
+        email,
+        customerId,
+        subscriptionId,
+        priceId,
+        planName,
+        status,
+        currentPeriodEnd,
+        trialEnd,
+        cancelAtPeriodEnd,
+        referralCode: invoice.metadata?.referral_code || "",
+        accessType: invoice.metadata?.access_type || ""
       });
     }
 
@@ -230,4 +402,3 @@ export default async function handler(req, res) {
     });
   }
 }
-
