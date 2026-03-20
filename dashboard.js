@@ -2,6 +2,8 @@ const SUPABASE_URL = "https://teixblbxkoershwgqpym.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRlaXhibGJ4a29lcnNod2dxcHltIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMwODUzMDMsImV4cCI6MjA4ODY2MTMwM30.wxt9zjKhsBuflaFZZT9awZiwckRzYkEl-OLm_4q8qF4";
 const EXTENSION_DOWNLOAD_URL = "/downloads/elevate-automation-extension.zip";
 
+const EXTENSION_DOWNLOAD_FALLBACK_URL = "https://github.com/Damianwalk321/elevate-automation-vehicle-poster/archive/refs/heads/Dev.zip";
+
 let supabaseClient = null;
 let currentUser = null;
 let currentProfile = null;
@@ -13,15 +15,16 @@ let filteredListings = [];
 
 document.addEventListener("DOMContentLoaded", async () => {
   try {
-    setBootStatus("Loading dashboard...");
+    setBootStatus("Loading dashboard shell...");
 
     if (!window.supabase || !window.supabase.createClient) {
       setBootStatus("Supabase library missing.");
       return;
     }
 
-    supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    supabaseClient = window.supabaseClient || window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
     bindDashboardUI();
+    setBootStatus("Checking session...");
 
     const {
       data: { session },
@@ -42,10 +45,15 @@ document.addEventListener("DOMContentLoaded", async () => {
     currentUser = session.user;
 
     renderUserBasics(currentUser);
+    setBootStatus("Syncing account...");
     await syncUserIfNeeded(currentUser);
+    setBootStatus("Loading profile...");
     await loadProfile(currentUser.id);
+    setBootStatus("Loading billing and access...");
     await loadAccountData(currentUser, true);
+    setBootStatus("Loading listings and analytics...");
     await loadListingDashboardData(true);
+    setBootStatus("Syncing extension profile...");
     await pushExtensionProfileSync();
 
     showSection("overview");
@@ -101,9 +109,16 @@ function bindDashboardUI() {
 
   const downloadExtensionBtn = document.getElementById("downloadExtensionBtn");
   if (downloadExtensionBtn) {
-    downloadExtensionBtn.addEventListener("click", () => {
-      window.open(EXTENSION_DOWNLOAD_URL, "_blank");
-      setStatus("extensionActionStatus", "Opening extension download...");
+    downloadExtensionBtn.addEventListener("click", async () => {
+      const downloadUrl = await resolveExtensionDownloadUrl();
+      window.open(downloadUrl, "_blank");
+      const usedFallback = downloadUrl === EXTENSION_DOWNLOAD_FALLBACK_URL;
+      setStatus(
+        "extensionActionStatus",
+        usedFallback
+          ? "Primary extension zip not found. Opening repository build instead."
+          : "Opening extension download..."
+      );
     });
   }
 
@@ -1397,6 +1412,23 @@ async function syncUserIfNeeded(user) {
   } catch (error) {
     console.warn("syncUserIfNeeded warning:", error);
   }
+}
+
+async function resolveExtensionDownloadUrl() {
+  try {
+    const response = await fetch(EXTENSION_DOWNLOAD_URL, {
+      method: "HEAD",
+      cache: "no-store"
+    });
+
+    if (response.ok) {
+      return EXTENSION_DOWNLOAD_URL;
+    }
+  } catch (error) {
+    console.warn("Primary extension download check failed:", error);
+  }
+
+  return EXTENSION_DOWNLOAD_FALLBACK_URL;
 }
 
 async function signOutUser() {
