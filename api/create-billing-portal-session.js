@@ -1,104 +1,147 @@
-import Stripe from "stripe";
-import { createClient } from "@supabase/supabase-js";
+const Stripe = require("stripe");
+const { createClient } = require("@supabase/supabase-js");
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-);
-
-const SITE_URL =
-  process.env.NEXT_PUBLIC_SITE_URL ||
-  process.env.SITE_URL ||
-  "http://localhost:3000";
-
-function clean(value) {
-  return String(value || "").trim();
+function json(res, status, body) {
+  res.status(status).setHeader("Content-Type", "application/json");
+  res.send(JSON.stringify(body));
 }
 
-function normalizeEmail(value) {
-  return clean(value).toLowerCase();
+function getSiteUrl(req) {
+  return (
+    process.env.SITE_URL ||
+    process.env.NEXT_PUBLIC_SITE_URL ||
+    `${req.headers["x-forwarded-proto"] || "https"}://${req.headers.host}`
+  );
 }
 
-async function resolveCustomerId({ email, userId }) {
-  const normalizedEmail = normalizeEmail(email);
-  const cleanUserId = clean(userId);
-
-  if (cleanUserId) {
-    const { data, error } = await supabase
-      .from("users")
-      .select("id,email,stripe_customer_id")
-      .eq("id", cleanUserId)
-      .maybeSingle();
-
-    if (error) throw error;
-    if (data?.stripe_customer_id) return { customerId: data.stripe_customer_id, source: "users.id" };
-    if (data?.email && !email) {
-      const subLookup = await resolveCustomerId({ email: data.email });
-      if (subLookup?.customerId) return subLookup;
-    }
-  }
-
-  if (normalizedEmail) {
-    const { data, error } = await supabase
-      .from("users")
-      .select("id,email,stripe_customer_id")
-      .eq("email", normalizedEmail)
-      .maybeSingle();
-
-    if (error) throw error;
-    if (data?.stripe_customer_id) return { customerId: data.stripe_customer_id, source: "users.email" };
-
-    const { data: subscriptionRow, error: subscriptionError } = await supabase
-      .from("subscriptions")
-      .select("stripe_customer_id,email")
-      .eq("email", normalizedEmail)
-      .maybeSingle();
-
-    if (subscriptionError) throw subscriptionError;
-    if (subscriptionRow?.stripe_customer_id) {
-      return { customerId: subscriptionRow.stripe_customer_id, source: "subscriptions.email" };
-    }
-  }
-
-  return { customerId: "", source: "none" };
-}
-
-export default async function handler(req, res) {
+module.exports = async function handler(req, res) {
   if (req.method !== "POST") {
-    return res.status(405).json({ error: "Method not allowed" });
+    return json(res, 405, { error: "Method not allowed" });
   }
+
+  const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
+  const supabaseUrl = process.env.SUPABASE_URL;
+  const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+  if (!stripeSecretKey) {
+    return json(res, 500, { error: "Missing STRIPE_SECRET_KEY" });
+  }
+
+  if (!supabaseUrl || !supabaseServiceRoleKey) {
+    return json(res, 500, { error: "Missing Supabase environment variables" });
+  }
+
+  const stripe = new Stripe(stripeSecretKey);
+  const supabase = createClient(supabaseUrl, supabaseServiceRoleKey);
 
   try {
-    if (!process.env.STRIPE_SECRET_KEY) {
-      return res.status(500).json({ error: "Missing STRIPE_SECRET_KEY env variable" });
-    }
-
-    const { email = "", userId = "" } = req.body || {};
+    const body = typeof req.body === "string" ? JSON.parse(req.body) : (req.body || {});
+    const email = body.email || null;
+    const userId = body.userId || body.id || null;
 
     if (!email && !userId) {
-      return res.status(400).json({ error: "Missing email or userId" });
+      return json(res, 400, { error: "Missing email or userId" });
     }
 
-    const { customerId, source } = await resolveCustomerId({ email, userId });
+    let stripeCustomerId = null;
+    let matchedUser = null;
 
-    if (!customerId) {
-      return res.status(400).json({
-        error: "Billing portal is not available yet. Complete checkout first so a Stripe customer can be attached to this account.",
-        source
+    // 1) Primary lookup: users table by id
+    if (userId) {
+      const { data: userById, error: userByIdError } = await supabase
+        .from("users")
+        .select("id, email, stripe_customer_id")
+        .eq("id", userId)
+        .maybeSingle();
+
+      if (userByIdError) {
+        console.error("[billing-portal] users by id lookup failed:", userByIdError);
+      }
+
+      if (userById) {
+        matchedUser = userById;
+        stripeCustomerId = userById.stripe_customer_id || null;
+      }
+    }
+
+    // 2) Secondary lookup: users table by email
+    if (!stripeCustomerId && email) {
+      const { data: userByEmail, error: userByEmailError } = await supabase
+        .from("users")
+        .select("id, email, stripe_customer_id")
+        .eq("email", email)
+        .maybeSingle();
+
+      if (userByEmailError) {
+        console.error("[billing-portal] users by email lookup failed:", userByEmailError);
+      }
+
+      if (userByEmail) {
+        matchedUser = userByEmail;
+        stripeCustomerId = userByEmail.stripe_customer_id || null;
+      }
+    }
+
+    // 3) Fallback: subscriptions by user_id only
+    if (!stripeCustomerId && matchedUser?.id) {
+      const { data: subscription, error: subscriptionError } = await supabase
+        .from("subscriptions")
+        .select("user_id, stripe_customer_id, status, plan")
+        .eq("user_id", matchedUser.id)
+        .order("updated_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (subscriptionError) {
+        console.error("[billing-portal] subscriptions by user_id lookup failed:", subscriptionError);
+      }
+
+      if (subscription?.stripe_customer_id) {
+        stripeCustomerId = subscription.stripe_customer_id;
+      }
+    }
+
+    // Optional fallback: if userId exists but users.id differs from auth id and your schema uses auth_user_id
+    if (!stripeCustomerId && userId) {
+      const { data: subscriptionByAuth, error: subscriptionByAuthError } = await supabase
+        .from("subscriptions")
+        .select("auth_user_id, stripe_customer_id, status, plan")
+        .eq("auth_user_id", userId)
+        .order("updated_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      // This only works if auth_user_id exists in your schema.
+      if (subscriptionByAuthError && !String(subscriptionByAuthError.message || "").includes("auth_user_id")) {
+        console.error("[billing-portal] subscriptions by auth_user_id lookup failed:", subscriptionByAuthError);
+      }
+
+      if (subscriptionByAuth?.stripe_customer_id) {
+        stripeCustomerId = subscriptionByAuth.stripe_customer_id;
+      }
+    }
+
+    if (!stripeCustomerId) {
+      return json(res, 404, {
+        error: "No Stripe customer found for this account",
+        debug: {
+          userId: userId || null,
+          email: email || null,
+          matchedUserId: matchedUser?.id || null
+        }
       });
     }
 
     const session = await stripe.billingPortal.sessions.create({
-      customer: customerId,
-      return_url: `${SITE_URL}/dashboard.html`
+      customer: stripeCustomerId,
+      return_url: `${getSiteUrl(req)}/dashboard.html`
     });
 
-    return res.status(200).json({ url: session.url, source });
+    return json(res, 200, { url: session.url });
   } catch (error) {
-    console.error("create-billing-portal-session error:", error);
-    return res.status(500).json({
-      error: error.message || "Could not create billing portal session"
+    console.error("[billing-portal] fatal error:", error);
+    return json(res, 500, {
+      error: error.message || "Failed to create billing portal session"
     });
   }
-}
+};
