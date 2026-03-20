@@ -27,15 +27,21 @@
           "Content-Type": "application/json"
         },
         body: JSON.stringify({
-          auth_user_id: user.id,
+          id: user.id,
           email: user.email,
           full_name: user.user_metadata?.full_name || ""
         })
       });
 
+      const data = await response.json().catch(() => null);
+
       if (!response.ok) {
-        const text = await response.text();
-        console.error("sync-user failed:", text);
+        console.error("sync-user failed:", data || response.statusText);
+        return;
+      }
+
+      if (data?.ok === false && !data?.skipped) {
+        console.error("sync-user returned non-ok payload:", data);
       }
     } catch (error) {
       console.error("User sync failed:", error);
@@ -181,7 +187,6 @@
     return user;
   }
 
-  // attach immediately
   window.signUpWithEmail = signUpWithEmail;
   window.signInWithEmail = signInWithEmail;
   window.signOutUser = signOutUser;
@@ -190,7 +195,6 @@
   window.getCurrentUser = getCurrentUser;
   window.requireAuth = requireAuth;
 
-  // auth state listener
   document.addEventListener("DOMContentLoaded", function () {
     try {
       if (!window.supabaseClient) {
@@ -201,6 +205,10 @@
       window.supabaseClient.auth.onAuthStateChange(async function (event, session) {
         if (session?.user?.email) {
           localStorage.setItem("user_email", session.user.email);
+        }
+
+        if (session?.user?.id && session?.user?.email) {
+          await syncUserToAppTable(session.user);
         }
 
         if (event === "SIGNED_OUT") {
@@ -214,4 +222,3 @@
 
   console.log("auth.js loaded successfully");
 })();
-
