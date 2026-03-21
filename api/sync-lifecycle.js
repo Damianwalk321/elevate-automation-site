@@ -108,8 +108,28 @@ function mergeAccountSnapshot(existing, nextSummary) {
     posts_this_month: nextSummary.posts_this_month,
     posting_limit: nextSummary.posting_limit,
     posts_remaining: nextSummary.posts_remaining,
-    lifecycle_updated_at: nextSummary.lifecycle_updated_at
+    lifecycle_updated_at: nextSummary.lifecycle_updated_at,
+    top_listing_title: clean(nextSummary.top_listing_title || prev.top_listing_title || "None yet")
   };
+}
+
+function computeTopListingTitle(listings) {
+  const best = [...(Array.isArray(listings) ? listings : [])]
+    .sort((a, b) => {
+      const scoreA =
+        (numberOrZero(a.messages_count) * 1000) +
+        (numberOrZero(a.views_count) * 10) +
+        (new Date(a.posted_at || 0).getTime() / 100000000);
+
+      const scoreB =
+        (numberOrZero(b.messages_count) * 1000) +
+        (numberOrZero(b.views_count) * 10) +
+        (new Date(b.posted_at || 0).getTime() / 100000000);
+
+      return scoreB - scoreA;
+    })[0] || null;
+
+  return clean(best?.title || "None yet");
 }
 
 export default async function handler(req, res) {
@@ -134,13 +154,16 @@ export default async function handler(req, res) {
       });
     }
 
-    const summary = buildSummaryPayload(body);
-
     const listingRows = Array.isArray(body.listings)
       ? body.listings
           .map((row) => normalizeListingRow(row, userId, email))
           .filter(Boolean)
       : [];
+
+    const summary = {
+      ...buildSummaryPayload(body),
+      top_listing_title: computeTopListingTitle(listingRows)
+    };
 
     const { data: existingSub, error: subLookupError } = await supabase
       .from("subscriptions")
@@ -193,17 +216,25 @@ export default async function handler(req, res) {
         dealership_id: row.dealership_id || dealershipId || ""
       }));
 
-      const { error: listingsUpsertError } = await supabase
+      const { error: userListingsUpsertError } = await supabase
         .from("user_listings")
         .upsert(payload, { onConflict: "id" });
 
-      if (listingsUpsertError) {
-        console.error("sync-lifecycle listings upsert error:", listingsUpsertError);
+      if (userListingsUpsertError) {
+        console.error("sync-lifecycle user_listings upsert error:", userListingsUpsertError);
         return res.status(500).json({
           ok: false,
-          error: "Listings upsert failed",
-          detail: listingsUpsertError.message
+          error: "user_listings upsert failed",
+          detail: userListingsUpsertError.message
         });
+      }
+
+      const { error: listingsMirrorError } = await supabase
+        .from("listings")
+        .upsert(payload, { onConflict: "id" });
+
+      if (listingsMirrorError) {
+        console.error("sync-lifecycle listings mirror upsert error:", listingsMirrorError);
       }
 
       listingsUpserted = payload.length;
