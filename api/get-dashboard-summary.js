@@ -60,6 +60,71 @@ function isActiveStatus(value) {
   return ["active", "trialing", "paid", "founder", "beta", "checkout_pending"].includes(status);
 }
 
+function buildComputedSummary(rows) {
+  const todayStart = new Date(dayStartIso()).getTime();
+  const monthStart = new Date(monthStartIso()).getTime();
+
+  let postsToday = 0;
+  let postsThisMonth = 0;
+  let activeListings = 0;
+  let totalViews = 0;
+  let totalMessages = 0;
+  let staleListings = 0;
+  let reviewDeleteCount = 0;
+  let reviewPriceChangeCount = 0;
+  let reviewNewCount = 0;
+
+  for (const row of rows) {
+    const postedTime = new Date(row.posted_at || row.created_at || 0).getTime();
+    const status = clean(row.status || "posted").toLowerCase();
+    const lifecycleStatus = clean(row.lifecycle_status || "").toLowerCase();
+    const reviewBucket = clean(row.review_bucket || "").toLowerCase();
+
+    if (postedTime >= todayStart) postsToday += 1;
+    if (postedTime >= monthStart) postsThisMonth += 1;
+
+    if (!["sold", "deleted", "inactive"].includes(status)) activeListings += 1;
+
+    totalViews += safeNumber(row.views_count, 0);
+    totalMessages += safeNumber(row.messages_count, 0);
+
+    if (lifecycleStatus === "stale") staleListings += 1;
+    if (lifecycleStatus === "review_delete" || reviewBucket === "removedvehicles") reviewDeleteCount += 1;
+    if (lifecycleStatus === "review_price_update" || reviewBucket === "pricechanges") reviewPriceChangeCount += 1;
+    if (lifecycleStatus === "review_new" || reviewBucket === "newvehicles") reviewNewCount += 1;
+  }
+
+  const topListing = [...rows]
+    .sort((a, b) => {
+      const scoreA =
+        (safeNumber(a.messages_count, 0) * 1000) +
+        (safeNumber(a.views_count, 0) * 10) +
+        (new Date(a.posted_at || 0).getTime() / 100000000);
+
+      const scoreB =
+        (safeNumber(b.messages_count, 0) * 1000) +
+        (safeNumber(b.views_count, 0) * 10) +
+        (new Date(b.posted_at || 0).getTime() / 100000000);
+
+      return scoreB - scoreA;
+    })[0] || null;
+
+  return {
+    posts_today: postsToday,
+    posts_this_month: postsThisMonth,
+    active_listings: activeListings,
+    stale_listings: staleListings,
+    total_views: totalViews,
+    total_messages: totalMessages,
+    review_delete_count: reviewDeleteCount,
+    review_price_change_count: reviewPriceChangeCount,
+    review_new_count: reviewNewCount,
+    review_queue_count: reviewDeleteCount + reviewPriceChangeCount + reviewNewCount,
+    top_listing_title: topListing?.title || "None yet",
+    total_listings: rows.length
+  };
+}
+
 export default async function handler(req, res) {
   res.setHeader("Content-Type", "application/json");
 
@@ -79,7 +144,7 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: "Missing userId or email" });
     }
 
-    let listingQuery = supabase.from("listings").select("*");
+    let listingQuery = supabase.from("user_listings").select("*");
     if (finalUserId) {
       listingQuery = listingQuery.eq("user_id", finalUserId);
     } else {
@@ -111,58 +176,10 @@ export default async function handler(req, res) {
     const postingUsageRow = postingUsageResult.data || null;
     const profileRow = profileResult.data || null;
 
-    const todayStart = new Date(dayStartIso()).getTime();
-    const monthStart = new Date(monthStartIso()).getTime();
-
-    let postsToday = 0;
-    let postsThisMonth = 0;
-    let activeListings = 0;
-    let totalViews = 0;
-    let totalMessages = 0;
-    let staleListings = 0;
-
-    const staleCutoff = Date.now() - (14 * 24 * 60 * 60 * 1000);
-
-    for (const row of rows) {
-      const postedTime = new Date(row.posted_at || row.created_at || 0).getTime();
-      const lastSeenTime = new Date(row.last_seen_at || row.updated_at || row.posted_at || 0).getTime();
-      const status = clean(row.status || "posted").toLowerCase();
-
-      if (postedTime >= todayStart) postsToday += 1;
-      if (postedTime >= monthStart) postsThisMonth += 1;
-      if (!["sold", "deleted", "inactive"].includes(status)) activeListings += 1;
-      if (lastSeenTime && lastSeenTime < staleCutoff && status !== "sold") staleListings += 1;
-
-      totalViews += safeNumber(row.views_count, 0);
-      totalMessages += safeNumber(row.messages_count, 0);
-    }
-
-    const topListing = [...rows]
-      .sort((a, b) => {
-        const scoreA =
-          (safeNumber(a.messages_count, 0) * 1000) +
-          (safeNumber(a.views_count, 0) * 10) +
-          (new Date(a.posted_at || 0).getTime() / 100000000);
-
-        const scoreB =
-          (safeNumber(b.messages_count, 0) * 1000) +
-          (safeNumber(b.views_count, 0) * 10) +
-          (new Date(b.posted_at || 0).getTime() / 100000000);
-
-        return scoreB - scoreA;
-      })[0] || null;
-
-    const recentListings = rows.slice(0, 5).map((row) => ({
-      id: row.id,
-      title: row.title,
-      image_url: row.image_url || "",
-      price: safeNumber(row.price, 0),
-      mileage: safeNumber(row.mileage, 0),
-      status: row.status || "posted",
-      posted_at: row.posted_at || row.created_at,
-      views_count: safeNumber(row.views_count, 0),
-      messages_count: safeNumber(row.messages_count, 0)
-    }));
+    const computed = buildComputedSummary(rows);
+    const snapshot = subscriptionRow?.account_snapshot && typeof subscriptionRow.account_snapshot === "object"
+      ? subscriptionRow.account_snapshot
+      : {};
 
     const effectivePlan = clean(
       subscriptionRow?.plan_name ||
@@ -179,34 +196,62 @@ export default async function handler(req, res) {
     ).toLowerCase();
 
     const dailyLimit = safeNumber(
-      postingLimitRow?.daily_limit ?? subscriptionRow?.daily_posting_limit,
+      snapshot.posting_limit ??
+      postingLimitRow?.daily_limit ??
+      subscriptionRow?.daily_posting_limit,
       0
     );
 
     const usageToday = safeNumber(
-      postingUsageRow?.posts_today ?? postingUsageRow?.used_today,
-      postsToday
+      snapshot.posts_today ??
+      postingUsageRow?.posts_today ??
+      postingUsageRow?.used_today,
+      computed.posts_today
     );
 
-    const postsRemaining = Math.max(dailyLimit - usageToday, 0);
+    const postsRemaining = Math.max(
+      safeNumber(snapshot.posts_remaining, dailyLimit - usageToday),
+      0
+    );
+
     const inventoryUrl = clean(profileRow?.inventory_url || "");
     const salespersonName = clean(profileRow?.full_name || profileRow?.salesperson_name || "");
     const dealershipName = clean(profileRow?.dealership || profileRow?.dealer_name || "");
     const province = clean(profileRow?.province || profileRow?.compliance_mode || "");
 
+    const recentListings = rows.slice(0, 5).map((row) => ({
+      id: row.id,
+      title: row.title,
+      image_url: row.image_url || "",
+      price: safeNumber(row.price, 0),
+      mileage: safeNumber(row.mileage, 0),
+      status: row.status || "posted",
+      lifecycle_status: row.lifecycle_status || "",
+      posted_at: row.posted_at || row.created_at,
+      views_count: safeNumber(row.views_count, 0),
+      messages_count: safeNumber(row.messages_count, 0)
+    }));
+
     return res.status(200).json({
       success: true,
       data: {
-        posts_today: postsToday,
-        posts_this_month: postsThisMonth,
-        active_listings: activeListings,
-        stale_listings: staleListings,
-        total_views: totalViews,
-        total_messages: totalMessages,
-        top_listing_title: topListing?.title || "None yet",
-        total_listings: rows.length,
+        posts_today: safeNumber(snapshot.posts_today, computed.posts_today),
+        posts_this_month: safeNumber(snapshot.posts_this_month, computed.posts_this_month),
+        active_listings: safeNumber(snapshot.active_listings, computed.active_listings),
+        stale_listings: safeNumber(snapshot.stale_listings, computed.stale_listings),
+        total_views: safeNumber(snapshot.total_views, computed.total_views),
+        total_messages: safeNumber(snapshot.total_messages, computed.total_messages),
+        review_delete_count: safeNumber(snapshot.review_delete_count, computed.review_delete_count),
+        review_price_change_count: safeNumber(snapshot.review_price_change_count, computed.review_price_change_count),
+        review_new_count: safeNumber(snapshot.review_new_count, computed.review_new_count),
+        review_queue_count: safeNumber(snapshot.review_queue_count, computed.review_queue_count),
+        queue_count: safeNumber(snapshot.queue_count, 0),
+        lifecycle_updated_at: clean(snapshot.lifecycle_updated_at || ""),
+        top_listing_title: clean(snapshot.top_listing_title || computed.top_listing_title || "None yet"),
+        total_listings: computed.total_listings,
         recent_listings: recentListings,
         account_snapshot: {
+          ...(snapshot || {}),
           user_id: finalUserId,
           email: finalEmail,
           plan: effectivePlan,
@@ -216,6 +261,7 @@ export default async function handler(req, res) {
           stripe_subscription_id: clean(subscriptionRow?.stripe_subscription_id || user?.stripe_subscription_id || ""),
           posting_limit: dailyLimit,
           posts_used_today: usageToday,
+          posts_today: usageToday,
           posts_remaining: postsRemaining,
           current_period_end: subscriptionRow?.current_period_end || null,
           trial_end: subscriptionRow?.trial_end || null,
