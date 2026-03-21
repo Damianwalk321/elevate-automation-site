@@ -126,7 +126,12 @@ function bindDashboardUI() {
     downloadExtensionBtn.addEventListener("click", async () => {
       const target = await resolveExtensionDownloadUrl();
       window.open(target, "_blank");
-      setStatus("extensionActionStatus", target === EXTENSION_DOWNLOAD_URL ? "Opening hosted extension download..." : "Hosted extension file missing. Opening GitHub fallback...");
+      setStatus(
+        "extensionActionStatus",
+        target === EXTENSION_DOWNLOAD_URL
+          ? "Opening hosted extension download..."
+          : "Hosted extension file missing. Opening GitHub fallback..."
+      );
     });
   }
 
@@ -170,55 +175,53 @@ function bindDashboardUI() {
     });
   }
 
-const openBillingPortalBtn = document.getElementById("openBillingPortalBtn");
-if (openBillingPortalBtn) {
-  openBillingPortalBtn.addEventListener("click", async () => {
-    try {
-      if (!currentUser?.id) {
-        setStatus("accountStatusBilling", "No logged-in user found.");
-        return;
-      }
-
-      setStatus("accountStatusBilling", "Opening billing portal...");
-
-      const response = await fetch("/api/create-billing-portal-session", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          userId: currentUser.id,
-          email: currentUser.email
-        })
-      });
-
-      // 🔥 CRITICAL FIX — safe parsing
-      const rawText = await response.text();
-
-      let data;
+  const openBillingPortalBtn = document.getElementById("openBillingPortalBtn");
+  if (openBillingPortalBtn) {
+    openBillingPortalBtn.addEventListener("click", async () => {
       try {
-        data = JSON.parse(rawText);
-      } catch (parseError) {
-        console.error("[billing] Non-JSON response:", rawText);
-        throw new Error("Server error (non-JSON response)");
+        if (!currentUser?.id) {
+          setStatus("accountStatusBilling", "No logged-in user found.");
+          return;
+        }
+
+        setStatus("accountStatusBilling", "Opening billing portal...");
+
+        const response = await fetch("/api/create-billing-portal-session", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            userId: currentUser.id,
+            email: currentUser.email
+          })
+        });
+
+        const rawText = await response.text();
+
+        let data;
+        try {
+          data = JSON.parse(rawText);
+        } catch (parseError) {
+          console.error("[billing] Non-JSON response:", rawText);
+          throw new Error("Server error (non-JSON response)");
+        }
+
+        if (!response.ok) {
+          throw new Error(data.error || "Could not open billing portal.");
+        }
+
+        if (!data.url) {
+          throw new Error("Billing portal URL missing.");
+        }
+
+        window.location.href = data.url;
+      } catch (error) {
+        console.error("Billing portal error:", error);
+        setStatus("accountStatusBilling", error.message || "Could not open billing portal.");
       }
-
-      if (!response.ok) {
-        throw new Error(data.error || "Could not open billing portal.");
-      }
-
-      if (!data.url) {
-        throw new Error("Billing portal URL missing.");
-      }
-
-      window.location.href = data.url;
-
-    } catch (error) {
-      console.error("Billing portal error:", error);
-      setStatus("accountStatusBilling", error.message || "Could not open billing portal.");
-    }
-  });
-}
+    });
+  }
 
   const refreshBillingBtn = document.getElementById("refreshBillingBtn");
   if (refreshBillingBtn) {
@@ -386,6 +389,7 @@ function normalizeListingRecord(row) {
     ) || placeholderVehicleImage(title);
 
   const status = clean(row.status || "posted").toLowerCase();
+  const lifecycleStatus = clean(row.lifecycle_status || row.review_status || "").toLowerCase();
 
   return {
     id: clean(row.id || row.marketplace_listing_id || row.source_url || cryptoRandomFallback()),
@@ -407,6 +411,8 @@ function normalizeListingRecord(row) {
     price,
     title,
     status,
+    lifecycle_status: lifecycleStatus,
+    review_bucket: clean(row.review_bucket || ""),
     posted_at: postedAt,
     created_at: row.created_at || postedAt,
     views_count: views,
@@ -425,6 +431,10 @@ function buildDashboardSummaryFromListings(listings) {
   let activeListings = 0;
   let totalViews = 0;
   let totalMessages = 0;
+  let staleListings = 0;
+  let reviewDeleteCount = 0;
+  let reviewPriceChangeCount = 0;
+  let reviewNewCount = 0;
 
   for (const item of listings) {
     const itemDate = new Date(item.posted_at);
@@ -434,9 +444,15 @@ function buildDashboardSummaryFromListings(listings) {
         postsMonth += 1;
       }
     }
+
     if (!["sold", "deleted", "inactive"].includes(item.status)) activeListings += 1;
     totalViews += numberOrZero(item.views_count);
     totalMessages += numberOrZero(item.messages_count);
+
+    if (item.lifecycle_status === "stale") staleListings += 1;
+    if (item.lifecycle_status === "review_delete" || item.review_bucket === "removedVehicles") reviewDeleteCount += 1;
+    if (item.lifecycle_status === "review_price_update" || item.review_bucket === "priceChanges") reviewPriceChangeCount += 1;
+    if (item.lifecycle_status === "review_new" || item.review_bucket === "newVehicles") reviewNewCount += 1;
   }
 
   const topListing = [...listings]
@@ -448,6 +464,11 @@ function buildDashboardSummaryFromListings(listings) {
     active_listings: activeListings,
     total_views: totalViews,
     total_messages: totalMessages,
+    stale_listings: staleListings,
+    review_delete_count: reviewDeleteCount,
+    review_price_change_count: reviewPriceChangeCount,
+    review_new_count: reviewNewCount,
+    review_queue_count: reviewDeleteCount + reviewPriceChangeCount + reviewNewCount,
     top_listing_title: topListing?.title || "None yet"
   };
 }
@@ -461,7 +482,16 @@ function mergeSummaryWithListings(summary, listings) {
     active_listings: numberOrZero(summary.active_listings ?? computed.active_listings),
     total_views: numberOrZero(summary.total_views ?? computed.total_views),
     total_messages: numberOrZero(summary.total_messages ?? computed.total_messages),
-    top_listing_title: clean(summary.top_listing_title || computed.top_listing_title || "None yet")
+    stale_listings: numberOrZero(summary.stale_listings ?? computed.stale_listings),
+    review_delete_count: numberOrZero(summary.review_delete_count ?? computed.review_delete_count),
+    review_price_change_count: numberOrZero(summary.review_price_change_count ?? computed.review_price_change_count),
+    review_new_count: numberOrZero(summary.review_new_count ?? computed.review_new_count),
+    review_queue_count: numberOrZero(summary.review_queue_count ?? computed.review_queue_count),
+    queue_count: numberOrZero(summary.queue_count ?? 0),
+    lifecycle_updated_at: clean(summary.lifecycle_updated_at || ""),
+    top_listing_title: clean(summary.top_listing_title || computed.top_listing_title || "None yet"),
+    account_snapshot: summary.account_snapshot || {},
+    setup_status: summary.setup_status || {}
   };
 }
 
@@ -471,6 +501,14 @@ function renderDashboardAnalytics() {
   setTextByIdForAll("kpiActiveListings", String(numberOrZero(dashboardSummary?.active_listings)));
   setTextByIdForAll("kpiViews", String(numberOrZero(dashboardSummary?.total_views)));
   setTextByIdForAll("kpiMessages", String(numberOrZero(dashboardSummary?.total_messages)));
+
+  // lifecycle-ready safe no-op if ids do not exist yet
+  setTextByIdForAll("kpiReviewQueue", String(numberOrZero(dashboardSummary?.review_queue_count)));
+  setTextByIdForAll("kpiStaleListings", String(numberOrZero(dashboardSummary?.stale_listings)));
+  setTextByIdForAll("kpiPriceChanges", String(numberOrZero(dashboardSummary?.review_price_change_count)));
+  setTextByIdForAll("kpiQueuedVehicles", String(numberOrZero(dashboardSummary?.queue_count)));
+  setTextByIdForAll("kpiReviewNew", String(numberOrZero(dashboardSummary?.review_new_count)));
+  setTextByIdForAll("kpiReviewDelete", String(numberOrZero(dashboardSummary?.review_delete_count)));
 
   renderTopListings(dashboardListings);
   renderRecentActivity(dashboardListings);
@@ -492,7 +530,9 @@ function applyListingFiltersAndRender() {
         item.trim,
         item.vin,
         item.stock_number,
-        item.body_style
+        item.body_style,
+        item.lifecycle_status,
+        item.review_bucket
       ]
         .join(" ")
         .toLowerCase();
@@ -527,7 +567,7 @@ function renderListingsGrid(listings) {
       <article class="listing-card">
         <div class="listing-media">
           <img src="${escapeHtml(item.image_url)}" alt="${escapeHtml(item.title)}" loading="lazy" onerror="this.src='${escapeHtml(placeholderVehicleImage(item.title))}'" />
-          <div class="listing-badge">${renderBadgeHtml(item.status)}</div>
+          <div class="listing-badge">${renderBadgeHtml(item.status, item.lifecycle_status)}</div>
         </div>
 
         <div class="listing-content">
@@ -637,7 +677,7 @@ function renderRecentActivity(listings) {
         <div>
           <div class="activity-item-title">${escapeHtml(item.title)}</div>
           <div class="activity-item-sub">
-            ${escapeHtml(item.status || "posted")} • ${escapeHtml(item.stock_number || item.vin || "No stock/VIN")} • ${escapeHtml(formatCurrency(item.price))}
+            ${escapeHtml(item.lifecycle_status || item.status || "posted")} • ${escapeHtml(item.stock_number || item.vin || "No stock/VIN")} • ${escapeHtml(formatCurrency(item.price))}
           </div>
         </div>
         <div class="activity-item-time">${escapeHtml(formatRelativeOrDate(item.posted_at))}</div>
@@ -1294,9 +1334,16 @@ function renderSetupSnapshot() {
 
   setTextByIdForAll("snapshotPostingLimit", String(numberOrZero(snapshot.posting_limit)));
   setTextByIdForAll("snapshotPostsRemaining", String(numberOrZero(snapshot.posts_remaining)));
-  setTextByIdForAll("snapshotBillingSource", clean(currentNormalizedSession?.subscription?.billing_source || snapshot.billing_source || "subscriptions/users" ) || "subscriptions/users");
+  setTextByIdForAll("snapshotBillingSource", clean(currentNormalizedSession?.subscription?.billing_source || snapshot.billing_source || "subscriptions/users") || "subscriptions/users");
   setTextByIdForAll("snapshotCurrentPeriodEnd", formatShortDate(snapshot.current_period_end || currentNormalizedSession?.subscription?.current_period_end || ""));
   setTextByIdForAll("snapshotProfileComplete", setup.profile_complete ? "Ready" : "Needs setup");
+
+  // lifecycle-ready safe no-op ids
+  setTextByIdForAll("snapshotReviewQueueCount", String(numberOrZero(dashboardSummary?.review_queue_count)));
+  setTextByIdForAll("snapshotStaleListings", String(numberOrZero(dashboardSummary?.stale_listings)));
+  setTextByIdForAll("snapshotPriceChanges", String(numberOrZero(dashboardSummary?.review_price_change_count)));
+  setTextByIdForAll("snapshotQueuedVehicles", String(numberOrZero(dashboardSummary?.queue_count)));
+  setTextByIdForAll("snapshotLifecycleUpdatedAt", formatShortDate(dashboardSummary?.lifecycle_updated_at || ""));
 
   const summaryBits = [
     setup.salesperson_name_present ? null : "salesperson name missing",
@@ -1518,7 +1565,8 @@ function copyVehicleSummary(listingId) {
     `Mileage: ${formatMileage(row.mileage)}`,
     `VIN: ${row.vin || "Not set"}`,
     `Stock: ${row.stock_number || "Not set"}`,
-    `Posted: ${formatShortDate(row.posted_at)}`
+    `Posted: ${formatShortDate(row.posted_at)}`,
+    `Lifecycle: ${row.lifecycle_status || row.status || "posted"}`
   ].join("\n");
 
   navigator.clipboard.writeText(text)
@@ -1617,11 +1665,27 @@ function buildListingSubtitle(item) {
   if (item.stock_number) parts.push(`Stock ${item.stock_number}`);
   if (item.vin) parts.push(`VIN ${item.vin}`);
   if (item.body_style) parts.push(item.body_style);
+  if (item.lifecycle_status) parts.push(item.lifecycle_status);
   return parts.join(" • ") || "Vehicle details";
 }
 
-function renderBadgeHtml(status) {
+function renderBadgeHtml(status, lifecycleStatus = "") {
   const normalized = clean(status || "posted").toLowerCase();
+  const lifecycle = clean(lifecycleStatus || "").toLowerCase();
+
+  if (lifecycle === "stale") {
+    return `<span class="badge warn">Stale</span>`;
+  }
+  if (lifecycle === "review_delete") {
+    return `<span class="badge warn">Review Delete</span>`;
+  }
+  if (lifecycle === "review_price_update") {
+    return `<span class="badge warn">Review Price</span>`;
+  }
+  if (lifecycle === "review_new") {
+    return `<span class="badge active">Review New</span>`;
+  }
+
   let badgeClass = "warn";
   let badgeText = normalized || "posted";
 
