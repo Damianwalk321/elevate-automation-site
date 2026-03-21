@@ -1,9 +1,19 @@
-const Stripe = require("stripe");
-const { createClient } = require("@supabase/supabase-js");
+import Stripe from "stripe";
+import { createClient } from "@supabase/supabase-js";
+
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 
 function json(res, status, body) {
   res.status(status).setHeader("Content-Type", "application/json");
   res.send(JSON.stringify(body));
+}
+
+function clean(value) {
+  return String(value || "").replace(/\s+/g, " ").trim();
+}
+
+function normalizeEmail(value) {
+  return clean(value).toLowerCase();
 }
 
 function getSiteUrl(req) {
@@ -14,119 +24,282 @@ function getSiteUrl(req) {
   );
 }
 
-module.exports = async function handler(req, res) {
+function parseBody(req) {
+  try {
+    if (!req.body) return {};
+    if (typeof req.body === "string") return JSON.parse(req.body || "{}");
+    if (typeof req.body === "object") return req.body;
+    return {};
+  } catch (error) {
+    return { __parse_error: error?.message || "Invalid JSON body" };
+  }
+}
+
+function getPlanConfig(planType, accessType, userType) {
+  const normalizedPlanType = clean(planType).toLowerCase();
+  const normalizedAccessType = clean(accessType).toLowerCase();
+  const normalizedUserType = clean(userType).toLowerCase();
+
+  const founderStarterPriceId = clean(process.env.STRIPE_FOUNDER_PRICE_ID);
+  const founderProPriceId = clean(process.env.STRIPE_FOUNDER_PRO_PRICE_ID);
+  const starterPriceId = clean(process.env.STRIPE_STARTER_PRICE_ID);
+  const proPriceId = clean(process.env.STRIPE_PRO_PRICE_ID);
+
+  // Founder starter
+  if (
+    normalizedPlanType === "founder_starter" ||
+    normalizedPlanType === "founder-starter"
+  ) {
+    return {
+      planName: "Founder Starter",
+      lookupKey: "STRIPE_FOUNDER_PRICE_ID",
+      priceId: founderStarterPriceId,
+      trialUntil: "2026-04-02T00:00:00Z"
+    };
+  }
+
+  // Founder pro
+  if (
+    normalizedPlanType === "founder_pro" ||
+    normalizedPlanType === "founder-pro"
+  ) {
+    return {
+      planName: "Founder Pro",
+      lookupKey: "STRIPE_FOUNDER_PRO_PRICE_ID",
+      priceId: founderProPriceId,
+      trialUntil: "2026-04-02T00:00:00Z"
+    };
+  }
+
+  // Public starter
+  if (
+    normalizedPlanType === "starter" ||
+    (normalizedPlanType === "" &&
+      normalizedAccessType !== "founder" &&
+      normalizedUserType !== "founder")
+  ) {
+    return {
+      planName: "Starter",
+      lookupKey: "STRIPE_STARTER_PRICE_ID",
+      priceId: starterPriceId,
+      trialUntil: null
+    };
+  }
+
+  // Public pro
+  if (normalizedPlanType === "pro") {
+    return {
+      planName: "Pro",
+      lookupKey: "STRIPE_PRO_PRICE_ID",
+      priceId: proPriceId,
+      trialUntil: null
+    };
+  }
+
+  return null;
+}
+
+function getTrialEndUnix(trialUntilIso) {
+  if (!trialUntilIso) return null;
+  const unix = Math.floor(new Date(trialUntilIso).getTime() / 1000);
+  const now = Math.floor(Date.now() / 1000);
+
+  if (!unix || Number.isNaN(unix) || unix <= now) return null;
+  return unix;
+}
+
+async function findOrCreateCustomer({ stripeClient, email, userId }) {
+  const normalizedEmail = normalizeEmail(email);
+
+  const existing = await stripeClient.customers.list({
+    email: normalizedEmail,
+    limit: 1
+  });
+
+  if (existing?.data?.length) {
+    const customer = existing.data[0];
+
+    // Keep useful metadata in sync
+    const nextMetadata = {
+      ...(customer.metadata || {})
+    };
+
+    if (userId && !nextMetadata.user_id) {
+      nextMetadata.user_id = clean(userId);
+    }
+    if (normalizedEmail && !nextMetadata.email) {
+      nextMetadata.email = normalizedEmail;
+    }
+
+    if (
+      JSON.stringify(nextMetadata) !== JSON.stringify(customer.metadata || {})
+    ) {
+      return await stripeClient.customers.update(customer.id, {
+        metadata: nextMetadata
+      });
+    }
+
+    return customer;
+  }
+
+  return await stripeClient.customers.create({
+    email: normalizedEmail,
+    metadata: {
+      email: normalizedEmail,
+      user_id: clean(userId || "")
+    }
+  });
+}
+
+async function mirrorCustomerToSupabase({ email, userId, stripeCustomerId }) {
+  const supabaseUrl = process.env.SUPABASE_URL;
+  const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+  if (!supabaseUrl || !supabaseServiceRoleKey) {
+    return;
+  }
+
+  const supabase = createClient(supabaseUrl, supabaseServiceRoleKey);
+  const normalizedEmail = normalizeEmail(email);
+  const cleanedUserId = clean(userId);
+
+  const payload = {
+    stripe_customer_id: stripeCustomerId,
+    updated_at: new Date().toISOString()
+  };
+
+  try {
+    if (cleanedUserId) {
+      const { error } = await supabase
+        .from("users")
+        .update(payload)
+        .eq("id", cleanedUserId);
+
+      if (!error) return;
+      console.error("[checkout] users update by id warning:", error.message);
+    }
+
+    if (normalizedEmail) {
+      const { error } = await supabase
+        .from("users")
+        .update(payload)
+        .eq("email", normalizedEmail);
+
+      if (error) {
+        console.error("[checkout] users update by email warning:", error.message);
+      }
+    }
+  } catch (error) {
+    console.error("[checkout] supabase mirror warning:", error);
+  }
+}
+
+export default async function handler(req, res) {
   if (req.method !== "POST") {
     return json(res, 405, { error: "Method not allowed" });
   }
 
   try {
-    const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
-    const supabaseUrl = process.env.SUPABASE_URL;
-    const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-    if (!stripeSecretKey) {
+    if (!process.env.STRIPE_SECRET_KEY) {
       return json(res, 500, { error: "Missing STRIPE_SECRET_KEY" });
     }
 
-    if (!supabaseUrl || !supabaseServiceRoleKey) {
-      return json(res, 500, { error: "Missing Supabase environment variables" });
+    const body = parseBody(req);
+    if (body.__parse_error) {
+      return json(res, 400, { error: body.__parse_error });
     }
 
-    const stripe = new Stripe(stripeSecretKey);
-    const supabase = createClient(supabaseUrl, supabaseServiceRoleKey);
+    const email = normalizeEmail(body.email || "");
+    const userId = clean(body.userId || body.user_id || body.id || "");
+    const planType = clean(body.planType || "");
+    const userType = clean(body.userType || "");
+    const accessType = clean(body.accessType || "");
+    const referralCode = clean(body.referralCode || "");
 
-    const body =
-      typeof req.body === "string"
-        ? JSON.parse(req.body || "{}")
-        : (req.body || {});
-
-    const email = body.email || null;
-    const userId = body.userId || body.id || null;
-
-    if (!email && !userId) {
-      return json(res, 400, { error: "Missing email or userId" });
+    if (!email) {
+      return json(res, 400, { error: "Missing email" });
     }
 
-    let stripeCustomerId = null;
-    let matchedUser = null;
+    const plan = getPlanConfig(planType, accessType, userType);
 
-    // 1) Primary lookup: users by id
-    if (userId) {
-      const { data: userById, error: userByIdError } = await supabase
-        .from("users")
-        .select("id, email, stripe_customer_id")
-        .eq("id", userId)
-        .maybeSingle();
-
-      if (userByIdError) {
-        console.error("[billing-portal] users by id lookup failed:", userByIdError);
-      }
-
-      if (userById) {
-        matchedUser = userById;
-        stripeCustomerId = userById.stripe_customer_id || null;
-      }
-    }
-
-    // 2) Secondary lookup: users by email
-    if (!stripeCustomerId && email) {
-      const { data: userByEmail, error: userByEmailError } = await supabase
-        .from("users")
-        .select("id, email, stripe_customer_id")
-        .eq("email", email)
-        .maybeSingle();
-
-      if (userByEmailError) {
-        console.error("[billing-portal] users by email lookup failed:", userByEmailError);
-      }
-
-      if (userByEmail) {
-        matchedUser = userByEmail;
-        stripeCustomerId = userByEmail.stripe_customer_id || null;
-      }
-    }
-
-    // 3) Fallback: subscriptions by user_id only
-    if (!stripeCustomerId && matchedUser?.id) {
-      const { data: subscription, error: subscriptionError } = await supabase
-        .from("subscriptions")
-        .select("user_id, stripe_customer_id, status, plan, updated_at")
-        .eq("user_id", matchedUser.id)
-        .order("updated_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-
-      if (subscriptionError) {
-        console.error("[billing-portal] subscriptions by user_id lookup failed:", subscriptionError);
-      }
-
-      if (subscription?.stripe_customer_id) {
-        stripeCustomerId = subscription.stripe_customer_id;
-      }
-    }
-
-    if (!stripeCustomerId) {
-      return json(res, 404, {
-        error: "No Stripe customer found for this account",
+    if (!plan) {
+      return json(res, 400, {
+        error: "Invalid or unsupported plan type",
         debug: {
-          userId: userId || null,
-          email: email || null,
-          matchedUserId: matchedUser?.id || null
+          planType,
+          userType,
+          accessType
         }
       });
     }
 
-    const session = await stripe.billingPortal.sessions.create({
-      customer: stripeCustomerId,
-      return_url: `${getSiteUrl(req)}/dashboard.html`
+    if (!plan.priceId) {
+      return json(res, 500, {
+        error: `Missing ${plan.lookupKey}`
+      });
+    }
+
+    const customer = await findOrCreateCustomer({
+      stripeClient: stripe,
+      email,
+      userId
     });
 
-    return json(res, 200, { url: session.url });
+    await mirrorCustomerToSupabase({
+      email,
+      userId,
+      stripeCustomerId: customer.id
+    });
+
+    const siteUrl = getSiteUrl(req);
+    const trialEnd = getTrialEndUnix(plan.trialUntil);
+
+    const session = await stripe.checkout.sessions.create({
+      mode: "subscription",
+      customer: customer.id,
+      customer_email: undefined,
+      line_items: [
+        {
+          price: plan.priceId,
+          quantity: 1
+        }
+      ],
+      success_url: `${siteUrl}/dashboard.html?checkout=success`,
+      cancel_url: `${siteUrl}/index.html?checkout=cancelled`,
+      allow_promotion_codes: true,
+      client_reference_id: userId || undefined,
+      metadata: {
+        email,
+        user_id: userId || "",
+        plan_name: plan.planName,
+        plan_type: planType,
+        user_type: userType,
+        access_type: accessType,
+        referral_code: referralCode
+      },
+      subscription_data: {
+        metadata: {
+          email,
+          user_id: userId || "",
+          plan_name: plan.planName,
+          plan_type: planType,
+          user_type: userType,
+          access_type: accessType,
+          referral_code: referralCode
+        },
+        ...(trialEnd ? { trial_end: trialEnd } : {})
+      }
+    });
+
+    return json(res, 200, {
+      url: session.url,
+      sessionId: session.id
+    });
   } catch (error) {
-    console.error("[billing-portal] fatal error:", error);
+    console.error("[checkout] fatal error:", error);
 
     return json(res, 500, {
-      error: error?.message || "Failed to create billing portal session"
+      error: error?.message || "Failed to create checkout session"
     });
   }
-};
+}
