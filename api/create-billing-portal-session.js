@@ -6,12 +6,31 @@ function json(res, status, body) {
   res.send(JSON.stringify(body));
 }
 
+function clean(value) {
+  return String(value || "").replace(/\s+/g, " ").trim();
+}
+
+function normalizeEmail(value) {
+  return clean(value).toLowerCase();
+}
+
 function getSiteUrl(req) {
   return (
     process.env.SITE_URL ||
     process.env.NEXT_PUBLIC_SITE_URL ||
     `${req.headers["x-forwarded-proto"] || "https"}://${req.headers.host}`
   );
+}
+
+function parseBody(req) {
+  try {
+    if (!req.body) return {};
+    if (typeof req.body === "string") return JSON.parse(req.body || "{}");
+    if (typeof req.body === "object") return req.body;
+    return {};
+  } catch (error) {
+    return { __parse_error: error?.message || "Invalid JSON body" };
+  }
 }
 
 module.exports = async function handler(req, res) {
@@ -32,23 +51,24 @@ module.exports = async function handler(req, res) {
       return json(res, 500, { error: "Missing Supabase environment variables" });
     }
 
-    const stripe = new Stripe(stripeSecretKey);
-    const supabase = createClient(supabaseUrl, supabaseServiceRoleKey);
+    const body = parseBody(req);
+    if (body.__parse_error) {
+      return json(res, 400, { error: body.__parse_error });
+    }
 
-    const body =
-      typeof req.body === "string"
-        ? JSON.parse(req.body || "{}")
-        : (req.body || {});
-
-    const email = body.email || null;
-    const userId = body.userId || body.id || null;
+    const email = normalizeEmail(body.email || "");
+    const userId = clean(body.userId || body.user_id || body.id || "");
 
     if (!email && !userId) {
       return json(res, 400, { error: "Missing email or userId" });
     }
 
-    let stripeCustomerId = null;
+    const stripe = new Stripe(stripeSecretKey);
+    const supabase = createClient(supabaseUrl, supabaseServiceRoleKey);
+
+    let stripeCustomerId = "";
     let matchedUser = null;
+    let matchedSubscription = null;
 
     // 1) Primary lookup: users by id
     if (userId) {
@@ -64,7 +84,7 @@ module.exports = async function handler(req, res) {
 
       if (userById) {
         matchedUser = userById;
-        stripeCustomerId = userById.stripe_customer_id || null;
+        stripeCustomerId = clean(userById.stripe_customer_id || "");
       }
     }
 
@@ -82,26 +102,67 @@ module.exports = async function handler(req, res) {
 
       if (userByEmail) {
         matchedUser = userByEmail;
-        stripeCustomerId = userByEmail.stripe_customer_id || null;
+        stripeCustomerId = clean(userByEmail.stripe_customer_id || "");
       }
     }
 
-    // 3) Fallback: subscriptions by user_id only
+    // 3) Fallback: subscriptions by user_id
     if (!stripeCustomerId && matchedUser?.id) {
-      const { data: subscription, error: subscriptionError } = await supabase
+      const { data: subscriptionByUserId, error: subscriptionByUserIdError } = await supabase
         .from("subscriptions")
-        .select("user_id, stripe_customer_id, status, plan, updated_at")
+        .select("user_id, email, stripe_customer_id, status, plan, updated_at")
         .eq("user_id", matchedUser.id)
         .order("updated_at", { ascending: false })
         .limit(1)
         .maybeSingle();
 
-      if (subscriptionError) {
-        console.error("[billing-portal] subscriptions by user_id lookup failed:", subscriptionError);
+      if (subscriptionByUserIdError) {
+        console.error("[billing-portal] subscriptions by user_id lookup failed:", subscriptionByUserIdError);
       }
 
-      if (subscription?.stripe_customer_id) {
-        stripeCustomerId = subscription.stripe_customer_id;
+      if (subscriptionByUserId) {
+        matchedSubscription = subscriptionByUserId;
+        stripeCustomerId = clean(subscriptionByUserId.stripe_customer_id || "");
+      }
+    }
+
+    // 4) Fallback: subscriptions by raw userId if user row not found
+    if (!stripeCustomerId && userId) {
+      const { data: subscriptionByRawUserId, error: subscriptionByRawUserIdError } = await supabase
+        .from("subscriptions")
+        .select("user_id, email, stripe_customer_id, status, plan, updated_at")
+        .eq("user_id", userId)
+        .order("updated_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (subscriptionByRawUserIdError) {
+        console.error("[billing-portal] subscriptions by raw user_id lookup failed:", subscriptionByRawUserIdError);
+      }
+
+      if (subscriptionByRawUserId) {
+        matchedSubscription = subscriptionByRawUserId;
+        stripeCustomerId = clean(subscriptionByRawUserId.stripe_customer_id || "");
+      }
+    }
+
+    // 5) Fallback: subscriptions by email
+    if (!stripeCustomerId && email) {
+      const { data: subscriptionByEmail, error: subscriptionByEmailError } = await supabase
+        .from("subscriptions")
+        .select("user_id, email, stripe_customer_id, status, plan, updated_at")
+        .eq("email", email)
+        .order("updated_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (subscriptionByEmailError) {
+        console.error("[billing-portal] subscriptions by email lookup failed:", subscriptionByEmailError);
+      }
+
+      if (subscriptionByEmail) {
+        matchedSubscription = subscriptionByEmail;
+        stripeCustomerId = clean(subscriptionByEmail.stripe_customer_id || "");
       }
     }
 
@@ -111,7 +172,22 @@ module.exports = async function handler(req, res) {
         debug: {
           userId: userId || null,
           email: email || null,
-          matchedUserId: matchedUser?.id || null
+          matchedUserId: matchedUser?.id || null,
+          matchedSubscriptionUserId: matchedSubscription?.user_id || null,
+          matchedSubscriptionEmail: matchedSubscription?.email || null
+        }
+      });
+    }
+
+    // Optional validation: make sure customer exists in Stripe before creating portal session
+    try {
+      await stripe.customers.retrieve(stripeCustomerId);
+    } catch (stripeLookupError) {
+      console.error("[billing-portal] stripe customer lookup failed:", stripeLookupError);
+      return json(res, 404, {
+        error: "Stripe customer record not found",
+        debug: {
+          stripeCustomerId
         }
       });
     }
