@@ -100,7 +100,7 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: "Missing userId or email" });
     }
 
-    let query = supabase.from("listings").select("*");
+    let query = supabase.from("user_listings").select("*");
 
     if (finalUserId) {
       query = query.eq("user_id", finalUserId);
@@ -131,7 +131,9 @@ export default async function handler(req, res) {
           row.vin,
           row.stock_number,
           row.body_style,
-          row.vehicle_type
+          row.vehicle_type,
+          row.lifecycle_status,
+          row.review_bucket
         ]
           .map((v) => clean(v).toLowerCase())
           .join(" ");
