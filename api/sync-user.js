@@ -46,7 +46,12 @@ export default async function handler(req, res) {
 
     if (userUpsertError) {
       console.error("sync-user users upsert error:", userUpsertError);
-      return res.status(200).json({ ok: false, skipped: true, reason: "Users upsert failed", detail: userUpsertError.message });
+      return res.status(200).json({
+        ok: false,
+        skipped: true,
+        reason: "Users upsert failed",
+        detail: userUpsertError.message
+      });
     }
 
     const { data: existingProfile, error: profileLookupError } = await supabase
@@ -57,7 +62,12 @@ export default async function handler(req, res) {
 
     if (profileLookupError) {
       console.error("sync-user profile lookup error:", profileLookupError);
-      return res.status(200).json({ ok: false, skipped: true, reason: "Profile lookup failed", detail: profileLookupError.message });
+      return res.status(200).json({
+        ok: false,
+        skipped: true,
+        reason: "Profile lookup failed",
+        detail: profileLookupError.message
+      });
     }
 
     if (!existingProfile) {
@@ -73,7 +83,12 @@ export default async function handler(req, res) {
 
       if (profileInsertError) {
         console.error("sync-user profile insert error:", profileInsertError);
-        return res.status(200).json({ ok: false, skipped: true, reason: "Profile insert failed", detail: profileInsertError.message });
+        return res.status(200).json({
+          ok: false,
+          skipped: true,
+          reason: "Profile insert failed",
+          detail: profileInsertError.message
+        });
       }
     } else {
       const profileUpdatePayload = { updated_at: nowIso };
@@ -88,7 +103,12 @@ export default async function handler(req, res) {
 
         if (profileUpdateError) {
           console.error("sync-user profile update error:", profileUpdateError);
-          return res.status(200).json({ ok: false, skipped: true, reason: "Profile update failed", detail: profileUpdateError.message });
+          return res.status(200).json({
+            ok: false,
+            skipped: true,
+            reason: "Profile update failed",
+            detail: profileUpdateError.message
+          });
         }
       }
     }
