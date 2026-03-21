@@ -71,45 +71,58 @@ function normalizeListingRow(row, fallbackUserId, fallbackEmail) {
   };
 }
 
-function buildSummaryPayload(body) {
+function buildSummaryPayload(body, partialSync = false) {
+  const readMetric = (value) => {
+    if (partialSync && value == null) return null;
+    return numberOrZero(value);
+  };
+
   return {
-    posts_today: numberOrZero(body.posts_today),
-    posting_limit: numberOrZero(body.posting_limit),
-    posts_remaining: numberOrZero(body.posts_remaining),
-    queue_count: numberOrZero(body.queue_count),
-    active_listings: numberOrZero(body.active_listings),
-    total_views: numberOrZero(body.total_views),
-    total_messages: numberOrZero(body.total_messages),
-    stale_listings: numberOrZero(body.stale_listings),
-    review_queue_count: numberOrZero(body.review_queue_count),
-    review_new_count: numberOrZero(body.review_new_count),
-    review_delete_count: numberOrZero(body.review_delete_count),
-    review_price_change_count: numberOrZero(body.review_price_change_count),
-    posts_this_month: numberOrZero(body.posts_this_month),
+    posts_today: readMetric(body.posts_today),
+    posting_limit: readMetric(body.posting_limit),
+    posts_remaining: readMetric(body.posts_remaining),
+    queue_count: readMetric(body.queue_count),
+    active_listings: readMetric(body.active_listings),
+    total_views: readMetric(body.total_views),
+    total_messages: readMetric(body.total_messages),
+    stale_listings: readMetric(body.stale_listings),
+    review_queue_count: readMetric(body.review_queue_count),
+    review_new_count: readMetric(body.review_new_count),
+    review_delete_count: readMetric(body.review_delete_count),
+    review_price_change_count: readMetric(body.review_price_change_count),
+    posts_this_month: readMetric(body.posts_this_month),
     lifecycle_updated_at: toIso(body.lifecycle_updated_at || new Date().toISOString())
   };
 }
 
-function mergeAccountSnapshot(existing, nextSummary) {
+function mergeAccountSnapshot(existing, nextSummary, partialSync = false) {
   const prev = existing && typeof existing === "object" ? existing : {};
+  const pick = (field, fallback = 0) => {
+    if (!partialSync) return nextSummary[field];
+    return nextSummary[field] == null ? numberOrZero(prev[field] ?? fallback) : nextSummary[field];
+  };
 
   return {
     ...prev,
-    queue_count: nextSummary.queue_count,
-    active_listings: nextSummary.active_listings,
-    total_views: nextSummary.total_views,
-    total_messages: nextSummary.total_messages,
-    stale_listings: nextSummary.stale_listings,
-    review_queue_count: nextSummary.review_queue_count,
-    review_new_count: nextSummary.review_new_count,
-    review_delete_count: nextSummary.review_delete_count,
-    review_price_change_count: nextSummary.review_price_change_count,
-    posts_today: nextSummary.posts_today,
-    posts_this_month: nextSummary.posts_this_month,
-    posting_limit: nextSummary.posting_limit,
-    posts_remaining: nextSummary.posts_remaining,
-    lifecycle_updated_at: nextSummary.lifecycle_updated_at,
-    top_listing_title: clean(nextSummary.top_listing_title || prev.top_listing_title || "None yet")
+    queue_count: pick("queue_count"),
+    active_listings: pick("active_listings"),
+    total_views: pick("total_views"),
+    total_messages: pick("total_messages"),
+    stale_listings: pick("stale_listings"),
+    review_queue_count: pick("review_queue_count"),
+    review_new_count: pick("review_new_count"),
+    review_delete_count: pick("review_delete_count"),
+    review_price_change_count: pick("review_price_change_count"),
+    posts_today: pick("posts_today"),
+    posts_this_month: pick("posts_this_month"),
+    posting_limit: pick("posting_limit"),
+    posts_remaining: pick("posts_remaining"),
+    lifecycle_updated_at: nextSummary.lifecycle_updated_at || prev.lifecycle_updated_at || new Date().toISOString(),
+    top_listing_title: clean(
+      (partialSync && !clean(nextSummary.top_listing_title))
+        ? (prev.top_listing_title || "None yet")
+        : (nextSummary.top_listing_title || prev.top_listing_title || "None yet")
+    )
   };
 }
 
@@ -132,6 +145,48 @@ function computeTopListingTitle(listings) {
   return clean(best?.title || "None yet");
 }
 
+function mergeListingRow(existing, incoming) {
+  const prev = existing && typeof existing === "object" ? existing : {};
+  const next = incoming && typeof incoming === "object" ? incoming : {};
+
+  return {
+    ...prev,
+    ...next,
+    id: normalizeKey(next.id || prev.id),
+    user_id: clean(next.user_id || prev.user_id),
+    email: clean(next.email || prev.email).toLowerCase(),
+    dealership_id: clean(next.dealership_id || prev.dealership_id || ""),
+    vin: clean(next.vin || prev.vin || "").toUpperCase(),
+    stock_number: clean(next.stock_number || prev.stock_number || ""),
+    source_url: clean(next.source_url || prev.source_url || ""),
+    image_url: clean(next.image_url || prev.image_url || ""),
+    year: numberOrZero(next.year || prev.year),
+    make: clean(next.make || prev.make || ""),
+    model: clean(next.model || prev.model || ""),
+    trim: clean(next.trim || prev.trim || ""),
+    vehicle_type: clean(next.vehicle_type || prev.vehicle_type || ""),
+    body_style: clean(next.body_style || prev.body_style || ""),
+    exterior_color: clean(next.exterior_color || prev.exterior_color || ""),
+    fuel_type: clean(next.fuel_type || prev.fuel_type || ""),
+    mileage: numberOrZero(next.mileage || prev.mileage),
+    price: numberOrZero(next.price || prev.price),
+    title: clean(next.title || prev.title || ""),
+    status: clean(next.status || prev.status || "posted").toLowerCase(),
+    lifecycle_status: clean(next.lifecycle_status || prev.lifecycle_status || "").toLowerCase(),
+    review_bucket: clean(next.review_bucket || prev.review_bucket || ""),
+    posted_at: toIso(next.posted_at || prev.posted_at || new Date().toISOString()),
+    views_count:
+      next.views_count != null && numberOrZero(next.views_count) > 0
+        ? numberOrZero(next.views_count)
+        : numberOrZero(prev.views_count),
+    messages_count:
+      next.messages_count != null && numberOrZero(next.messages_count) > 0
+        ? numberOrZero(next.messages_count)
+        : numberOrZero(prev.messages_count),
+    updated_at: new Date().toISOString()
+  };
+}
+
 export default async function handler(req, res) {
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Method not allowed" });
@@ -146,6 +201,7 @@ export default async function handler(req, res) {
     const userId = clean(body.user_id || body.userId || body.id);
     const email = clean(body.email).toLowerCase();
     const dealershipId = clean(body.dealership_id || body.dealershipId || "");
+    const partialSync = Boolean(body.partial_sync || clean(body.sync_reason || "") === "post_commit");
 
     if (!userId || !email) {
       return res.status(400).json({
@@ -154,15 +210,15 @@ export default async function handler(req, res) {
       });
     }
 
-    const listingRows = Array.isArray(body.listings)
+    const incomingListingRows = Array.isArray(body.listings)
       ? body.listings
           .map((row) => normalizeListingRow(row, userId, email))
           .filter(Boolean)
       : [];
 
     const summary = {
-      ...buildSummaryPayload(body),
-      top_listing_title: computeTopListingTitle(listingRows)
+      ...buildSummaryPayload(body, partialSync),
+      top_listing_title: computeTopListingTitle(incomingListingRows)
     };
 
     const { data: existingSub, error: subLookupError } = await supabase
@@ -182,7 +238,8 @@ export default async function handler(req, res) {
 
     const nextAccountSnapshot = mergeAccountSnapshot(
       existingSub?.account_snapshot,
-      summary
+      summary,
+      partialSync
     );
 
     const { error: subUpsertError } = await supabase
@@ -208,13 +265,39 @@ export default async function handler(req, res) {
 
     let listingsUpserted = 0;
 
-    if (listingRows.length) {
-      const payload = listingRows.map((row) => ({
-        ...row,
-        user_id: userId,
-        email,
-        dealership_id: row.dealership_id || dealershipId || ""
-      }));
+    if (incomingListingRows.length) {
+      const listingIds = incomingListingRows.map((row) => row.id).filter(Boolean);
+
+      let existingRowsById = {};
+
+      if (listingIds.length) {
+        const { data: existingRows, error: existingRowsError } = await supabase
+          .from("user_listings")
+          .select("*")
+          .in("id", listingIds);
+
+        if (existingRowsError) {
+          console.error("sync-lifecycle existing listing lookup error:", existingRowsError);
+          return res.status(500).json({
+            ok: false,
+            error: "Existing listing lookup failed",
+            detail: existingRowsError.message
+          });
+        }
+
+        existingRowsById = Object.fromEntries(
+          (Array.isArray(existingRows) ? existingRows : []).map((row) => [clean(row.id), row])
+        );
+      }
+
+      const payload = incomingListingRows.map((row) =>
+        mergeListingRow(existingRowsById[clean(row.id)], {
+          ...row,
+          user_id: userId,
+          email,
+          dealership_id: row.dealership_id || dealershipId || ""
+        })
+      );
 
       const { error: userListingsUpsertError } = await supabase
         .from("user_listings")
