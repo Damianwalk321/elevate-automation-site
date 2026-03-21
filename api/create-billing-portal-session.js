@@ -1,5 +1,7 @@
-const Stripe = require("stripe");
-const { createClient } = require("@supabase/supabase-js");
+import Stripe from "stripe";
+import { createClient } from "@supabase/supabase-js";
+
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 
 function json(res, status, body) {
   res.status(status).setHeader("Content-Type", "application/json");
@@ -33,22 +35,168 @@ function parseBody(req) {
   }
 }
 
-module.exports = async function handler(req, res) {
+async function findCustomerIdInSupabase({ email, userId }) {
+  const supabaseUrl = process.env.SUPABASE_URL;
+  const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+  if (!supabaseUrl || !supabaseServiceRoleKey) return "";
+
+  const supabase = createClient(supabaseUrl, supabaseServiceRoleKey);
+  const normalizedEmail = normalizeEmail(email);
+  const cleanedUserId = clean(userId);
+
+  try {
+    if (cleanedUserId) {
+      const { data, error } = await supabase
+        .from("users")
+        .select("stripe_customer_id")
+        .eq("id", cleanedUserId)
+        .maybeSingle();
+
+      if (!error && data?.stripe_customer_id) {
+        return clean(data.stripe_customer_id);
+      }
+    }
+
+    if (normalizedEmail) {
+      const { data, error } = await supabase
+        .from("users")
+        .select("stripe_customer_id")
+        .eq("email", normalizedEmail)
+        .maybeSingle();
+
+      if (!error && data?.stripe_customer_id) {
+        return clean(data.stripe_customer_id);
+      }
+    }
+  } catch (error) {
+    console.error("[billing-portal] supabase lookup warning:", error);
+  }
+
+  return "";
+}
+
+async function mirrorCustomerToSupabase({ email, userId, stripeCustomerId }) {
+  const supabaseUrl = process.env.SUPABASE_URL;
+  const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+  if (!supabaseUrl || !supabaseServiceRoleKey) return;
+
+  const supabase = createClient(supabaseUrl, supabaseServiceRoleKey);
+  const normalizedEmail = normalizeEmail(email);
+  const cleanedUserId = clean(userId);
+
+  const payload = {
+    stripe_customer_id: stripeCustomerId,
+    updated_at: new Date().toISOString()
+  };
+
+  try {
+    if (cleanedUserId) {
+      const { error } = await supabase
+        .from("users")
+        .update(payload)
+        .eq("id", cleanedUserId);
+
+      if (!error) return;
+      console.error("[billing-portal] users update by id warning:", error.message);
+    }
+
+    if (normalizedEmail) {
+      const { error } = await supabase
+        .from("users")
+        .update(payload)
+        .eq("email", normalizedEmail);
+
+      if (error) {
+        console.error(
+          "[billing-portal] users update by email warning:",
+          error.message
+        );
+      }
+    }
+  } catch (error) {
+    console.error("[billing-portal] supabase mirror warning:", error);
+  }
+}
+
+async function resolveCustomer({ email, userId }) {
+  const normalizedEmail = normalizeEmail(email);
+  const cleanedUserId = clean(userId);
+
+  if (!normalizedEmail && !cleanedUserId) {
+    return null;
+  }
+
+  // 1) Prefer stored Stripe customer id in Supabase
+  const storedCustomerId = await findCustomerIdInSupabase({
+    email: normalizedEmail,
+    userId: cleanedUserId
+  });
+
+  if (storedCustomerId) {
+    try {
+      const customer = await stripe.customers.retrieve(storedCustomerId);
+      if (customer && !customer.deleted) {
+        return customer;
+      }
+    } catch (error) {
+      console.error("[billing-portal] stored customer retrieve warning:", error);
+    }
+  }
+
+  // 2) Fallback to Stripe email search
+  if (normalizedEmail) {
+    const existing = await stripe.customers.list({
+      email: normalizedEmail,
+      limit: 1
+    });
+
+    if (existing?.data?.length) {
+      const customer = existing.data[0];
+
+      const nextMetadata = {
+        ...(customer.metadata || {})
+      };
+
+      if (cleanedUserId && !nextMetadata.user_id) {
+        nextMetadata.user_id = cleanedUserId;
+      }
+      if (normalizedEmail && !nextMetadata.email) {
+        nextMetadata.email = normalizedEmail;
+      }
+
+      let finalCustomer = customer;
+
+      if (
+        JSON.stringify(nextMetadata) !== JSON.stringify(customer.metadata || {})
+      ) {
+        finalCustomer = await stripe.customers.update(customer.id, {
+          metadata: nextMetadata
+        });
+      }
+
+      await mirrorCustomerToSupabase({
+        email: normalizedEmail,
+        userId: cleanedUserId,
+        stripeCustomerId: finalCustomer.id
+      });
+
+      return finalCustomer;
+    }
+  }
+
+  return null;
+}
+
+export default async function handler(req, res) {
   if (req.method !== "POST") {
     return json(res, 405, { error: "Method not allowed" });
   }
 
   try {
-    const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
-    const supabaseUrl = process.env.SUPABASE_URL;
-    const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-    if (!stripeSecretKey) {
+    if (!process.env.STRIPE_SECRET_KEY) {
       return json(res, 500, { error: "Missing STRIPE_SECRET_KEY" });
-    }
-
-    if (!supabaseUrl || !supabaseServiceRoleKey) {
-      return json(res, 500, { error: "Missing Supabase environment variables" });
     }
 
     const body = parseBody(req);
@@ -58,146 +206,25 @@ module.exports = async function handler(req, res) {
 
     const email = normalizeEmail(body.email || "");
     const userId = clean(body.userId || body.user_id || body.id || "");
+    const returnPath = clean(body.returnPath || "/dashboard.html");
+    const siteUrl = getSiteUrl(req);
 
-    if (!email && !userId) {
-      return json(res, 400, { error: "Missing email or userId" });
-    }
+    const customer = await resolveCustomer({ email, userId });
 
-    const stripe = new Stripe(stripeSecretKey);
-    const supabase = createClient(supabaseUrl, supabaseServiceRoleKey);
-
-    let stripeCustomerId = "";
-    let matchedUser = null;
-    let matchedSubscription = null;
-
-    // 1) Primary lookup: users by id
-    if (userId) {
-      const { data: userById, error: userByIdError } = await supabase
-        .from("users")
-        .select("id, email, stripe_customer_id")
-        .eq("id", userId)
-        .maybeSingle();
-
-      if (userByIdError) {
-        console.error("[billing-portal] users by id lookup failed:", userByIdError);
-      }
-
-      if (userById) {
-        matchedUser = userById;
-        stripeCustomerId = clean(userById.stripe_customer_id || "");
-      }
-    }
-
-    // 2) Secondary lookup: users by email
-    if (!stripeCustomerId && email) {
-      const { data: userByEmail, error: userByEmailError } = await supabase
-        .from("users")
-        .select("id, email, stripe_customer_id")
-        .eq("email", email)
-        .maybeSingle();
-
-      if (userByEmailError) {
-        console.error("[billing-portal] users by email lookup failed:", userByEmailError);
-      }
-
-      if (userByEmail) {
-        matchedUser = userByEmail;
-        stripeCustomerId = clean(userByEmail.stripe_customer_id || "");
-      }
-    }
-
-    // 3) Fallback: subscriptions by user_id
-    if (!stripeCustomerId && matchedUser?.id) {
-      const { data: subscriptionByUserId, error: subscriptionByUserIdError } = await supabase
-        .from("subscriptions")
-        .select("user_id, email, stripe_customer_id, status, plan, updated_at")
-        .eq("user_id", matchedUser.id)
-        .order("updated_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-
-      if (subscriptionByUserIdError) {
-        console.error("[billing-portal] subscriptions by user_id lookup failed:", subscriptionByUserIdError);
-      }
-
-      if (subscriptionByUserId) {
-        matchedSubscription = subscriptionByUserId;
-        stripeCustomerId = clean(subscriptionByUserId.stripe_customer_id || "");
-      }
-    }
-
-    // 4) Fallback: subscriptions by raw userId if user row not found
-    if (!stripeCustomerId && userId) {
-      const { data: subscriptionByRawUserId, error: subscriptionByRawUserIdError } = await supabase
-        .from("subscriptions")
-        .select("user_id, email, stripe_customer_id, status, plan, updated_at")
-        .eq("user_id", userId)
-        .order("updated_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-
-      if (subscriptionByRawUserIdError) {
-        console.error("[billing-portal] subscriptions by raw user_id lookup failed:", subscriptionByRawUserIdError);
-      }
-
-      if (subscriptionByRawUserId) {
-        matchedSubscription = subscriptionByRawUserId;
-        stripeCustomerId = clean(subscriptionByRawUserId.stripe_customer_id || "");
-      }
-    }
-
-    // 5) Fallback: subscriptions by email
-    if (!stripeCustomerId && email) {
-      const { data: subscriptionByEmail, error: subscriptionByEmailError } = await supabase
-        .from("subscriptions")
-        .select("user_id, email, stripe_customer_id, status, plan, updated_at")
-        .eq("email", email)
-        .order("updated_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-
-      if (subscriptionByEmailError) {
-        console.error("[billing-portal] subscriptions by email lookup failed:", subscriptionByEmailError);
-      }
-
-      if (subscriptionByEmail) {
-        matchedSubscription = subscriptionByEmail;
-        stripeCustomerId = clean(subscriptionByEmail.stripe_customer_id || "");
-      }
-    }
-
-    if (!stripeCustomerId) {
+    if (!customer?.id) {
       return json(res, 404, {
-        error: "No Stripe customer found for this account",
-        debug: {
-          userId: userId || null,
-          email: email || null,
-          matchedUserId: matchedUser?.id || null,
-          matchedSubscriptionUserId: matchedSubscription?.user_id || null,
-          matchedSubscriptionEmail: matchedSubscription?.email || null
-        }
-      });
-    }
-
-    // Optional validation: make sure customer exists in Stripe before creating portal session
-    try {
-      await stripe.customers.retrieve(stripeCustomerId);
-    } catch (stripeLookupError) {
-      console.error("[billing-portal] stripe customer lookup failed:", stripeLookupError);
-      return json(res, 404, {
-        error: "Stripe customer record not found",
-        debug: {
-          stripeCustomerId
-        }
+        error: "No Stripe customer found for this account"
       });
     }
 
     const session = await stripe.billingPortal.sessions.create({
-      customer: stripeCustomerId,
-      return_url: `${getSiteUrl(req)}/dashboard.html`
+      customer: customer.id,
+      return_url: `${siteUrl}${returnPath.startsWith("/") ? returnPath : `/${returnPath}`}`
     });
 
-    return json(res, 200, { url: session.url });
+    return json(res, 200, {
+      url: session.url
+    });
   } catch (error) {
     console.error("[billing-portal] fatal error:", error);
 
@@ -205,4 +232,4 @@ module.exports = async function handler(req, res) {
       error: error?.message || "Failed to create billing portal session"
     });
   }
-};
+}
