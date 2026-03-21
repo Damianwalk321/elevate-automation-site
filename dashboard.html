@@ -948,6 +948,42 @@
             <div id="kpiMessages" class="stat-value">0</div>
             <div class="stat-sub">Tracked or defaulted</div>
           </div>
+
+          <div class="card kpi-card">
+            <div class="stat-label">Review Queue</div>
+            <div id="kpiReviewQueue" class="stat-value">0</div>
+            <div class="stat-sub">Needs attention</div>
+          </div>
+
+          <div class="card kpi-card">
+            <div class="stat-label">Stale Listings</div>
+            <div id="kpiStaleListings" class="stat-value">0</div>
+            <div class="stat-sub">Potential removals</div>
+          </div>
+
+          <div class="card kpi-card">
+            <div class="stat-label">Price Changes</div>
+            <div id="kpiPriceChanges" class="stat-value">0</div>
+            <div class="stat-sub">Detected changes</div>
+          </div>
+
+          <div class="card kpi-card">
+            <div class="stat-label">Queued Vehicles</div>
+            <div id="kpiQueuedVehicles" class="stat-value">0</div>
+            <div class="stat-sub">Ready to post</div>
+          </div>
+
+          <div class="card kpi-card">
+            <div class="stat-label">Review New</div>
+            <div id="kpiReviewNew" class="stat-value">0</div>
+            <div class="stat-sub">New detections</div>
+          </div>
+
+          <div class="card kpi-card">
+            <div class="stat-label">Review Delete</div>
+            <div id="kpiReviewDelete" class="stat-value">0</div>
+            <div class="stat-sub">Removed vehicles</div>
+          </div>
         </div>
 
         <div class="analytics-shell">
@@ -1018,6 +1054,11 @@
               <div><strong>Billing Source:</strong> <span id="snapshotBillingSource">Loading...</span></div>
               <div><strong>Current Period End:</strong> <span id="snapshotCurrentPeriodEnd">Loading...</span></div>
               <div><strong>Profile Complete:</strong> <span id="snapshotProfileComplete">Loading...</span></div>
+              <div><strong>Review Queue:</strong> <span id="snapshotReviewQueueCount">0</span></div>
+              <div><strong>Stale Listings:</strong> <span id="snapshotStaleListings">0</span></div>
+              <div><strong>Price Changes:</strong> <span id="snapshotPriceChanges">0</span></div>
+              <div><strong>Queued Vehicles:</strong> <span id="snapshotQueuedVehicles">0</span></div>
+              <div><strong>Lifecycle Updated:</strong> <span id="snapshotLifecycleUpdatedAt">—</span></div>
             </div>
             <div id="snapshotSetupSummary" class="status-line"></div>
           </div>
