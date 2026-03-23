@@ -13,6 +13,11 @@ function normalizeEmail(value) {
   return clean(value).toLowerCase();
 }
 
+function safeNumber(value, fallback = 0) {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : fallback;
+}
+
 async function resolveUser({ userId, email }) {
   if (userId) {
     const { data, error } = await supabase
@@ -29,7 +34,9 @@ async function resolveUser({ userId, email }) {
     const { data, error } = await supabase
       .from("users")
       .select("id,email")
-      .eq("email", email)
+      .ilike("email", email)
+      .order("created_at", { ascending: false })
+      .limit(1)
       .maybeSingle();
 
     if (error) throw error;
@@ -37,11 +44,6 @@ async function resolveUser({ userId, email }) {
   }
 
   return null;
-}
-
-function safeNumber(value, fallback = 0) {
-  const n = Number(value);
-  return Number.isFinite(n) ? n : fallback;
 }
 
 function sortRows(rows, sort) {
@@ -58,23 +60,44 @@ function sortRows(rows, sort) {
   if (sort === "popular") {
     return items.sort((a, b) => {
       const scoreA =
-        (safeNumber(a.messages_count) * 1000) +
-        (safeNumber(a.views_count) * 10) +
-        (new Date(a.posted_at || 0).getTime() / 100000000);
+        safeNumber(a.messages_count) * 1000 +
+        safeNumber(a.views_count) * 10 +
+        new Date(a.posted_at || a.created_at || 0).getTime() / 100000000;
 
       const scoreB =
-        (safeNumber(b.messages_count) * 1000) +
-        (safeNumber(b.views_count) * 10) +
-        (new Date(b.posted_at || 0).getTime() / 100000000);
+        safeNumber(b.messages_count) * 1000 +
+        safeNumber(b.views_count) * 10 +
+        new Date(b.posted_at || b.created_at || 0).getTime() / 100000000;
 
       return scoreB - scoreA;
     });
   }
 
   return items.sort((a, b) => {
-    return new Date(b.posted_at || b.created_at || 0).getTime() -
-      new Date(a.posted_at || a.created_at || 0).getTime();
+    return (
+      new Date(b.posted_at || b.created_at || 0).getTime() -
+      new Date(a.posted_at || a.created_at || 0).getTime()
+    );
   });
+}
+
+async function fetchRows(tableName, finalUserId, finalEmail, status, limit) {
+  let query = supabase.from(tableName).select("*");
+
+  if (finalUserId) {
+    query = query.eq("user_id", finalUserId);
+  } else {
+    query = query.ilike("email", finalEmail);
+  }
+
+  if (status) {
+    query = query.eq("status", status);
+  }
+
+  const { data, error } = await query.limit(limit);
+
+  if (error) throw error;
+  return Array.isArray(data) ? data : [];
 }
 
 export default async function handler(req, res) {
@@ -100,26 +123,18 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: "Missing userId or email" });
     }
 
-    let query = supabase.from("user_listings").select("*");
+    let rows = await fetchRows("user_listings", finalUserId, finalEmail, status, limit);
 
-    if (finalUserId) {
-      query = query.eq("user_id", finalUserId);
-    } else {
-      query = query.eq("email", finalEmail);
+    if (!rows.length) {
+      rows = await fetchRows("listings", finalUserId, finalEmail, status, limit);
     }
 
-    if (status) {
-      query = query.eq("status", status);
+    if (!rows.length && finalEmail) {
+      rows = await fetchRows("user_listings", "", finalEmail, status, limit);
+      if (!rows.length) {
+        rows = await fetchRows("listings", "", finalEmail, status, limit);
+      }
     }
-
-    const { data, error } = await query.limit(limit);
-
-    if (error) {
-      console.error("get-user-listings error:", error);
-      return res.status(500).json({ error: error.message });
-    }
-
-    let rows = Array.isArray(data) ? data : [];
 
     if (search) {
       rows = rows.filter((row) => {
