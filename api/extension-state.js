@@ -373,7 +373,7 @@ export default async function handler(req, res) {
     const { data: user, error: userError } = await supabase
       .from("users")
       .select("*")
-      .eq("email", email)
+      .ilike("email", email)
       .maybeSingle();
 
     if (userError) {
@@ -395,7 +395,6 @@ export default async function handler(req, res) {
       legacyProfileResult,
       userProfileResult,
       subscriptionResult,
-      postingLimitResult,
       postingUsageResult,
       licenseResult,
       licenseKeyResult
@@ -411,7 +410,8 @@ export default async function handler(req, res) {
       supabase
         .from("profiles")
         .select("*")
-        .eq("email", email)
+        .or(`id.eq.${user.id},email.eq.${email}`)
+        .limit(1)
         .maybeSingle(),
       supabase
         .from("user_profiles")
@@ -420,12 +420,6 @@ export default async function handler(req, res) {
         .maybeSingle(),
       supabase
         .from("subscriptions")
-        .select("*")
-        .or(`user_id.eq.${user.id},email.eq.${email}`)
-        .limit(1)
-        .maybeSingle(),
-      supabase
-        .from("posting_limits")
         .select("*")
         .or(`user_id.eq.${user.id},email.eq.${email}`)
         .limit(1)
@@ -460,10 +454,31 @@ export default async function handler(req, res) {
     const legacyProfile = legacyProfileResult.data || null;
     const userProfile = userProfileResult.data || null;
     const subscriptionRow = subscriptionResult.data || null;
-    const postingLimitRow = postingLimitResult.data || null;
     const postingUsageRow = postingUsageResult.data || null;
     const licenseRow = licenseResult.data || null;
     const licenseKeyRow = licenseKeyResult.data || null;
+
+    const normalizedPlanType = clean(
+      firstNonEmpty(
+        subscriptionRow?.plan_type,
+        subscriptionRow?.plan_name,
+        subscriptionRow?.plan,
+        licenseRow?.plan,
+        licenseKeyRow?.plan,
+        "Founder Beta"
+      )
+    );
+
+    let postingLimitRow = null;
+    if (normalizedPlanType) {
+      const { data: postingLimitData } = await supabase
+        .from("posting_limits")
+        .select("*")
+        .ilike("plan_type", normalizedPlanType)
+        .limit(1)
+        .maybeSingle();
+      postingLimitRow = postingLimitData || null;
+    }
 
     const membershipList = Array.isArray(membershipsResult.data) ? membershipsResult.data : [];
 
