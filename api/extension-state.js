@@ -1,8 +1,13 @@
 import { createClient } from "@supabase/supabase-js";
 
+const SUPABASE_URL = process.env.SUPABASE_URL;
+const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const DEFAULT_MINIMUM_VERSION = process.env.EXTENSION_MINIMUM_VERSION || "7.6.0";
+const DEFAULT_LATEST_VERSION = process.env.EXTENSION_LATEST_VERSION || DEFAULT_MINIMUM_VERSION;
+
 const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
+  SUPABASE_URL,
+  SUPABASE_SERVICE_ROLE_KEY
 );
 
 function setCors(req, res) {
@@ -313,6 +318,27 @@ function buildFallbackDealership(user, legacyProfile) {
   };
 }
 
+
+function compareVersions(a, b) {
+  const pa = String(a || "0.0.0").split(".").map((x) => Number(x) || 0);
+  const pb = String(b || "0.0.0").split(".").map((x) => Number(x) || 0);
+  const len = Math.max(pa.length, pb.length);
+
+  for (let i = 0; i < len; i += 1) {
+    const av = pa[i] || 0;
+    const bv = pb[i] || 0;
+    if (av > bv) return 1;
+    if (av < bv) return -1;
+  }
+
+  return 0;
+}
+
+function buildAllowedDealerHosts(dealership) {
+  const hosts = [safeHostname(dealership?.website || ""), safeHostname(dealership?.inventory_url || "")].filter(Boolean);
+  return Array.from(new Set(hosts));
+}
+
 export default async function handler(req, res) {
   setCors(req, res);
 
@@ -328,9 +354,14 @@ export default async function handler(req, res) {
   }
 
   try {
+    if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
+      return res.status(500).json({ ok: false, error: "Missing Supabase env" });
+    }
+
     const email = normalizeEmail(req.query?.email || "");
     const hostname = safeHostname(req.query?.hostname || "");
     const pageUrl = clean(req.query?.pageUrl || "");
+    const clientVersion = clean(req.query?.clientVersion || "");
 
     if (!email) {
       return res.status(400).json({
@@ -499,6 +530,15 @@ export default async function handler(req, res) {
       legacyProfile
     );
     const scannerConfigPayload = buildScannerConfigPayload(scannerConfig, dealership || {}, legacyProfile || {});
+    const allowedDealerHosts = buildAllowedDealerHosts(dealership || {});
+    const minimumVersion = DEFAULT_MINIMUM_VERSION;
+    const latestVersion = DEFAULT_LATEST_VERSION;
+    const updateRequired = clientVersion ? compareVersions(clientVersion, minimumVersion) < 0 : false;
+
+    subscription.minimum_version = minimumVersion;
+    subscription.latest_version = latestVersion;
+    subscription.update_required = updateRequired;
+    subscription.allowed_dealer_hosts = allowedDealerHosts;
 
     const session = {
       user: {
@@ -534,8 +574,15 @@ export default async function handler(req, res) {
         requested_page_url: pageUrl,
         mode: membershipList.length ? "multi_tenant" : "solo_bridge",
         setup_ready: Boolean(profile?.full_name && dealership?.inventory_url),
-        billing_active: Boolean(subscription?.active)
-      }
+        billing_active: Boolean(subscription?.active),
+        minimum_version: minimumVersion,
+        latest_version: latestVersion,
+        update_required: updateRequired,
+        allowed_dealer_hosts: allowedDealerHosts
+      },
+      minimum_version: minimumVersion,
+      latest_version: latestVersion,
+      update_required: updateRequired
     };
 
     return res.status(200).json({
