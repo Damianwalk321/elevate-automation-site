@@ -1040,45 +1040,60 @@ async function loadAccountData(user, forceFresh = false) {
     setStatus("accountStatusBilling", "Loading account data...");
     setStatus("extensionActionStatus", "Loading extension state...");
 
-    const url = new URL("/api/extension-state", window.location.origin);
-    url.searchParams.set("email", user.email || "");
-    if (window.location.hostname) {
-      url.searchParams.set("hostname", window.location.hostname);
+    let result = null;
+    let extensionStateError = "";
+
+    try {
+      const url = new URL("/api/extension-state", window.location.origin);
+      url.searchParams.set("email", user.email || "");
+      if (window.location.hostname) {
+        url.searchParams.set("hostname", window.location.hostname);
+      }
+      if (forceFresh) {
+        url.searchParams.set("_ts", String(Date.now()));
+      }
+
+      const response = await fetch(url.toString(), {
+        cache: "no-store"
+      });
+
+      if (!response.ok) {
+        extensionStateError = `extension-state ${response.status}`;
+        console.warn("[dashboard] extension-state unavailable:", response.status);
+        setStatus("extensionActionStatus", "Extension state unavailable. Using saved account summary.");
+      } else {
+        result = await response.json().catch(() => null);
+      }
+    } catch (innerError) {
+      extensionStateError = innerError?.message || String(innerError);
+      console.warn("[dashboard] extension-state request failed:", innerError);
+      setStatus("extensionActionStatus", "Extension state unavailable. Using saved account summary.");
     }
-    if (forceFresh) {
-      url.searchParams.set("_ts", String(Date.now()));
-    }
 
-    const response = await fetch(url.toString(), {
-      cache: "no-store"
-    });
-
-    const result = await response.json();
-
-    if (!response.ok || !result) {
+    if (result) {
+      currentAccountData = result || null;
+      currentNormalizedSession = normalizeExtensionStateResponse(result, currentUser, currentProfile);
+    } else {
       currentAccountData = null;
-      currentNormalizedSession = null;
-      renderAccessState(null);
-      renderExtensionControl(null, currentProfile);
-      updateSetupStates(currentProfile, null);
-      persistProfileSnapshots(buildExtensionProfileSnapshot(null, currentProfile, currentUser), null);
-      setStatus("accountStatus", "Could not load account data.");
-      setStatus("accountStatusBilling", "Could not load account data.");
-      setStatus("extensionActionStatus", "Could not load extension state.");
-      return;
+      currentNormalizedSession = buildFallbackSessionFromLocalState();
     }
-
-    currentAccountData = result || null;
-    currentNormalizedSession = normalizeExtensionStateResponse(result, currentUser, currentProfile);
 
     renderAccessState(currentNormalizedSession);
     renderExtensionControl(currentNormalizedSession, currentProfile);
     updateSetupStates(currentProfile, currentNormalizedSession);
-    persistProfileSnapshots(buildExtensionProfileSnapshot(currentNormalizedSession, currentProfile, currentUser), currentNormalizedSession);
+    persistProfileSnapshots(
+      buildExtensionProfileSnapshot(currentNormalizedSession, currentProfile, currentUser),
+      currentNormalizedSession
+    );
 
-    setStatus("accountStatus", "Account data loaded.");
-    setStatus("accountStatusBilling", "Account data loaded.");
-    setStatus("extensionActionStatus", "Extension state loaded.");
+    const extensionLoaded = Boolean(result);
+    setStatus("accountStatus", extensionLoaded ? "Account data loaded." : "Account data loaded from dashboard summary.");
+    setStatus("accountStatusBilling", extensionLoaded ? "Account data loaded." : "Account data loaded from dashboard summary.");
+    if (!extensionLoaded && extensionStateError) {
+      console.warn("[dashboard] proceeding without extension-state:", extensionStateError);
+    } else {
+      setStatus("extensionActionStatus", "Extension state loaded.");
+    }
 
     const licenseKey = currentNormalizedSession?.subscription?.license_key || "Auto-assignment pending";
     setTextByIdForAll("licenseKeyDisplay", licenseKey);
@@ -1116,14 +1131,14 @@ async function loadAccountData(user, forceFresh = false) {
   } catch (error) {
     console.error("loadAccountData error:", error);
     currentAccountData = null;
-    currentNormalizedSession = null;
-    renderAccessState(null);
-    renderExtensionControl(null, currentProfile);
-    updateSetupStates(currentProfile, null);
-    persistProfileSnapshots(buildExtensionProfileSnapshot(null, currentProfile, currentUser), null);
-    setStatus("accountStatus", "Failed to load account data.");
-    setStatus("accountStatusBilling", "Failed to load account data.");
-    setStatus("extensionActionStatus", "Failed to load extension state.");
+    currentNormalizedSession = buildFallbackSessionFromLocalState();
+    renderAccessState(currentNormalizedSession);
+    renderExtensionControl(currentNormalizedSession, currentProfile);
+    updateSetupStates(currentProfile, currentNormalizedSession);
+    persistProfileSnapshots(buildExtensionProfileSnapshot(currentNormalizedSession, currentProfile, currentUser), currentNormalizedSession);
+    setStatus("accountStatus", "Failed to load extension-state. Using dashboard summary.");
+    setStatus("accountStatusBilling", "Failed to load extension-state. Using dashboard summary.");
+    setStatus("extensionActionStatus", "Extension state unavailable. Using saved account summary.");
   }
 }
 
