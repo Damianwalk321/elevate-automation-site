@@ -136,9 +136,7 @@ function buildSubscriptionPayload(
   postingUsageRow,
   licenseRow,
   licenseKeyRow,
-  legacyProfileRow,
-  userProfileRow,
-  dealership
+  legacyProfileRow
 ) {
   const rawPlan = firstNonEmpty(
     subscriptionRow?.plan_name,
@@ -196,43 +194,32 @@ function buildSubscriptionPayload(
     normalizeBoolean(licenseKeyRow?.assigned) ||
     isActiveStatus(rawStatus);
 
-  const hardNegative = [
+  const explicitNegative = [
     "canceled",
     "cancelled",
     "unpaid",
     "past_due",
     "expired",
-    "suspended"
+    "suspended",
+    "inactive"
   ].includes(rawStatus);
 
   const hasProfileSetup = Boolean(
-    firstNonEmpty(
-      userProfileRow?.inventory_url,
-      legacyProfileRow?.inventory_url,
-      dealership?.inventory_url,
-      userProfileRow?.dealer_website,
-      legacyProfileRow?.dealer_website,
-      dealership?.website,
-      userProfileRow?.dealership,
-      legacyProfileRow?.dealership,
-      dealership?.name
-    )
+    legacyProfileRow?.dealer_website ||
+      legacyProfileRow?.inventory_url ||
+      legacyProfileRow?.dealership
   );
 
-  const bridgeEligible =
-    normalizeBoolean(subscriptionRow?.bridge_access) ||
-    normalizeBoolean(userProfileRow?.bridge_access) ||
-    normalizeBoolean(legacyProfileRow?.bridge_access) ||
-    (rawStatus === "inactive" && hasProfileSetup);
-
-  const bridgeActive = !hardNegative && bridgeEligible && hasProfileSetup;
+  const bridgeEligible = normalizeBoolean(subscriptionRow?.bridge_access) || normalizeBoolean(legacyProfileRow?.bridge_access);
+  const bridgeActive = !explicitNegative && bridgeEligible && hasProfileSetup;
   const active = explicitPositive || bridgeActive;
+  const effectivePlan = clean(rawPlan || (active ? "Founder Beta" : "No Plan"));
   const postingLimit = active ? basePostingLimit : 0;
   const postsRemaining = Math.max(postingLimit - postsToday, 0);
 
   return {
     id: clean(subscriptionRow?.id || ""),
-    plan: clean(rawPlan || "No Plan"),
+    plan: effectivePlan,
     status: active ? (rawStatus || "active") : (rawStatus || "inactive"),
     active,
     access_type: clean(subscriptionRow?.access_type || ""),
@@ -556,9 +543,7 @@ export default async function handler(req, res) {
       postingUsageRow,
       licenseRow,
       licenseKeyRow,
-      legacyProfile,
-      userProfile,
-      dealership
+      legacyProfile
     );
     const scannerConfigPayload = buildScannerConfigPayload(scannerConfig, dealership || {}, legacyProfile || {});
     const allowedDealerHosts = buildAllowedDealerHosts(dealership || {});
