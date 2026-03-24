@@ -120,6 +120,36 @@ async function mirrorCustomerToSupabase({ email, userId, stripeCustomerId }) {
   }
 }
 
+async function findSubscriptionMirror({ email, userId }) {
+  const supabaseUrl = process.env.SUPABASE_URL;
+  const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+  if (!supabaseUrl || !supabaseServiceRoleKey) return null;
+
+  const supabase = createClient(supabaseUrl, supabaseServiceRoleKey);
+  const normalizedEmail = normalizeEmail(email);
+  const cleanedUserId = clean(userId);
+
+  try {
+    let query = supabase.from("subscriptions").select("stripe_customer_id,stripe_subscription_id,email,user_id").order("updated_at", { ascending: false }).limit(1);
+    if (cleanedUserId && normalizedEmail) {
+      query = query.or(`user_id.eq.${cleanedUserId},email.eq.${normalizedEmail}`);
+    } else if (cleanedUserId) {
+      query = query.eq("user_id", cleanedUserId);
+    } else if (normalizedEmail) {
+      query = query.eq("email", normalizedEmail);
+    } else {
+      return null;
+    }
+    const { data, error } = await query.maybeSingle();
+    if (!error && data) return data;
+  } catch (error) {
+    console.error("[billing-portal] subscription mirror lookup warning:", error);
+  }
+
+  return null;
+}
+
 async function resolveCustomer({ email, userId }) {
   const normalizedEmail = normalizeEmail(email);
   const cleanedUserId = clean(userId);
@@ -142,6 +172,18 @@ async function resolveCustomer({ email, userId }) {
       }
     } catch (error) {
       console.error("[billing-portal] stored customer retrieve warning:", error);
+    }
+  }
+
+  const subscriptionMirror = await findSubscriptionMirror({ email: normalizedEmail, userId: cleanedUserId });
+  if (subscriptionMirror?.stripe_customer_id) {
+    try {
+      const customer = await stripe.customers.retrieve(clean(subscriptionMirror.stripe_customer_id));
+      if (customer && !customer.deleted) {
+        return customer;
+      }
+    } catch (error) {
+      console.error("[billing-portal] subscription mirror customer warning:", error);
     }
   }
 
