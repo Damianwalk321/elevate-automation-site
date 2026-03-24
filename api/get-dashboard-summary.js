@@ -1,4 +1,3 @@
-
 import { createClient } from "@supabase/supabase-js";
 
 const supabase = createClient(
@@ -23,10 +22,6 @@ function dayKeyNow() {
   return new Date().toISOString().slice(0, 10);
 }
 
-function monthKeyNow() {
-  return new Date().toISOString().slice(0, 7);
-}
-
 function monthStartIso() {
   const d = new Date();
   d.setDate(1);
@@ -42,12 +37,7 @@ function dayStartIso() {
 
 function isActiveStatus(value) {
   const status = clean(value).toLowerCase();
-  return [
-    "active",
-    "trialing",
-    "paid",
-    "checkout_pending"
-  ].includes(status);
+  return ["active", "trialing", "paid", "checkout_pending"].includes(status);
 }
 
 function normalizePlan(value) {
@@ -56,13 +46,132 @@ function normalizePlan(value) {
 
 function inferPostingLimitFromPlan(planValue) {
   const plan = normalizePlan(planValue);
-
   if (!plan) return 5;
   if (plan.includes("founder")) return 25;
   if (plan.includes("beta")) return 25;
   if (plan.includes("pro")) return 25;
-
   return 5;
+}
+
+function normalizeStatus(value) {
+  const status = clean(value).toLowerCase();
+  if (["sold", "deleted", "inactive", "failed", "stale"].includes(status)) return status;
+  if (["posted", "active", "live"].includes(status)) return "active";
+  return status || "active";
+}
+
+function normalizeReviewBucket(value) {
+  const bucket = clean(value).toLowerCase().replace(/[\s_-]+/g, "");
+  if (!bucket) return "";
+  if (["removedvehicles", "removed", "reviewdelete"].includes(bucket)) return "removedvehicles";
+  if (["pricechanges", "pricechange", "reviewpriceupdate"].includes(bucket)) return "pricechanges";
+  if (["newvehicles", "new", "reviewnew"].includes(bucket)) return "newvehicles";
+  return bucket;
+}
+
+function normalizeLifecycleStatus(value, reviewBucket = "") {
+  const status = clean(value).toLowerCase();
+  const review = normalizeReviewBucket(reviewBucket);
+  if (status) return status;
+  if (review === "removedvehicles") return "review_delete";
+  if (review === "pricechanges") return "review_price_update";
+  if (review === "newvehicles") return "review_new";
+  return "active";
+}
+
+function listingIdentityKey(row) {
+  const marketplace = clean(row.marketplace_listing_id || "").toUpperCase();
+  if (marketplace) return `MARKETPLACE:${marketplace}`;
+
+  const vin = clean(row.vin || "").toUpperCase();
+  if (vin) return `VIN:${vin}`;
+
+  const stock = clean(row.stock_number || "").toUpperCase();
+  if (stock) return `STOCK:${stock}`;
+
+  const source = clean(row.source_url || "").toLowerCase();
+  if (source) return `URL:${source}`;
+
+  const id = clean(row.id || "");
+  if (id) return `ID:${id}`;
+
+  return [
+    clean(row.year || "").toUpperCase(),
+    clean(row.make || "").toUpperCase(),
+    clean(row.model || "").toUpperCase(),
+    String(row.price || "").replace(/[^\d]/g, ""),
+    String(row.mileage || row.kilometers || row.km || "").replace(/[^\d]/g, "")
+  ].filter(Boolean).join("|");
+}
+
+function normalizeListingRow(row = {}, source = "user_listings") {
+  const normalizedStatus = normalizeStatus(row.status);
+  const normalizedReviewBucket = normalizeReviewBucket(row.review_bucket);
+  const normalizedLifecycleStatus = normalizeLifecycleStatus(row.lifecycle_status, normalizedReviewBucket);
+
+  return {
+    ...row,
+    id: clean(row.id || ""),
+    source_table: source,
+    status: normalizedStatus,
+    lifecycle_status: normalizedLifecycleStatus,
+    review_bucket: normalizedReviewBucket,
+    identity_key: listingIdentityKey(row),
+    title: clean(row.title || ""),
+    posted_at: row.posted_at || row.created_at || null,
+    updated_at: row.updated_at || row.created_at || null,
+    views_count: safeNumber(row.views_count, 0),
+    messages_count: safeNumber(row.messages_count, 0),
+    price: safeNumber(row.price, 0),
+    mileage: safeNumber(row.mileage || row.kilometers || row.km, 0)
+  };
+}
+
+function preferListingRow(current, incoming) {
+  if (!current) return incoming;
+
+  const currentTs = new Date(current.updated_at || current.posted_at || current.created_at || 0).getTime();
+  const incomingTs = new Date(incoming.updated_at || incoming.posted_at || incoming.created_at || 0).getTime();
+
+  const currentScore =
+    (current.source_table === "user_listings" ? 1000 : 0) +
+    (clean(current.image_url) ? 120 : 0) +
+    (clean(current.marketplace_listing_id) ? 60 : 0) +
+    (clean(current.vin) ? 40 : 0) +
+    (clean(current.stock_number) ? 30 : 0) +
+    (clean(current.lifecycle_status) ? 20 : 0) +
+    (clean(current.review_bucket) ? 20 : 0) +
+    currentTs / 1000000000000;
+
+  const incomingScore =
+    (incoming.source_table === "user_listings" ? 1000 : 0) +
+    (clean(incoming.image_url) ? 120 : 0) +
+    (clean(incoming.marketplace_listing_id) ? 60 : 0) +
+    (clean(incoming.vin) ? 40 : 0) +
+    (clean(incoming.stock_number) ? 30 : 0) +
+    (clean(incoming.lifecycle_status) ? 20 : 0) +
+    (clean(incoming.review_bucket) ? 20 : 0) +
+    incomingTs / 1000000000000;
+
+  return incomingScore >= currentScore ? { ...current, ...incoming } : { ...incoming, ...current };
+}
+
+function mergeListingRows(userListingRows, legacyListingRows) {
+  const map = new Map();
+
+  for (const row of userListingRows) {
+    const normalized = normalizeListingRow(row, "user_listings");
+    map.set(normalized.identity_key, preferListingRow(map.get(normalized.identity_key), normalized));
+  }
+
+  for (const row of legacyListingRows) {
+    const normalized = normalizeListingRow(row, "listings");
+    map.set(normalized.identity_key, preferListingRow(map.get(normalized.identity_key), normalized));
+  }
+
+  return [...map.values()].sort((a, b) => {
+    return new Date(b.posted_at || b.updated_at || 0).getTime() - new Date(a.posted_at || a.updated_at || 0).getTime();
+  });
 }
 
 function buildComputedSummary(rows) {
@@ -81,44 +190,36 @@ function buildComputedSummary(rows) {
 
   for (const row of rows) {
     const postedTime = new Date(row.posted_at || row.created_at || 0).getTime();
-    const status = clean(row.status || "posted").toLowerCase();
-    const lifecycleStatus = clean(row.lifecycle_status || "").toLowerCase();
-    const reviewBucket = clean(row.review_bucket || "").toLowerCase();
+    const status = normalizeStatus(row.status);
+    const lifecycleStatus = normalizeLifecycleStatus(row.lifecycle_status, row.review_bucket);
+    const reviewBucket = normalizeReviewBucket(row.review_bucket);
 
     if (postedTime >= todayStart) postsToday += 1;
     if (postedTime >= monthStart) postsThisMonth += 1;
-
     if (!["sold", "deleted", "inactive"].includes(status)) activeListings += 1;
 
     totalViews += safeNumber(row.views_count, 0);
     totalMessages += safeNumber(row.messages_count, 0);
 
-    if (lifecycleStatus === "stale") staleListings += 1;
-    if (lifecycleStatus === "review_delete" || reviewBucket === "removedvehicles") {
-      reviewDeleteCount += 1;
-    }
-    if (lifecycleStatus === "review_price_update" || reviewBucket === "pricechanges") {
-      reviewPriceChangeCount += 1;
-    }
-    if (lifecycleStatus === "review_new" || reviewBucket === "newvehicles") {
-      reviewNewCount += 1;
-    }
+    if (status === "stale" || lifecycleStatus === "stale") staleListings += 1;
+    if (lifecycleStatus === "review_delete" || reviewBucket === "removedvehicles") reviewDeleteCount += 1;
+    if (lifecycleStatus === "review_price_update" || reviewBucket === "pricechanges") reviewPriceChangeCount += 1;
+    if (lifecycleStatus === "review_new" || reviewBucket === "newvehicles") reviewNewCount += 1;
   }
 
-  const topListing = [...rows]
-    .sort((a, b) => {
-      const scoreA =
-        safeNumber(a.messages_count, 0) * 1000 +
-        safeNumber(a.views_count, 0) * 10 +
-        new Date(a.posted_at || a.created_at || 0).getTime() / 100000000;
+  const topListing = [...rows].sort((a, b) => {
+    const scoreA =
+      safeNumber(a.messages_count, 0) * 1000 +
+      safeNumber(a.views_count, 0) * 10 +
+      new Date(a.posted_at || a.created_at || 0).getTime() / 100000000;
 
-      const scoreB =
-        safeNumber(b.messages_count, 0) * 1000 +
-        safeNumber(b.views_count, 0) * 10 +
-        new Date(b.posted_at || b.created_at || 0).getTime() / 100000000;
+    const scoreB =
+      safeNumber(b.messages_count, 0) * 1000 +
+      safeNumber(b.views_count, 0) * 10 +
+      new Date(b.posted_at || b.created_at || 0).getTime() / 100000000;
 
-      return scoreB - scoreA;
-    })[0] || null;
+    return scoreB - scoreA;
+  })[0] || null;
 
   return {
     posts_today: postsToday,
@@ -138,12 +239,7 @@ function buildComputedSummary(rows) {
 
 async function resolveUser({ userId, email }) {
   if (userId) {
-    const { data, error } = await supabase
-      .from("users")
-      .select("*")
-      .eq("id", userId)
-      .maybeSingle();
-
+    const { data, error } = await supabase.from("users").select("*").eq("id", userId).maybeSingle();
     if (error) throw error;
     if (data) return data;
   }
@@ -173,7 +269,6 @@ async function getSubscription(finalUserId, finalEmail) {
       .order("created_at", { ascending: false })
       .limit(1)
       .maybeSingle();
-
     if (error) throw error;
     if (data) return data;
   }
@@ -186,7 +281,6 @@ async function getSubscription(finalUserId, finalEmail) {
       .order("created_at", { ascending: false })
       .limit(1)
       .maybeSingle();
-
     if (error) throw error;
     if (data) return data;
   }
@@ -198,10 +292,7 @@ async function getPostingLimitRow(planType) {
   const normalizedPlan = normalizePlan(planType);
   if (!normalizedPlan) return null;
 
-  const { data: allRows, error } = await supabase
-    .from("posting_limits")
-    .select("*");
-
+  const { data: allRows, error } = await supabase.from("posting_limits").select("*");
   if (error) throw error;
 
   const rows = (Array.isArray(allRows) ? allRows : []).filter((row) => clean(row?.plan_type) && !clean(row?.email) && !clean(row?.user_id));
@@ -225,20 +316,6 @@ async function getPostingUsageRow(finalUserId, finalEmail) {
       .order("updated_at", { ascending: false })
       .limit(1)
       .maybeSingle();
-
-    if (error) throw error;
-    if (data) return data;
-  }
-
-  if (finalUserId) {
-    const { data, error } = await supabase
-      .from("posting_usage")
-      .select("*")
-      .eq("user_id", finalUserId)
-      .order("updated_at", { ascending: false })
-      .limit(1)
-      .maybeSingle();
-
     if (error) throw error;
     if (data) return data;
   }
@@ -252,7 +329,18 @@ async function getPostingUsageRow(finalUserId, finalEmail) {
       .order("updated_at", { ascending: false })
       .limit(1)
       .maybeSingle();
+    if (error) throw error;
+    if (data) return data;
+  }
 
+  if (finalUserId) {
+    const { data, error } = await supabase
+      .from("posting_usage")
+      .select("*")
+      .eq("user_id", finalUserId)
+      .order("updated_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
     if (error) throw error;
     if (data) return data;
   }
@@ -262,24 +350,13 @@ async function getPostingUsageRow(finalUserId, finalEmail) {
 
 async function getProfileRow(finalUserId, finalEmail) {
   if (finalUserId) {
-    const { data, error } = await supabase
-      .from("profiles")
-      .select("*")
-      .eq("id", finalUserId)
-      .maybeSingle();
-
+    const { data, error } = await supabase.from("profiles").select("*").eq("id", finalUserId).maybeSingle();
     if (error) throw error;
     if (data) return data;
   }
 
   if (finalEmail) {
-    const { data, error } = await supabase
-      .from("profiles")
-      .select("*")
-      .ilike("email", finalEmail)
-      .limit(1)
-      .maybeSingle();
-
+    const { data, error } = await supabase.from("profiles").select("*").ilike("email", finalEmail).limit(1).maybeSingle();
     if (error) throw error;
     if (data) return data;
   }
@@ -287,56 +364,49 @@ async function getProfileRow(finalUserId, finalEmail) {
   return null;
 }
 
+async function getTableListingRows(tableName, finalUserId, finalEmail) {
+  let query = supabase.from(tableName).select("*").order("posted_at", { ascending: false });
+
+  if (finalUserId) query = query.eq("user_id", finalUserId);
+  else if (finalEmail) query = query.ilike("email", finalEmail);
+
+  const { data, error } = await query;
+  if (error) throw error;
+  return Array.isArray(data) ? data : [];
+}
+
 async function getListingRows(finalUserId, finalEmail) {
-  // 1) try user_listings by user_id
-  if (finalUserId) {
-    const { data, error } = await supabase
-      .from("user_listings")
-      .select("*")
-      .eq("user_id", finalUserId)
-      .order("posted_at", { ascending: false });
+  const [userListingRows, legacyListingRows] = await Promise.all([
+    getTableListingRows("user_listings", finalUserId, finalEmail),
+    getTableListingRows("listings", finalUserId, finalEmail)
+  ]);
 
-    if (error) throw error;
-    if (Array.isArray(data) && data.length) return data;
-  }
+  return mergeListingRows(userListingRows, legacyListingRows);
+}
 
-  // 2) fallback user_listings by email
-  if (finalEmail) {
-    const { data, error } = await supabase
-      .from("user_listings")
-      .select("*")
-      .ilike("email", finalEmail)
-      .order("posted_at", { ascending: false });
+function buildSetupStatus(user, profileRow) {
+  const inventoryUrl = clean(profileRow?.inventory_url || "");
+  const salespersonName = clean(profileRow?.full_name || profileRow?.salesperson_name || `${clean(user?.first_name)} ${clean(user?.last_name)}`.trim());
+  const dealershipName = clean(profileRow?.dealership || profileRow?.dealer_name || user?.company || "");
+  const complianceMode = clean(profileRow?.compliance_mode || "");
 
-    if (error) throw error;
-    if (Array.isArray(data) && data.length) return data;
-  }
+  const checks = {
+    inventory_url_present: Boolean(inventoryUrl),
+    salesperson_name_present: Boolean(salespersonName),
+    dealership_name_present: Boolean(dealershipName),
+    compliance_mode_present: Boolean(complianceMode)
+  };
 
-  // 3) fallback listings by user_id
-  if (finalUserId) {
-    const { data, error } = await supabase
-      .from("listings")
-      .select("*")
-      .eq("user_id", finalUserId)
-      .order("posted_at", { ascending: false });
-
-    if (error) throw error;
-    if (Array.isArray(data) && data.length) return data;
-  }
-
-  // 4) fallback listings by email
-  if (finalEmail) {
-    const { data, error } = await supabase
-      .from("listings")
-      .select("*")
-      .ilike("email", finalEmail)
-      .order("posted_at", { ascending: false });
-
-    if (error) throw error;
-    if (Array.isArray(data) && data.length) return data;
-  }
-
-  return [];
+  const completionCount = Object.values(checks).filter(Boolean).length;
+  return {
+    profile_complete: completionCount === 4,
+    profile_completion_score: completionCount / 4,
+    inventory_url: inventoryUrl,
+    salesperson_name: salespersonName,
+    dealership_name: dealershipName,
+    compliance_mode: complianceMode,
+    ...checks
+  };
 }
 
 export default async function handler(req, res) {
@@ -375,16 +445,14 @@ export default async function handler(req, res) {
     );
 
     const postingLimitRow = await getPostingLimitRow(planValue);
-
     const computed = buildComputedSummary(rows);
+
     const snapshot =
-      subscriptionRow?.account_snapshot &&
-      typeof subscriptionRow.account_snapshot === "object"
+      subscriptionRow?.account_snapshot && typeof subscriptionRow.account_snapshot === "object"
         ? subscriptionRow.account_snapshot
         : {};
 
     const effectivePlan = planValue || "No Plan Yet";
-
     const effectiveStatus = clean(
       subscriptionRow?.subscription_status ||
       subscriptionRow?.billing_status ||
@@ -396,72 +464,53 @@ export default async function handler(req, res) {
 
     const dailyLimit = safeNumber(
       snapshot.posting_limit ??
-        postingLimitRow?.daily_limit ??
-        subscriptionRow?.daily_posting_limit ??
-        inferPostingLimitFromPlan(effectivePlan),
+      postingLimitRow?.daily_limit ??
+      subscriptionRow?.daily_posting_limit ??
+      inferPostingLimitFromPlan(effectivePlan),
       inferPostingLimitFromPlan(effectivePlan)
     );
 
     const usageToday = safeNumber(
+      postingUsageRow?.posts_used ??
+      postingUsageRow?.used_today ??
       snapshot.posts_today ??
-        postingUsageRow?.posts_used ??
-        postingUsageRow?.used_today ??
-        computed.posts_today,
+      computed.posts_today,
       computed.posts_today
     );
 
-    const postsRemaining = Math.max(
-      safeNumber(snapshot.posts_remaining, dailyLimit - usageToday),
-      0
-    );
+    const postsRemaining = Math.max(safeNumber(snapshot.posts_remaining, dailyLimit - usageToday), 0);
+    const setupStatus = buildSetupStatus(user, profileRow);
 
-    const inventoryUrl = clean(profileRow?.inventory_url || "");
-    const salespersonName = clean(
-      profileRow?.full_name ||
-      profileRow?.salesperson_name ||
-      `${clean(user?.first_name)} ${clean(user?.last_name)}`.trim()
-    );
-    const dealershipName = clean(
-      profileRow?.dealership ||
-      profileRow?.dealer_name ||
-      user?.company ||
-      ""
-    );
-    const complianceMode = clean(profileRow?.compliance_mode || "");
     const recentListings = rows.slice(0, 5).map((row) => ({
       id: row.id,
       title: row.title,
       image_url: row.image_url || "",
       price: safeNumber(row.price, 0),
       mileage: safeNumber(row.mileage, 0),
-      status: row.status || "posted",
+      status: row.status || "active",
       lifecycle_status: row.lifecycle_status || "",
       posted_at: row.posted_at || row.created_at,
       views_count: safeNumber(row.views_count, 0),
-      messages_count: safeNumber(row.messages_count, 0)
+      messages_count: safeNumber(row.messages_count, 0),
+      review_bucket: row.review_bucket || ""
     }));
 
     return res.status(200).json({
       success: true,
       data: {
-        posts_today: safeNumber(snapshot.posts_today, computed.posts_today),
-        posts_this_month: safeNumber(snapshot.posts_this_month, computed.posts_this_month),
-        active_listings: safeNumber(snapshot.active_listings, computed.active_listings),
-        stale_listings: safeNumber(snapshot.stale_listings, computed.stale_listings),
-        total_views: safeNumber(snapshot.total_views, computed.total_views),
-        total_messages: safeNumber(snapshot.total_messages, computed.total_messages),
-        review_delete_count: safeNumber(snapshot.review_delete_count, computed.review_delete_count),
-        review_price_change_count: safeNumber(
-          snapshot.review_price_change_count,
-          computed.review_price_change_count
-        ),
-        review_new_count: safeNumber(snapshot.review_new_count, computed.review_new_count),
-        review_queue_count: safeNumber(snapshot.review_queue_count, computed.review_queue_count),
+        posts_today: usageToday,
+        posts_this_month: computed.posts_this_month,
+        active_listings: computed.active_listings,
+        stale_listings: computed.stale_listings,
+        total_views: computed.total_views,
+        total_messages: computed.total_messages,
+        review_delete_count: computed.review_delete_count,
+        review_price_change_count: computed.review_price_change_count,
+        review_new_count: computed.review_new_count,
+        review_queue_count: computed.review_queue_count,
         queue_count: safeNumber(snapshot.queue_count, 0),
         lifecycle_updated_at: clean(snapshot.lifecycle_updated_at || ""),
-        top_listing_title: clean(
-          snapshot.top_listing_title || computed.top_listing_title || "None yet"
-        ),
+        top_listing_title: clean(computed.top_listing_title || "None yet"),
         total_listings: computed.total_listings,
         recent_listings: recentListings,
         account_snapshot: {
@@ -471,12 +520,8 @@ export default async function handler(req, res) {
           plan: effectivePlan,
           status: effectiveStatus,
           active: isActiveStatus(effectiveStatus),
-          stripe_customer_id: clean(
-            subscriptionRow?.stripe_customer_id || user?.stripe_customer_id || ""
-          ),
-          stripe_subscription_id: clean(
-            subscriptionRow?.stripe_subscription_id || user?.stripe_subscription_id || ""
-          ),
+          stripe_customer_id: clean(subscriptionRow?.stripe_customer_id || user?.stripe_customer_id || ""),
+          stripe_subscription_id: clean(subscriptionRow?.stripe_subscription_id || user?.stripe_subscription_id || ""),
           posting_limit: dailyLimit,
           posts_used_today: usageToday,
           posts_today: usageToday,
@@ -485,21 +530,16 @@ export default async function handler(req, res) {
           trial_end: subscriptionRow?.trial_end || null,
           cancel_at_period_end: Boolean(subscriptionRow?.cancel_at_period_end)
         },
-        setup_status: {
-          profile_complete: Boolean(
-            salespersonName &&
-            dealershipName &&
-            complianceMode &&
-            inventoryUrl
-          ),
-          inventory_url_present: Boolean(inventoryUrl),
-          salesperson_name_present: Boolean(salespersonName),
-          dealership_name_present: Boolean(dealershipName),
-          compliance_mode_present: Boolean(complianceMode),
-          inventory_url: inventoryUrl,
-          salesperson_name: salespersonName,
-          dealership_name: dealershipName,
-          compliance_mode: complianceMode
+        setup_status: setupStatus,
+        data_integrity: {
+          listing_rows_merged: rows.length,
+          listing_sources: rows.reduce((acc, row) => {
+            const key = clean(row.source_table || "unknown");
+            acc[key] = safeNumber(acc[key], 0) + 1;
+            return acc;
+          }, {}),
+          posting_usage_source: postingUsageRow ? "posting_usage" : "computed_from_listings",
+          summary_source: "merged_listings_plus_posting_usage"
         }
       }
     });
