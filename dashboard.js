@@ -1173,7 +1173,7 @@ function normalizeExtensionStateResponse(result, user, profile) {
     ""
   );
 
-  const rawStatus = clean(subscription.status || (subscription.active ? "active" : "inactive")) || "inactive";
+  const rawStatus = clean(subscription.normalized_status || subscription.status || (subscription.active ? "active" : "inactive")) || "inactive";
   const hardNegative = ["canceled", "cancelled", "unpaid", "past_due", "expired", "suspended"].includes(rawStatus.toLowerCase());
   const setupReady = Boolean(
     raw?.meta?.setup_ready ||
@@ -1191,11 +1191,18 @@ function normalizeExtensionStateResponse(result, user, profile) {
     subscription.status === "trialing" ||
     (setupReady && founderBridgePlan && !hardNegative)
   );
-  const normalizedPlan = clean(subscription.plan || subscription.plan_name || "");
+  const normalizedPlan = clean(subscription.normalized_plan || subscription.plan || subscription.plan_name || "");
   const normalizedSubscription = {
     active: normalizedActive,
+    access_granted: normalizedActive,
     status: clean(rawStatus || (normalizedActive ? "active" : "inactive")) || (normalizedActive ? "active" : "inactive"),
+    normalized_status: clean(rawStatus || (normalizedActive ? "active" : "inactive")) || (normalizedActive ? "active" : "inactive"),
     plan: clean(
+      (normalizedActive && (!normalizedPlan || normalizedPlan === "No Plan"))
+        ? "Founder Beta"
+        : (normalizedPlan || "Founder Beta")
+    ) || "Founder Beta",
+    normalized_plan: clean(
       (normalizedActive && (!normalizedPlan || normalizedPlan === "No Plan"))
         ? "Founder Beta"
         : (normalizedPlan || "Founder Beta")
@@ -1391,9 +1398,9 @@ function renderSetupSnapshot() {
 }
 
 function renderAccessState(session) {
-  const hasAccess = Boolean(session?.subscription?.active);
+  const hasAccess = Boolean(session?.subscription?.access_granted ?? session?.subscription?.active);
   const plan = session?.subscription?.plan || "Founder Beta";
-  const status = session?.subscription?.status || (hasAccess ? "active" : "inactive");
+  const status = session?.subscription?.normalized_status || session?.subscription?.status || (hasAccess ? "active" : "inactive");
 
   setTextByIdForAll("accessBadge", hasAccess ? "Active Access" : "Inactive Access");
   setTextByIdForAll("planName", plan);
@@ -1407,7 +1414,7 @@ function renderAccessState(session) {
 
 function renderExtensionControl(session, profile) {
   const mergedProfile = profile || {};
-  const hasAccess = Boolean(session?.subscription?.active);
+  const hasAccess = Boolean(session?.subscription?.access_granted ?? session?.subscription?.active);
   const limit = Number(session?.subscription?.posting_limit || 0);
   const used = Number(session?.subscription?.posts_today || 0);
   const remaining = Number(session?.subscription?.posts_remaining ?? Math.max(limit - used, 0));
