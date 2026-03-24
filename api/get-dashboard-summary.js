@@ -1,3 +1,4 @@
+
 import { createClient } from "@supabase/supabase-js";
 
 const supabase = createClient(
@@ -45,8 +46,6 @@ function isActiveStatus(value) {
     "active",
     "trialing",
     "paid",
-    "founder",
-    "beta",
     "checkout_pending"
   ].includes(status);
 }
@@ -199,23 +198,13 @@ async function getPostingLimitRow(planType) {
   const normalizedPlan = normalizePlan(planType);
   if (!normalizedPlan) return null;
 
-  const { data, error } = await supabase
-    .from("posting_limits")
-    .select("*")
-    .ilike("plan_type", normalizedPlan)
-    .maybeSingle();
-
-  if (error) throw error;
-  if (data) return data;
-
-  // looser fallback: try fetching all and match in memory
-  const { data: allRows, error: allError } = await supabase
+  const { data: allRows, error } = await supabase
     .from("posting_limits")
     .select("*");
 
-  if (allError) throw allError;
+  if (error) throw error;
 
-  const rows = Array.isArray(allRows) ? allRows : [];
+  const rows = (Array.isArray(allRows) ? allRows : []).filter((row) => clean(row?.plan_type) && !clean(row?.email) && !clean(row?.user_id));
   return (
     rows.find((row) => normalizePlan(row.plan_type) === normalizedPlan) ||
     rows.find((row) => normalizedPlan.includes(normalizePlan(row.plan_type))) ||
