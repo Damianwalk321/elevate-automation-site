@@ -47,9 +47,8 @@ function normalizePlan(value) {
 function inferPostingLimitFromPlan(planValue) {
   const plan = normalizePlan(planValue);
   if (!plan) return 5;
-  if (plan.includes("founder")) return 25;
-  if (plan.includes("beta")) return 25;
-  if (plan.includes("pro")) return 25;
+  if (plan.includes("founder") && plan.includes("pro")) return 25;
+  if (plan === "pro" || (!plan.includes("founder") && plan.includes("pro"))) return 25;
   return 5;
 }
 
@@ -463,17 +462,21 @@ export default async function handler(req, res) {
     ).toLowerCase();
 
     const dailyLimit = safeNumber(
-      snapshot.posting_limit ??
       postingLimitRow?.daily_limit ??
+      postingLimitRow?.posting_limit ??
+      snapshot.posting_limit ??
       subscriptionRow?.daily_posting_limit ??
+      subscriptionRow?.posting_limit ??
       inferPostingLimitFromPlan(effectivePlan),
       inferPostingLimitFromPlan(effectivePlan)
     );
 
     const usageToday = safeNumber(
+      postingUsageRow?.posts_today ??
       postingUsageRow?.posts_used ??
       postingUsageRow?.used_today ??
       snapshot.posts_today ??
+      snapshot.posts_used_today ??
       computed.posts_today,
       computed.posts_today
     );
@@ -513,6 +516,12 @@ export default async function handler(req, res) {
         top_listing_title: clean(computed.top_listing_title || "None yet"),
         total_listings: computed.total_listings,
         recent_listings: recentListings,
+        ingest_debug: {
+          posting_usage_row_found: Boolean(postingUsageRow),
+          listing_rows_found: rows.length,
+          subscription_snapshot_posts_today: safeNumber(snapshot.posts_today ?? snapshot.posts_used_today, 0),
+          usage_today_row: safeNumber(postingUsageRow?.posts_today ?? postingUsageRow?.posts_used ?? postingUsageRow?.used_today, 0)
+        },
         account_snapshot: {
           ...(snapshot || {}),
           user_id: finalUserId,
