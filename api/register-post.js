@@ -418,11 +418,12 @@ export default async function handler(req, res) {
 
     if (userListingsError) throw userListingsError;
 
-    // Always increment posting usage on a confirmed post registration.
-    // Duplicate suppression is handled client-side by the worker/content flow.
-    // Existing listing rows may already exist from pre-publish lifecycle syncs,
-    // so skipping here can incorrectly leave posts_today at zero.
-    const usageResult = await upsertPostingUsage(supabase, resolved);
+    let usageResult = null;
+
+    // Always increment posting usage on a confirmed register-post call.
+    // A listing row may already exist because of lifecycle sync or pre-publish writes,
+    // but a successful publish still consumes one daily posting slot.
+    usageResult = await upsertPostingUsage(supabase, resolved);
 
     const snapshotResult = await syncSubscriptionSnapshot(supabase, resolved, usageResult?.posts_used || 0);
 
@@ -433,7 +434,14 @@ export default async function handler(req, res) {
       email: resolved.email,
       listing_id: listingRow.id,
       posts_used_today: usageResult?.posts_used || 0,
-      posting_state: snapshotResult?.snapshot || null
+      posting_usage_updated_at: nowIso(),
+      posting_state: snapshotResult?.snapshot || null,
+      debug: {
+        duplicate,
+        usage_incremented: true,
+        resolved_user_id: resolved.user_id,
+        resolved_email: resolved.email
+      }
     });
   } catch (error) {
     console.error("register-post fatal:", error);
