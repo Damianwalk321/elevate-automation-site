@@ -518,6 +518,7 @@ export default async function handler(req, res) {
         recent_listings: recentListings,
         ingest_debug: {
           posting_usage_row_found: Boolean(postingUsageRow),
+          posting_usage_updated_at: clean(postingUsageRow?.updated_at || postingUsageRow?.created_at || ""),
           listing_rows_found: rows.length,
           subscription_snapshot_posts_today: safeNumber(snapshot.posts_today ?? snapshot.posts_used_today, 0),
           usage_today_row: safeNumber(postingUsageRow?.posts_today ?? postingUsageRow?.posts_used ?? postingUsageRow?.used_today, 0)
