@@ -170,6 +170,34 @@ function bindDashboardUI() {
       }
     });
   }
+  const copyReferralCodeBtn = document.getElementById("copyReferralCodeBtn");
+  if (copyReferralCodeBtn) {
+    copyReferralCodeBtn.addEventListener("click", async () => {
+      const referral = document.getElementById("referralCodeAffiliate")?.textContent?.trim() || "";
+      if (!referral || referral === "Loading...") return;
+      try {
+        await navigator.clipboard.writeText(referral);
+        setBootStatus("Referral code copied.");
+      } catch (error) {
+        console.error("copyReferralCodeBtn error:", error);
+      }
+    });
+  }
+
+  const copyAffiliatePitchBtn = document.getElementById("copyAffiliatePitchBtn");
+  if (copyAffiliatePitchBtn) {
+    copyAffiliatePitchBtn.addEventListener("click", async () => {
+      const referral = document.getElementById("referralCodeAffiliate")?.textContent?.trim() || "";
+      const pitch = `I have early access to Elevate Automation. It helps salespeople post inventory faster and more consistently. Use my code ${referral || "[YOUR CODE]"} if you want founder access.`;
+      try {
+        await navigator.clipboard.writeText(pitch);
+        setBootStatus("Affiliate pitch copied.");
+      } catch (error) {
+        console.error("copyAffiliatePitchBtn error:", error);
+      }
+    });
+  }
+
 
   const openBillingPortalBtn = document.getElementById("openBillingPortalBtn");
   if (openBillingPortalBtn) {
@@ -476,9 +504,16 @@ function buildDashboardSummaryFromListings(listings) {
 
 function mergeSummaryWithListings(summary, listings) {
   const computed = buildDashboardSummaryFromListings(listings);
+  const sessionPostsToday = numberOrZero(currentNormalizedSession?.subscription?.posts_today);
+  const snapshotPostsToday = numberOrZero(summary?.account_snapshot?.posts_today ?? summary?.account_snapshot?.posts_used_today);
+  const bestPostsToday = Math.max(
+    numberOrZero(summary.posts_today ?? computed.posts_today),
+    sessionPostsToday,
+    snapshotPostsToday
+  );
 
   return {
-    posts_today: numberOrZero(summary.posts_today ?? computed.posts_today),
+    posts_today: bestPostsToday,
     posts_this_month: numberOrZero(summary.posts_this_month ?? computed.posts_this_month),
     active_listings: numberOrZero(summary.active_listings ?? computed.active_listings),
     total_views: numberOrZero(summary.total_views ?? computed.total_views),
@@ -502,6 +537,8 @@ function renderDashboardAnalytics() {
   setTextByIdForAll("kpiActiveListings", String(numberOrZero(dashboardSummary?.active_listings)));
   setTextByIdForAll("kpiViews", String(numberOrZero(dashboardSummary?.total_views)));
   setTextByIdForAll("kpiMessages", String(numberOrZero(dashboardSummary?.total_messages)));
+  setTextByIdForAll("kpiPostsRemaining", String(numberOrZero(currentNormalizedSession?.subscription?.posts_remaining ?? dashboardSummary?.account_snapshot?.posts_remaining)));
+  setTextByIdForAll("kpiDailyLimit", String(numberOrZero(currentNormalizedSession?.subscription?.posting_limit ?? dashboardSummary?.account_snapshot?.posting_limit)));
 
   // lifecycle-ready safe no-op if ids do not exist yet
   setTextByIdForAll("kpiReviewQueue", String(numberOrZero(dashboardSummary?.review_queue_count)));
@@ -1109,6 +1146,10 @@ async function loadAccountData(user, forceFresh = false) {
 
     setTextByIdForAll("planNameBilling", currentNormalizedSession?.subscription?.plan || "Founder Beta");
     setTextByIdForAll("subscriptionStatusBilling", currentNormalizedSession?.subscription?.status || "inactive");
+    setTextByIdForAll("affiliateDirectCommission", "20% recurring");
+    setTextByIdForAll("affiliateTierOverride", "5% second level");
+    setTextByIdForAll("affiliatePartnerType", "Founding Partner");
+    setTextByIdForAll("affiliatePayoutStatus", "Manual founder-stage payouts");
 
     const access = Boolean(currentNormalizedSession?.subscription?.active);
     setTextByIdForAll("accessBadgeBilling", access ? "Active Access" : "Inactive Access");
@@ -1375,7 +1416,8 @@ function renderSetupSnapshot() {
   const setup = dashboardSummary?.setup_status || {};
 
   setTextByIdForAll("snapshotPostingLimit", String(numberOrZero(snapshot.posting_limit)));
-  setTextByIdForAll("snapshotPostsRemaining", String(numberOrZero(snapshot.posts_remaining)));
+  setTextByIdForAll("snapshotPostsRemaining", String(Math.max(numberOrZero(snapshot.posts_remaining), numberOrZero(currentNormalizedSession?.subscription?.posts_remaining))));
+  setTextByIdForAll("snapshotPostsUsed", String(Math.max(numberOrZero(snapshot.posts_today ?? snapshot.posts_used_today), numberOrZero(currentNormalizedSession?.subscription?.posts_today), numberOrZero(dashboardSummary?.posts_today))));
   setTextByIdForAll("snapshotBillingSource", clean(currentNormalizedSession?.subscription?.billing_source || snapshot.billing_source || "subscriptions/users") || "subscriptions/users");
   setTextByIdForAll("snapshotCurrentPeriodEnd", formatShortDate(snapshot.current_period_end || currentNormalizedSession?.subscription?.current_period_end || ""));
   setTextByIdForAll("snapshotProfileComplete", setup.profile_complete ? "Ready" : "Needs setup");
@@ -1415,9 +1457,17 @@ function renderAccessState(session) {
 function renderExtensionControl(session, profile) {
   const mergedProfile = profile || {};
   const hasAccess = Boolean(session?.subscription?.access_granted ?? session?.subscription?.active);
-  const limit = Number(session?.subscription?.posting_limit || 0);
-  const used = Number(session?.subscription?.posts_today || 0);
-  const remaining = Number(session?.subscription?.posts_remaining ?? Math.max(limit - used, 0));
+  const summarySnapshot = dashboardSummary?.account_snapshot || {};
+  const limit = Math.max(
+    Number(session?.subscription?.posting_limit || 0),
+    Number(summarySnapshot?.posting_limit || 0)
+  );
+  const used = Math.max(
+    Number(session?.subscription?.posts_today || 0),
+    Number(summarySnapshot?.posts_today ?? summarySnapshot?.posts_used_today ?? 0),
+    Number(dashboardSummary?.posts_today || 0)
+  );
+  const remaining = Math.max(Number(session?.subscription?.posts_remaining ?? (limit - used)), Number(summarySnapshot?.posts_remaining ?? (limit - used)), 0);
 
   const dealerWebsite =
     session?.dealership?.website ||
@@ -1458,6 +1508,8 @@ function renderExtensionControl(session, profile) {
   setTextByIdForAll("extensionPlan", plan);
   setTextByIdForAll("extensionPostsUsed", String(used));
   setTextByIdForAll("extensionPostLimit", String(limit));
+  setTextByIdForAll("extensionSyncStatus", dashboardSummary?.ingest_debug?.posting_usage_row_found ? "Backend sync live" : "No committed post sync yet");
+  setTextByIdForAll("extensionCommittedRows", String(numberOrZero(dashboardSummary?.ingest_debug?.listing_rows_found)));
 
   const accessText = !session
     ? "Unavailable"
