@@ -33,9 +33,7 @@ function normalizePlan(planValue) {
 function inferPostingLimit(planValue) {
   const plan = normalizePlan(planValue);
   if (!plan) return 5;
-  if (plan.includes("founder")) return 25;
-  if (plan.includes("beta")) return 25;
-  if (plan.includes("pro")) return 25;
+  if ((plan.includes("founder") && plan.includes("pro")) || plan === "pro" || (!plan.includes("founder") && plan.includes("pro"))) return 25;
   return 5;
 }
 
