@@ -1,3 +1,4 @@
+
 import Stripe from "stripe";
 import { createClient } from "@supabase/supabase-js";
 
@@ -149,6 +150,7 @@ async function upsertSubscriptionsMirror({ user, email, customerId, subscription
     subscription_status: status || null,
     plan: planName || "Active Plan",
     plan_name: planName || "Active Plan",
+    plan_type: planName || "Active Plan",
     access: statusIsActive(status),
     active: statusIsActive(status),
     daily_posting_limit: getDailyPostingLimit(planName, status),
@@ -157,6 +159,19 @@ async function upsertSubscriptionsMirror({ user, email, customerId, subscription
     cancel_at_period_end: Boolean(cancelAtPeriodEnd),
     referral_code: clean(referralCode) || null,
     access_type: clean(accessType) || null,
+    account_snapshot: {
+      user_id: user?.id || null,
+      email: normalizedEmail || null,
+      plan: planName || "Active Plan",
+      status: status || null,
+      active: statusIsActive(status),
+      posting_limit: getDailyPostingLimit(planName, status),
+      posts_today: 0,
+      posts_remaining: getDailyPostingLimit(planName, status),
+      current_period_end: currentPeriodEnd || null,
+      trial_end: trialEnd || null,
+      cancel_at_period_end: Boolean(cancelAtPeriodEnd)
+    },
     updated_at: new Date().toISOString()
   };
 
@@ -166,24 +181,6 @@ async function upsertSubscriptionsMirror({ user, email, customerId, subscription
 
   if (error) {
     console.error("subscriptions upsert warning:", error.message);
-  }
-}
-
-async function mirrorPostingLimit({ user, email, planName, status }) {
-  const normalizedEmail = normalizeEmail(firstNonEmpty(email, user?.email));
-  const payload = {
-    user_id: user?.id || null,
-    email: normalizedEmail || null,
-    daily_limit: getDailyPostingLimit(planName, status),
-    updated_at: new Date().toISOString()
-  };
-
-  const { error } = await supabase
-    .from("posting_limits")
-    .upsert(payload, { onConflict: "email" });
-
-  if (error) {
-    console.error("posting_limits upsert warning:", error.message);
   }
 }
 
@@ -213,13 +210,6 @@ async function syncBillingState({ userId, email, customerId, subscriptionId, pri
     cancelAtPeriodEnd,
     referralCode,
     accessType
-  });
-
-  await mirrorPostingLimit({
-    user,
-    email: firstNonEmpty(email, user?.email),
-    planName,
-    status
   });
 }
 
