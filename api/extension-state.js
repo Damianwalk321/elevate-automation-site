@@ -1,3 +1,4 @@
+
 import { createClient } from "@supabase/supabase-js";
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
@@ -52,7 +53,7 @@ function normalizeBoolean(value) {
 
 function isActiveStatus(value) {
   const status = clean(value).toLowerCase();
-  return ["active", "trialing", "paid", "founder", "beta", "checkout_pending"].includes(status);
+  return ["active", "trialing", "paid", "checkout_pending"].includes(status);
 }
 
 function dealershipMatchesHostname(dealership, hostname) {
@@ -142,7 +143,7 @@ function buildSubscriptionPayload(
     subscriptionRow?.plan,
     licenseRow?.plan,
     licenseKeyRow?.plan,
-    "Founder Beta"
+    ""
   );
 
   const rawStatus = clean(
@@ -161,9 +162,9 @@ function buildSubscriptionPayload(
       postingLimitRow?.posting_limit,
       subscriptionRow?.daily_posting_limit,
       subscriptionRow?.posting_limit,
-      25
+      0
     )
-  ) || 25;
+  ) || 0;
 
   const postsToday = Number(
     firstNonEmpty(
@@ -209,15 +210,15 @@ function buildSubscriptionPayload(
       legacyProfileRow?.dealership
   );
 
-  const founderLikePlan = /founder|beta|starter/i.test(rawPlan);
-  const bridgeActive = !explicitNegative && founderLikePlan && hasProfileSetup;
+  const bridgeEligible = normalizeBoolean(subscriptionRow?.bridge_access) || normalizeBoolean(legacyProfileRow?.bridge_access);
+  const bridgeActive = !explicitNegative && bridgeEligible && hasProfileSetup;
   const active = explicitPositive || bridgeActive;
-  const postingLimit = explicitNegative ? 0 : basePostingLimit;
+  const postingLimit = active ? basePostingLimit : 0;
   const postsRemaining = Math.max(postingLimit - postsToday, 0);
 
   return {
     id: clean(subscriptionRow?.id || ""),
-    plan: clean(rawPlan || "Founder Beta"),
+    plan: clean(rawPlan || "No Plan"),
     status: active ? (rawStatus || "active") : (rawStatus || "inactive"),
     active,
     access_type: clean(subscriptionRow?.access_type || ""),
@@ -465,19 +466,18 @@ export default async function handler(req, res) {
         subscriptionRow?.plan,
         licenseRow?.plan,
         licenseKeyRow?.plan,
-        "Founder Beta"
+        ""
       )
     );
 
     let postingLimitRow = null;
     if (normalizedPlanType) {
-      const { data: postingLimitData } = await supabase
+      const { data: postingLimitRows } = await supabase
         .from("posting_limits")
         .select("*")
-        .ilike("plan_type", normalizedPlanType)
-        .limit(1)
-        .maybeSingle();
-      postingLimitRow = postingLimitData || null;
+        .ilike("plan_type", normalizedPlanType);
+      const configRows = Array.isArray(postingLimitRows) ? postingLimitRows.filter((row) => clean(row?.plan_type) && !clean(row?.email) && !clean(row?.user_id)) : [];
+      postingLimitRow = configRows[0] || null;
     }
 
     const membershipList = Array.isArray(membershipsResult.data) ? membershipsResult.data : [];
