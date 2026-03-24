@@ -418,29 +418,11 @@ export default async function handler(req, res) {
 
     if (userListingsError) throw userListingsError;
 
-    let usageResult = null;
-
-    if (!duplicate) {
-      usageResult = await upsertPostingUsage(supabase, resolved);
-    } else {
-      const today = dayKey();
-      const usageLookup = clean(resolved.user_id)
-        ? await supabase
-            .from("posting_usage")
-            .select("*")
-            .eq("user_id", clean(resolved.user_id))
-            .eq("date_key", today)
-            .maybeSingle()
-        : await supabase
-            .from("posting_usage")
-            .select("*")
-            .ilike("email", lower(resolved.email))
-            .eq("date_key", today)
-            .maybeSingle();
-
-      if (usageLookup.error) throw usageLookup.error;
-      usageResult = { ok: true, posts_used: integerOrZero(usageLookup.data?.posts_used) };
-    }
+    // Always increment posting usage on a confirmed post registration.
+    // Duplicate suppression is handled client-side by the worker/content flow.
+    // Existing listing rows may already exist from pre-publish lifecycle syncs,
+    // so skipping here can incorrectly leave posts_today at zero.
+    const usageResult = await upsertPostingUsage(supabase, resolved);
 
     const snapshotResult = await syncSubscriptionSnapshot(supabase, resolved, usageResult?.posts_used || 0);
 
