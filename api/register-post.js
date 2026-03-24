@@ -102,13 +102,27 @@ async function resolveUserId(supabase, userId, email) {
   };
 }
 
+function buildVehicleKey(payload = {}) {
+  const vin = clean(payload.vin || "").toUpperCase();
+  if (vin) return `VIN:${vin}`;
+
+  const stock = clean(payload.stock_number || payload.stock || "").toUpperCase();
+  if (stock) return `STOCK:${stock}`;
+
+  return [
+    clean(payload.year || "").toUpperCase(),
+    clean(payload.make || "").toUpperCase(),
+    clean(payload.model || "").toUpperCase(),
+    String(payload.price || "").replace(/[^\d]/g, ""),
+    String(payload.mileage || payload.kilometers || payload.km || "").replace(/[^\d]/g, "")
+  ].filter(Boolean).join("|");
+}
+
 function buildListingId(payload) {
   return (
     clean(payload.marketplace_listing_id) ||
     clean(payload.vehicle_id) ||
-    clean(payload.vin) ||
-    clean(payload.stock_number) ||
-    clean(payload.stock) ||
+    buildVehicleKey(payload) ||
     `${Date.now()}`
   );
 }
@@ -157,6 +171,69 @@ function buildListingRow(payload, resolved) {
     posted_at: clean(payload.posted_at) || timestamp,
     updated_at: timestamp
   };
+}
+
+async function findExistingListing(supabase, resolved, listingRow, payload = {}) {
+  const listingId = clean(listingRow?.id || "");
+  if (listingId) {
+    const { data, error } = await supabase
+      .from("user_listings")
+      .select("*")
+      .eq("id", listingId)
+      .maybeSingle();
+
+    if (error) throw error;
+    if (data) return data;
+  }
+
+  const marketplaceListingId = clean(payload.marketplace_listing_id || "");
+  if (marketplaceListingId) {
+    const { data, error } = await supabase
+      .from("user_listings")
+      .select("*")
+      .eq("marketplace_listing_id", marketplaceListingId)
+      .maybeSingle();
+
+    if (error) throw error;
+    if (data) return data;
+  }
+
+  const vin = clean(payload.vin || "");
+  if (vin && clean(resolved.user_id)) {
+    const { data, error } = await supabase
+      .from("user_listings")
+      .select("*")
+      .eq("user_id", clean(resolved.user_id))
+      .eq("vin", vin)
+      .order("updated_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (error) throw error;
+    if (data) return data;
+  }
+
+  return null;
+}
+
+function isSamePostingWindow(existingRow, incomingRow) {
+  if (!existingRow || !incomingRow) return false;
+
+  const existingPosted = new Date(existingRow.posted_at || existingRow.updated_at || 0).getTime();
+  const incomingPosted = new Date(incomingRow.posted_at || incomingRow.updated_at || 0).getTime();
+
+  if (!existingPosted || !incomingPosted) return false;
+
+  const sameDay =
+    String(existingRow.posted_at || existingRow.updated_at || "").slice(0, 10) ===
+    String(incomingRow.posted_at || incomingRow.updated_at || "").slice(0, 10);
+
+  const withinWindow = Math.abs(incomingPosted - existingPosted) <= (1000 * 60 * 30);
+
+  const existingStatus = lower(existingRow.status || existingRow.lifecycle_status || "");
+  const incomingStatus = lower(incomingRow.status || incomingRow.lifecycle_status || "");
+
+  return sameDay && withinWindow && existingStatus === incomingStatus;
 }
 
 async function upsertPostingUsage(supabase, resolved) {
@@ -296,6 +373,8 @@ export default async function handler(req, res) {
     }
 
     const listingRow = buildListingRow(payload, resolved);
+    const existingListing = await findExistingListing(supabase, resolved, listingRow, payload);
+    const duplicate = isSamePostingWindow(existingListing, listingRow);
 
     const { error: userListingsError } = await supabase
       .from("user_listings")
@@ -303,15 +382,40 @@ export default async function handler(req, res) {
 
     if (userListingsError) throw userListingsError;
 
-    const usageResult = await upsertPostingUsage(supabase, resolved);
-    await syncSubscriptionSnapshot(supabase, resolved, usageResult.posts_used || 0);
+    let usageResult = null;
+
+    if (!duplicate) {
+      usageResult = await upsertPostingUsage(supabase, resolved);
+    } else {
+      const today = dayKey();
+      const usageLookup = clean(resolved.user_id)
+        ? await supabase
+            .from("posting_usage")
+            .select("*")
+            .eq("user_id", clean(resolved.user_id))
+            .eq("date_key", today)
+            .maybeSingle()
+        : await supabase
+            .from("posting_usage")
+            .select("*")
+            .ilike("email", lower(resolved.email))
+            .eq("date_key", today)
+            .maybeSingle();
+
+      if (usageLookup.error) throw usageLookup.error;
+      usageResult = { ok: true, posts_used: integerOrZero(usageLookup.data?.posts_used) };
+    }
+
+    const snapshotResult = await syncSubscriptionSnapshot(supabase, resolved, usageResult?.posts_used || 0);
 
     return json(res, 200, {
       ok: true,
+      duplicate,
       user_id: resolved.user_id,
       email: resolved.email,
       listing_id: listingRow.id,
-      posts_used_today: usageResult.posts_used || 0
+      posts_used_today: usageResult?.posts_used || 0,
+      posting_state: snapshotResult?.snapshot || null
     });
   } catch (error) {
     console.error("register-post fatal:", error);
