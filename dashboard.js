@@ -61,11 +61,8 @@ document.addEventListener("DOMContentLoaded", async () => {
     pushBootStage("Profile", "Loading saved dealer profile...");
     await loadProfile(currentUser.id);
 
-    pushBootStage("Access", "Loading billing and extension state...");
-    await loadAccountData(currentUser, true);
-
-    pushBootStage("Analytics", "Loading dashboard metrics and listings...");
-    await loadListingDashboardData(true);
+    pushBootStage("Workspace", "Loading billing, extension state, metrics, and listings...");
+    await refreshDashboardState(true);
 
     pushBootStage("Extension", "Pushing live profile sync to extension...");
     await pushExtensionProfileSync();
@@ -105,8 +102,7 @@ function bindDashboardUI() {
   if (refreshAccessBtn) {
     refreshAccessBtn.addEventListener("click", async () => {
       if (!currentUser) return;
-      await loadAccountData(currentUser, true);
-      await loadListingDashboardData(true);
+      await refreshDashboardState(true);
       await pushExtensionProfileSync();
     });
   }
@@ -276,6 +272,11 @@ async function onSaveProfilePressed() {
   }
 }
 
+async function refreshDashboardState(forceFresh = false) {
+  await loadAccountData(currentUser, forceFresh);
+  await loadListingDashboardData(forceFresh);
+}
+
 async function loadListingDashboardData(forceFresh = false) {
   try {
     dashboardSummary = await fetchDashboardSummary(forceFresh);
@@ -338,7 +339,7 @@ async function fetchUserListings(forceFresh = false) {
     const url = new URL("/api/get-user-listings", window.location.origin);
     url.searchParams.set("userId", currentUser.id);
     if (currentUser.email) url.searchParams.set("email", currentUser.email);
-    url.searchParams.set("limit", "100");
+    url.searchParams.set("limit", "250");
     if (forceFresh) url.searchParams.set("_ts", String(Date.now()));
 
     const response = await fetch(url.toString(), {
@@ -1264,9 +1265,9 @@ function buildFallbackSessionFromLocalState() {
       status: "inactive",
       plan: "Founder Beta",
       license_key: currentProfile?.software_license_key || "",
-      posting_limit: 0,
-      posts_today: 0,
-      posts_remaining: 0
+      posting_limit: Number(dashboardSummary?.account_snapshot?.posting_limit || 0),
+      posts_today: Number(dashboardSummary?.account_snapshot?.posts_today || 0),
+      posts_remaining: Number(dashboardSummary?.account_snapshot?.posts_remaining || 0)
     },
     dealership: {
       name: dealerName || "",
@@ -1579,9 +1580,7 @@ async function markListingSold(listingId) {
       throw new Error(data.error || "Could not update listing status.");
     }
 
-    dashboardSummary = buildDashboardSummaryFromListings(dashboardListings);
-    renderDashboardAnalytics();
-    applyListingFiltersAndRender();
+    await loadListingDashboardData(true);
     setStatus("listingGridStatus", "Listing marked sold.");
   } catch (error) {
     console.error("markListingSold error:", error);
