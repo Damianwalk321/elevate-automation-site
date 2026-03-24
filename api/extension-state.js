@@ -51,9 +51,33 @@ function normalizeBoolean(value) {
   return value === true || value === "true" || value === 1 || value === "1";
 }
 
-function isActiveStatus(value) {
+function normalizePlanLabel(value) {
+  const raw = clean(value).toLowerCase();
+  if (!raw || raw === "no plan") return "Founder Beta";
+  if (raw.includes("founder") && raw.includes("pro")) return "Founder Pro";
+  if (raw.includes("founder") && raw.includes("starter")) return "Founder Starter";
+  if (raw.includes("founder") || raw.includes("beta")) return "Founder Beta";
+  if (raw.includes("pro")) return "Pro";
+  if (raw.includes("starter")) return "Starter";
+  return clean(value) || "Founder Beta";
+}
+
+function inferPostingLimitFromPlan(value) {
+  const raw = normalizePlanLabel(value).toLowerCase();
+  if (raw.includes("pro") || raw.includes("beta")) return 25;
+  return 5;
+}
+
+function normalizeStatusValue(value, fallback = "inactive") {
   const status = clean(value).toLowerCase();
-  return ["active", "trialing", "paid", "checkout_pending"].includes(status);
+  if (!status) return fallback;
+  if (["active", "trialing", "paid", "checkout_pending"].includes(status)) return "active";
+  if (["canceled", "cancelled", "unpaid", "past_due", "expired", "suspended", "inactive"].includes(status)) return "inactive";
+  return status;
+}
+
+function isActiveStatus(value) {
+  return normalizeStatusValue(value) === "active";
 }
 
 function dealershipMatchesHostname(dealership, hostname) {
@@ -139,6 +163,7 @@ function buildSubscriptionPayload(
   legacyProfileRow
 ) {
   const rawPlan = firstNonEmpty(
+    subscriptionRow?.plan_type,
     subscriptionRow?.plan_name,
     subscriptionRow?.plan,
     licenseRow?.plan,
@@ -146,30 +171,34 @@ function buildSubscriptionPayload(
     ""
   );
 
-  const rawStatus = clean(
-    firstNonEmpty(
-      subscriptionRow?.status,
-      subscriptionRow?.subscription_status,
-      licenseRow?.status,
-      licenseKeyRow?.status,
-      ""
-    )
-  ).toLowerCase();
+  const rawStatus = firstNonEmpty(
+    subscriptionRow?.status,
+    subscriptionRow?.subscription_status,
+    subscriptionRow?.billing_status,
+    licenseRow?.status,
+    licenseKeyRow?.status,
+    ""
+  );
 
-  const basePostingLimit = Number(
+  const configuredPostingLimit = Number(
     firstNonEmpty(
       postingLimitRow?.daily_limit,
       postingLimitRow?.posting_limit,
       subscriptionRow?.daily_posting_limit,
       subscriptionRow?.posting_limit,
+      subscriptionRow?.account_snapshot?.posting_limit,
       0
     )
   ) || 0;
 
+  const plan = normalizePlanLabel(rawPlan);
+  const status = normalizeStatusValue(rawStatus);
   const postsToday = Number(
     firstNonEmpty(
       postingUsageRow?.posts_today,
+      postingUsageRow?.posts_used,
       postingUsageRow?.used_today,
+      subscriptionRow?.account_snapshot?.posts_today,
       0
     )
   ) || 0;
@@ -188,21 +217,14 @@ function buildSubscriptionPayload(
     normalizeBoolean(subscriptionRow?.access) ||
     normalizeBoolean(subscriptionRow?.access_active) ||
     normalizeBoolean(subscriptionRow?.is_active) ||
+    normalizeBoolean(subscriptionRow?.account_snapshot?.active) ||
     normalizeBoolean(licenseRow?.active) ||
     normalizeBoolean(licenseRow?.access) ||
     normalizeBoolean(licenseKeyRow?.active) ||
     normalizeBoolean(licenseKeyRow?.assigned) ||
     isActiveStatus(rawStatus);
 
-  const explicitNegative = [
-    "canceled",
-    "cancelled",
-    "unpaid",
-    "past_due",
-    "expired",
-    "suspended",
-    "inactive"
-  ].includes(rawStatus);
+  const explicitNegative = normalizeStatusValue(rawStatus) === "inactive";
 
   const hasProfileSetup = Boolean(
     legacyProfileRow?.dealer_website ||
@@ -213,24 +235,27 @@ function buildSubscriptionPayload(
   const bridgeEligible = normalizeBoolean(subscriptionRow?.bridge_access) || normalizeBoolean(legacyProfileRow?.bridge_access);
   const bridgeActive = !explicitNegative && bridgeEligible && hasProfileSetup;
   const active = explicitPositive || bridgeActive;
-  const postingLimit = active ? basePostingLimit : 0;
+  const postingLimitBase = configuredPostingLimit > 0 ? configuredPostingLimit : inferPostingLimitFromPlan(plan);
+  const postingLimit = active ? postingLimitBase : 0;
   const postsRemaining = Math.max(postingLimit - postsToday, 0);
+  const billingSource = subscriptionRow ? "subscriptions" : (licenseRow || licenseKeyRow ? "license" : "bridge");
 
   return {
     id: clean(subscriptionRow?.id || ""),
-    plan: clean(rawPlan || "No Plan"),
-    status: active ? (rawStatus || "active") : (rawStatus || "inactive"),
+    plan,
+    normalized_plan: plan,
+    status: active ? "active" : status,
+    normalized_status: active ? "active" : status,
     active,
-    access_type: clean(subscriptionRow?.access_type || ""),
+    access_granted: active,
     posting_limit: postingLimit,
+    daily_posting_limit: postingLimit,
     posts_today: postsToday,
     posts_remaining: postsRemaining,
-    current_period_end: subscriptionRow?.current_period_end || null,
-    trial_end: subscriptionRow?.trial_end || null,
-    cancel_at_period_end: Boolean(subscriptionRow?.cancel_at_period_end),
-    billing_source: subscriptionRow ? "subscriptions" : (licenseRow || licenseKeyRow ? "license" : "bridge"),
-    stripe_customer_id: clean(subscriptionRow?.stripe_customer_id || ""),
-    stripe_subscription_id: clean(subscriptionRow?.stripe_subscription_id || ""),
+    current_period_end: clean(subscriptionRow?.current_period_end || ""),
+    trial_end: clean(subscriptionRow?.trial_end || ""),
+    cancel_at_period_end: normalizeBoolean(subscriptionRow?.cancel_at_period_end),
+    billing_source: billingSource,
     license_key: licenseKey
   };
 }
@@ -565,18 +590,21 @@ export default async function handler(req, res) {
 
     if (!subscription.active && setupReady && !hardNegativeStatuses.includes(normalizedSubscriptionStatus)) {
       subscription.active = true;
-      subscription.status = normalizedSubscriptionStatus && normalizedSubscriptionStatus !== "inactive"
-        ? normalizedSubscriptionStatus
-        : "active";
-      subscription.plan = clean(subscription.plan || "") === "No Plan"
-        ? "Founder Beta"
-        : clean(subscription.plan || "Founder Beta");
+      subscription.access_granted = true;
+      subscription.status = "active";
+      subscription.normalized_status = "active";
+      subscription.plan = normalizePlanLabel(subscription.plan || "Founder Beta");
+      subscription.normalized_plan = subscription.plan;
+      subscription.posting_limit = Number(subscription.posting_limit || inferPostingLimitFromPlan(subscription.plan));
+      subscription.daily_posting_limit = subscription.posting_limit;
+      subscription.posts_remaining = Math.max(Number(subscription.posting_limit || 0) - Number(subscription.posts_today || 0), 0);
     }
 
     subscription.minimum_version = minimumVersion;
     subscription.latest_version = latestVersion;
     subscription.update_required = updateRequired;
     subscription.allowed_dealer_hosts = allowedDealerHosts;
+    subscription.access_granted = Boolean(subscription.active);
 
     const session = {
       user: {
