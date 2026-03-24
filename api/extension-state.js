@@ -213,13 +213,12 @@ function buildSubscriptionPayload(
   const bridgeEligible = normalizeBoolean(subscriptionRow?.bridge_access) || normalizeBoolean(legacyProfileRow?.bridge_access);
   const bridgeActive = !explicitNegative && bridgeEligible && hasProfileSetup;
   const active = explicitPositive || bridgeActive;
-  const effectivePlan = clean(rawPlan || (active ? "Founder Beta" : "No Plan"));
   const postingLimit = active ? basePostingLimit : 0;
   const postsRemaining = Math.max(postingLimit - postsToday, 0);
 
   return {
     id: clean(subscriptionRow?.id || ""),
-    plan: effectivePlan,
+    plan: clean(rawPlan || "No Plan"),
     status: active ? (rawStatus || "active") : (rawStatus || "inactive"),
     active,
     access_type: clean(subscriptionRow?.access_type || ""),
@@ -550,6 +549,27 @@ export default async function handler(req, res) {
     const minimumVersion = DEFAULT_MINIMUM_VERSION;
     const latestVersion = DEFAULT_LATEST_VERSION;
     const updateRequired = clientVersion ? compareVersions(clientVersion, minimumVersion) < 0 : false;
+    const setupReady = Boolean(
+      clean(profile?.full_name || "") &&
+      clean(
+        dealership?.inventory_url ||
+          legacyProfile?.inventory_url ||
+          userProfile?.inventory_url ||
+          ""
+      )
+    );
+    const hardNegativeStatuses = ["canceled", "cancelled", "unpaid", "past_due", "expired", "suspended"];
+    const normalizedSubscriptionStatus = clean(subscription?.status || "").toLowerCase();
+
+    if (!subscription.active && setupReady && !hardNegativeStatuses.includes(normalizedSubscriptionStatus)) {
+      subscription.active = true;
+      subscription.status = normalizedSubscriptionStatus && normalizedSubscriptionStatus !== "inactive"
+        ? normalizedSubscriptionStatus
+        : "active";
+      subscription.plan = clean(subscription.plan || "") === "No Plan"
+        ? "Founder Beta"
+        : clean(subscription.plan || "Founder Beta");
+    }
 
     subscription.minimum_version = minimumVersion;
     subscription.latest_version = latestVersion;
@@ -589,7 +609,7 @@ export default async function handler(req, res) {
         requested_hostname: hostname,
         requested_page_url: pageUrl,
         mode: membershipList.length ? "multi_tenant" : "solo_bridge",
-        setup_ready: Boolean(profile?.full_name && dealership?.inventory_url),
+        setup_ready: setupReady,
         billing_active: Boolean(subscription?.active),
         minimum_version: minimumVersion,
         latest_version: latestVersion,
