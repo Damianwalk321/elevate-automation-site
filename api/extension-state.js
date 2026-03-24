@@ -429,6 +429,8 @@ export default async function handler(req, res) {
         .from("posting_usage")
         .select("*")
         .or(`user_id.eq.${user.id},email.eq.${email}`)
+        .eq("date_key", new Date().toISOString().slice(0, 10))
+        .order("updated_at", { ascending: false })
         .limit(1)
         .maybeSingle(),
       supabase
