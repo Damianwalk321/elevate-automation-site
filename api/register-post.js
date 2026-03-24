@@ -42,7 +42,7 @@ function normalizePlan(planValue) {
   const plan = lower(planValue);
   if (!plan || plan === "no plan") return "founder beta";
   if (plan.includes("founder") && plan.includes("pro")) return "founder pro";
-  if (plan.includes("founder") && plan.includes("starter")) return "founder starter";
+  if (plan.includes("founder") && plan.includes("starter")) return "founder beta";
   if (plan.includes("founder") || plan.includes("beta")) return "founder beta";
   if (plan.includes("pro")) return "pro";
   if (plan.includes("starter")) return "starter";
@@ -52,7 +52,7 @@ function normalizePlan(planValue) {
 function formatPlanLabel(planValue) {
   const plan = normalizePlan(planValue);
   if (plan === "founder pro") return "Founder Pro";
-  if (plan === "founder starter") return "Founder Starter";
+  if (plan === "founder starter") return "Founder Beta";
   if (plan === "founder beta") return "Founder Beta";
   if (plan === "pro") return "Pro";
   return "Starter";
@@ -61,9 +61,8 @@ function formatPlanLabel(planValue) {
 function inferPostingLimit(planValue) {
   const plan = normalizePlan(planValue);
   if (!plan) return 5;
-  if (plan.includes("founder")) return 25;
-  if (plan.includes("beta")) return 25;
-  if (plan.includes("pro")) return 25;
+  if (plan.includes("founder") && plan.includes("pro")) return 25;
+  if (plan === "pro" || (!plan.includes("founder") && plan.includes("pro"))) return 25;
   return 5;
 }
 
@@ -292,14 +291,21 @@ async function upsertPostingUsage(supabase, resolved) {
     existing = data || null;
   }
 
-  const nextPostsUsed = integerOrZero(existing?.posts_used) + 1;
+  const nextPostsUsed = Math.max(
+    integerOrZero(existing?.posts_today),
+    integerOrZero(existing?.posts_used),
+    integerOrZero(existing?.used_today)
+  ) + 1;
 
   const usageRow = {
     user_id: clean(resolved.user_id) || null,
     email: lower(resolved.email) || null,
     date_key: today,
+    date: today,
     month_key: month,
     posts_used: nextPostsUsed,
+    posts_today: nextPostsUsed,
+    used_today: nextPostsUsed,
     updated_at: nowIso()
   };
 
