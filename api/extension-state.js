@@ -136,7 +136,9 @@ function buildSubscriptionPayload(
   postingUsageRow,
   licenseRow,
   licenseKeyRow,
-  legacyProfileRow
+  legacyProfileRow,
+  userProfileRow,
+  dealership
 ) {
   const rawPlan = firstNonEmpty(
     subscriptionRow?.plan_name,
@@ -194,24 +196,36 @@ function buildSubscriptionPayload(
     normalizeBoolean(licenseKeyRow?.assigned) ||
     isActiveStatus(rawStatus);
 
-  const explicitNegative = [
+  const hardNegative = [
     "canceled",
     "cancelled",
     "unpaid",
     "past_due",
     "expired",
-    "suspended",
-    "inactive"
+    "suspended"
   ].includes(rawStatus);
 
   const hasProfileSetup = Boolean(
-    legacyProfileRow?.dealer_website ||
-      legacyProfileRow?.inventory_url ||
-      legacyProfileRow?.dealership
+    firstNonEmpty(
+      userProfileRow?.inventory_url,
+      legacyProfileRow?.inventory_url,
+      dealership?.inventory_url,
+      userProfileRow?.dealer_website,
+      legacyProfileRow?.dealer_website,
+      dealership?.website,
+      userProfileRow?.dealership,
+      legacyProfileRow?.dealership,
+      dealership?.name
+    )
   );
 
-  const bridgeEligible = normalizeBoolean(subscriptionRow?.bridge_access) || normalizeBoolean(legacyProfileRow?.bridge_access);
-  const bridgeActive = !explicitNegative && bridgeEligible && hasProfileSetup;
+  const bridgeEligible =
+    normalizeBoolean(subscriptionRow?.bridge_access) ||
+    normalizeBoolean(userProfileRow?.bridge_access) ||
+    normalizeBoolean(legacyProfileRow?.bridge_access) ||
+    (rawStatus === "inactive" && hasProfileSetup);
+
+  const bridgeActive = !hardNegative && bridgeEligible && hasProfileSetup;
   const active = explicitPositive || bridgeActive;
   const postingLimit = active ? basePostingLimit : 0;
   const postsRemaining = Math.max(postingLimit - postsToday, 0);
@@ -542,7 +556,9 @@ export default async function handler(req, res) {
       postingUsageRow,
       licenseRow,
       licenseKeyRow,
-      legacyProfile
+      legacyProfile,
+      userProfile,
+      dealership
     );
     const scannerConfigPayload = buildScannerConfigPayload(scannerConfig, dealership || {}, legacyProfile || {});
     const allowedDealerHosts = buildAllowedDealerHosts(dealership || {});
