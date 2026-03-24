@@ -277,14 +277,21 @@ export default async function handler(req, res) {
       if (userListingsError) throw userListingsError;
     }
 
-    await upsertPostingUsageFromPayload(supabase, resolved, payload);
-    await syncSubscriptionSnapshot(supabase, resolved, payload);
+    const shouldSyncPostingUsage =
+      payload?.authoritative_posting_usage === true ||
+      (!payload?.partial_sync && payload?.sync_reason !== "post_commit");
+
+    if (shouldSyncPostingUsage) {
+      await upsertPostingUsageFromPayload(supabase, resolved, payload);
+      await syncSubscriptionSnapshot(supabase, resolved, payload);
+    }
 
     return json(res, 200, {
       ok: true,
       user_id: resolved.user_id,
       email: resolved.email,
-      synced_listings: normalizedRows.length
+      synced_listings: normalizedRows.length,
+      posting_usage_synced: shouldSyncPostingUsage
     });
   } catch (error) {
     console.error("sync-lifecycle fatal:", error);
