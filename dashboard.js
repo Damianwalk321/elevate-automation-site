@@ -1172,13 +1172,30 @@ function normalizeExtensionStateResponse(result, user, profile) {
     ""
   );
 
+  const normalizedStatus = clean(subscription.status || (subscription.active ? "active" : "inactive")).toLowerCase() || "inactive";
+  const hardInactiveStatuses = ["canceled", "cancelled", "unpaid", "past_due", "expired", "suspended"];
   const normalizedSubscription = {
     active: Boolean(
       subscription.active ||
-      subscription.status === "active" ||
-      subscription.status === "trialing"
+      normalizedStatus === "active" ||
+      normalizedStatus === "trialing" ||
+      (raw?.meta?.setup_ready &&
+        rawUser?.active !== false &&
+        dealership?.active !== false &&
+        !hardInactiveStatuses.includes(normalizedStatus))
     ),
-    status: clean(subscription.status || (subscription.active ? "active" : "inactive")) || "inactive",
+    status:
+      (Boolean(
+        subscription.active ||
+        normalizedStatus === "active" ||
+        normalizedStatus === "trialing" ||
+        (raw?.meta?.setup_ready &&
+          rawUser?.active !== false &&
+          dealership?.active !== false &&
+          !hardInactiveStatuses.includes(normalizedStatus))
+      ) && normalizedStatus === "inactive")
+        ? "active"
+        : (clean(subscription.status || (subscription.active ? "active" : "inactive")) || "inactive"),
     plan: clean(subscription.plan || subscription.plan_name || "Founder Beta") || "Founder Beta",
     license_key: clean(subscription.license_key || subscription.software_license_key || ""),
     posting_limit: Number(subscription.posting_limit || subscription.daily_posting_limit || 0),
