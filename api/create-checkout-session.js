@@ -40,12 +40,12 @@ function normalizePlanRequest(planType, accessType, userType) {
   const normalizedAccessType = clean(accessType).toLowerCase();
   const normalizedUserType = clean(userType).toLowerCase();
 
-  if (["founder beta", "founder", "beta"].includes(normalizedPlanType)) return "founder_pro";
-  if (["founder starter", "founder-starter", "founder_starter"].includes(normalizedPlanType)) return "founder_starter";
+  if (["founder beta", "founder-beta", "founder_beta", "founder", "beta", "beta founder"].includes(normalizedPlanType)) return "founder_beta";
+  if (["founder starter", "founder-starter", "founder_starter"].includes(normalizedPlanType)) return "founder_beta";
   if (["founder pro", "founder-pro", "founder_pro"].includes(normalizedPlanType)) return "founder_pro";
   if (normalizedPlanType === "starter") return "starter";
   if (normalizedPlanType === "pro") return "pro";
-  if (!normalizedPlanType && (normalizedAccessType === "founder" || normalizedUserType === "founder")) return "founder_pro";
+  if (!normalizedPlanType && (normalizedAccessType === "founder" || normalizedUserType === "founder")) return "founder_beta";
   return normalizedPlanType;
 }
 
@@ -59,13 +59,15 @@ function getPlanConfig(planType, accessType, userType) {
   const starterPriceId = clean(process.env.STRIPE_STARTER_PRICE_ID);
   const proPriceId = clean(process.env.STRIPE_PRO_PRICE_ID);
 
-  // Founder starter
+  // Founder beta
   if (
+    normalizedPlanType === "founder_beta" ||
+    normalizedPlanType === "founder-beta" ||
     normalizedPlanType === "founder_starter" ||
     normalizedPlanType === "founder-starter"
   ) {
     return {
-      planName: "Founder Starter",
+      planName: "Founder Beta",
       lookupKey: "STRIPE_FOUNDER_PRICE_ID",
       priceId: founderStarterPriceId,
       trialUntil: "2026-04-02T00:00:00Z"
