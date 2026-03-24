@@ -18,14 +18,94 @@ function safeNumber(value, fallback = 0) {
   return Number.isFinite(n) ? n : fallback;
 }
 
+function normalizeStatus(value) {
+  const status = clean(value).toLowerCase();
+  if (["sold", "deleted", "inactive", "failed", "stale"].includes(status)) return status;
+  if (["posted", "active", "live"].includes(status)) return "active";
+  return status || "active";
+}
+
+function normalizeReviewBucket(value) {
+  const bucket = clean(value).toLowerCase().replace(/[\s_-]+/g, "");
+  if (!bucket) return "";
+  if (["removedvehicles", "removed", "reviewdelete"].includes(bucket)) return "removedvehicles";
+  if (["pricechanges", "pricechange", "reviewpriceupdate"].includes(bucket)) return "pricechanges";
+  if (["newvehicles", "new", "reviewnew"].includes(bucket)) return "newvehicles";
+  return bucket;
+}
+
+function normalizeLifecycleStatus(value, reviewBucket = "") {
+  const status = clean(value).toLowerCase();
+  const review = normalizeReviewBucket(reviewBucket);
+  if (status) return status;
+  if (review === "removedvehicles") return "review_delete";
+  if (review === "pricechanges") return "review_price_update";
+  if (review === "newvehicles") return "review_new";
+  return "active";
+}
+
+function listingIdentityKey(row) {
+  const marketplace = clean(row.marketplace_listing_id || "").toUpperCase();
+  if (marketplace) return `MARKETPLACE:${marketplace}`;
+  const vin = clean(row.vin || "").toUpperCase();
+  if (vin) return `VIN:${vin}`;
+  const stock = clean(row.stock_number || "").toUpperCase();
+  if (stock) return `STOCK:${stock}`;
+  const source = clean(row.source_url || "").toLowerCase();
+  if (source) return `URL:${source}`;
+  const id = clean(row.id || "");
+  if (id) return `ID:${id}`;
+  return [
+    clean(row.year || "").toUpperCase(),
+    clean(row.make || "").toUpperCase(),
+    clean(row.model || "").toUpperCase(),
+    String(row.price || "").replace(/[^\d]/g, ""),
+    String(row.mileage || row.kilometers || row.km || "").replace(/[^\d]/g, "")
+  ].filter(Boolean).join("|");
+}
+
+function normalizeListingRow(row = {}, source = "user_listings") {
+  const reviewBucket = normalizeReviewBucket(row.review_bucket);
+  return {
+    ...row,
+    source_table: source,
+    identity_key: listingIdentityKey(row),
+    status: normalizeStatus(row.status),
+    lifecycle_status: normalizeLifecycleStatus(row.lifecycle_status, reviewBucket),
+    review_bucket: reviewBucket,
+    price: safeNumber(row.price, 0),
+    mileage: safeNumber(row.mileage || row.kilometers || row.km, 0),
+    views_count: safeNumber(row.views_count, 0),
+    messages_count: safeNumber(row.messages_count, 0),
+    posted_at: row.posted_at || row.created_at || null,
+    updated_at: row.updated_at || row.created_at || null
+  };
+}
+
+function preferListingRow(current, incoming) {
+  if (!current) return incoming;
+
+  const currentTs = new Date(current.updated_at || current.posted_at || current.created_at || 0).getTime();
+  const incomingTs = new Date(incoming.updated_at || incoming.posted_at || incoming.created_at || 0).getTime();
+
+  const currentScore =
+    (current.source_table === "user_listings" ? 1000 : 0) +
+    (clean(current.image_url) ? 100 : 0) +
+    (clean(current.marketplace_listing_id) ? 50 : 0) +
+    currentTs / 1000000000000;
+
+  const incomingScore =
+    (incoming.source_table === "user_listings" ? 1000 : 0) +
+    (clean(incoming.image_url) ? 100 : 0) +
+    (clean(incoming.marketplace_listing_id) ? 50 : 0) +
+    incomingTs / 1000000000000;
+
+  return incomingScore >= currentScore ? { ...current, ...incoming } : { ...incoming, ...current };
+}
+
 async function resolveUser({ userId, email }) {
   if (userId) {
-    const { data, error } = await supabase
-      .from("users")
-      .select("id,email")
-      .eq("id", userId)
-      .maybeSingle();
-
+    const { data, error } = await supabase.from("users").select("id,email").eq("id", userId).maybeSingle();
     if (error) throw error;
     if (data) return data;
   }
@@ -49,55 +129,69 @@ async function resolveUser({ userId, email }) {
 function sortRows(rows, sort) {
   const items = [...rows];
 
-  if (sort === "price_high") {
-    return items.sort((a, b) => safeNumber(b.price) - safeNumber(a.price));
-  }
-
-  if (sort === "price_low") {
-    return items.sort((a, b) => safeNumber(a.price) - safeNumber(b.price));
-  }
+  if (sort === "price_high") return items.sort((a, b) => safeNumber(b.price) - safeNumber(a.price));
+  if (sort === "price_low") return items.sort((a, b) => safeNumber(a.price) - safeNumber(b.price));
 
   if (sort === "popular") {
     return items.sort((a, b) => {
-      const scoreA =
-        safeNumber(a.messages_count) * 1000 +
-        safeNumber(a.views_count) * 10 +
-        new Date(a.posted_at || a.created_at || 0).getTime() / 100000000;
-
-      const scoreB =
-        safeNumber(b.messages_count) * 1000 +
-        safeNumber(b.views_count) * 10 +
-        new Date(b.posted_at || b.created_at || 0).getTime() / 100000000;
-
+      const scoreA = safeNumber(a.messages_count) * 1000 + safeNumber(a.views_count) * 10 + new Date(a.posted_at || a.created_at || 0).getTime() / 100000000;
+      const scoreB = safeNumber(b.messages_count) * 1000 + safeNumber(b.views_count) * 10 + new Date(b.posted_at || b.created_at || 0).getTime() / 100000000;
       return scoreB - scoreA;
     });
   }
 
-  return items.sort((a, b) => {
-    return (
-      new Date(b.posted_at || b.created_at || 0).getTime() -
-      new Date(a.posted_at || a.created_at || 0).getTime()
-    );
-  });
+  return items.sort((a, b) => new Date(b.posted_at || b.created_at || 0).getTime() - new Date(a.posted_at || a.created_at || 0).getTime());
 }
 
-async function fetchRows(tableName, finalUserId, finalEmail, status, limit) {
+async function fetchTableRows(tableName, finalUserId, finalEmail) {
   let query = supabase.from(tableName).select("*");
 
-  if (finalUserId) {
-    query = query.eq("user_id", finalUserId);
-  } else {
-    query = query.ilike("email", finalEmail);
-  }
+  if (finalUserId) query = query.eq("user_id", finalUserId);
+  else query = query.ilike("email", finalEmail);
 
-  if (status) {
-    query = query.eq("status", status);
-  }
-
-  const { data, error } = await query.limit(limit);
-
+  const { data, error } = await query;
   if (error) throw error;
   return Array.isArray(data) ? data : [];
+}
+
+function matchesFilter(row, { status, lifecycleStatus, reviewBucket, search }) {
+  const normalizedStatus = normalizeStatus(row.status);
+  const normalizedLifecycle = normalizeLifecycleStatus(row.lifecycle_status, row.review_bucket);
+  const normalizedBucket = normalizeReviewBucket(row.review_bucket);
+
+  if (status) {
+    if (status === "review") {
+      if (!["review_delete", "review_price_update", "review_new"].includes(normalizedLifecycle)) return false;
+    } else if (normalizedStatus !== status) {
+      return false;
+    }
+  }
+
+  if (lifecycleStatus && normalizedLifecycle !== lifecycleStatus) return false;
+  if (reviewBucket && normalizedBucket !== reviewBucket) return false;
+
+  if (search) {
+    const haystack = [
+      row.title,
+      row.make,
+      row.model,
+      row.trim,
+      row.vin,
+      row.stock_number,
+      row.body_style,
+      row.vehicle_type,
+      row.exterior_color,
+      row.fuel_type,
+      row.location,
+      row.lifecycle_status,
+      row.review_bucket,
+      row.source_url
+    ].map((v) => clean(v).toLowerCase()).join(" ");
+
+    if (!haystack.includes(search)) return false;
+  }
+
+  return true;
 }
 
 export default async function handler(req, res) {
@@ -111,6 +205,8 @@ export default async function handler(req, res) {
     const userId = clean(req.query?.userId || req.query?.user_id || "");
     const email = normalizeEmail(req.query?.email || "");
     const status = clean(req.query?.status || "").toLowerCase();
+    const lifecycleStatus = clean(req.query?.lifecycle_status || req.query?.lifecycleStatus || "").toLowerCase();
+    const reviewBucket = normalizeReviewBucket(req.query?.review_bucket || req.query?.reviewBucket || "");
     const search = clean(req.query?.search || "").toLowerCase();
     const sort = clean(req.query?.sort || "newest").toLowerCase();
     const limit = Math.min(Math.max(Number(req.query?.limit || 100), 1), 250);
@@ -123,45 +219,36 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: "Missing userId or email" });
     }
 
-    let rows = await fetchRows("user_listings", finalUserId, finalEmail, status, limit);
+    const [userListingRows, legacyListingRows] = await Promise.all([
+      fetchTableRows("user_listings", finalUserId, finalEmail),
+      fetchTableRows("listings", finalUserId, finalEmail)
+    ]);
 
-    if (!rows.length) {
-      rows = await fetchRows("listings", finalUserId, finalEmail, status, limit);
+    const map = new Map();
+    for (const row of userListingRows) {
+      const normalized = normalizeListingRow(row, "user_listings");
+      map.set(normalized.identity_key, preferListingRow(map.get(normalized.identity_key), normalized));
+    }
+    for (const row of legacyListingRows) {
+      const normalized = normalizeListingRow(row, "listings");
+      map.set(normalized.identity_key, preferListingRow(map.get(normalized.identity_key), normalized));
     }
 
-    if (!rows.length && finalEmail) {
-      rows = await fetchRows("user_listings", "", finalEmail, status, limit);
-      if (!rows.length) {
-        rows = await fetchRows("listings", "", finalEmail, status, limit);
-      }
-    }
-
-    if (search) {
-      rows = rows.filter((row) => {
-        const haystack = [
-          row.title,
-          row.make,
-          row.model,
-          row.trim,
-          row.vin,
-          row.stock_number,
-          row.body_style,
-          row.vehicle_type,
-          row.lifecycle_status,
-          row.review_bucket
-        ]
-          .map((v) => clean(v).toLowerCase())
-          .join(" ");
-
-        return haystack.includes(search);
-      });
-    }
-
-    rows = sortRows(rows, sort);
+    let rows = [...map.values()].filter((row) => matchesFilter(row, { status, lifecycleStatus, reviewBucket, search }));
+    rows = sortRows(rows, sort).slice(0, limit);
 
     return res.status(200).json({
       success: true,
-      data: rows
+      data: rows,
+      meta: {
+        total: rows.length,
+        limit,
+        sources: {
+          user_listings: userListingRows.length,
+          listings: legacyListingRows.length,
+          merged: map.size
+        }
+      }
     });
   } catch (error) {
     console.error("get-user-listings fatal error:", error);
