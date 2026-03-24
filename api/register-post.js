@@ -39,7 +39,23 @@ function monthKey() {
 }
 
 function normalizePlan(planValue) {
-  return lower(planValue);
+  const plan = lower(planValue);
+  if (!plan || plan === "no plan") return "founder beta";
+  if (plan.includes("founder") && plan.includes("pro")) return "founder pro";
+  if (plan.includes("founder") && plan.includes("starter")) return "founder starter";
+  if (plan.includes("founder") || plan.includes("beta")) return "founder beta";
+  if (plan.includes("pro")) return "pro";
+  if (plan.includes("starter")) return "starter";
+  return plan || "founder beta";
+}
+
+function formatPlanLabel(planValue) {
+  const plan = normalizePlan(planValue);
+  if (plan === "founder pro") return "Founder Pro";
+  if (plan === "founder starter") return "Founder Starter";
+  if (plan === "founder beta") return "Founder Beta";
+  if (plan === "pro") return "Pro";
+  return "Starter";
 }
 
 function inferPostingLimit(planValue) {
@@ -51,8 +67,16 @@ function inferPostingLimit(planValue) {
   return 5;
 }
 
+function normalizeStatus(status, fallback = "inactive") {
+  const value = lower(status);
+  if (!value) return fallback;
+  if (["active", "trialing", "paid", "checkout_pending"].includes(value)) return "active";
+  if (["canceled", "cancelled", "unpaid", "past_due", "expired", "suspended", "inactive"].includes(value)) return "inactive";
+  return value;
+}
+
 function statusIsActive(status) {
-  return ["active", "trialing", "paid", "checkout_pending"].includes(lower(status));
+  return normalizeStatus(status) === "active";
 }
 
 async function resolveUserId(supabase, userId, email) {
@@ -311,8 +335,11 @@ async function syncSubscriptionSnapshot(supabase, resolved, postsUsedToday) {
   if (subError) throw subError;
   if (!subscription) return { ok: false, reason: "no_subscription" };
 
-  const postingLimit = numberOrZero(subscription.daily_posting_limit || subscription.posting_limit) || inferPostingLimit(subscription.plan_type || subscription.plan_name || subscription.plan);
-  const active = statusIsActive(subscription.subscription_status || subscription.status || subscription.billing_status || "inactive");
+  const normalizedPlan = normalizePlan(subscription.plan_type || subscription.plan_name || subscription.plan || subscription.account_snapshot?.plan);
+  const formattedPlan = formatPlanLabel(normalizedPlan);
+  const postingLimit = numberOrZero(subscription.daily_posting_limit || subscription.posting_limit || subscription.account_snapshot?.posting_limit) || inferPostingLimit(normalizedPlan);
+  const normalizedStatus = normalizeStatus(subscription.subscription_status || subscription.status || subscription.billing_status || subscription.account_snapshot?.status || "inactive");
+  const active = Boolean(subscription.active || subscription.access || subscription.account_snapshot?.active || statusIsActive(normalizedStatus));
   const postsRemaining = Math.max((active ? postingLimit : 0) - integerOrZero(postsUsedToday), 0);
 
   const nextSnapshot = {
@@ -321,9 +348,12 @@ async function syncSubscriptionSnapshot(supabase, resolved, postsUsedToday) {
       : {}),
     user_id: clean(resolved.user_id),
     email: lower(resolved.email),
-    plan: clean(subscription.plan_type || subscription.plan_name || subscription.plan),
-    status: clean(subscription.subscription_status || subscription.billing_status || subscription.status || "inactive"),
+    plan: formattedPlan,
+    normalized_plan: normalizedPlan,
+    status: active ? "active" : normalizedStatus,
+    normalized_status: active ? "active" : normalizedStatus,
     active,
+    access_granted: active,
     posting_limit: active ? postingLimit : 0,
     posts_used_today: integerOrZero(postsUsedToday),
     posts_today: integerOrZero(postsUsedToday),
