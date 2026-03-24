@@ -1,6 +1,11 @@
 const EXTENSION_DOWNLOAD_URL = "/downloads/elevate-automation-extension.zip";
 const EXTENSION_FALLBACK_URL = "https://github.com/Damianwalk321/elevate-automation-vehicle-poster/archive/refs/heads/Dev.zip";
 
+function cleanText(value) {
+  if (value === null || value === undefined) return "";
+  return String(value).trim();
+}
+
 let bootStages = [];
 
 let supabaseClient = null;
