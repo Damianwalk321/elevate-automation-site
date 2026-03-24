@@ -184,6 +184,21 @@ function bindDashboardUI() {
     });
   }
 
+  const copyAffiliatePitchBtn = document.getElementById("copyAffiliatePitchBtn");
+  if (copyAffiliatePitchBtn) {
+    copyAffiliatePitchBtn.addEventListener("click", async () => {
+      const referral = document.getElementById("referralCodeAffiliate")?.textContent?.trim() || "";
+      const pitch = `I have early access to Elevate Automation. It helps salespeople post inventory faster and more consistently. Use my code ${referral || "[YOUR CODE]"} if you want founder access.`;
+      try {
+        await navigator.clipboard.writeText(pitch);
+        setBootStatus("Affiliate pitch copied.");
+      } catch (error) {
+        console.error("copyAffiliatePitchBtn error:", error);
+      }
+    });
+  }
+
+
   const openBillingPortalBtn = document.getElementById("openBillingPortalBtn");
   if (openBillingPortalBtn) {
     openBillingPortalBtn.addEventListener("click", async () => {
@@ -1135,8 +1150,6 @@ async function loadAccountData(user, forceFresh = false) {
     setTextByIdForAll("affiliateTierOverride", "5% second level");
     setTextByIdForAll("affiliatePartnerType", "Founding Partner");
     setTextByIdForAll("affiliatePayoutStatus", "Manual founder-stage payouts");
-    setTextByIdForAll("affiliateCommissionEarned", "$0.00");
-    setTextByIdForAll("affiliateTotalReferrals", "0");
 
     const access = Boolean(currentNormalizedSession?.subscription?.active);
     setTextByIdForAll("accessBadgeBilling", access ? "Active Access" : "Inactive Access");
@@ -1495,14 +1508,12 @@ function renderExtensionControl(session, profile) {
   setTextByIdForAll("extensionPlan", plan);
   setTextByIdForAll("extensionPostsUsed", String(used));
   setTextByIdForAll("extensionPostLimit", String(limit));
-  const backendSyncLive = Boolean(dashboardSummary?.ingest_debug?.posting_usage_row_found);
-  const lastCommittedAt = clean(dashboardSummary?.ingest_debug?.posting_usage_updated_at || "");
-  setTextByIdForAll(
-    "extensionSyncStatus",
-    backendSyncLive
-      ? `Backend sync live${lastCommittedAt ? ` • ${formatShortDate(lastCommittedAt)}` : ""}`
-      : "No committed post sync yet"
-  );
+  const postingUsageFound = Boolean(dashboardSummary?.ingest_debug?.posting_usage_row_found);
+  const postingUsageUpdatedAt = cleanText(dashboardSummary?.ingest_debug?.posting_usage_updated_at);
+  const syncStatusText = postingUsageFound
+    ? `Backend sync live${postingUsageUpdatedAt ? ` • ${new Date(postingUsageUpdatedAt).toLocaleString()}` : ""}`
+    : "No committed post sync yet";
+  setTextByIdForAll("extensionSyncStatus", syncStatusText);
   setTextByIdForAll("extensionCommittedRows", String(numberOrZero(dashboardSummary?.ingest_debug?.listing_rows_found)));
 
   const accessText = !session
