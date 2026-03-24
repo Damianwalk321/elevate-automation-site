@@ -78,7 +78,7 @@ export default async function handler(req, res) {
     const finalEmail = normalizeEmail(user?.email || email || "");
 
     let query = supabase
-      .from("listings")
+      .from("user_listings")
       .update({
         status: nextStatus,
         updated_at: nowIso(),
@@ -97,6 +97,18 @@ export default async function handler(req, res) {
     if (error) {
       console.error("update-listing-status error:", error);
       return res.status(500).json({ error: error.message });
+    }
+
+    try {
+      let legacyQuery = supabase
+        .from("listings")
+        .update({ status: nextStatus, updated_at: nowIso(), last_seen_at: nowIso() })
+        .eq("id", listingId);
+      if (finalUserId) legacyQuery = legacyQuery.eq("user_id", finalUserId);
+      else if (finalEmail) legacyQuery = legacyQuery.eq("email", finalEmail);
+      await legacyQuery;
+    } catch (legacyError) {
+      console.warn("legacy listings mirror update warning:", legacyError);
     }
 
     try {
