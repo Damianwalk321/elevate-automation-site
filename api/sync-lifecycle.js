@@ -3,13 +3,12 @@ import { createClient } from "@supabase/supabase-js";
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-if (!SUPABASE_URL) throw new Error("Missing env: SUPABASE_URL");
-if (!SUPABASE_SERVICE_ROLE_KEY) throw new Error("Missing env: SUPABASE_SERVICE_ROLE_KEY");
-
-const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
-
 function clean(value) {
-  return String(value || "").trim();
+  return String(value || "").replace(/\s+/g, " ").trim();
+}
+
+function lower(value) {
+  return clean(value).toLowerCase();
 }
 
 function numberOrZero(value) {
@@ -17,325 +16,287 @@ function numberOrZero(value) {
   return Number.isFinite(n) ? n : 0;
 }
 
-function toIso(value) {
-  const d = value ? new Date(value) : new Date();
-  return Number.isNaN(d.getTime()) ? new Date().toISOString() : d.toISOString();
+function integerOrZero(value) {
+  const n = parseInt(value, 10);
+  return Number.isFinite(n) ? n : 0;
 }
 
-function normalizeKey(value) {
-  return clean(value).slice(0, 255);
+function json(res, status, body) {
+  res.status(status).setHeader("Content-Type", "application/json");
+  return res.json(body);
 }
 
-function normalizeListingRow(row, fallbackUserId, fallbackEmail) {
-  if (!row || typeof row !== "object") return null;
+function normalizePlan(planValue) {
+  return lower(planValue);
+}
 
-  const id = normalizeKey(
-    row.id ||
-    row.marketplace_listing_id ||
-    row.source_url ||
-    row.sourceUrl ||
-    row.vin ||
-    row.stock_number ||
-    row.stockNumber
+function inferPostingLimit(planValue) {
+  const plan = normalizePlan(planValue);
+  if (!plan) return 5;
+  if (plan.includes("founder")) return 25;
+  if (plan.includes("beta")) return 25;
+  if (plan.includes("pro")) return 25;
+  return 5;
+}
+
+function nowIso() {
+  return new Date().toISOString();
+}
+
+function dayKey() {
+  return nowIso().slice(0, 10);
+}
+
+function monthKey() {
+  return nowIso().slice(0, 7);
+}
+
+async function resolveUserId(supabase, userId, email) {
+  const cleanedUserId = clean(userId);
+  const cleanedEmail = lower(email);
+
+  if (cleanedUserId) {
+    const { data, error } = await supabase
+      .from("users")
+      .select("id,email")
+      .eq("id", cleanedUserId)
+      .maybeSingle();
+
+    if (error) throw error;
+    if (data?.id) {
+      return {
+        user_id: data.id,
+        email: lower(data.email || cleanedEmail)
+      };
+    }
+  }
+
+  if (cleanedEmail) {
+    const { data, error } = await supabase
+      .from("users")
+      .select("id,email")
+      .ilike("email", cleanedEmail)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (error) throw error;
+    if (data?.id) {
+      return {
+        user_id: data.id,
+        email: lower(data.email || cleanedEmail)
+      };
+    }
+  }
+
+  return {
+    user_id: cleanedUserId,
+    email: cleanedEmail
+  };
+}
+
+function buildListingId(row) {
+  return (
+    clean(row.id) ||
+    clean(row.marketplace_listing_id) ||
+    clean(row.vin) ||
+    clean(row.stock_number) ||
+    clean(row.source_url) ||
+    `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
   );
+}
 
-  if (!id) return null;
-
+function buildListingRow(row, resolved) {
   return {
-    id,
-    user_id: clean(row.user_id || fallbackUserId),
-    email: clean(row.email || fallbackEmail).toLowerCase(),
-    dealership_id: clean(row.dealership_id || ""),
-    vin: clean(row.vin || "").toUpperCase(),
-    stock_number: clean(row.stock_number || row.stockNumber || ""),
-    source_url: clean(row.source_url || row.sourceUrl || ""),
-    image_url: clean(row.image_url || row.cover_photo || row.coverPhotoUrl || row.photo || ""),
-    year: numberOrZero(row.year),
-    make: clean(row.make || ""),
-    model: clean(row.model || ""),
-    trim: clean(row.trim || ""),
-    vehicle_type: clean(row.vehicle_type || row.vehicleType || ""),
-    body_style: clean(row.body_style || row.bodyStyle || ""),
-    exterior_color: clean(row.exterior_color || row.exteriorColor || row.color || ""),
-    fuel_type: clean(row.fuel_type || row.fuelType || ""),
-    mileage: numberOrZero(row.mileage || row.kilometers || row.km),
+    id: buildListingId(row),
+    user_id: clean(resolved.user_id),
+    email: lower(row.email || resolved.email),
+    dealership_id: clean(row.dealership_id),
+    marketplace_listing_id: clean(row.marketplace_listing_id),
+    vin: clean(row.vin),
+    stock_number: clean(row.stock_number),
+    source_url: clean(row.source_url),
+    image_url: clean(row.image_url),
+    year: integerOrZero(row.year),
+    make: clean(row.make),
+    model: clean(row.model),
+    trim: clean(row.trim),
+    vehicle_type: clean(row.vehicle_type),
+    body_style: clean(row.body_style),
+    exterior_color: clean(row.exterior_color),
+    fuel_type: clean(row.fuel_type),
+    mileage: integerOrZero(row.mileage),
     price: numberOrZero(row.price),
-    title: clean(row.title || ""),
-    status: clean(row.status || "posted").toLowerCase(),
-    lifecycle_status: clean(row.lifecycle_status || "").toLowerCase(),
-    review_bucket: clean(row.review_bucket || ""),
-    posted_at: toIso(row.posted_at || row.created_at || row.timestamp),
-    views_count: numberOrZero(row.views_count ?? row.views),
-    messages_count: numberOrZero(row.messages_count ?? row.messages),
-    updated_at: new Date().toISOString()
+    title:
+      clean(row.title) ||
+      [row.year, row.make, row.model, row.trim].map(clean).filter(Boolean).join(" "),
+    location: clean(row.location),
+    status: clean(row.status || "active") || "active",
+    lifecycle_status: clean(row.lifecycle_status || "active"),
+    review_bucket: clean(row.review_bucket),
+    views_count: integerOrZero(row.views_count),
+    messages_count: integerOrZero(row.messages_count),
+    posted_at: clean(row.posted_at) || nowIso(),
+    updated_at: nowIso()
   };
 }
 
-function buildSummaryPayload(body, partialSync = false) {
-  const readMetric = (value) => {
-    if (partialSync && value == null) return null;
-    return numberOrZero(value);
+async function upsertPostingUsageFromPayload(supabase, resolved, payload) {
+  if (!clean(resolved.user_id) && !lower(resolved.email)) return;
+
+  const postsToday = integerOrZero(payload.posts_today || payload.posts_used_today);
+  if (postsToday <= 0) return;
+
+  const today = dayKey();
+  const month = monthKey();
+
+  let existing = null;
+
+  if (clean(resolved.user_id)) {
+    const { data, error } = await supabase
+      .from("posting_usage")
+      .select("*")
+      .eq("user_id", clean(resolved.user_id))
+      .eq("date_key", today)
+      .maybeSingle();
+
+    if (error) throw error;
+    existing = data || null;
+  }
+
+  const usageRow = {
+    user_id: clean(resolved.user_id) || null,
+    email: lower(resolved.email) || null,
+    date_key: today,
+    month_key: month,
+    posts_used: postsToday,
+    updated_at: nowIso()
   };
 
-  return {
-    posts_today: readMetric(body.posts_today),
-    posting_limit: readMetric(body.posting_limit),
-    posts_remaining: readMetric(body.posts_remaining),
-    queue_count: readMetric(body.queue_count),
-    active_listings: readMetric(body.active_listings),
-    total_views: readMetric(body.total_views),
-    total_messages: readMetric(body.total_messages),
-    stale_listings: readMetric(body.stale_listings),
-    review_queue_count: readMetric(body.review_queue_count),
-    review_new_count: readMetric(body.review_new_count),
-    review_delete_count: readMetric(body.review_delete_count),
-    review_price_change_count: readMetric(body.review_price_change_count),
-    posts_this_month: readMetric(body.posts_this_month),
-    lifecycle_updated_at: toIso(body.lifecycle_updated_at || new Date().toISOString())
-  };
+  if (existing?.id) {
+    const { error } = await supabase
+      .from("posting_usage")
+      .update(usageRow)
+      .eq("id", existing.id);
+
+    if (error) throw error;
+  } else {
+    const { error } = await supabase
+      .from("posting_usage")
+      .insert(usageRow);
+
+    if (error) throw error;
+  }
 }
 
-function mergeAccountSnapshot(existing, nextSummary, partialSync = false) {
-  const prev = existing && typeof existing === "object" ? existing : {};
-  const pick = (field, fallback = 0) => {
-    if (!partialSync) return nextSummary[field];
-    return nextSummary[field] == null ? numberOrZero(prev[field] ?? fallback) : nextSummary[field];
+async function syncSubscriptionSnapshot(supabase, resolved, payload) {
+  if (!clean(resolved.user_id)) return;
+
+  const { data: subscription, error } = await supabase
+    .from("subscriptions")
+    .select("*")
+    .eq("user_id", clean(resolved.user_id))
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) throw error;
+  if (!subscription) return;
+
+  const postingLimit = inferPostingLimit(subscription.plan_type);
+  const postsUsedToday = integerOrZero(payload.posts_today || payload.posts_used_today);
+  const nextSnapshot = {
+    ...(subscription.account_snapshot && typeof subscription.account_snapshot === "object"
+      ? subscription.account_snapshot
+      : {}),
+    user_id: clean(resolved.user_id),
+    email: lower(resolved.email),
+    plan: clean(subscription.plan_type),
+    status: clean(subscription.subscription_status || subscription.billing_status || "active"),
+    active: true,
+    posting_limit: postingLimit,
+    posts_used_today: postsUsedToday,
+    posts_today: postsUsedToday,
+    posts_remaining: Math.max(postingLimit - postsUsedToday, 0),
+    active_listings: integerOrZero(payload.active_listings),
+    stale_listings: integerOrZero(payload.stale_listings),
+    total_views: integerOrZero(payload.total_views),
+    total_messages: integerOrZero(payload.total_messages),
+    review_delete_count: integerOrZero(payload.review_delete_count),
+    review_price_change_count: integerOrZero(payload.review_price_change_count),
+    review_new_count: integerOrZero(payload.review_new_count),
+    review_queue_count: integerOrZero(payload.review_queue_count),
+    queue_count: integerOrZero(payload.queue_count),
+    lifecycle_updated_at: clean(payload.lifecycle_updated_at || nowIso()),
+    top_listing_title: clean(payload.top_listing_title)
   };
 
-  return {
-    ...prev,
-    queue_count: pick("queue_count"),
-    active_listings: pick("active_listings"),
-    total_views: pick("total_views"),
-    total_messages: pick("total_messages"),
-    stale_listings: pick("stale_listings"),
-    review_queue_count: pick("review_queue_count"),
-    review_new_count: pick("review_new_count"),
-    review_delete_count: pick("review_delete_count"),
-    review_price_change_count: pick("review_price_change_count"),
-    posts_today: pick("posts_today"),
-    posts_this_month: pick("posts_this_month"),
-    posting_limit: pick("posting_limit"),
-    posts_remaining: pick("posts_remaining"),
-    lifecycle_updated_at: nextSummary.lifecycle_updated_at || prev.lifecycle_updated_at || new Date().toISOString(),
-    top_listing_title: clean(
-      (partialSync && !clean(nextSummary.top_listing_title))
-        ? (prev.top_listing_title || "None yet")
-        : (nextSummary.top_listing_title || prev.top_listing_title || "None yet")
-    )
-  };
-}
+  const { error: updateError } = await supabase
+    .from("subscriptions")
+    .update({ account_snapshot: nextSnapshot })
+    .eq("user_id", clean(resolved.user_id));
 
-function computeTopListingTitle(listings) {
-  const best = [...(Array.isArray(listings) ? listings : [])]
-    .sort((a, b) => {
-      const scoreA =
-        (numberOrZero(a.messages_count) * 1000) +
-        (numberOrZero(a.views_count) * 10) +
-        (new Date(a.posted_at || 0).getTime() / 100000000);
-
-      const scoreB =
-        (numberOrZero(b.messages_count) * 1000) +
-        (numberOrZero(b.views_count) * 10) +
-        (new Date(b.posted_at || 0).getTime() / 100000000);
-
-      return scoreB - scoreA;
-    })[0] || null;
-
-  return clean(best?.title || "None yet");
-}
-
-function mergeListingRow(existing, incoming) {
-  const prev = existing && typeof existing === "object" ? existing : {};
-  const next = incoming && typeof incoming === "object" ? incoming : {};
-
-  return {
-    ...prev,
-    ...next,
-    id: normalizeKey(next.id || prev.id),
-    user_id: clean(next.user_id || prev.user_id),
-    email: clean(next.email || prev.email).toLowerCase(),
-    dealership_id: clean(next.dealership_id || prev.dealership_id || ""),
-    vin: clean(next.vin || prev.vin || "").toUpperCase(),
-    stock_number: clean(next.stock_number || prev.stock_number || ""),
-    source_url: clean(next.source_url || prev.source_url || ""),
-    image_url: clean(next.image_url || prev.image_url || ""),
-    year: numberOrZero(next.year || prev.year),
-    make: clean(next.make || prev.make || ""),
-    model: clean(next.model || prev.model || ""),
-    trim: clean(next.trim || prev.trim || ""),
-    vehicle_type: clean(next.vehicle_type || prev.vehicle_type || ""),
-    body_style: clean(next.body_style || prev.body_style || ""),
-    exterior_color: clean(next.exterior_color || prev.exterior_color || ""),
-    fuel_type: clean(next.fuel_type || prev.fuel_type || ""),
-    mileage: numberOrZero(next.mileage || prev.mileage),
-    price: numberOrZero(next.price || prev.price),
-    title: clean(next.title || prev.title || ""),
-    status: clean(next.status || prev.status || "posted").toLowerCase(),
-    lifecycle_status: clean(next.lifecycle_status || prev.lifecycle_status || "").toLowerCase(),
-    review_bucket: clean(next.review_bucket || prev.review_bucket || ""),
-    posted_at: toIso(next.posted_at || prev.posted_at || new Date().toISOString()),
-    views_count:
-      next.views_count != null && numberOrZero(next.views_count) > 0
-        ? numberOrZero(next.views_count)
-        : numberOrZero(prev.views_count),
-    messages_count:
-      next.messages_count != null && numberOrZero(next.messages_count) > 0
-        ? numberOrZero(next.messages_count)
-        : numberOrZero(prev.messages_count),
-    updated_at: new Date().toISOString()
-  };
+  if (updateError) throw updateError;
 }
 
 export default async function handler(req, res) {
   if (req.method !== "POST") {
-    return res.status(405).json({ error: "Method not allowed" });
+    return json(res, 405, { ok: false, error: "Method not allowed" });
   }
 
   try {
-    const body =
+    if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
+      return json(res, 500, { ok: false, error: "Missing Supabase env" });
+    }
+
+    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+
+    const payload =
       typeof req.body === "string"
         ? JSON.parse(req.body || "{}")
         : (req.body || {});
 
-    const userId = clean(body.user_id || body.userId || body.id);
-    const email = clean(body.email).toLowerCase();
-    const dealershipId = clean(body.dealership_id || body.dealershipId || "");
-    const partialSync = Boolean(body.partial_sync || clean(body.sync_reason || "") === "post_commit");
-
-    if (!userId || !email) {
-      return res.status(400).json({
-        ok: false,
-        error: "Missing user_id or email"
-      });
-    }
-
-    const incomingListingRows = Array.isArray(body.listings)
-      ? body.listings
-          .map((row) => normalizeListingRow(row, userId, email))
-          .filter(Boolean)
-      : [];
-
-    const summary = {
-      ...buildSummaryPayload(body, partialSync),
-      top_listing_title: computeTopListingTitle(incomingListingRows)
-    };
-
-    const { data: existingSub, error: subLookupError } = await supabase
-      .from("subscriptions")
-      .select("user_id,email,account_snapshot")
-      .eq("email", email)
-      .maybeSingle();
-
-    if (subLookupError) {
-      console.error("sync-lifecycle subscription lookup error:", subLookupError);
-      return res.status(500).json({
-        ok: false,
-        error: "Subscription lookup failed",
-        detail: subLookupError.message
-      });
-    }
-
-    const nextAccountSnapshot = mergeAccountSnapshot(
-      existingSub?.account_snapshot,
-      summary,
-      partialSync
+    const resolved = await resolveUserId(
+      supabase,
+      payload.user_id,
+      payload.email
     );
 
-    const { error: subUpsertError } = await supabase
-      .from("subscriptions")
-      .upsert(
-        {
-          user_id: userId,
-          email,
-          account_snapshot: nextAccountSnapshot,
-          updated_at: new Date().toISOString()
-        },
-        { onConflict: "email" }
-      );
-
-    if (subUpsertError) {
-      console.error("sync-lifecycle subscription upsert error:", subUpsertError);
-      return res.status(500).json({
-        ok: false,
-        error: "Subscription update failed",
-        detail: subUpsertError.message
-      });
+    if (!clean(resolved.user_id) && !lower(resolved.email)) {
+      return json(res, 400, { ok: false, error: "Missing user identity" });
     }
 
-    let listingsUpserted = 0;
+    const listingRows = Array.isArray(payload.listings) ? payload.listings : [];
+    const normalizedRows = listingRows.map((row) => buildListingRow(row, resolved));
 
-    if (incomingListingRows.length) {
-      const listingIds = incomingListingRows.map((row) => row.id).filter(Boolean);
-
-      let existingRowsById = {};
-
-      if (listingIds.length) {
-        const { data: existingRows, error: existingRowsError } = await supabase
-          .from("user_listings")
-          .select("*")
-          .in("id", listingIds);
-
-        if (existingRowsError) {
-          console.error("sync-lifecycle existing listing lookup error:", existingRowsError);
-          return res.status(500).json({
-            ok: false,
-            error: "Existing listing lookup failed",
-            detail: existingRowsError.message
-          });
-        }
-
-        existingRowsById = Object.fromEntries(
-          (Array.isArray(existingRows) ? existingRows : []).map((row) => [clean(row.id), row])
-        );
-      }
-
-      const payload = incomingListingRows.map((row) =>
-        mergeListingRow(existingRowsById[clean(row.id)], {
-          ...row,
-          user_id: userId,
-          email,
-          dealership_id: row.dealership_id || dealershipId || ""
-        })
-      );
-
-      const { error: userListingsUpsertError } = await supabase
+    for (const row of normalizedRows) {
+      const { error: userListingsError } = await supabase
         .from("user_listings")
-        .upsert(payload, { onConflict: "id" });
+        .upsert(row, { onConflict: "id" });
 
-      if (userListingsUpsertError) {
-        console.error("sync-lifecycle user_listings upsert error:", userListingsUpsertError);
-        return res.status(500).json({
-          ok: false,
-          error: "user_listings upsert failed",
-          detail: userListingsUpsertError.message
-        });
-      }
+      if (userListingsError) throw userListingsError;
 
-      const { error: listingsMirrorError } = await supabase
+      const { error: listingsError } = await supabase
         .from("listings")
-        .upsert(payload, { onConflict: "id" });
+        .upsert(row, { onConflict: "id" });
 
-      if (listingsMirrorError) {
-        console.error("sync-lifecycle listings mirror upsert error:", listingsMirrorError);
-      }
-
-      listingsUpserted = payload.length;
+      if (listingsError) throw listingsError;
     }
 
-    return res.status(200).json({
+    await upsertPostingUsageFromPayload(supabase, resolved, payload);
+    await syncSubscriptionSnapshot(supabase, resolved, payload);
+
+    return json(res, 200, {
       ok: true,
-      user_id: userId,
-      email,
-      summary,
-      listings_upserted: listingsUpserted
+      user_id: resolved.user_id,
+      email: resolved.email,
+      synced_listings: normalizedRows.length
     });
   } catch (error) {
-    console.error("sync-lifecycle fatal error:", error);
-    return res.status(500).json({
+    console.error("sync-lifecycle fatal:", error);
+    return json(res, 500, {
       ok: false,
-      error: "Unexpected sync-lifecycle error",
-      detail: error.message || "Unknown error"
+      error: error?.message || "Unexpected sync-lifecycle error"
     });
   }
 }
