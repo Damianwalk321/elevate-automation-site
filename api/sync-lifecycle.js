@@ -275,12 +275,6 @@ export default async function handler(req, res) {
         .upsert(row, { onConflict: "id" });
 
       if (userListingsError) throw userListingsError;
-
-      const { error: listingsError } = await supabase
-        .from("listings")
-        .upsert(row, { onConflict: "id" });
-
-      if (listingsError) throw listingsError;
     }
 
     await upsertPostingUsageFromPayload(supabase, resolved, payload);
