@@ -944,6 +944,18 @@
           </div>
 
           <div class="card kpi-card">
+            <div class="stat-label">Views</div>
+            <div id="kpiViews" class="stat-value">0</div>
+            <div class="stat-sub">Tracked traction</div>
+          </div>
+
+          <div class="card kpi-card">
+            <div class="stat-label">Messages</div>
+            <div id="kpiMessages" class="stat-value">0</div>
+            <div class="stat-sub">Buyer conversations</div>
+          </div>
+
+          <div class="card kpi-card">
             <div class="stat-label">Queued Vehicles</div>
             <div id="kpiQueuedVehicles" class="stat-value">0</div>
             <div class="stat-sub">Ready to post</div>
@@ -1295,19 +1307,20 @@
             </div>
             <div class="action-grid" style="margin-top:14px;">
               <button id="copyReferralCodeBtn" class="action-btn" type="button">Copy Referral Code</button>
-              <button id="copyAffiliatePitchBtn" class="action-btn" type="button">Copy Affiliate Pitch</button>
             </div>
             <div class="subtext" style="margin-top:14px;">Built for clean founder-stage promotion: simple referral code, clean positioning, and dealership-level partner conversations.</div>
           </div>
 
-          <div class="card">
-            <h2>Affiliate Promo Kit</h2>
-            <div class="list-block">
-              <div>• Lead with time saved, volume posted, and consistency</div>
-              <div>• Position as a professional partner program, not MLM-style recruiting</div>
-              <div>• Push team-level adoption with managers and dealership leaders</div>
-              <div>• Use founder pricing urgency while beta/founder access stays limited</div>
-              <div>• Ask every satisfied user for one referral and one team intro</div>
+          <div class="grid-2" style="gap:18px;">
+            <div class="card">
+              <h2>Commission Earned</h2>
+              <div class="stat-value" id="affiliateCommissionEarned">$0.00</div>
+              <div class="stat-sub">Founder-stage payout tracking</div>
+            </div>
+            <div class="card">
+              <h2>Total Referrals</h2>
+              <div class="stat-value" id="affiliateTotalReferrals">0</div>
+              <div class="stat-sub">Confirmed referred users</div>
             </div>
           </div>
         </div>
