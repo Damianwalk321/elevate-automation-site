@@ -51,6 +51,10 @@ function inferPostingLimit(planValue) {
   return 5;
 }
 
+function statusIsActive(status) {
+  return ["active", "trialing", "paid", "checkout_pending"].includes(lower(status));
+}
+
 async function resolveUserId(supabase, userId, email) {
   const cleanedUserId = clean(userId);
   const cleanedEmail = lower(email);
@@ -230,8 +234,9 @@ async function syncSubscriptionSnapshot(supabase, resolved, postsUsedToday) {
   if (subError) throw subError;
   if (!subscription) return { ok: false, reason: "no_subscription" };
 
-  const postingLimit = inferPostingLimit(subscription.plan_type);
-  const postsRemaining = Math.max(postingLimit - integerOrZero(postsUsedToday), 0);
+  const postingLimit = numberOrZero(subscription.daily_posting_limit || subscription.posting_limit) || inferPostingLimit(subscription.plan_type || subscription.plan_name || subscription.plan);
+  const active = statusIsActive(subscription.subscription_status || subscription.status || subscription.billing_status || "inactive");
+  const postsRemaining = Math.max((active ? postingLimit : 0) - integerOrZero(postsUsedToday), 0);
 
   const nextSnapshot = {
     ...(subscription.account_snapshot && typeof subscription.account_snapshot === "object"
@@ -239,13 +244,16 @@ async function syncSubscriptionSnapshot(supabase, resolved, postsUsedToday) {
       : {}),
     user_id: clean(resolved.user_id),
     email: lower(resolved.email),
-    plan: clean(subscription.plan_type),
-    status: clean(subscription.subscription_status || subscription.billing_status || "active"),
-    active: true,
-    posting_limit: postingLimit,
+    plan: clean(subscription.plan_type || subscription.plan_name || subscription.plan),
+    status: clean(subscription.subscription_status || subscription.billing_status || subscription.status || "inactive"),
+    active,
+    posting_limit: active ? postingLimit : 0,
     posts_used_today: integerOrZero(postsUsedToday),
     posts_today: integerOrZero(postsUsedToday),
-    posts_remaining: postsRemaining
+    posts_remaining: postsRemaining,
+    current_period_end: subscription.current_period_end || null,
+    trial_end: subscription.trial_end || null,
+    cancel_at_period_end: Boolean(subscription.cancel_at_period_end)
   };
 
   const { error } = await supabase
@@ -288,12 +296,6 @@ export default async function handler(req, res) {
     }
 
     const listingRow = buildListingRow(payload, resolved);
-
-    const { error: listingsError } = await supabase
-      .from("listings")
-      .upsert(listingRow, { onConflict: "id" });
-
-    if (listingsError) throw listingsError;
 
     const { error: userListingsError } = await supabase
       .from("user_listings")
