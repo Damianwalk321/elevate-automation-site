@@ -908,13 +908,13 @@
           <div class="card">
             <div class="stat-label">Current Plan</div>
             <div id="planName" class="stat-value">Loading...</div>
-            <div class="stat-sub">Plan, access state, posting limits, and extension unlock status.</div>
+            <div class="stat-sub">Plan, access state, and live posting capacity.</div>
           </div>
 
           <div class="card">
             <div class="stat-label">Subscription Status</div>
             <div id="subscriptionStatus" class="stat-value" style="font-size:22px;">Loading...</div>
-            <div class="stat-sub">Refresh after Stripe, webhook, or access-state changes.</div>
+            <div class="stat-sub">Live billing and entitlement state.</div>
           </div>
         </div>
 
@@ -922,67 +922,31 @@
           <div class="card kpi-card">
             <div class="stat-label">Posts Today</div>
             <div id="kpiPostsToday" class="stat-value">0</div>
-            <div class="stat-sub">Vehicles posted today</div>
+            <div class="stat-sub">Committed posts today</div>
           </div>
 
           <div class="card kpi-card">
-            <div class="stat-label">Posts This Month</div>
-            <div id="kpiPostsMonth" class="stat-value">0</div>
-            <div class="stat-sub">Monthly posting volume</div>
+            <div class="stat-label">Posts Remaining</div>
+            <div id="kpiPostsRemaining" class="stat-value">0</div>
+            <div class="stat-sub">Remaining daily capacity</div>
+          </div>
+
+          <div class="card kpi-card">
+            <div class="stat-label">Daily Limit</div>
+            <div id="kpiDailyLimit" class="stat-value">0</div>
+            <div class="stat-sub">Plan posting cap</div>
           </div>
 
           <div class="card kpi-card">
             <div class="stat-label">Active Listings</div>
             <div id="kpiActiveListings" class="stat-value">0</div>
-            <div class="stat-sub">Current active memory set</div>
-          </div>
-
-          <div class="card kpi-card">
-            <div class="stat-label">Views</div>
-            <div id="kpiViews" class="stat-value">0</div>
-            <div class="stat-sub">Tracked or defaulted</div>
-          </div>
-
-          <div class="card kpi-card">
-            <div class="stat-label">Messages</div>
-            <div id="kpiMessages" class="stat-value">0</div>
-            <div class="stat-sub">Tracked or defaulted</div>
-          </div>
-
-          <div class="card kpi-card">
-            <div class="stat-label">Review Queue</div>
-            <div id="kpiReviewQueue" class="stat-value">0</div>
-            <div class="stat-sub">Needs attention</div>
-          </div>
-
-          <div class="card kpi-card">
-            <div class="stat-label">Stale Listings</div>
-            <div id="kpiStaleListings" class="stat-value">0</div>
-            <div class="stat-sub">Potential removals</div>
-          </div>
-
-          <div class="card kpi-card">
-            <div class="stat-label">Price Changes</div>
-            <div id="kpiPriceChanges" class="stat-value">0</div>
-            <div class="stat-sub">Detected changes</div>
+            <div class="stat-sub">Listings on file</div>
           </div>
 
           <div class="card kpi-card">
             <div class="stat-label">Queued Vehicles</div>
             <div id="kpiQueuedVehicles" class="stat-value">0</div>
             <div class="stat-sub">Ready to post</div>
-          </div>
-
-          <div class="card kpi-card">
-            <div class="stat-label">Review New</div>
-            <div id="kpiReviewNew" class="stat-value">0</div>
-            <div class="stat-sub">New detections</div>
-          </div>
-
-          <div class="card kpi-card">
-            <div class="stat-label">Review Delete</div>
-            <div id="kpiReviewDelete" class="stat-value">0</div>
-            <div class="stat-sub">Removed vehicles</div>
           </div>
         </div>
 
@@ -1050,15 +1014,13 @@
               <div><strong>Software License Key:</strong> <span id="licenseKeyDisplay">Loading...</span></div>
               <div><strong>User ID:</strong> <span class="user-id">Loading...</span></div>
               <div><strong>Daily Posting Limit:</strong> <span id="snapshotPostingLimit">Loading...</span></div>
+              <div><strong>Posts Used Today:</strong> <span id="snapshotPostsUsed">Loading...</span></div>
               <div><strong>Posts Remaining Today:</strong> <span id="snapshotPostsRemaining">Loading...</span></div>
               <div><strong>Billing Source:</strong> <span id="snapshotBillingSource">Loading...</span></div>
               <div><strong>Current Period End:</strong> <span id="snapshotCurrentPeriodEnd">Loading...</span></div>
               <div><strong>Profile Complete:</strong> <span id="snapshotProfileComplete">Loading...</span></div>
-              <div><strong>Review Queue:</strong> <span id="snapshotReviewQueueCount">0</span></div>
-              <div><strong>Stale Listings:</strong> <span id="snapshotStaleListings">0</span></div>
-              <div><strong>Price Changes:</strong> <span id="snapshotPriceChanges">0</span></div>
               <div><strong>Queued Vehicles:</strong> <span id="snapshotQueuedVehicles">0</span></div>
-              <div><strong>Lifecycle Updated:</strong> <span id="snapshotLifecycleUpdatedAt">—</span></div>
+              <div><strong>Sync Updated:</strong> <span id="snapshotLifecycleUpdatedAt">—</span></div>
             </div>
             <div id="snapshotSetupSummary" class="status-line"></div>
           </div>
@@ -1228,15 +1190,17 @@
             <h2>Extension Control</h2>
             <div class="list-block">
               <div><strong>Access State:</strong> <span id="extensionAccessState">Loading.</span></div>
-              <div><strong>Remaining Posts Today:</strong> <span id="extensionRemainingPosts">Loading.</span></div>
+              <div><strong>Current Plan:</strong> <span id="extensionPlan">Loading.</span></div>
+              <div><strong>Posts Used Today:</strong> <span id="extensionPostsUsed">Loading.</span></div>
+              <div><strong>Posts Remaining Today:</strong> <span id="extensionRemainingPosts">Loading.</span></div>
+              <div><strong>Daily Limit:</strong> <span id="extensionPostLimit">Loading.</span></div>
+              <div><strong>Backend Sync:</strong> <span id="extensionSyncStatus">Checking...</span></div>
+              <div><strong>Committed Listing Rows:</strong> <span id="extensionCommittedRows">0</span></div>
               <div><strong>Scanner Type:</strong> <span id="extensionScannerType">Loading.</span></div>
               <div><strong>Dealer Website:</strong> <span id="extensionDealerWebsite">Loading.</span></div>
               <div><strong>Inventory URL:</strong> <span id="extensionInventoryUrl">Loading.</span></div>
               <div><strong>Listing Location:</strong> <span id="extensionListingLocation">Loading.</span></div>
               <div><strong>Compliance Mode:</strong> <span id="extensionComplianceMode">Loading.</span></div>
-              <div><strong>Current Plan:</strong> <span id="extensionPlan">Loading.</span></div>
-              <div><strong>Posts Used Today:</strong> <span id="extensionPostsUsed">Loading.</span></div>
-              <div><strong>Daily Limit:</strong> <span id="extensionPostLimit">Loading.</span></div>
             </div>
 
             <div class="action-grid">
@@ -1280,8 +1244,8 @@
             </div>
 
             <div class="subtext" style="margin-top:14px;">
-              This control panel gives users one place to verify access, confirm dealer settings,
-              and open the right pages before posting.
+              Use this as the single operator panel before posting: verify access, verify live counts,
+              refresh backend state, then open inventory or Marketplace.
             </div>
           </div>
         </div>
@@ -1324,18 +1288,26 @@
             <h2>Affiliate Center</h2>
             <div class="list-block">
               <div><strong>Your Referral Code:</strong> <span id="referralCodeAffiliate">Loading...</span></div>
-              <div><strong>Direct Referral Commission:</strong> 20% recurring</div>
-              <div><strong>Second-Level Override:</strong> 5% planned</div>
-              <div><strong>Positioning:</strong> referral / partner program</div>
+              <div><strong>Partner Type:</strong> <span id="affiliatePartnerType">Loading...</span></div>
+              <div><strong>Direct Referral Commission:</strong> <span id="affiliateDirectCommission">Loading...</span></div>
+              <div><strong>Second-Level Override:</strong> <span id="affiliateTierOverride">Loading...</span></div>
+              <div><strong>Payout Status:</strong> <span id="affiliatePayoutStatus">Loading...</span></div>
             </div>
+            <div class="action-grid" style="margin-top:14px;">
+              <button id="copyReferralCodeBtn" class="action-btn" type="button">Copy Referral Code</button>
+              <button id="copyAffiliatePitchBtn" class="action-btn" type="button">Copy Affiliate Pitch</button>
+            </div>
+            <div class="subtext" style="margin-top:14px;">Built for clean founder-stage promotion: simple referral code, clean positioning, and dealership-level partner conversations.</div>
           </div>
 
           <div class="card">
-            <h2>Partner Notes</h2>
+            <h2>Affiliate Promo Kit</h2>
             <div class="list-block">
-              <div>• Founding affiliates help seed early demand</div>
-              <div>• Dealer managers can become team partners</div>
-              <div>• Promo kit and dashboard visibility can expand later</div>
+              <div>• Lead with time saved, volume posted, and consistency</div>
+              <div>• Position as a professional partner program, not MLM-style recruiting</div>
+              <div>• Push team-level adoption with managers and dealership leaders</div>
+              <div>• Use founder pricing urgency while beta/founder access stays limited</div>
+              <div>• Ask every satisfied user for one referral and one team intro</div>
             </div>
           </div>
         </div>
