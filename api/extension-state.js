@@ -55,7 +55,7 @@ function normalizePlanLabel(value) {
   const raw = clean(value).toLowerCase();
   if (!raw || raw === "no plan") return "Founder Beta";
   if (raw.includes("founder") && raw.includes("pro")) return "Founder Pro";
-  if (raw.includes("founder") && raw.includes("starter")) return "Founder Starter";
+  if (raw.includes("founder") && raw.includes("starter")) return "Founder Beta";
   if (raw.includes("founder") || raw.includes("beta")) return "Founder Beta";
   if (raw.includes("pro")) return "Pro";
   if (raw.includes("starter")) return "Starter";
@@ -64,7 +64,7 @@ function normalizePlanLabel(value) {
 
 function inferPostingLimitFromPlan(value) {
   const raw = normalizePlanLabel(value).toLowerCase();
-  if (raw.includes("pro") || raw.includes("beta")) return 25;
+  if ((raw.includes("founder") && raw.includes("pro")) || raw === "pro" || (!raw.includes("founder") && raw.includes("pro"))) return 25;
   return 5;
 }
 
