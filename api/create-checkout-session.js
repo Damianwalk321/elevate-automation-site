@@ -35,8 +35,22 @@ function parseBody(req) {
   }
 }
 
-function getPlanConfig(planType, accessType, userType) {
+function normalizePlanRequest(planType, accessType, userType) {
   const normalizedPlanType = clean(planType).toLowerCase();
+  const normalizedAccessType = clean(accessType).toLowerCase();
+  const normalizedUserType = clean(userType).toLowerCase();
+
+  if (["founder beta", "founder", "beta"].includes(normalizedPlanType)) return "founder_pro";
+  if (["founder starter", "founder-starter", "founder_starter"].includes(normalizedPlanType)) return "founder_starter";
+  if (["founder pro", "founder-pro", "founder_pro"].includes(normalizedPlanType)) return "founder_pro";
+  if (normalizedPlanType === "starter") return "starter";
+  if (normalizedPlanType === "pro") return "pro";
+  if (!normalizedPlanType && (normalizedAccessType === "founder" || normalizedUserType === "founder")) return "founder_pro";
+  return normalizedPlanType;
+}
+
+function getPlanConfig(planType, accessType, userType) {
+  const normalizedPlanType = normalizePlanRequest(planType, accessType, userType);
   const normalizedAccessType = clean(accessType).toLowerCase();
   const normalizedUserType = clean(userType).toLowerCase();
 
@@ -272,7 +286,8 @@ export default async function handler(req, res) {
         email,
         user_id: userId || "",
         plan_name: plan.planName,
-        plan_type: planType,
+        plan_type: normalizePlanRequest(planType, accessType, userType),
+        normalized_plan: normalizePlanRequest(planType, accessType, userType),
         user_type: userType,
         access_type: accessType,
         referral_code: referralCode
@@ -282,7 +297,8 @@ export default async function handler(req, res) {
           email,
           user_id: userId || "",
           plan_name: plan.planName,
-          plan_type: planType,
+          plan_type: normalizePlanRequest(planType, accessType, userType),
+        normalized_plan: normalizePlanRequest(planType, accessType, userType),
           user_type: userType,
           access_type: accessType,
           referral_code: referralCode
