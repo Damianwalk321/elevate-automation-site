@@ -54,7 +54,7 @@ function normalizePlanName(planName) {
   const plan = clean(planName).toLowerCase();
   if (!plan || plan === "active plan") return "Founder Beta";
   if (plan.includes("founder") && plan.includes("pro")) return "Founder Pro";
-  if (plan.includes("founder") && plan.includes("starter")) return "Founder Starter";
+  if (plan.includes("founder") && plan.includes("starter")) return "Founder Beta";
   if (plan.includes("founder") || plan.includes("beta")) return "Founder Beta";
   if (plan.includes("starter")) return "Starter";
   if (plan.includes("pro")) return "Pro";
@@ -64,9 +64,9 @@ function normalizePlanName(planName) {
 function getDailyPostingLimit(planName, status) {
   if (!statusIsActive(status)) return 0;
   const plan = normalizePlanName(planName).toLowerCase();
-  if (plan.includes("starter")) return 5;
-  if (plan.includes("pro")) return 25;
-  return 25;
+  if (plan.includes("founder") && plan.includes("pro")) return 25;
+  if (plan === "pro" || (!plan.includes("founder") && plan.includes("pro"))) return 25;
+  return 5;
 }
 
 function mapPlanFromPriceId(priceId) {
@@ -75,7 +75,7 @@ function mapPlanFromPriceId(priceId) {
   const founderPro = clean(process.env.STRIPE_FOUNDER_PRO_PRICE_ID);
   const pro = clean(process.env.STRIPE_PRO_PRICE_ID);
 
-  if (priceId && founder && priceId === founder) return "Founder Starter";
+  if (priceId && founder && priceId === founder) return "Founder Beta";
   if (priceId && founderPro && priceId === founderPro) return "Founder Pro";
   if (priceId && starter && priceId === starter) return "Starter";
   if (priceId && pro && priceId === pro) return "Pro";
