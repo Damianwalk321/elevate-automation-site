@@ -38,14 +38,32 @@ function firstNonEmpty(...values) {
   return "";
 }
 
-function statusIsActive(status) {
+function normalizeStatus(status, fallback = "inactive") {
   const value = clean(status).toLowerCase();
-  return ["active", "trialing", "paid"].includes(value);
+  if (!value) return fallback;
+  if (["active", "trialing", "paid", "checkout_pending"].includes(value)) return "active";
+  if (["canceled", "cancelled", "unpaid", "past_due", "expired", "suspended", "inactive"].includes(value)) return "inactive";
+  return value;
+}
+
+function statusIsActive(status) {
+  return normalizeStatus(status) === "active";
+}
+
+function normalizePlanName(planName) {
+  const plan = clean(planName).toLowerCase();
+  if (!plan || plan === "active plan") return "Founder Beta";
+  if (plan.includes("founder") && plan.includes("pro")) return "Founder Pro";
+  if (plan.includes("founder") && plan.includes("starter")) return "Founder Starter";
+  if (plan.includes("founder") || plan.includes("beta")) return "Founder Beta";
+  if (plan.includes("starter")) return "Starter";
+  if (plan.includes("pro")) return "Pro";
+  return clean(planName) || "Founder Beta";
 }
 
 function getDailyPostingLimit(planName, status) {
   if (!statusIsActive(status)) return 0;
-  const plan = clean(planName).toLowerCase();
+  const plan = normalizePlanName(planName).toLowerCase();
   if (plan.includes("starter")) return 5;
   if (plan.includes("pro")) return 25;
   return 25;
@@ -148,9 +166,9 @@ async function upsertSubscriptionsMirror({ user, email, customerId, subscription
     stripe_price_id: priceId || null,
     status: status || null,
     subscription_status: status || null,
-    plan: planName || "Active Plan",
-    plan_name: planName || "Active Plan",
-    plan_type: planName || "Active Plan",
+    plan: normalizePlanName(planName),
+    plan_name: normalizePlanName(planName),
+    plan_type: normalizePlanName(planName),
     access: statusIsActive(status),
     active: statusIsActive(status),
     daily_posting_limit: getDailyPostingLimit(planName, status),
@@ -162,9 +180,12 @@ async function upsertSubscriptionsMirror({ user, email, customerId, subscription
     account_snapshot: {
       user_id: user?.id || null,
       email: normalizedEmail || null,
-      plan: planName || "Active Plan",
-      status: status || null,
+      plan: normalizePlanName(planName),
+      normalized_plan: normalizePlanName(planName),
+      status: normalizeStatus(status, "inactive"),
+      normalized_status: normalizeStatus(status, "inactive"),
       active: statusIsActive(status),
+      access_granted: statusIsActive(status),
       posting_limit: getDailyPostingLimit(planName, status),
       posts_today: 0,
       posts_remaining: getDailyPostingLimit(planName, status),
