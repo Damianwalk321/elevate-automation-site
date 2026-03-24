@@ -39,6 +39,25 @@ function inferPostingLimit(planValue) {
   return 5;
 }
 
+function normalizeReviewBucket(value) {
+  const bucket = clean(value).toLowerCase().replace(/[\s_-]+/g, "");
+  if (!bucket) return "";
+  if (["removedvehicles", "removed", "reviewdelete"].includes(bucket)) return "removedvehicles";
+  if (["pricechanges", "pricechange", "reviewpriceupdate"].includes(bucket)) return "pricechanges";
+  if (["newvehicles", "new", "reviewnew"].includes(bucket)) return "newvehicles";
+  return bucket;
+}
+
+function normalizeLifecycleStatus(value, reviewBucket = "") {
+  const status = clean(value).toLowerCase();
+  const review = normalizeReviewBucket(reviewBucket);
+  if (status) return status;
+  if (review === "removedvehicles") return "review_delete";
+  if (review === "pricechanges") return "review_price_update";
+  if (review === "newvehicles") return "review_new";
+  return "active";
+}
+
 function nowIso() {
   return new Date().toISOString();
 }
@@ -56,18 +75,10 @@ async function resolveUserId(supabase, userId, email) {
   const cleanedEmail = lower(email);
 
   if (cleanedUserId) {
-    const { data, error } = await supabase
-      .from("users")
-      .select("id,email")
-      .eq("id", cleanedUserId)
-      .maybeSingle();
-
+    const { data, error } = await supabase.from("users").select("id,email").eq("id", cleanedUserId).maybeSingle();
     if (error) throw error;
     if (data?.id) {
-      return {
-        user_id: data.id,
-        email: lower(data.email || cleanedEmail)
-      };
+      return { user_id: data.id, email: lower(data.email || cleanedEmail) };
     }
   }
 
@@ -82,17 +93,28 @@ async function resolveUserId(supabase, userId, email) {
 
     if (error) throw error;
     if (data?.id) {
-      return {
-        user_id: data.id,
-        email: lower(data.email || cleanedEmail)
-      };
+      return { user_id: data.id, email: lower(data.email || cleanedEmail) };
     }
   }
 
-  return {
-    user_id: cleanedUserId,
-    email: cleanedEmail
-  };
+  return { user_id: cleanedUserId, email: cleanedEmail };
+}
+
+function buildIdentityCandidates(row) {
+  const candidates = [];
+  const id = clean(row.id || "");
+  const marketplace = clean(row.marketplace_listing_id || "");
+  const vin = clean(row.vin || "");
+  const stock = clean(row.stock_number || "");
+  const source = clean(row.source_url || "");
+
+  if (id) candidates.push({ column: "id", value: id });
+  if (marketplace) candidates.push({ column: "marketplace_listing_id", value: marketplace });
+  if (vin) candidates.push({ column: "vin", value: vin });
+  if (stock) candidates.push({ column: "stock_number", value: stock });
+  if (source) candidates.push({ column: "source_url", value: source });
+
+  return candidates;
 }
 
 function buildListingId(row) {
@@ -106,39 +128,57 @@ function buildListingId(row) {
   );
 }
 
-function buildListingRow(row, resolved) {
+function buildListingRow(row, resolved, existing = null) {
+  const reviewBucket = normalizeReviewBucket(row.review_bucket || existing?.review_bucket || "");
+  const lifecycleStatus = normalizeLifecycleStatus(row.lifecycle_status || existing?.lifecycle_status || "", reviewBucket);
+
   return {
-    id: buildListingId(row),
+    id: clean(existing?.id || row.id || buildListingId(row)),
     user_id: clean(resolved.user_id),
-    email: lower(row.email || resolved.email),
-    dealership_id: clean(row.dealership_id),
-    marketplace_listing_id: clean(row.marketplace_listing_id),
-    vin: clean(row.vin),
-    stock_number: clean(row.stock_number),
-    source_url: clean(row.source_url),
-    image_url: clean(row.image_url),
-    year: integerOrZero(row.year),
-    make: clean(row.make),
-    model: clean(row.model),
-    trim: clean(row.trim),
-    vehicle_type: clean(row.vehicle_type),
-    body_style: clean(row.body_style),
-    exterior_color: clean(row.exterior_color),
-    fuel_type: clean(row.fuel_type),
-    mileage: integerOrZero(row.mileage),
-    price: numberOrZero(row.price),
-    title:
-      clean(row.title) ||
-      [row.year, row.make, row.model, row.trim].map(clean).filter(Boolean).join(" "),
-    location: clean(row.location),
-    status: clean(row.status || "active") || "active",
-    lifecycle_status: clean(row.lifecycle_status || "active"),
-    review_bucket: clean(row.review_bucket),
-    views_count: integerOrZero(row.views_count),
-    messages_count: integerOrZero(row.messages_count),
-    posted_at: clean(row.posted_at) || nowIso(),
-    updated_at: nowIso()
+    email: lower(row.email || existing?.email || resolved.email),
+    dealership_id: clean(row.dealership_id || existing?.dealership_id),
+    marketplace_listing_id: clean(row.marketplace_listing_id || existing?.marketplace_listing_id),
+    vin: clean(row.vin || existing?.vin),
+    stock_number: clean(row.stock_number || existing?.stock_number),
+    source_url: clean(row.source_url || existing?.source_url),
+    image_url: clean(row.image_url || existing?.image_url),
+    year: integerOrZero(row.year || existing?.year),
+    make: clean(row.make || existing?.make),
+    model: clean(row.model || existing?.model),
+    trim: clean(row.trim || existing?.trim),
+    vehicle_type: clean(row.vehicle_type || existing?.vehicle_type),
+    body_style: clean(row.body_style || existing?.body_style),
+    exterior_color: clean(row.exterior_color || existing?.exterior_color),
+    fuel_type: clean(row.fuel_type || existing?.fuel_type),
+    mileage: integerOrZero(row.mileage || existing?.mileage),
+    price: numberOrZero(row.price || existing?.price),
+    title: clean(row.title || existing?.title) || [row.year || existing?.year, row.make || existing?.make, row.model || existing?.model, row.trim || existing?.trim].map(clean).filter(Boolean).join(" "),
+    location: clean(row.location || existing?.location),
+    status: clean(row.status || existing?.status || "active") || "active",
+    lifecycle_status: lifecycleStatus,
+    review_bucket: reviewBucket,
+    views_count: integerOrZero(row.views_count ?? existing?.views_count),
+    messages_count: integerOrZero(row.messages_count ?? existing?.messages_count),
+    posted_at: clean(row.posted_at || existing?.posted_at) || nowIso(),
+    updated_at: nowIso(),
+    last_seen_at: nowIso()
   };
+}
+
+async function findExistingListing(supabase, resolved, row) {
+  const candidates = buildIdentityCandidates(row);
+
+  for (const candidate of candidates) {
+    let query = supabase.from("user_listings").select("*").eq(candidate.column, candidate.value).limit(1);
+    if (clean(resolved.user_id)) query = query.eq("user_id", clean(resolved.user_id));
+    else if (lower(resolved.email)) query = query.ilike("email", lower(resolved.email));
+
+    const { data, error } = await query.maybeSingle();
+    if (error) throw error;
+    if (data) return data;
+  }
+
+  return null;
 }
 
 async function upsertPostingUsageFromPayload(supabase, resolved, payload) {
@@ -151,15 +191,8 @@ async function upsertPostingUsageFromPayload(supabase, resolved, payload) {
   const month = monthKey();
 
   let existing = null;
-
   if (clean(resolved.user_id)) {
-    const { data, error } = await supabase
-      .from("posting_usage")
-      .select("*")
-      .eq("user_id", clean(resolved.user_id))
-      .eq("date_key", today)
-      .maybeSingle();
-
+    const { data, error } = await supabase.from("posting_usage").select("*").eq("user_id", clean(resolved.user_id)).eq("date_key", today).maybeSingle();
     if (error) throw error;
     existing = data || null;
   }
@@ -174,17 +207,10 @@ async function upsertPostingUsageFromPayload(supabase, resolved, payload) {
   };
 
   if (existing?.id) {
-    const { error } = await supabase
-      .from("posting_usage")
-      .update(usageRow)
-      .eq("id", existing.id);
-
+    const { error } = await supabase.from("posting_usage").update(usageRow).eq("id", existing.id);
     if (error) throw error;
   } else {
-    const { error } = await supabase
-      .from("posting_usage")
-      .insert(usageRow);
-
+    const { error } = await supabase.from("posting_usage").insert(usageRow);
     if (error) throw error;
   }
 }
@@ -203,15 +229,13 @@ async function syncSubscriptionSnapshot(supabase, resolved, payload) {
   if (error) throw error;
   if (!subscription) return;
 
-  const postingLimit = inferPostingLimit(subscription.plan_type);
+  const postingLimit = inferPostingLimit(subscription.plan_type || subscription.plan_name || subscription.plan);
   const postsUsedToday = integerOrZero(payload.posts_today || payload.posts_used_today);
   const nextSnapshot = {
-    ...(subscription.account_snapshot && typeof subscription.account_snapshot === "object"
-      ? subscription.account_snapshot
-      : {}),
+    ...(subscription.account_snapshot && typeof subscription.account_snapshot === "object" ? subscription.account_snapshot : {}),
     user_id: clean(resolved.user_id),
     email: lower(resolved.email),
-    plan: clean(subscription.plan_type),
+    plan: clean(subscription.plan_type || subscription.plan_name || subscription.plan),
     status: clean(subscription.subscription_status || subscription.billing_status || "active"),
     active: true,
     posting_limit: postingLimit,
@@ -231,11 +255,7 @@ async function syncSubscriptionSnapshot(supabase, resolved, payload) {
     top_listing_title: clean(payload.top_listing_title)
   };
 
-  const { error: updateError } = await supabase
-    .from("subscriptions")
-    .update({ account_snapshot: nextSnapshot })
-    .eq("user_id", clean(resolved.user_id));
-
+  const { error: updateError } = await supabase.from("subscriptions").update({ account_snapshot: nextSnapshot }).eq("user_id", clean(resolved.user_id));
   if (updateError) throw updateError;
 }
 
@@ -250,37 +270,33 @@ export default async function handler(req, res) {
     }
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+    const payload = typeof req.body === "string" ? JSON.parse(req.body || "{}") : (req.body || {});
 
-    const payload =
-      typeof req.body === "string"
-        ? JSON.parse(req.body || "{}")
-        : (req.body || {});
-
-    const resolved = await resolveUserId(
-      supabase,
-      payload.user_id,
-      payload.email
-    );
-
+    const resolved = await resolveUserId(supabase, payload.user_id, payload.email);
     if (!clean(resolved.user_id) && !lower(resolved.email)) {
       return json(res, 400, { ok: false, error: "Missing user identity" });
     }
 
     const listingRows = Array.isArray(payload.listings) ? payload.listings : [];
-    const normalizedRows = listingRows.map((row) => buildListingRow(row, resolved));
+    let synced = 0;
 
-    for (const row of normalizedRows) {
-      const { error: userListingsError } = await supabase
-        .from("user_listings")
-        .upsert(row, { onConflict: "id" });
+    for (const rawRow of listingRows) {
+      const existing = await findExistingListing(supabase, resolved, rawRow);
+      const row = buildListingRow(rawRow, resolved, existing);
 
+      const { error: userListingsError } = await supabase.from("user_listings").upsert(row, { onConflict: "id" });
       if (userListingsError) throw userListingsError;
+
+      try {
+        await supabase.from("listings").upsert(row, { onConflict: "id" });
+      } catch (legacyMirrorError) {
+        console.warn("sync-lifecycle legacy mirror warning:", legacyMirrorError);
+      }
+
+      synced += 1;
     }
 
-    const shouldSyncPostingUsage =
-      payload?.authoritative_posting_usage === true ||
-      (!payload?.partial_sync && payload?.sync_reason !== "post_commit");
-
+    const shouldSyncPostingUsage = payload?.authoritative_posting_usage === true || (!payload?.partial_sync && payload?.sync_reason !== "post_commit");
     if (shouldSyncPostingUsage) {
       await upsertPostingUsageFromPayload(supabase, resolved, payload);
       await syncSubscriptionSnapshot(supabase, resolved, payload);
@@ -290,7 +306,7 @@ export default async function handler(req, res) {
       ok: true,
       user_id: resolved.user_id,
       email: resolved.email,
-      synced_listings: normalizedRows.length,
+      synced_listings: synced,
       posting_usage_synced: shouldSyncPostingUsage
     });
   } catch (error) {
