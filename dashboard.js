@@ -1172,18 +1172,32 @@ function normalizeExtensionStateResponse(result, user, profile) {
     ""
   );
 
+  const rawStatus = clean(subscription.status || (subscription.active ? "active" : "inactive")) || "inactive";
+  const hardNegative = ["canceled", "cancelled", "unpaid", "past_due", "expired", "suspended"].includes(rawStatus.toLowerCase());
+  const setupReady = Boolean(
+    raw?.meta?.setup_ready ||
+    (
+      fullName &&
+      clean(dealership.inventory_url || mergedProfile.inventory_url || "") &&
+      rawUser?.active !== false &&
+      dealership?.active !== false
+    )
+  );
+  const founderBridgePlan = ["founder beta", "no plan", ""].includes(clean(subscription.plan || subscription.plan_name || "").toLowerCase());
+  const normalizedActive = Boolean(
+    subscription.active ||
+    subscription.status === "active" ||
+    subscription.status === "trialing" ||
+    (setupReady && founderBridgePlan && !hardNegative)
+  );
+  const normalizedPlan = clean(subscription.plan || subscription.plan_name || "");
   const normalizedSubscription = {
-    active: Boolean(
-      subscription.active ||
-      subscription.status === "active" ||
-      subscription.status === "trialing"
-    ),
-    status: clean(subscription.status || (subscription.active ? "active" : "inactive")) || "inactive",
+    active: normalizedActive,
+    status: clean(rawStatus || (normalizedActive ? "active" : "inactive")) || (normalizedActive ? "active" : "inactive"),
     plan: clean(
-      ((subscription.plan === "No Plan" || subscription.plan_name === "No Plan") &&
-      (subscription.active || raw?.meta?.setup_ready))
+      (normalizedActive && (!normalizedPlan || normalizedPlan === "No Plan"))
         ? "Founder Beta"
-        : (subscription.plan || subscription.plan_name || "Founder Beta")
+        : (normalizedPlan || "Founder Beta")
     ) || "Founder Beta",
     license_key: clean(subscription.license_key || subscription.software_license_key || ""),
     posting_limit: Number(subscription.posting_limit || subscription.daily_posting_limit || 0),
