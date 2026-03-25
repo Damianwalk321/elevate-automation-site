@@ -498,6 +498,130 @@ function buildSetupStatus(user, profileRow) {
   };
 }
 
+
+function formatPriceBand(value) {
+  const price = safeNumber(value, 0);
+  if (price <= 0) return 'Unknown';
+  if (price < 20000) return 'Under $20k';
+  if (price < 30000) return '$20k-$29k';
+  if (price < 40000) return '$30k-$39k';
+  if (price < 50000) return '$40k-$49k';
+  return '$50k+';
+}
+
+function buildManagerMetrics(rows, summaryBase = {}) {
+  const liveRows = rows.filter((row) => !['sold','deleted','inactive','stale'].includes(normalizeStatus(row.status)) && normalizeLifecycleStatus(row.lifecycle_status, row.review_bucket) !== 'review_delete');
+  const totalViews = safeNumber(summaryBase.total_views, 0);
+  const totalMessages = safeNumber(summaryBase.total_messages, 0);
+  const liveCount = liveRows.length;
+  const avgViewsPerLive = liveCount ? +(totalViews / liveCount).toFixed(1) : 0;
+  const avgMessagesPerLive = liveCount ? +(totalMessages / liveCount).toFixed(2) : 0;
+  const viewToMessageRate = totalViews ? +((totalMessages / totalViews) * 100).toFixed(1) : 0;
+  const staleRate = liveCount ? +((safeNumber(summaryBase.stale_listings, 0) / liveCount) * 100).toFixed(1) : 0;
+  const weakRate = liveCount ? +((safeNumber(summaryBase.weak_listings, 0) / liveCount) * 100).toFixed(1) : 0;
+  return {
+    live_inventory: liveCount,
+    total_views: totalViews,
+    total_messages: totalMessages,
+    avg_views_per_live: avgViewsPerLive,
+    avg_messages_per_live: avgMessagesPerLive,
+    view_to_message_rate: viewToMessageRate,
+    stale_rate: staleRate,
+    weak_rate: weakRate,
+    needs_action: safeNumber(summaryBase.needs_action_count, 0)
+  };
+}
+
+function buildSegmentPerformance(rows) {
+  const buckets = { make: new Map(), body_style: new Map(), price_band: new Map() };
+  const push = (map, key, row) => {
+    const cleanKey = clean(key || 'Unknown') || 'Unknown';
+    const entry = map.get(cleanKey) || { key: cleanKey, listings: 0, views: 0, messages: 0, live: 0 };
+    entry.listings += 1;
+    entry.views += safeNumber(row.views_count, 0);
+    entry.messages += safeNumber(row.messages_count, 0);
+    if (!['sold','deleted','inactive','stale'].includes(normalizeStatus(row.status))) entry.live += 1;
+    map.set(cleanKey, entry);
+  };
+  for (const row of rows) {
+    push(buckets.make, row.make || 'Unknown', row);
+    push(buckets.body_style, row.body_style || row.vehicle_type || 'Unknown', row);
+    push(buckets.price_band, formatPriceBand(row.price), row);
+  }
+  const finalize = (map) => [...map.values()].map((entry) => ({
+    ...entry,
+    conversion_rate: entry.views ? +((entry.messages / entry.views) * 100).toFixed(1) : 0
+  })).sort((a,b) => (b.messages*100 + b.views) - (a.messages*100 + a.views)).slice(0,5);
+  return {
+    make: finalize(buckets.make),
+    body_style: finalize(buckets.body_style),
+    price_band: finalize(buckets.price_band)
+  };
+}
+
+function buildDailyOpsQueues(rows) {
+  const queues = {
+    repost_today: [],
+    review_today: [],
+    promote_today: [],
+    likely_sold: [],
+    low_performance: []
+  };
+  for (const row of rows) {
+    const health = calculateHealthScore(row);
+    const action = recommendListingAction(row);
+    const lifecycle = normalizeLifecycleStatus(row.lifecycle_status, row.review_bucket);
+    const status = normalizeStatus(row.status);
+    const ageDays = health.age_days || 0;
+    const compact = {
+      id: row.id,
+      title: row.title,
+      status,
+      lifecycle_status: lifecycle,
+      health_label: health.label,
+      health_score: health.score,
+      recommended_action: action,
+      views_count: safeNumber(row.views_count, 0),
+      messages_count: safeNumber(row.messages_count, 0)
+    };
+    if (action === 'Promote now' || (ageDays >= 7 && safeNumber(row.views_count,0) < 5)) queues.promote_today.push(compact);
+    if (['review_delete','review_price_update','review_new'].includes(lifecycle)) queues.review_today.push(compact);
+    if (health.label in {'Weak':1,'Needs Action':1}) queues.low_performance.push(compact);
+    if (status === 'stale' || lifecycle === 'review_delete') queues.repost_today.push(compact);
+    if (safeNumber(row.views_count,0) >= 12 && safeNumber(row.messages_count,0) === 0) queues.likely_sold.push(compact);
+  }
+  for (const key of Object.keys(queues)) {
+    queues[key] = queues[key].slice(0,6);
+  }
+  return queues;
+}
+
+function buildSalespersonLeaderboard(finalEmail, summaryBase = {}) {
+  const email = clean(finalEmail || 'Unknown');
+  const posts = safeNumber(summaryBase.posts_today, 0);
+  const views = safeNumber(summaryBase.total_views, 0);
+  const messages = safeNumber(summaryBase.total_messages, 0);
+  return [{
+    name: email === 'Unknown' ? 'Current Account' : email,
+    posts_today: posts,
+    views,
+    messages,
+    conversion_rate: views ? +((messages / views) * 100).toFixed(1) : 0,
+    healthy_listings: Math.max(0, safeNumber(summaryBase.active_listings,0) - safeNumber(summaryBase.weak_listings,0))
+  }];
+}
+
+function buildManagerRecommendations(summaryBase = {}, managerMetrics = {}, segments = {}, queues = {}) {
+  const items = [];
+  if (safeNumber(summaryBase.review_queue_count, 0) > 0) items.push({ title: 'Clear review queue', detail: `${summaryBase.review_queue_count} listing${summaryBase.review_queue_count === 1 ? '' : 's'} need review today.` });
+  if (safeNumber(summaryBase.weak_listings, 0) > 0) items.push({ title: 'Work weak listings', detail: `${summaryBase.weak_listings} weak listing${summaryBase.weak_listings === 1 ? '' : 's'} need attention.` });
+  if (managerMetrics.view_to_message_rate < 8 && managerMetrics.total_views >= 10) items.push({ title: 'Improve conversion', detail: `Views-to-messages conversion is ${managerMetrics.view_to_message_rate}%. Review titles, CTA, and pricing.` });
+  const topMake = segments.make?.[0];
+  if (topMake) items.push({ title: 'Top segment today', detail: `${topMake.key} leads with ${topMake.views} views and ${topMake.messages} messages.` });
+  if ((queues.promote_today || []).length) items.push({ title: 'Promote aging units', detail: `${queues.promote_today.length} listing${queues.promote_today.length === 1 ? '' : 's'} should be boosted or reposted.` });
+  return items.slice(0,5);
+}
+
 export default async function handler(req, res) {
   res.setHeader("Content-Type", "application/json");
 
@@ -603,12 +727,20 @@ export default async function handler(req, res) {
         source_url: row.source_url || "",
         stock_number: row.stock_number || "",
         vin: row.vin || "",
+        make: row.make || "",
+        body_style: row.body_style || row.vehicle_type || "",
         health_score: health.score,
         health_label: health.label,
         age_days: health.age_days,
         recommended_action: recommendListingAction(row)
       };
     });
+
+    const managerSummary = buildManagerMetrics(rows, { ...computed, posts_today: usageToday });
+    const segmentPerformance = buildSegmentPerformance(rows);
+    const dailyOpsQueues = buildDailyOpsQueues(rows);
+    const salespersonLeaderboard = buildSalespersonLeaderboard(finalEmail, { ...computed, posts_today: usageToday });
+    const managerRecommendations = buildManagerRecommendations({ ...computed, posts_today: usageToday }, managerSummary, segmentPerformance, dailyOpsQueues);
 
     return res.status(200).json({
       success: true,
@@ -634,8 +766,15 @@ export default async function handler(req, res) {
           price_changes: computed.review_price_change_count,
           review_new: computed.review_new_count,
           weak_listings: computed.weak_listings,
-          needs_action: computed.needs_action_count
+          needs_action: computed.needs_action_count,
+          repost_today: dailyOpsQueues.repost_today.length,
+          promote_today: dailyOpsQueues.promote_today.length
         },
+        manager_summary: managerSummary,
+        segment_performance: segmentPerformance,
+        daily_ops_queues: dailyOpsQueues,
+        salesperson_leaderboard: salespersonLeaderboard,
+        manager_recommendations: managerRecommendations,
         lifecycle_updated_at: clean(snapshot.lifecycle_updated_at || ""),
         top_listing_title: clean(computed.top_listing_title || "None yet"),
         total_listings: computed.total_listings,
