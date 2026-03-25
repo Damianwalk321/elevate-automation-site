@@ -221,44 +221,48 @@ function buildListingRow(payload, resolved) {
   };
 }
 
+function normalizeListingUrl(value) {
+  const raw = clean(value);
+  if (!raw) return "";
+  try {
+    const url = new URL(raw);
+    ["fbclid", "utm_source", "utm_medium", "utm_campaign", "utm_term", "utm_content", "ref", "tracking", "tracking_id"].forEach((key) => url.searchParams.delete(key));
+    return `${url.origin}${url.pathname.replace(/\/$/, "")}${url.search ? `?${url.searchParams.toString()}` : ""}`.toLowerCase();
+  } catch {
+    return raw.replace(/[?#].*$/, "").replace(/\/$/, "").toLowerCase();
+  }
+}
 async function findExistingListing(supabase, resolved, listingRow, payload = {}) {
-  const listingId = clean(listingRow?.id || "");
+  const listingId = clean(listingRow?.id || payload.id || "");
   if (listingId) {
-    const { data, error } = await supabase
-      .from("user_listings")
-      .select("*")
-      .eq("id", listingId)
-      .maybeSingle();
-
+    const { data, error } = await supabase.from("user_listings").select("*").eq("id", listingId).maybeSingle();
     if (error) throw error;
     if (data) return data;
   }
 
-  const marketplaceListingId = clean(payload.marketplace_listing_id || "");
-  if (marketplaceListingId) {
-    const { data, error } = await supabase
-      .from("user_listings")
-      .select("*")
-      .eq("marketplace_listing_id", marketplaceListingId)
-      .maybeSingle();
+  const normalizedEmail = lower(resolved.email);
+  const identityCandidates = [
+    { column: "marketplace_listing_id", value: clean(payload.marketplace_listing_id || payload.listing_id || "") },
+    { column: "vin", value: clean(payload.vin || "") },
+    { column: "stock_number", value: clean(payload.stock_number || payload.stock || "") },
+    { column: "source_url", value: normalizeListingUrl(payload.source_url || "") }
+  ].filter((entry) => clean(entry.value));
 
+  for (const candidate of identityCandidates) {
+    let query = supabase.from("user_listings").select("*").eq(candidate.column, candidate.value).order("updated_at", { ascending: false }).limit(5);
+    const { data, error } = await query;
     if (error) throw error;
-    if (data) return data;
-  }
-
-  const vin = clean(payload.vin || "");
-  if (vin && clean(resolved.user_id)) {
-    const { data, error } = await supabase
-      .from("user_listings")
-      .select("*")
-      .eq("user_id", clean(resolved.user_id))
-      .eq("vin", vin)
-      .order("updated_at", { ascending: false })
-      .limit(1)
-      .maybeSingle();
-
-    if (error) throw error;
-    if (data) return data;
+    if (Array.isArray(data) && data.length) {
+      if (normalizedEmail) {
+        const emailMatch = data.find((row) => lower(row.email || "") === normalizedEmail);
+        if (emailMatch) return emailMatch;
+      }
+      if (clean(resolved.user_id)) {
+        const userMatch = data.find((row) => clean(row.user_id || "") === clean(resolved.user_id));
+        if (userMatch) return userMatch;
+      }
+      return data[0];
+    }
   }
 
   return null;
