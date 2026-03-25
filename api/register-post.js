@@ -31,31 +31,26 @@ function nowIso() {
   return new Date().toISOString();
 }
 
+const BUSINESS_TIMEZONE = "America/Edmonton";
 
-const BUSINESS_TIME_ZONE = 'America/Edmonton';
-
-function getBusinessDateParts(date = new Date()) {
-  const parts = new Intl.DateTimeFormat('en-CA', {
-    timeZone: BUSINESS_TIME_ZONE,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit'
-  }).formatToParts(date instanceof Date ? date : new Date(date));
+function zonedDateParts(value = new Date(), timeZone = BUSINESS_TIMEZONE) {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit"
+  }).formatToParts(new Date(value));
   const map = Object.fromEntries(parts.map((part) => [part.type, part.value]));
-  return {
-    year: map.year || '0000',
-    month: map.month || '00',
-    day: map.day || '00'
-  };
+  return { year: map.year || "0000", month: map.month || "00", day: map.day || "00" };
 }
 
 function dayKey() {
-  const { year, month, day } = getBusinessDateParts();
+  const { year, month, day } = zonedDateParts();
   return `${year}-${month}-${day}`;
 }
 
 function monthKey() {
-  const { year, month } = getBusinessDateParts();
+  const { year, month } = zonedDateParts();
   return `${year}-${month}`;
 }
 
@@ -315,7 +310,7 @@ async function upsertPostingUsage(supabase, resolved) {
     const { data, error } = await supabase
       .from("posting_usage")
       .select("*")
-      .eq("user_id", clean(resolved.user_id))
+      .ilike("email", lower(resolved.email))
       .eq("date_key", today)
       .maybeSingle();
 
