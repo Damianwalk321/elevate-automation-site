@@ -36,8 +36,6 @@ const ALLOWED_ACTIONS = new Set([
   "listing_status_updated",
   "listing_viewed",
   "listing_message",
-  "message_logged",
-  "message_thread_opened",
   "listing_card_opened",
   "listing_view_sync",
   "listing_view_sync_v2"
@@ -45,25 +43,44 @@ const ALLOWED_ACTIONS = new Set([
 
 
 
+function normalizeListingUrl(value) {
+  const raw = clean(value);
+  if (!raw) return "";
+  try {
+    const url = new URL(raw);
+    ["fbclid", "utm_source", "utm_medium", "utm_campaign", "utm_term", "utm_content", "ref", "tracking", "tracking_id"].forEach((key) => url.searchParams.delete(key));
+    return `${url.origin}${url.pathname.replace(/\/$/, "")}${url.search ? `?${url.searchParams.toString()}` : ""}`.toLowerCase();
+  } catch {
+    return raw.replace(/[?#].*$/, "").replace(/\/$/, "").toLowerCase();
+  }
+}
+async function maybeFindListingBy(column, value, email) {
+  const cleaned = clean(value);
+  if (!cleaned) return "";
+  let query = supabase.from("user_listings").select("id,email").eq(column, cleaned).order("updated_at", { ascending: false }).limit(5);
+  const { data } = await query;
+  if (!Array.isArray(data) || !data.length) return "";
+  if (email) {
+    const preferred = data.find((row) => normalizeEmail(row.email || "") === email);
+    if (preferred?.id) return preferred.id;
+  }
+  return data[0]?.id || "";
+}
 async function resolveListingId(payload) {
   const directId = clean(payload.listing_id || payload.listingId || "");
   if (directId) return directId;
-  const marketplaceId = clean(payload.metadata?.marketplace_listing_id || payload.marketplace_listing_id || "");
-  const sourceUrl = clean(payload.metadata?.source_url || payload.source_url || "");
   const email = normalizeEmail(payload.email || "");
-  if (marketplaceId) {
-    let query = supabase.from("user_listings").select("id").eq("marketplace_listing_id", marketplaceId).limit(1).maybeSingle();
-    if (email) query = query.ilike("email", email);
-    const { data } = await query;
-    if (data?.id) return data.id;
-  }
-  if (sourceUrl) {
-    let query = supabase.from("user_listings").select("id").eq("source_url", sourceUrl).limit(1).maybeSingle();
-    if (email) query = query.ilike("email", email);
-    const { data } = await query;
-    if (data?.id) return data.id;
-  }
-  return "";
+  const marketplaceId = clean(payload.metadata?.marketplace_listing_id || payload.marketplace_listing_id || payload.metadata?.listing_id || "");
+  const sourceUrl = normalizeListingUrl(payload.metadata?.source_url || payload.source_url || payload.metadata?.listing_url || "");
+  const vin = clean(payload.metadata?.vin || payload.vin || "");
+  const stock = clean(payload.metadata?.stock_number || payload.stock_number || payload.metadata?.stock || "");
+  return (
+    await maybeFindListingBy("marketplace_listing_id", marketplaceId, email) ||
+    await maybeFindListingBy("source_url", sourceUrl, email) ||
+    await maybeFindListingBy("vin", vin, email) ||
+    await maybeFindListingBy("stock_number", stock, email) ||
+    ""
+  );
 }
 
 async function bumpListingMetric(listingId, updates) {
@@ -140,21 +157,13 @@ export default async function handler(req, res) {
         }
       }
 
-      if (payload.action === "listing_message" || payload.action === "message_logged") {
+      if (payload.action === "listing_message") {
         try {
           const { data: row } = await supabase.from("user_listings").select("messages_count").eq("id", payload.listing_id).maybeSingle();
           const nextMessages = Number(row?.messages_count || 0) + 1;
           await bumpListingMetric(payload.listing_id, { messages_count: nextMessages, last_seen_at: nowIso() });
         } catch (metricError) {
           console.warn("listing message metric warning:", metricError);
-        }
-      }
-
-      if (payload.action === "message_thread_opened") {
-        try {
-          await bumpListingMetric(payload.listing_id, { last_seen_at: nowIso() });
-        } catch (metricError) {
-          console.warn("listing message thread metric warning:", metricError);
         }
       }
 
