@@ -124,7 +124,7 @@ async function findUser({ email, customerId, subscriptionId, userId }) {
   return null;
 }
 
-async function updateUsersTable({ userId, email, customerId, subscriptionId, priceId, planName, status }) {
+async function updateUsersTable({ userId, email, customerId, subscriptionId, priceId, planName, status, referralCode = "", referralSource = "" }) {
   const normalizedEmail = normalizeEmail(email);
   const payload = {
     stripe_customer_id: customerId || null,
@@ -132,6 +132,8 @@ async function updateUsersTable({ userId, email, customerId, subscriptionId, pri
     stripe_price_id: priceId || null,
     subscription_status: status || null,
     plan: planName || "Active Plan",
+    ...(clean(referralCode) ? { referral_code: clean(referralCode) } : {}),
+    ...(clean(referralSource) ? { referral_source: clean(referralSource) } : {}),
     updated_at: new Date().toISOString()
   };
 
@@ -242,7 +244,9 @@ async function syncBillingState({ userId, email, customerId, subscriptionId, pri
     subscriptionId,
     priceId,
     planName,
-    status
+    status,
+    referralCode,
+    referralSource
   });
 
   await upsertSubscriptionsMirror({
