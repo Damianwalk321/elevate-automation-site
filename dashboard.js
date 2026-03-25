@@ -256,18 +256,6 @@ function bindDashboardUI() {
     });
   }
 
-  const copyFirstWinPlanBtn = document.getElementById("copyFirstWinPlanBtn");
-  if (copyFirstWinPlanBtn) {
-    copyFirstWinPlanBtn.addEventListener("click", async () => {
-      try {
-        await navigator.clipboard.writeText(buildFirstWinActionPlan());
-        setBootStatus("First-win action plan copied.");
-      } catch (error) {
-        console.warn("copy first win plan warning", error);
-      }
-    });
-  }
-
   const openMarketplaceBtn = document.getElementById("openMarketplaceBtn");
   if (openMarketplaceBtn) {
     openMarketplaceBtn.addEventListener("click", () => {
@@ -806,72 +794,17 @@ function mergeSummaryWithListings(summary, listings) {
     alerts: Array.isArray(summary.alerts) ? summary.alerts : [],
     scorecards: summary.scorecards || {},
     intelligence: summary.intelligence || {},
-    affiliate: summary.affiliate || {}
+    affiliate: summary.affiliate || {},
+    message_tracking: summary.message_tracking || {}
   };
 }
 
-
-function deriveFirstWinState() {
-  const summary = dashboardSummary || {};
-  const firstWin = summary.first_win || {};
-  const postsToday = numberOrZero(firstWin.posts_today ?? summary.posts_today);
-  const totalViews = numberOrZero(firstWin.total_views ?? summary.total_views);
-  const totalMessages = numberOrZero(firstWin.total_messages ?? summary.total_messages);
-  let stage = cleanText(firstWin.stage || 'setup');
-  let title = cleanText(firstWin.title || 'Start your first win');
-  let message = cleanText(firstWin.message || 'Complete setup and publish your first listing so the platform can start generating traction.');
-  let nextAction = cleanText(firstWin.next_action || 'Complete profile setup and post your first listing.');
-  let momentum = numberOrZero(firstWin.momentum_score);
-
-  if (!momentum) {
-    if (totalMessages > 0) momentum = 100;
-    else if (totalViews > 0) momentum = 65;
-    else if (postsToday > 0 || numberOrZero(summary.active_listings) > 0) momentum = 35;
-    else momentum = 5;
-  }
-
-  if (!stage || stage === 'setup') {
-    if (totalMessages > 0) stage = 'message';
-    else if (totalViews > 0) stage = 'views';
-    else if (postsToday > 0 || numberOrZero(summary.active_listings) > 0) stage = 'posted';
-    else stage = 'setup';
-  }
-
-  return { stage, title, message, next_action: nextAction, momentum_score: momentum, posts_today: postsToday, total_views: totalViews, total_messages: totalMessages };
-}
-
-function buildFirstWinActionPlan() {
-  const firstWin = deriveFirstWinState();
-  const lines = [
-    `First Win Stage: ${firstWin.title}`,
-    '',
-    firstWin.message,
-    '',
-    `Next best action: ${firstWin.next_action}`,
-    `Momentum: ${firstWin.momentum_score}%`,
-    `Posts Today: ${firstWin.posts_today}`,
-    `Views: ${firstWin.total_views}`,
-    `Messages: ${firstWin.total_messages}`
-  ];
-  return lines.join('\n');
-}
-
-function renderFirstWinPanel() {
-  const firstWin = deriveFirstWinState();
-  setTextByIdForAll('firstWinTitle', firstWin.title || 'First Win');
-  setTextByIdForAll('firstWinMomentum', `${numberOrZero(firstWin.momentum_score)}%`);
-  const msg = document.getElementById('firstWinMessage');
-  if (msg) msg.innerHTML = `<div>${escapeHtml(firstWin.message || '')}</div>`;
-  const next = document.getElementById('firstWinNextAction');
-  if (next) next.innerHTML = `<div>${escapeHtml(firstWin.next_action || '')}</div>`;
-  const progress = document.getElementById('firstWinProgress');
-  if (progress) {
-    const status = [];
-    if (numberOrZero(firstWin.posts_today) > 0) status.push('First post complete');
-    if (numberOrZero(firstWin.total_views) > 0) status.push('First views captured');
-    if (numberOrZero(firstWin.total_messages) > 0) status.push('First buyer message captured');
-    progress.textContent = status.length ? status.join(' • ') : 'No traction milestones yet — get your first listing live.';
-  }
+function buildMessageConfidenceText(messageTracking = {}) {
+  const confidence = clean(messageTracking?.confidence || '').toLowerCase();
+  if (confidence === 'high') return '• direct';
+  if (confidence === 'medium') return '• hybrid';
+  if (confidence === 'estimated') return '• assisted';
+  return '';
 }
 
 function renderDashboardAnalytics() {
@@ -880,6 +813,7 @@ function renderDashboardAnalytics() {
   setTextByIdForAll("kpiActiveListings", String(numberOrZero(dashboardSummary?.active_listings)));
   setTextByIdForAll("kpiViews", String(numberOrZero(dashboardSummary?.total_views)));
   setTextByIdForAll("kpiMessages", String(numberOrZero(dashboardSummary?.total_messages)));
+  setTextByIdForAll("kpiMessagesConfidence", buildMessageConfidenceText(dashboardSummary?.message_tracking));
   setTextByIdForAll("kpiPostsRemaining", String(numberOrZero(currentNormalizedSession?.subscription?.posts_remaining ?? dashboardSummary?.account_snapshot?.posts_remaining)));
   setTextByIdForAll("kpiDailyLimit", String(numberOrZero(currentNormalizedSession?.subscription?.posting_limit ?? dashboardSummary?.account_snapshot?.posting_limit)));
 
@@ -898,7 +832,6 @@ function renderDashboardAnalytics() {
   renderScorecards();
   renderIntelligencePanels();
   renderAffiliateCenter();
-  renderFirstWinPanel();
   renderTopListings(dashboardListings);
   renderRecentActivity(dashboardListings);
   drawActivityChart(buildChartSeries());
@@ -2127,6 +2060,7 @@ function renderExtensionControl(session, profile) {
   setTextByIdForAll("extensionCommittedRows", String(numberOrZero(dashboardSummary?.ingest_debug?.listing_rows_found)));
   setTextByIdForAll("extensionViewsTracked", String(numberOrZero(dashboardSummary?.total_views)));
   setTextByIdForAll("extensionMessagesTracked", String(numberOrZero(dashboardSummary?.total_messages)));
+  setTextByIdForAll("extensionMessagesConfidence", buildMessageConfidenceText(dashboardSummary?.message_tracking));
   setTextByIdForAll("extensionReviewQueue", String(numberOrZero(dashboardSummary?.review_queue_count)));
   setTextByIdForAll("extensionStaleListings", String(numberOrZero(dashboardSummary?.stale_listings)));
 
