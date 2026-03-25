@@ -2,7 +2,7 @@
 
 function getQueryParam(name) {
   const params = new URLSearchParams(window.location.search);
-  return params.get(name);
+  return params.get(name) || params.get(name.replace(/_/g, "-")) || params.get(name.replace(/-/g, "_"));
 }
 
 
@@ -52,7 +52,7 @@ function showReferralBanner(refCode, source = "direct") {
 }
 
 function loadStoredReferralCode() {
-  const queryRef = normalizeReferralCode(getQueryParam("ref"));
+  const queryRef = normalizeReferralCode(getQueryParam("ref") || getQueryParam("referral_code") || getQueryParam("affiliate") || getQueryParam("code"));
   const stored = getStoredReferralData();
 
   if (queryRef) {
@@ -115,6 +115,8 @@ async function startCheckout(planType, userType, accessType) {
     }
 
     showCheckoutMessage("Redirecting to secure checkout...");
+
+  const lockedReferral = getStoredReferralData();
 
     const response = await fetch("/api/create-checkout-session", {
       method: "POST",
