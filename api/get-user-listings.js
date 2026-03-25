@@ -229,6 +229,8 @@ function matchesFilter(row, { status, lifecycleStatus, reviewBucket, search, pre
     const health = calculateHealthScore(row);
     if (preset === "weak" && !["Weak", "Needs Action"].includes(health.label)) return false;
     if (preset === "needs_action" && health.label !== "Needs Action" && !["review_delete","review_price_update","review_new"].includes(normalizedLifecycle)) return false;
+    if (preset === "likely_sold" && !(safeNumber(row.views_count,0) >= 12 && safeNumber(row.messages_count,0) === 0)) return false;
+    if (preset === "promote" && !(health.age_days >= 7 && safeNumber(row.views_count,0) < 5)) return false;
   }
 
   if (search) {
