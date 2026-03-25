@@ -38,6 +38,12 @@ function monthKey() {
   return nowIso().slice(0, 7);
 }
 
+const TEST_LIMIT_25_EMAILS = new Set(['damian044@icloud.com']);
+
+function hasTestingLimitOverride(email) {
+  return TEST_LIMIT_25_EMAILS.has(lower(email));
+}
+
 function normalizePlan(planValue) {
   const plan = lower(planValue);
   if (!plan || plan === "no plan") return "founder beta";
@@ -167,7 +173,7 @@ function buildListingRow(payload, resolved) {
   return {
     id: listingId,
     user_id: clean(resolved.user_id),
-    email: lower(payload.email || resolved.email),
+    email: lower(resolved.email || payload.email),
     dealership_id: clean(payload.dealership_id),
     marketplace_listing_id: clean(payload.marketplace_listing_id),
     vin: clean(payload.vin),
@@ -267,19 +273,21 @@ async function upsertPostingUsage(supabase, resolved) {
 
   let existing = null;
 
-  if (clean(resolved.user_id)) {
+  if (lower(resolved.email)) {
     const { data, error } = await supabase
       .from("posting_usage")
       .select("*")
-      .eq("user_id", clean(resolved.user_id))
+      .ilike("email", lower(resolved.email))
       .eq("date_key", today)
+      .order("updated_at", { ascending: false })
+      .limit(1)
       .maybeSingle();
 
     if (error) throw error;
     existing = data || null;
   }
 
-  if (!existing && lower(resolved.email)) {
+  if (!existing && clean(resolved.user_id)) {
     const { data, error } = await supabase
       .from("posting_usage")
       .select("*")
@@ -343,7 +351,9 @@ async function syncSubscriptionSnapshot(supabase, resolved, postsUsedToday) {
 
   const normalizedPlan = normalizePlan(subscription.plan_type || subscription.plan_name || subscription.plan || subscription.account_snapshot?.plan);
   const formattedPlan = formatPlanLabel(normalizedPlan);
-  const postingLimit = numberOrZero(subscription.daily_posting_limit || subscription.posting_limit || subscription.account_snapshot?.posting_limit) || inferPostingLimit(normalizedPlan);
+  const postingLimit = hasTestingLimitOverride(resolved.email)
+    ? 25
+    : (numberOrZero(subscription.daily_posting_limit || subscription.posting_limit || subscription.account_snapshot?.posting_limit) || inferPostingLimit(normalizedPlan));
   const normalizedStatus = normalizeStatus(subscription.subscription_status || subscription.status || subscription.billing_status || subscription.account_snapshot?.status || "inactive");
   const active = Boolean(subscription.active || subscription.access || subscription.account_snapshot?.active || statusIsActive(normalizedStatus));
   const postsRemaining = Math.max((active ? postingLimit : 0) - integerOrZero(postsUsedToday), 0);
