@@ -144,14 +144,27 @@ function sortRows(rows, sort) {
 }
 
 async function fetchTableRows(tableName, finalUserId, finalEmail) {
-  let query = supabase.from(tableName).select("*");
+  const rows = [];
+  const seen = new Set();
 
-  if (finalUserId) query = query.eq("user_id", finalUserId);
-  else query = query.ilike("email", finalEmail);
+  async function runQuery(mode) {
+    let query = supabase.from(tableName).select("*");
+    if (mode === "user" && finalUserId) query = query.eq("user_id", finalUserId);
+    if (mode === "email" && finalEmail) query = query.ilike("email", finalEmail);
 
-  const { data, error } = await query;
-  if (error) throw error;
-  return Array.isArray(data) ? data : [];
+    const { data, error } = await query;
+    if (error) throw error;
+    for (const row of Array.isArray(data) ? data : []) {
+      const key = clean(row?.id || "") || clean(row?.marketplace_listing_id || "") || clean(row?.vin || "") || clean(row?.stock_number || "") || `${clean(row?.email || "")}|${clean(row?.title || "")}|${clean(row?.posted_at || row?.created_at || "")}`;
+      if (!key || seen.has(key)) continue;
+      seen.add(key);
+      rows.push(row);
+    }
+  }
+
+  if (finalUserId) await runQuery("user");
+  if (finalEmail) await runQuery("email");
+  return rows;
 }
 
 function matchesFilter(row, { status, lifecycleStatus, reviewBucket, search }) {
