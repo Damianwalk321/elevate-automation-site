@@ -17,6 +17,7 @@ let currentNormalizedSession = null;
 let dashboardSummary = null;
 let dashboardListings = [];
 let filteredListings = [];
+let listingQuickFilter = "all";
 
 document.addEventListener("DOMContentLoaded", async () => {
   try {
@@ -565,6 +566,21 @@ function applyListingFiltersAndRender() {
 
   let rows = [...dashboardListings];
 
+  if (listingQuickFilter !== "all") {
+    rows = rows.filter((item) => {
+      const lifecycle = clean((item.lifecycle_status || "").toLowerCase());
+      const bucket = clean((item.review_bucket || "").toLowerCase()).replace(/[\s_-]+/g, "");
+      const status = clean((item.status || "").toLowerCase());
+
+      if (listingQuickFilter === "review") return ["review_delete", "review_price_update", "review_new"].includes(lifecycle) || ["removedvehicles", "pricechanges", "newvehicles"].includes(bucket);
+      if (listingQuickFilter === "stale") return lifecycle === "stale" || status === "stale" || lifecycle === "review_delete" || bucket === "removedvehicles";
+      if (listingQuickFilter === "price") return lifecycle === "review_price_update" || bucket === "pricechanges";
+      if (listingQuickFilter === "new") return lifecycle === "review_new" || bucket === "newvehicles";
+      if (listingQuickFilter === "active") return !["sold", "deleted", "inactive", "stale"].includes(status) && lifecycle !== "review_delete";
+      return true;
+    });
+  }
+
   if (searchTerm) {
     rows = rows.filter((item) => {
       const haystack = [
@@ -594,6 +610,38 @@ function applyListingFiltersAndRender() {
 
   filteredListings = rows;
   renderListingsGrid(filteredListings);
+}
+
+async function logListingUsage(action, listingId, metadata = {}) {
+  try {
+    const email = clean(window.currentUser?.email || window.currentUserEmail || "").toLowerCase();
+    const userId = clean(window.currentUser?.id || window.currentUserId || "");
+    const response = await fetch("/api/log-usage", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action, listing_id: listingId, listingId, email, user_id: userId, userId, metadata })
+    });
+    return await response.json().catch(() => ({}));
+  } catch (error) {
+    console.warn("log listing usage warning", error);
+    return { success: false, error: error.message };
+  }
+}
+
+async function trackListingView(listingId) {
+  await logListingUsage("listing_viewed", listingId, { source: "dashboard_card" });
+  await refreshDashboardData?.();
+}
+
+async function trackListingMessage(listingId) {
+  await logListingUsage("listing_message", listingId, { source: "dashboard_card" });
+  await refreshDashboardData?.();
+}
+
+async function openListingSource(listingId, sourceUrl) {
+  await logListingUsage("listing_card_opened", listingId, { source: "dashboard_open_source", source_url: sourceUrl });
+  if (sourceUrl) window.open(sourceUrl, "_blank");
+  setTimeout(() => { refreshDashboardData?.(); }, 400);
 }
 
 function renderListingsGrid(listings) {
@@ -658,7 +706,7 @@ function renderListingsGrid(listings) {
             <button class="action-btn" type="button" onclick="trackListingMessage('${escapeJs(item.id)}')">Log Message</button>
             ${
               item.source_url
-                ? `<button class="action-btn" type="button" onclick="openListingSource('${escapeJs(item.id)}', '${escapeJs(item.source_url)}')">Open Source</button>`
+                ? `<button class="action-btn" type="button" onclick="openListingSource('${escapeJs(item.id)}','${escapeJs(item.source_url)}')">Open Source</button>`
                 : `<button class="action-btn" type="button" onclick="copyVehicleSummary('${escapeJs(item.id)}')">Copy Summary</button>`
             }
           </div>
@@ -1632,51 +1680,6 @@ function redirectToLogin() {
   window.location.href = "/login.html";
 }
 
-
-async function logListingUsage(action, listingId, metadata = {}) {
-  try {
-    if (!currentUser?.email || !listingId) return null;
-    const response = await fetch("/api/log-usage", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        userId: currentUser?.id || "",
-        email: currentUser?.email || "",
-        action,
-        listingId,
-        metadata
-      })
-    });
-
-    const result = await response.json().catch(() => ({}));
-    if (!response.ok) throw new Error(result?.error || `Usage log failed (${response.status})`);
-    await loadListingDashboardData(true);
-    return result;
-  } catch (error) {
-    console.error("logListingUsage error:", error);
-    setStatus("listingGridStatus", `Tracking error: ${error.message || "Unknown error"}`);
-    return null;
-  }
-}
-
-async function trackListingView(listingId) {
-  const item = dashboardListings.find((row) => row.id === listingId);
-  const result = await logListingUsage("listing_viewed", listingId, { source_url: item?.source_url || "" });
-  if (result?.success) setStatus("listingGridStatus", "View tracked.");
-}
-
-async function trackListingMessage(listingId) {
-  const item = dashboardListings.find((row) => row.id === listingId);
-  const result = await logListingUsage("listing_message", listingId, { source_url: item?.source_url || "" });
-  if (result?.success) setStatus("listingGridStatus", "Message tracked.");
-}
-
-async function openListingSource(listingId, sourceUrl) {
-  const item = dashboardListings.find((row) => row.id === listingId);
-  await logListingUsage("listing_card_opened", listingId, { source_url: item?.source_url || sourceUrl || "" });
-  if (sourceUrl) window.open(sourceUrl, "_blank");
-}
-
 async function markListingSold(listingId) {
   try {
     const row = dashboardListings.find((item) => item.id === listingId);
@@ -1941,6 +1944,7 @@ function cryptoRandomFallback() {
 
 window.markListingSold = markListingSold;
 window.copyVehicleSummary = copyVehicleSummary;
+
 window.trackListingView = trackListingView;
 window.trackListingMessage = trackListingMessage;
 window.openListingSource = openListingSource;
