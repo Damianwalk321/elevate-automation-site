@@ -144,30 +144,17 @@ function sortRows(rows, sort) {
 }
 
 async function fetchTableRows(tableName, finalUserId, finalEmail) {
-  const rows = [];
-  const seen = new Set();
+  let query = supabase.from(tableName).select("*");
 
-  async function runQuery(mode) {
-    let query = supabase.from(tableName).select("*");
-    if (mode === "user" && finalUserId) query = query.eq("user_id", finalUserId);
-    if (mode === "email" && finalEmail) query = query.ilike("email", finalEmail);
+  if (finalUserId) query = query.eq("user_id", finalUserId);
+  else query = query.ilike("email", finalEmail);
 
-    const { data, error } = await query;
-    if (error) throw error;
-    for (const row of Array.isArray(data) ? data : []) {
-      const key = clean(row?.id || "") || clean(row?.marketplace_listing_id || "") || clean(row?.vin || "") || clean(row?.stock_number || "") || `${clean(row?.email || "")}|${clean(row?.title || "")}|${clean(row?.posted_at || row?.created_at || "")}`;
-      if (!key || seen.has(key)) continue;
-      seen.add(key);
-      rows.push(row);
-    }
-  }
-
-  if (finalUserId) await runQuery("user");
-  if (finalEmail) await runQuery("email");
-  return rows;
+  const { data, error } = await query;
+  if (error) throw error;
+  return Array.isArray(data) ? data : [];
 }
 
-function matchesFilter(row, { status, lifecycleStatus, reviewBucket, search }) {
+function matchesFilter(row, { status, lifecycleStatus, reviewBucket, search, preset }) {
   const normalizedStatus = normalizeStatus(row.status);
   const normalizedLifecycle = normalizeLifecycleStatus(row.lifecycle_status, row.review_bucket);
   const normalizedBucket = normalizeReviewBucket(row.review_bucket);
@@ -182,6 +169,14 @@ function matchesFilter(row, { status, lifecycleStatus, reviewBucket, search }) {
 
   if (lifecycleStatus && normalizedLifecycle !== lifecycleStatus) return false;
   if (reviewBucket && normalizedBucket !== reviewBucket) return false;
+
+  if (preset) {
+    if (preset === "review" && !["review_delete", "review_price_update", "review_new"].includes(normalizedLifecycle)) return false;
+    if (preset === "stale" && !(normalizedStatus === "stale" || normalizedLifecycle === "stale" || normalizedLifecycle === "review_delete")) return false;
+    if (preset === "price" && normalizedLifecycle !== "review_price_update" && normalizedBucket !== "pricechanges") return false;
+    if (preset === "new" && normalizedLifecycle !== "review_new" && normalizedBucket !== "newvehicles") return false;
+    if (preset === "active" && ["sold", "deleted", "inactive", "stale"].includes(normalizedStatus)) return false;
+  }
 
   if (search) {
     const haystack = [
@@ -218,6 +213,7 @@ export default async function handler(req, res) {
     const userId = clean(req.query?.userId || req.query?.user_id || "");
     const email = normalizeEmail(req.query?.email || "");
     const status = clean(req.query?.status || "").toLowerCase();
+    const preset = clean(req.query?.preset || "").toLowerCase();
     const lifecycleStatus = clean(req.query?.lifecycle_status || req.query?.lifecycleStatus || "").toLowerCase();
     const reviewBucket = normalizeReviewBucket(req.query?.review_bucket || req.query?.reviewBucket || "");
     const search = clean(req.query?.search || "").toLowerCase();
@@ -247,7 +243,7 @@ export default async function handler(req, res) {
       map.set(normalized.identity_key, preferListingRow(map.get(normalized.identity_key), normalized));
     }
 
-    let rows = [...map.values()].filter((row) => matchesFilter(row, { status, lifecycleStatus, reviewBucket, search }));
+    let rows = [...map.values()].filter((row) => matchesFilter(row, { status, lifecycleStatus, reviewBucket, search, preset }));
     rows = sortRows(rows, sort).slice(0, limit);
 
     return res.status(200).json({
