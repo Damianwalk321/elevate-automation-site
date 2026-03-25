@@ -148,6 +148,31 @@ function buildIdentityCandidates(row) {
   return candidates;
 }
 
+function identityKeyFromRow(row) {
+  const candidates = buildIdentityCandidates(row);
+  if (!candidates.length) return "";
+  const first = candidates[0];
+  return `${first.column}:${clean(first.value || "").toLowerCase()}`;
+}
+
+function dedupeIncomingRows(rows) {
+  const seen = new Map();
+  for (const raw of Array.isArray(rows) ? rows : []) {
+    const key = identityKeyFromRow(raw) || `fallback:${clean(raw.title || "")}:${clean(raw.price || "")}`;
+    const existing = seen.get(key);
+    if (!existing) {
+      seen.set(key, raw);
+      continue;
+    }
+    const existingUpdated = new Date(existing.updated_at || existing.last_seen_at || existing.posted_at || 0).getTime();
+    const incomingUpdated = new Date(raw.updated_at || raw.last_seen_at || raw.posted_at || 0).getTime();
+    if (incomingUpdated >= existingUpdated) {
+      seen.set(key, { ...existing, ...raw });
+    }
+  }
+  return Array.from(seen.values());
+}
+
 function buildListingId(row) {
   return (
     clean(row.id) ||
@@ -195,7 +220,7 @@ function buildListingRow(row, resolved, existing = null, options = {}) {
     marketplace_listing_id: clean(row.marketplace_listing_id || existing?.marketplace_listing_id),
     vin: clean(row.vin || existing?.vin),
     stock_number: clean(row.stock_number || existing?.stock_number),
-    source_url: clean(row.source_url || existing?.source_url),
+    source_url: normalizeListingUrl(row.source_url || existing?.source_url),
     image_url: clean(row.image_url || existing?.image_url),
     year: integerOrZero(row.year || existing?.year),
     make: clean(row.make || existing?.make),
@@ -212,8 +237,8 @@ function buildListingRow(row, resolved, existing = null, options = {}) {
     status: nextStatus,
     lifecycle_status: lifecycleStatus,
     review_bucket: reviewBucket,
-    views_count: integerOrZero(row.views_count ?? existing?.views_count),
-    messages_count: integerOrZero(row.messages_count ?? existing?.messages_count),
+    views_count: Math.max(integerOrZero(existing?.views_count), integerOrZero(row.views_count)),
+    messages_count: Math.max(integerOrZero(existing?.messages_count), integerOrZero(row.messages_count)),
     posted_at: postedAt,
     updated_at: nowIso(),
     last_seen_at: nowIso()
@@ -256,8 +281,11 @@ async function upsertPostingUsageFromPayload(supabase, resolved, payload) {
     user_id: clean(resolved.user_id) || null,
     email: lower(resolved.email) || null,
     date_key: today,
+    date: today,
     month_key: month,
     posts_used: postsToday,
+    posts_today: postsToday,
+    used_today: postsToday,
     updated_at: nowIso()
   };
 
@@ -375,7 +403,7 @@ export default async function handler(req, res) {
       return json(res, 400, { ok: false, error: "Missing user identity" });
     }
 
-    const listingRows = Array.isArray(payload.listings) ? payload.listings : [];
+    const listingRows = dedupeIncomingRows(Array.isArray(payload.listings) ? payload.listings : []);
     let synced = 0;
     const syncedRows = [];
 
