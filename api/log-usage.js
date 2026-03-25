@@ -151,9 +151,26 @@ export default async function handler(req, res) {
       if (payload.action === "listing_view_sync" || payload.action === "listing_view_sync_v2") {
         try {
           const incomingViews = Number(payload.metadata?.views_count ?? payload.metadata?.views ?? body.views_count ?? body.views ?? 0);
-          const { data: row } = await supabase.from("user_listings").select("views_count").eq("id", payload.listing_id).maybeSingle();
-          const nextViews = Math.max(Number(row?.views_count || 0), incomingViews);
-          await bumpListingMetric(payload.listing_id, { views_count: nextViews, last_seen_at: nowIso() });
+          let listingId = payload.listing_id;
+          let row = null;
+          if (listingId) {
+            const lookup = await supabase.from("user_listings").select("id,views_count").eq("id", listingId).maybeSingle();
+            row = lookup.data || null;
+          }
+          if (!row && payload.metadata?.marketplace_listing_id) {
+            const lookup = await supabase.from("user_listings").select("id,views_count").eq("marketplace_listing_id", String(payload.metadata.marketplace_listing_id)).order("updated_at", { ascending: false }).limit(1).maybeSingle();
+            row = lookup.data || null;
+            listingId = row?.id || listingId;
+          }
+          if (!row && payload.metadata?.source_url) {
+            const lookup = await supabase.from("user_listings").select("id,views_count").eq("source_url", String(payload.metadata.source_url)).order("updated_at", { ascending: false }).limit(1).maybeSingle();
+            row = lookup.data || null;
+            listingId = row?.id || listingId;
+          }
+          if (listingId) {
+            const nextViews = Math.max(Number(row?.views_count || 0), incomingViews);
+            await bumpListingMetric(listingId, { views_count: nextViews, last_seen_at: nowIso() });
+          }
         } catch (metricError) {
           console.warn("listing view sync metric warning:", metricError);
         }
