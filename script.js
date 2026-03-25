@@ -5,7 +5,41 @@ function getQueryParam(name) {
   return params.get(name);
 }
 
-function showReferralBanner(refCode) {
+
+function normalizeReferralCode(value) {
+  return String(value || "").trim();
+}
+
+function getStoredReferralData() {
+  try {
+    return {
+      code: normalizeReferralCode(localStorage.getItem("elevate_referral_code")),
+      source: normalizeReferralCode(localStorage.getItem("elevate_referral_source")) || "direct"
+    };
+  } catch (error) {
+    console.error("Could not read stored referral data:", error);
+    return { code: "", source: "direct" };
+  }
+}
+
+function storeReferralData(code, source = "direct") {
+  const normalizedCode = normalizeReferralCode(code);
+  if (!normalizedCode) return;
+
+  try {
+    const existing = normalizeReferralCode(localStorage.getItem("elevate_referral_code"));
+    if (existing && existing !== normalizedCode) {
+      // Lock referral once captured to avoid accidental overwrite.
+      return;
+    }
+    localStorage.setItem("elevate_referral_code", normalizedCode);
+    localStorage.setItem("elevate_referral_source", normalizeReferralCode(source) || "direct");
+  } catch (error) {
+    console.error("Could not store referral data:", error);
+  }
+}
+
+function showReferralBanner(refCode, source = "direct") {
   const banner = document.getElementById("referral-banner");
   const display = document.getElementById("referral-code-display");
 
@@ -14,29 +48,23 @@ function showReferralBanner(refCode) {
   display.textContent = refCode;
   banner.classList.remove("hidden");
 
-  try {
-    localStorage.setItem("elevate_referral_code", refCode);
-  } catch (error) {
-    console.error("Could not store referral code:", error);
-  }
+  storeReferralData(refCode, source);
 }
 
 function loadStoredReferralCode() {
-  const queryRef = getQueryParam("ref");
+  const queryRef = normalizeReferralCode(getQueryParam("ref"));
+  const stored = getStoredReferralData();
 
   if (queryRef) {
-    showReferralBanner(queryRef);
-    return queryRef;
+    storeReferralData(queryRef, stored.code ? stored.source : "link");
+    const locked = getStoredReferralData();
+    showReferralBanner(locked.code, locked.source);
+    return locked.code;
   }
 
-  try {
-    const storedRef = localStorage.getItem("elevate_referral_code");
-    if (storedRef) {
-      showReferralBanner(storedRef);
-      return storedRef;
-    }
-  } catch (error) {
-    console.error("Could not read stored referral code:", error);
+  if (stored.code) {
+    showReferralBanner(stored.code, stored.source);
+    return stored.code;
   }
 
   return null;
@@ -78,6 +106,7 @@ async function startCheckout(planType, userType, accessType) {
   try {
     const email = await getLoggedInUserEmail();
     const referralCode = loadStoredReferralCode();
+    const referralSource = getStoredReferralData().source;
 
     if (!email) {
       showCheckoutMessage("Please create an account or log in before checkout.", true);
@@ -95,6 +124,7 @@ async function startCheckout(planType, userType, accessType) {
       body: JSON.stringify({
         email,
         referralCode,
+        referralSource,
         planType,
         userType,
         accessType
