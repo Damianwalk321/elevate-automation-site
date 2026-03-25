@@ -22,6 +22,16 @@ function safeNumber(value, fallback = 0) {
 function normalizePlan(value) {
   return clean(value).toLowerCase();
 }
+function normalizeReferralSource(value) {
+  const source = clean(value).toLowerCase().replace(/[^a-z0-9_:-]+/g, "_");
+  if (!source) return "";
+  if (["ref","referral","link","direct_link"].includes(source)) return "link";
+  if (["checkout","stripe","billing"].includes(source)) return "checkout";
+  if (["signup","auth","register"].includes(source)) return "signup";
+  if (["story","ig_story","facebook_story"].includes(source)) return "story";
+  if (["dm","message","direct_message"].includes(source)) return "dm";
+  return source;
+}
 function inferPostingLimitFromPlan(planValue) {
   const plan = normalizePlan(planValue);
   if (!plan) return 5;
@@ -323,10 +333,9 @@ function estimatePlanMonthlyRevenue(planValue) {
   if (plan === 'pro' || (!plan.includes('founder') && plan.includes('pro'))) return 79;
   return 39;
 }
-
 async function getAffiliateSummary({ referralCode, referralSource, email }) {
   const code = clean(referralCode || '');
-  const ownerSource = clean(referralSource || '');
+  const ownerSource = normalizeReferralSource(referralSource || '');
   const ownerEmail = normalizeEmail(email || '');
   const base = {
     referral_code: code,
@@ -346,9 +355,10 @@ async function getAffiliateSummary({ referralCode, referralSource, email }) {
     paid_out_all_time: 0,
     conversion_rate: 0,
     active_referral_rate: 0,
-    top_source: ownerSource || 'direct',
+    top_source: ownerSource || 'link',
     last_referral_date: '',
     recent_referrals: [],
+    attribution_confidence: 'low',
     recommended_actions: [
       'Invite sales managers and top Marketplace posters first.',
       'Share your referral link in one direct DM and one story this week.'
@@ -361,7 +371,7 @@ async function getAffiliateSummary({ referralCode, referralSource, email }) {
     .select('id,user_id,email,plan,plan_name,plan_type,status,active,created_at,current_period_end,cancel_at_period_end,referral_code,referral_source,account_snapshot')
     .ilike('referral_code', code)
     .order('created_at', { ascending: false })
-    .limit(200);
+    .limit(300);
   if (error) throw error;
 
   const rows = (Array.isArray(data) ? data : []).filter((row) => normalizeEmail(row?.email) !== ownerEmail);
@@ -370,67 +380,76 @@ async function getAffiliateSummary({ referralCode, referralSource, email }) {
   let churned = 0;
   let signedUp = 0;
   let estimatedMrr = 0;
+  let commissionEarned = 0;
   const recent = [];
   const sourceCounts = new Map();
 
   for (const row of rows) {
     const snapshot = row?.account_snapshot && typeof row.account_snapshot === 'object' ? row.account_snapshot : {};
+    const createdAt = row?.created_at || snapshot.created_at || '';
     const plan = clean(row?.plan_type || row?.plan_name || row?.plan || snapshot.plan || 'Starter');
     const normalizedStatus = clean(row?.status || snapshot.status || '').toLowerCase();
-    const createdAt = row?.created_at || snapshot.created_at || '';
-    const isSignedUp = Boolean(row?.email || createdAt);
-    const isActive = Boolean(row?.active === true || snapshot.active === true || isActiveStatus(row?.status || snapshot.status));
-    const isChurned = !isActive && ['cancelled','canceled','inactive','unpaid','past_due'].includes(normalizedStatus);
-    const estimatedCommission = isActive ? estimatePlanMonthlyRevenue(plan) * 0.20 : 0;
+    const isActive = Boolean(row?.active === true || snapshot.active === true || isActiveStatus(normalizedStatus));
+    const isSignedUp = Boolean(createdAt || normalizeEmail(row?.email));
+    const isChurned = !isActive && ['canceled','cancelled','unpaid','past_due','incomplete_expired','inactive'].includes(normalizedStatus);
+    const monthlyRevenue = estimatePlanMonthlyRevenue(plan);
+    const estimatedCommission = isActive ? monthlyRevenue * 0.20 : 0;
+    const source = normalizeReferralSource(snapshot.referral_source || row?.referral_source || ownerSource || 'link') || 'link';
+
     if (isSignedUp) signedUp += 1;
     if (isActive) {
       active += 1;
       paying += 1;
       estimatedMrr += estimatedCommission;
+      commissionEarned += estimatedCommission;
     } else if (isChurned) {
       churned += 1;
     }
-    const source = clean(snapshot.referral_source || row?.referral_source || ownerSource || 'direct') || 'direct';
+
     sourceCounts.set(source, (sourceCounts.get(source) || 0) + 1);
     recent.push({
       name: clean(snapshot.full_name || row?.email || '').split('@')[0],
       email: normalizeEmail(row?.email || ''),
       plan,
-      status: isActive ? 'paying' : (isSignedUp ? 'signed_up' : 'invited'),
+      status: isActive ? 'paying' : (isChurned ? 'churned' : 'signed_up'),
       created_at: createdAt,
       estimated_commission: Math.round(estimatedCommission * 100) / 100,
       source
     });
   }
 
-  recent.sort((a, b) => String(b.created_at || '').localeCompare(String(a.created_at || '')));
-  const topSource = [...sourceCounts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] || base.top_source;
-  const lastReferralDate = recent[0]?.created_at || '';
-  const conversionRate = signedUp ? Math.round((paying / signedUp) * 1000) / 10 : 0;
-  const activeReferralRate = rows.length ? Math.round((active / rows.length) * 1000) / 10 : 0;
+  const sortedSources = [...sourceCounts.entries()].sort((a, b) => b[1] - a[1]);
+  const topSource = sortedSources.length ? sortedSources[0][0] : (ownerSource || 'link');
+  const total = rows.length;
+  const conversionRate = signedUp > 0 ? Math.round((paying / signedUp) * 100) : 0;
+  const activeReferralRate = total > 0 ? Math.round((active / total) * 100) : 0;
+  const attributionConfidence = total >= 5 ? 'high' : (total >= 1 ? 'medium' : 'low');
 
   const recommended = [];
   if (!rows.length) recommended.push('Start with 10 direct outreach messages to salespeople or managers this week.');
-  if (signedUp > paying) recommended.push(`Follow up with ${signedUp - paying} signed-up referral${signedUp - paying === 1 ? '' : 's'} who have not converted to paying yet.`);
-  if (active) recommended.push('Ask active partners for one dealership or manager introduction.');
-  if (topSource) recommended.push(`Your best current referral source is ${topSource}. Double down there this week.`);
+  if (signedUp > paying) recommended.push(`Follow up with ${signedUp - paying} signed referral${signedUp - paying === 1 ? '' : 's'} who have not converted to paying yet.`);
+  if (active > 0) recommended.push('Double down on your highest-converting source and repeat that outreach pattern.');
+  if (topSource && topSource !== 'link') recommended.push(`Your top source is ${topSource}. Add that source to your next outreach push.`);
+
+  recent.sort((a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime());
 
   return {
     ...base,
-    total_referrals: rows.length,
+    total_referrals: total,
     active_referrals: active,
-    invited_referrals: rows.length,
+    invited_referrals: total,
     signed_up_referrals: signedUp,
     paying_referrals: paying,
     churned_referrals: churned,
-    commission_earned: 0,
+    commission_earned: Math.round(commissionEarned * 100) / 100,
     estimated_mrr_commission: Math.round(estimatedMrr * 100) / 100,
-    pending_payout: Math.round(estimatedMrr * 100) / 100,
+    pending_payout: Math.round(commissionEarned * 100) / 100,
     conversion_rate: conversionRate,
     active_referral_rate: activeReferralRate,
     top_source: topSource,
-    last_referral_date: lastReferralDate,
+    last_referral_date: recent[0]?.created_at || '',
     recent_referrals: recent.slice(0, 8),
+    attribution_confidence: attributionConfidence,
     recommended_actions: recommended.length ? recommended : base.recommended_actions
   };
 }
