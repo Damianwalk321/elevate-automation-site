@@ -12,6 +12,31 @@ function clean(value) {
   return String(value || "").trim();
 }
 
+async function safeUsersUpdateByIdOrEmail(basePayload, referralPayload, id, email) {
+  const payloadWithReferral = { ...basePayload, ...referralPayload };
+  const payloadBaseOnly = { ...basePayload };
+
+  const tryUpdate = async (payload) => {
+    if (id) {
+      const { error } = await supabase.from("users").update(payload).eq("id", id);
+      if (!error) return null;
+      return error;
+    }
+    if (email) {
+      const { error } = await supabase.from("users").update(payload).eq("email", email);
+      if (!error) return null;
+      return error;
+    }
+    return null;
+  };
+
+  let error = await tryUpdate(payloadWithReferral);
+  if (error && /column/i.test(error.message || "")) {
+    error = await tryUpdate(payloadBaseOnly);
+  }
+  return error;
+}
+
 export default async function handler(req, res) {
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Method not allowed" });
@@ -22,6 +47,8 @@ export default async function handler(req, res) {
     const id = clean(body.id || body.auth_user_id);
     const email = clean(body.email).toLowerCase();
     const fullName = clean(body.full_name || body.fullName || "");
+    const referralCode = clean(body.referral_code || body.referralCode || "");
+    const referralSource = clean(body.referral_source || body.referralSource || "");
     const nowIso = new Date().toISOString();
 
     if (!id || !email) {
@@ -32,26 +59,75 @@ export default async function handler(req, res) {
       });
     }
 
-    const { error: userUpsertError } = await supabase
+    const { data: existingUser } = await supabase
       .from("users")
-      .upsert(
+      .select("*")
+      .eq("id", id)
+      .maybeSingle();
+
+    const lockedReferralCode = clean(existingUser?.referral_code || "");
+    const lockedReferralSource = clean(existingUser?.referral_source || "");
+    const referralPayload = {
+      ...(lockedReferralCode ? {} : { referral_code: referralCode || null }),
+      ...(lockedReferralSource ? {} : { referral_source: referralSource || null })
+    };
+
+    if (existingUser) {
+      const updateError = await safeUsersUpdateByIdOrEmail(
         {
-          id,
           email,
-          full_name: fullName || null,
+          full_name: fullName || existingUser.full_name || null,
           updated_at: nowIso
         },
-        { onConflict: "id" }
+        referralPayload,
+        id,
+        email
       );
 
-    if (userUpsertError) {
-      console.error("sync-user users upsert error:", userUpsertError);
-      return res.status(200).json({
-        ok: false,
-        skipped: true,
-        reason: "Users upsert failed",
-        detail: userUpsertError.message
-      });
+      if (updateError) {
+        console.error("sync-user users update error:", updateError);
+        return res.status(200).json({
+          ok: false,
+          skipped: true,
+          reason: "Users update failed",
+          detail: updateError.message
+        });
+      }
+    } else {
+      let insertError = null;
+      const withReferral = {
+        id,
+        email,
+        full_name: fullName || null,
+        updated_at: nowIso,
+        ...referralPayload
+      };
+      const withoutReferral = {
+        id,
+        email,
+        full_name: fullName || null,
+        updated_at: nowIso
+      };
+
+      ({ error: insertError } = await supabase
+        .from("users")
+        .upsert(withReferral, { onConflict: "id" }));
+
+      if (insertError && /column/i.test(insertError.message || "")) {
+        ({ error: insertError } = await supabase
+          .from("users")
+          .upsert(withoutReferral, { onConflict: "id" }));
+      }
+
+      if (insertError) {
+        console.error("sync-user users upsert error:", insertError);
+        return res.status(200).json({
+          ok: false,
+          skipped: true,
+          reason: "Users upsert failed",
+          detail: insertError.message
+        });
+      }
     }
 
     const { data: existingProfile, error: profileLookupError } = await supabase
