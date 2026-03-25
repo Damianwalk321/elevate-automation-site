@@ -64,8 +64,38 @@ function listingIdentityKey(row) {
   ].filter(Boolean).join("|");
 }
 
+
+function buildListingIntelligence(row) {
+  const postedTs = row.posted_at ? new Date(row.posted_at).getTime() : 0;
+  const ageDays = postedTs > 0 ? Math.max(0, Math.floor((Date.now() - postedTs) / 86400000)) : 0;
+  const views = safeNumber(row.views_count, 0);
+  const messages = safeNumber(row.messages_count, 0);
+  const status = normalizeStatus(row.status);
+  const lifecycle = normalizeLifecycleStatus(row.lifecycle_status, row.review_bucket);
+  const reviewBucket = normalizeReviewBucket(row.review_bucket);
+  const staleLike = status === 'stale' || lifecycle === 'stale' || lifecycle === 'review_delete' || reviewBucket === 'removedvehicles';
+  const likelySold = lifecycle === 'review_delete' || reviewBucket === 'removedvehicles';
+  const promoteNow = !['sold', 'deleted', 'inactive'].includes(status) && views >= 20 && messages >= 1;
+  const lowPerformance = !['sold', 'deleted', 'inactive'].includes(status) && ageDays >= 7 && views < 5 && messages === 0;
+  const weak = staleLike || lowPerformance;
+  const needsAction = staleLike || lowPerformance || (views >= 20 && messages === 0) || lifecycle === 'review_price_update' || reviewBucket === 'pricechanges';
+  let healthScore = 100 - Math.min(ageDays * 2, 30) + Math.min(messages * 12, 36) + Math.min(views, 20);
+  if (staleLike) healthScore -= 35;
+  if (lowPerformance) healthScore -= 20;
+  healthScore = Math.max(0, Math.min(100, Math.round(healthScore)));
+  const healthLabel = promoteNow ? 'High Performer' : (needsAction ? 'Needs Action' : (weak ? 'Weak' : 'Healthy'));
+  let recommendedAction = 'Keep live';
+  if (likelySold) recommendedAction = 'Check if sold or stale';
+  else if (lifecycle === 'review_price_update' || reviewBucket === 'pricechanges' || (views >= 20 && messages === 0)) recommendedAction = 'Review price';
+  else if (lifecycle === 'review_new' || reviewBucket === 'newvehicles') recommendedAction = 'Review new listing';
+  else if (lowPerformance) recommendedAction = 'Refresh title/photos';
+  else if (promoteNow) recommendedAction = 'Promote now';
+  return { age_days: ageDays, likely_sold: likelySold, promote_now: promoteNow, weak, needs_action: needsAction, health_score: healthScore, health_label: healthLabel, recommended_action: recommendedAction };
+}
+
 function normalizeListingRow(row = {}, source = "user_listings") {
   const reviewBucket = normalizeReviewBucket(row.review_bucket);
+  const intelligence = buildListingIntelligence({ ...row, posted_at: row.posted_at || row.created_at || null });
   return {
     ...row,
     source_table: source,
@@ -78,7 +108,8 @@ function normalizeListingRow(row = {}, source = "user_listings") {
     views_count: safeNumber(row.views_count, 0),
     messages_count: safeNumber(row.messages_count, 0),
     posted_at: row.posted_at || row.created_at || null,
-    updated_at: row.updated_at || row.created_at || null
+    updated_at: row.updated_at || row.created_at || null,
+    ...intelligence
   };
 }
 
@@ -124,44 +155,6 @@ async function resolveUser({ userId, email }) {
   }
 
   return null;
-}
-
-
-function calculateHealthScore(row = {}) {
-  const views = safeNumber(row.views_count, 0);
-  const messages = safeNumber(row.messages_count, 0);
-  const postedAt = row.posted_at || row.created_at || row.updated_at || null;
-  const ageDays = postedAt ? Math.max(0, Math.floor((Date.now() - new Date(postedAt).getTime()) / 86400000)) : 0;
-  const lifecycle = clean(row.lifecycle_status || '').toLowerCase();
-  const status = clean(row.status || '').toLowerCase();
-  let score = 50 + Math.min(views, 50) + Math.min(messages * 12, 60) - Math.min(ageDays * 2, 35);
-  if (["stale", "review_delete", "review_price_update", "review_new"].includes(lifecycle)) score -= 25;
-  if (["sold", "deleted", "inactive"].includes(status)) score -= 20;
-  if (views >= 10 && messages === 0) score -= 10;
-  score = Math.max(0, Math.min(100, score));
-  let label = 'Healthy';
-  if (score >= 85) label = 'High Performer';
-  else if (score >= 60) label = 'Healthy';
-  else if (score >= 35) label = 'Watch';
-  else if (score >= 15) label = 'Weak';
-  else label = 'Needs Action';
-  return { score, label, age_days: ageDays };
-}
-
-function recommendListingAction(row = {}) {
-  const views = safeNumber(row.views_count, 0);
-  const messages = safeNumber(row.messages_count, 0);
-  const postedAt = row.posted_at || row.created_at || row.updated_at || null;
-  const ageDays = postedAt ? Math.max(0, Math.floor((Date.now() - new Date(postedAt).getTime()) / 86400000)) : 0;
-  const lifecycle = clean(row.lifecycle_status || '').toLowerCase();
-  const status = clean(row.status || '').toLowerCase();
-  if (lifecycle === 'review_price_update') return 'Review price';
-  if (lifecycle === 'review_delete' || status === 'stale') return 'Check if sold or stale';
-  if (lifecycle === 'review_new') return 'Review new listing';
-  if (views >= 15 && messages === 0) return 'Refresh title/photos';
-  if (ageDays >= 7 && views < 5) return 'Promote now';
-  if (messages >= 3) return 'Keep live';
-  return 'Monitor performance';
 }
 
 function sortRows(rows, sort) {
@@ -226,11 +219,10 @@ function matchesFilter(row, { status, lifecycleStatus, reviewBucket, search, pre
     if (preset === "price" && normalizedLifecycle !== "review_price_update" && normalizedBucket !== "pricechanges") return false;
     if (preset === "new" && normalizedLifecycle !== "review_new" && normalizedBucket !== "newvehicles") return false;
     if (preset === "active" && ["sold", "deleted", "inactive", "stale"].includes(normalizedStatus)) return false;
-    const health = calculateHealthScore(row);
-    if (preset === "weak" && !["Weak", "Needs Action"].includes(health.label)) return false;
-    if (preset === "needs_action" && health.label !== "Needs Action" && !["review_delete","review_price_update","review_new"].includes(normalizedLifecycle)) return false;
-    if (preset === "likely_sold" && !(safeNumber(row.views_count,0) >= 12 && safeNumber(row.messages_count,0) === 0)) return false;
-    if (preset === "promote" && !(health.age_days >= 7 && safeNumber(row.views_count,0) < 5)) return false;
+    if (preset === "promote" && !row.promote_now) return false;
+    if (preset === "likely_sold" && !row.likely_sold) return false;
+    if (preset === "weak" && !row.weak) return false;
+    if (preset === "needs_action" && !row.needs_action) return false;
   }
 
   if (search) {
@@ -298,16 +290,7 @@ export default async function handler(req, res) {
       map.set(normalized.identity_key, preferListingRow(map.get(normalized.identity_key), normalized));
     }
 
-    let rows = [...map.values()].map((row) => {
-      const health = calculateHealthScore(row);
-      return {
-        ...row,
-        health_score: health.score,
-        health_label: health.label,
-        age_days: health.age_days,
-        recommended_action: recommendListingAction(row)
-      };
-    }).filter((row) => matchesFilter(row, { status, lifecycleStatus, reviewBucket, search, preset }));
+    let rows = [...map.values()].filter((row) => matchesFilter(row, { status, lifecycleStatus, reviewBucket, search, preset }));
     rows = sortRows(rows, sort).slice(0, limit);
 
     return res.status(200).json({
