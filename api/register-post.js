@@ -1,3 +1,4 @@
+
 import { createClient } from "@supabase/supabase-js";
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
@@ -198,7 +199,10 @@ function buildListingRow(payload, resolved) {
     views_count: integerOrZero(payload.views_count),
     messages_count: integerOrZero(payload.messages_count),
     posted_at: clean(payload.posted_at) || timestamp,
-    updated_at: timestamp
+    updated_at: timestamp,
+    last_seen_at: timestamp,
+    views_count: integerOrZero(payload.views_count ?? payload.views ?? 0),
+    messages_count: integerOrZero(payload.messages_count ?? payload.messages ?? 0)
   };
 }
 
@@ -335,6 +339,16 @@ async function upsertPostingUsage(supabase, resolved) {
   return { ok: true, posts_used: nextPostsUsed };
 }
 
+
+async function mirrorListingToLegacyTable(supabase, listingRow) {
+  const legacyRow = { ...listingRow };
+  const { error } = await supabase
+    .from("listings")
+    .upsert(legacyRow, { onConflict: "id" });
+
+  if (error) throw error;
+}
+
 async function syncSubscriptionSnapshot(supabase, resolved, postsUsedToday) {
   if (!clean(resolved.user_id)) return { ok: false, reason: "missing_user_id" };
 
@@ -355,7 +369,7 @@ async function syncSubscriptionSnapshot(supabase, resolved, postsUsedToday) {
     ? 25
     : (numberOrZero(subscription.daily_posting_limit || subscription.posting_limit || subscription.account_snapshot?.posting_limit) || inferPostingLimit(normalizedPlan));
   const normalizedStatus = normalizeStatus(subscription.subscription_status || subscription.status || subscription.billing_status || subscription.account_snapshot?.status || "inactive");
-  const active = Boolean(subscription.active || subscription.access || subscription.account_snapshot?.active || statusIsActive(normalizedStatus));
+  const active = Boolean(hasTestingLimitOverride(resolved.email) || subscription.active || subscription.access || subscription.account_snapshot?.active || statusIsActive(normalizedStatus));
   const postsRemaining = Math.max((active ? postingLimit : 0) - integerOrZero(postsUsedToday), 0);
 
   const nextSnapshot = {
@@ -427,6 +441,8 @@ export default async function handler(req, res) {
       .upsert(listingRow, { onConflict: "id" });
 
     if (userListingsError) throw userListingsError;
+
+    await mirrorListingToLegacyTable(supabase, listingRow);
 
     let usageResult = null;
 
