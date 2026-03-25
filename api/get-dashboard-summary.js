@@ -18,50 +18,40 @@ function safeNumber(value, fallback = 0) {
   return Number.isFinite(n) ? n : fallback;
 }
 
+const BUSINESS_TIMEZONE = "America/Edmonton";
 
-const BUSINESS_TIME_ZONE = 'America/Edmonton';
+function zonedDateParts(value = new Date(), timeZone = BUSINESS_TIMEZONE) {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit"
+  }).formatToParts(new Date(value));
 
-function getBusinessDateParts(date = new Date()) {
-  const parts = new Intl.DateTimeFormat('en-CA', {
-    timeZone: BUSINESS_TIME_ZONE,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit'
-  }).formatToParts(date instanceof Date ? date : new Date(date));
   const map = Object.fromEntries(parts.map((part) => [part.type, part.value]));
-  return {
-    year: map.year || '0000',
-    month: map.month || '00',
-    day: map.day || '00'
-  };
-}
-
-function businessDayKey(date = new Date()) {
-  const { year, month, day } = getBusinessDateParts(date);
-  return `${year}-${month}-${day}`;
-}
-
-function businessMonthKey(date = new Date()) {
-  const { year, month } = getBusinessDateParts(date);
-  return `${year}-${month}`;
-}
-
-function toBusinessDayKey(value) {
-  if (!value) return '';
-  const parsed = value instanceof Date ? value : new Date(value);
-  if (Number.isNaN(parsed.getTime())) return '';
-  return businessDayKey(parsed);
-}
-
-function toBusinessMonthKey(value) {
-  if (!value) return '';
-  const parsed = value instanceof Date ? value : new Date(value);
-  if (Number.isNaN(parsed.getTime())) return '';
-  return businessMonthKey(parsed);
+  return { year: map.year || "0000", month: map.month || "00", day: map.day || "00" };
 }
 
 function dayKeyNow() {
-  return businessDayKey();
+  const { year, month, day } = zonedDateParts();
+  return `${year}-${month}-${day}`;
+}
+
+function monthKeyNow() {
+  const { year, month } = zonedDateParts();
+  return `${year}-${month}`;
+}
+
+function rowDayKey(value) {
+  if (!value) return "";
+  const { year, month, day } = zonedDateParts(value);
+  return `${year}-${month}-${day}`;
+}
+
+function rowMonthKey(value) {
+  if (!value) return "";
+  const { year, month } = zonedDateParts(value);
+  return `${year}-${month}`;
 }
 
 const TEST_LIMIT_25_EMAILS = new Set([
@@ -72,13 +62,6 @@ function hasTestingLimitOverride(email) {
   return TEST_LIMIT_25_EMAILS.has(normalizeEmail(email));
 }
 
-function monthStartIso() {
-  return '';
-}
-
-function dayStartIso() {
-  return '';
-}
 
 function isActiveStatus(value) {
   const status = clean(value).toLowerCase();
@@ -220,7 +203,7 @@ function mergeListingRows(userListingRows, legacyListingRows) {
 
 function buildComputedSummary(rows) {
   const todayKey = dayKeyNow();
-  const monthKey = businessMonthKey();
+  const monthKey = monthKeyNow();
 
   let postsToday = 0;
   let postsThisMonth = 0;
@@ -233,15 +216,15 @@ function buildComputedSummary(rows) {
   let reviewNewCount = 0;
 
   for (const row of rows) {
-    const postedTime = new Date(row.posted_at || row.created_at || 0).getTime();
+    const postedAtValue = row.posted_at || row.created_at || row.updated_at || null;
+    const rowDay = rowDayKey(postedAtValue);
+    const rowMonth = rowMonthKey(postedAtValue);
     const status = normalizeStatus(row.status);
     const lifecycleStatus = normalizeLifecycleStatus(row.lifecycle_status, row.review_bucket);
     const reviewBucket = normalizeReviewBucket(row.review_bucket);
 
-    const postedDayKey = toBusinessDayKey(row.posted_at || row.created_at || '');
-    const postedMonthKey = toBusinessMonthKey(row.posted_at || row.created_at || '');
-    if (postedDayKey && postedDayKey === todayKey) postsToday += 1;
-    if (postedMonthKey && postedMonthKey === monthKey) postsThisMonth += 1;
+    if (rowDay && rowDay === todayKey) postsToday += 1;
+    if (rowMonth && rowMonth === monthKey) postsThisMonth += 1;
     if (!["sold", "deleted", "inactive", "stale"].includes(status) && lifecycleStatus !== "review_delete") activeListings += 1;
 
     totalViews += safeNumber(row.views_count, 0);
@@ -411,26 +394,14 @@ async function getProfileRow(finalUserId, finalEmail) {
 }
 
 async function getTableListingRows(tableName, finalUserId, finalEmail) {
-  const rows = [];
-  const seen = new Set();
+  let query = supabase.from(tableName).select("*").order("posted_at", { ascending: false });
 
-  async function runQuery(mode) {
-    let query = supabase.from(tableName).select('*').order('posted_at', { ascending: false });
-    if (mode === 'user' && finalUserId) query = query.eq('user_id', finalUserId);
-    if (mode === 'email' && finalEmail) query = query.ilike('email', finalEmail);
-    const { data, error } = await query;
-    if (error) throw error;
-    for (const row of Array.isArray(data) ? data : []) {
-      const key = clean(row?.id || '') || `${clean(row?.marketplace_listing_id || '')}|${clean(row?.posted_at || row?.created_at || '')}`;
-      if (!key || seen.has(key)) continue;
-      seen.add(key);
-      rows.push(row);
-    }
-  }
+  if (finalUserId) query = query.eq("user_id", finalUserId);
+  else if (finalEmail) query = query.ilike("email", finalEmail);
 
-  if (finalUserId) await runQuery('user');
-  if (finalEmail) await runQuery('email');
-  return rows;
+  const { data, error } = await query;
+  if (error) throw error;
+  return Array.isArray(data) ? data : [];
 }
 
 async function getListingRows(finalUserId, finalEmail) {
@@ -530,11 +501,9 @@ export default async function handler(req, res) {
       inferPostingLimitFromPlan(effectivePlan)
     );
 
-    const planDailyLimit = hasTestingLimitOverride(finalEmail)
+    const dailyLimit = hasTestingLimitOverride(finalEmail)
       ? 25
-      : inferPostingLimitFromPlan(effectivePlan);
-
-    const dailyLimit = Math.max(configuredDailyLimit, planDailyLimit);
+      : configuredDailyLimit;
 
     const usageToday = Math.max(
       safeNumber(postingUsageRow?.posts_today ?? postingUsageRow?.posts_used ?? postingUsageRow?.used_today, 0),
@@ -548,11 +517,10 @@ export default async function handler(req, res) {
       hasTestingLimitOverride(finalEmail) ||
       snapshot.access_granted === true ||
       snapshot.active === true ||
-      subscriptionRow?.active === true ||
-      subscriptionRow?.access === true ||
       isActiveStatus(effectiveStatus) ||
       clean(effectivePlan)
     );
+    const effectiveStatusNormalized = accessGranted ? "active" : (effectiveStatus || "inactive");
 
     const recentListings = rows.slice(0, 5).map((row) => ({
       id: row.id,
@@ -575,8 +543,6 @@ export default async function handler(req, res) {
       success: true,
       data: {
         posts_today: usageToday,
-        posts_remaining: postsRemaining,
-        daily_limit: dailyLimit,
         posts_this_month: computed.posts_this_month,
         active_listings: computed.active_listings,
         stale_listings: computed.stale_listings,
@@ -609,7 +575,7 @@ export default async function handler(req, res) {
           user_id: finalUserId,
           email: finalEmail,
           plan: effectivePlan,
-          status: accessGranted ? 'active' : effectiveStatus,
+          status: effectiveStatusNormalized,
           active: accessGranted,
           access_granted: accessGranted,
           stripe_customer_id: clean(subscriptionRow?.stripe_customer_id || user?.stripe_customer_id || ""),
