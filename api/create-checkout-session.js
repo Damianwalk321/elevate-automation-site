@@ -124,7 +124,7 @@ function getTrialEndUnix(trialUntilIso) {
   return unix;
 }
 
-async function findOrCreateCustomer({ stripeClient, email, userId }) {
+async function findOrCreateCustomer({ stripeClient, email, userId, referralCode = "", referralSource = "" }) {
   const normalizedEmail = normalizeEmail(email);
 
   const existing = await stripeClient.customers.list({
@@ -146,6 +146,12 @@ async function findOrCreateCustomer({ stripeClient, email, userId }) {
     if (normalizedEmail && !nextMetadata.email) {
       nextMetadata.email = normalizedEmail;
     }
+    if (clean(referralCode) && !nextMetadata.referral_code) {
+      nextMetadata.referral_code = clean(referralCode);
+    }
+    if (clean(referralSource) && !nextMetadata.referral_source) {
+      nextMetadata.referral_source = clean(referralSource);
+    }
 
     if (
       JSON.stringify(nextMetadata) !== JSON.stringify(customer.metadata || {})
@@ -162,7 +168,9 @@ async function findOrCreateCustomer({ stripeClient, email, userId }) {
     email: normalizedEmail,
     metadata: {
       email: normalizedEmail,
-      user_id: clean(userId || "")
+      user_id: clean(userId || ""),
+      referral_code: clean(referralCode || ""),
+      referral_source: clean(referralSource || "")
     }
   });
 }
@@ -309,7 +317,9 @@ export default async function handler(req, res) {
     const customer = await findOrCreateCustomer({
       stripeClient: stripe,
       email,
-      userId
+      userId,
+      referralCode,
+      referralSource
     });
 
     await mirrorCustomerToSupabase({
