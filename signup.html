@@ -104,7 +104,11 @@
       message.textContent = "Creating account...";
 
       try {
-        await signUpWithEmail(email, password, name);
+        const referral = {
+          referral_code: String(localStorage.getItem("elevate_referral_code") || "").trim(),
+          referral_source: String(localStorage.getItem("elevate_referral_source") || "").trim() || "direct"
+        };
+        await signUpWithEmail(email, password, name, referral);
         message.textContent = "Account created. Check your email, then log in.";
       } catch (err) {
         message.textContent = err.message || "Signup failed.";
