@@ -315,6 +315,99 @@ async function getListingRows(userId, email) {
   ]);
   return mergeListingRows(userRows, legacyRows);
 }
+
+function estimatePlanMonthlyRevenue(planValue) {
+  const plan = normalizePlan(planValue);
+  if (!plan) return 39;
+  if (plan.includes('founder') && plan.includes('pro')) return 79;
+  if (plan === 'pro' || (!plan.includes('founder') && plan.includes('pro'))) return 79;
+  return 39;
+}
+async function getAffiliateSummary({ referralCode, email }) {
+  const code = clean(referralCode || '');
+  const ownerEmail = normalizeEmail(email || '');
+  const base = {
+    referral_code: code,
+    partner_type: 'Founding Partner',
+    direct_commission_percent: 20,
+    second_level_override_percent: 5,
+    payout_status: 'Manual founder-stage payouts',
+    total_referrals: 0,
+    active_referrals: 0,
+    invited_referrals: 0,
+    signed_up_referrals: 0,
+    paying_referrals: 0,
+    churned_referrals: 0,
+    commission_earned: 0,
+    estimated_mrr_commission: 0,
+    pending_payout: 0,
+    paid_out_all_time: 0,
+    recent_referrals: [],
+    recommended_actions: [
+      'Invite sales managers and top Marketplace posters first.',
+      'Share your referral link in one direct DM and one story this week.'
+    ]
+  };
+  if (!code) return base;
+
+  const { data, error } = await supabase
+    .from('subscriptions')
+    .select('id,user_id,email,plan,plan_name,plan_type,status,active,created_at,current_period_end,cancel_at_period_end,referral_code,account_snapshot')
+    .ilike('referral_code', code)
+    .order('created_at', { ascending: false })
+    .limit(200);
+  if (error) throw error;
+
+  const rows = (Array.isArray(data) ? data : []).filter((row) => normalizeEmail(row?.email) !== ownerEmail);
+  let active = 0;
+  let paying = 0;
+  let churned = 0;
+  let estimatedMrr = 0;
+  const recent = [];
+
+  for (const row of rows) {
+    const snapshot = row?.account_snapshot && typeof row.account_snapshot === 'object' ? row.account_snapshot : {};
+    const plan = clean(row?.plan_type || row?.plan_name || row?.plan || snapshot.plan || 'Starter');
+    const isActive = Boolean(row?.active === true || snapshot.active === true || isActiveStatus(row?.status || snapshot.status));
+    const estimatedCommission = isActive ? estimatePlanMonthlyRevenue(plan) * 0.20 : 0;
+    if (isActive) {
+      active += 1;
+      paying += 1;
+      estimatedMrr += estimatedCommission;
+    } else {
+      churned += 1;
+    }
+    recent.push({
+      name: clean(snapshot.full_name || row?.email || '').split('@')[0],
+      email: normalizeEmail(row?.email || ''),
+      plan,
+      status: isActive ? 'paying' : 'signed_up',
+      created_at: row?.created_at || '',
+      estimated_commission: Math.round(estimatedCommission * 100) / 100
+    });
+  }
+
+  const recommended = [];
+  if (!rows.length) recommended.push('Start with 10 direct outreach messages to salespeople or managers this week.');
+  if (rows.length > active) recommended.push(`Follow up with ${rows.length - active} inactive referral${rows.length - active === 1 ? '' : 's'}.`);
+  if (active) recommended.push('Ask active partners for one dealership or manager introduction.');
+  if (active >= 3) recommended.push('Highlight recurring commission in your outreach to attract stronger partners.');
+
+  return {
+    ...base,
+    total_referrals: rows.length,
+    active_referrals: active,
+    invited_referrals: rows.length,
+    signed_up_referrals: rows.length,
+    paying_referrals: paying,
+    churned_referrals: churned,
+    commission_earned: 0,
+    estimated_mrr_commission: Math.round(estimatedMrr * 100) / 100,
+    pending_payout: Math.round(estimatedMrr * 100) / 100,
+    recent_referrals: recent.slice(0, 8),
+    recommended_actions: recommended.length ? recommended : base.recommended_actions
+  };
+}
 function buildSetupStatus(user, profileRow) {
   const inventoryUrl = clean(profileRow?.inventory_url || '');
   const salespersonName = clean(profileRow?.full_name || `${clean(user?.first_name)} ${clean(user?.last_name)}`.trim());
@@ -485,6 +578,8 @@ export default async function handler(req, res) {
     const segmentIntel = buildSegmentPerformance(rows);
     const alerts = buildAlerts({ ...computed, total_views: computed.total_views, total_messages: computed.total_messages });
     const scorecards = buildScorecards(computed, rows);
+    const referralCode = clean(snapshot.referral_code || subscriptionRow?.referral_code || user?.referral_code || '');
+    const affiliate = await getAffiliateSummary({ referralCode, email: finalEmail });
     const managerAccess = Boolean(snapshot.organization_role === 'admin' || snapshot.organization_role === 'manager' || snapshot.team_access === true || clean(snapshot.plan_type).toLowerCase() === 'team' || clean(snapshot.plan_type).toLowerCase() === 'dealership');
     const managerSummary = {
       live_inventory: computed.active_listings,
@@ -558,6 +653,7 @@ export default async function handler(req, res) {
         alerts,
         scorecards,
         intelligence: segmentIntel,
+        affiliate,
         daily_ops_queues: computed.action_center,
         manager_access: managerAccess,
         manager_summary: managerSummary,
