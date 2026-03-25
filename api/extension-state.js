@@ -1,10 +1,12 @@
 
+
 import { createClient } from "@supabase/supabase-js";
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const DEFAULT_MINIMUM_VERSION = process.env.EXTENSION_MINIMUM_VERSION || "7.6.0";
 const DEFAULT_LATEST_VERSION = process.env.EXTENSION_LATEST_VERSION || DEFAULT_MINIMUM_VERSION;
+const TEST_LIMIT_25_EMAILS = new Set(['damian044@icloud.com']);
 
 const supabase = createClient(
   SUPABASE_URL,
@@ -68,6 +70,10 @@ function inferPostingLimitFromPlan(value) {
   return 5;
 }
 
+function hasTestingLimitOverride(email) {
+  return TEST_LIMIT_25_EMAILS.has(normalizeEmail(email));
+}
+
 function normalizeStatusValue(value, fallback = "inactive") {
   const status = clean(value).toLowerCase();
   if (!status) return fallback;
@@ -96,6 +102,34 @@ function dealershipMatchesHostname(dealership, hostname) {
         hostname.endsWith(`.${inventoryHost}`) ||
         inventoryHost.endsWith(`.${hostname}`)))
   );
+}
+
+async function getTodayListingPostedCount(supabase, userId, email) {
+  const todayStart = new Date();
+  todayStart.setHours(0, 0, 0, 0);
+  const iso = todayStart.toISOString();
+  const finalEmail = normalizeEmail(email);
+  const finalUserId = clean(userId);
+
+  async function fetchRows(tableName) {
+    let query = supabase.from(tableName).select('id,posted_at,created_at').gte('posted_at', iso);
+    if (finalUserId) query = query.eq('user_id', finalUserId);
+    else query = query.ilike('email', finalEmail);
+    const { data, error } = await query;
+    if (error) return [];
+    return Array.isArray(data) ? data : [];
+  }
+
+  const [userRows, legacyRows] = await Promise.all([fetchRows('user_listings'), fetchRows('listings')]);
+  const seen = new Set();
+  let count = 0;
+  for (const row of [...userRows, ...legacyRows]) {
+    const key = clean(row?.id || '') || `${clean(row?.posted_at || row?.created_at || '')}`;
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    count += 1;
+  }
+  return count;
 }
 
 function buildProfilePayload(user, userProfileRow, legacyProfileRow, dealership) {
@@ -571,6 +605,15 @@ export default async function handler(req, res) {
       licenseKeyRow,
       legacyProfile
     );
+
+    const listingUsageToday = await getTodayListingPostedCount(supabase, user.id, email);
+    subscription.posts_today = Math.max(Number(subscription.posts_today || 0), Number(listingUsageToday || 0));
+    if (hasTestingLimitOverride(email)) {
+      subscription.posting_limit = 25;
+      subscription.daily_posting_limit = 25;
+      subscription.testing_limit_override = true;
+    }
+    subscription.posts_remaining = Math.max(Number(subscription.posting_limit || 0) - Number(subscription.posts_today || 0), 0);
     const scannerConfigPayload = buildScannerConfigPayload(scannerConfig, dealership || {}, legacyProfile || {});
     const allowedDealerHosts = buildAllowedDealerHosts(dealership || {});
     const minimumVersion = DEFAULT_MINIMUM_VERSION;
