@@ -996,6 +996,54 @@
           </div>
         </div>
 
+
+        <div class="grid-2">
+          <div class="card">
+            <div class="section-head">
+              <h2>Getting Started</h2>
+              <div class="subtext">Complete these steps to get your first win fast.</div>
+            </div>
+            <div class="setup-grid" id="onboardingChecklist">
+              <div class="setup-item">
+                <div class="setup-item-label">Complete profile</div>
+                <div id="onboardingStepProfile" class="setup-state warn">Checking</div>
+              </div>
+              <div class="setup-item">
+                <div class="setup-item-label">Add inventory URL</div>
+                <div id="onboardingStepInventory" class="setup-state warn">Checking</div>
+              </div>
+              <div class="setup-item">
+                <div class="setup-item-label">Run first scan</div>
+                <div id="onboardingStepScan" class="setup-state warn">Checking</div>
+              </div>
+              <div class="setup-item">
+                <div class="setup-item-label">Post first listing</div>
+                <div id="onboardingStepPost" class="setup-state warn">Checking</div>
+              </div>
+            </div>
+            <div class="action-grid" style="margin-top:14px;">
+              <button id="copyOnboardingStepsBtn" class="action-btn" type="button">Copy Onboarding Steps</button>
+              <button id="openProfileSetupBtn" class="action-btn" type="button">Open Profile Setup</button>
+            </div>
+            <div id="onboardingStatusLine" class="status-line"></div>
+          </div>
+
+          <div class="card">
+            <div class="section-head">
+              <h2>Activation Snapshot</h2>
+              <div class="subtext">Track progress to first scan and first post.</div>
+            </div>
+            <div class="list-block">
+              <div><strong>Checklist Progress:</strong> <span id="onboardingProgressText">0 / 4 complete</span></div>
+              <div><strong>Completion:</strong> <span id="onboardingPercentText">0%</span></div>
+              <div><strong>First Scan:</strong> <span id="onboardingFirstScan">Pending</span></div>
+              <div><strong>First Post:</strong> <span id="onboardingFirstPost">Pending</span></div>
+              <div><strong>Next Best Action:</strong> <span id="onboardingNextAction">Complete your profile</span></div>
+            </div>
+            <div class="subtext" style="margin-top:14px;">Once all four steps are complete, onboarding collapses into your normal operating rhythm.</div>
+          </div>
+        </div>
+
         <div class="analytics-shell">
           <div class="card">
             <div class="graph-wrap">
@@ -1434,22 +1482,11 @@
 
       <!-- AFFILIATE -->
       <section id="affiliate" class="dashboard-section">
-        <div class="grid-3" style="margin-bottom:18px;">
-          <div class="card">
-            <h2>Commission Earned</h2>
-            <div class="stat-value" id="affiliateCommissionEarned">$0.00</div>
-            <div class="stat-sub">Recurring founder-stage commissions</div>
-          </div>
-          <div class="card">
-            <h2>Pending Payout</h2>
-            <div class="stat-value" id="affiliatePendingPayout">$0.00</div>
-            <div class="stat-sub">Projected next payout cycle</div>
-          </div>
-          <div class="card">
-            <h2>Total Referrals</h2>
-            <div class="stat-value" id="affiliateTotalReferrals">0</div>
-            <div class="stat-sub">Users tied to your referral code</div>
-          </div>
+        <div class="grid-4">
+          <div class="card"><h2>Commission Earned</h2><div class="stat-value" id="affiliateCommissionEarned">$0.00</div><div class="stat-sub">Recurring commission earned so far</div></div>
+          <div class="card"><h2>Pending Payout</h2><div class="stat-value" id="affiliatePendingPayout">$0.00</div><div class="stat-sub">Projected next founder payout</div></div>
+          <div class="card"><h2>Total Referrals</h2><div class="stat-value" id="affiliateTotalReferrals">0</div><div class="stat-sub">All referred signups tracked</div></div>
+          <div class="card"><h2>Active Referrals</h2><div class="stat-value" id="affiliateActiveReferrals">0</div><div class="stat-sub">Currently paying referred users</div></div>
         </div>
 
         <div class="grid-2">
@@ -1461,70 +1498,41 @@
               <div><strong>Direct Referral Commission:</strong> <span id="affiliateDirectCommission">Loading...</span></div>
               <div><strong>Second-Level Override:</strong> <span id="affiliateTierOverride">Loading...</span></div>
               <div><strong>Payout Status:</strong> <span id="affiliatePayoutStatus">Loading...</span></div>
-              <div><strong>Estimated MRR Commission:</strong> <span id="affiliateEstimatedMrr">$0.00</span></div>
+              <div><strong>Estimated Monthly Recurring:</strong> <span id="affiliateEstimatedMRR">$0.00</span></div>
               <div><strong>Paid Out All-Time:</strong> <span id="affiliatePaidOutAllTime">$0.00</span></div>
             </div>
             <div class="action-grid" style="margin-top:14px;">
               <button id="copyReferralCodeBtn" class="action-btn" type="button">Copy Referral Code</button>
               <button id="copyReferralLinkBtn" class="action-btn" type="button">Copy Referral Link</button>
+              <button id="copyAffiliateDMBtn" class="action-btn" type="button">Copy DM Script</button>
+              <button id="copyAffiliatePitchBtn" class="action-btn" type="button">Copy Short Pitch</button>
+              <button id="copyAffiliatePostBtn" class="action-btn" type="button">Copy Story/Post</button>
             </div>
-            <div class="subtext" style="margin-top:14px;">Built for clean founder-stage promotion: simple referral code, clean positioning, and dealership-level partner conversations.</div>
+            <div class="subtext" style="margin-top:14px;">Professional partner program positioning: recurring commissions, clean referral economics, and dealership-level conversations.</div>
           </div>
 
-          <div class="card">
-            <h2>Affiliate Performance</h2>
-            <div class="grid-2">
-              <div class="stat-box"><div class="stat-label">Active Referrals</div><div class="stat-value small" id="affiliateActiveReferrals">0</div></div>
-              <div class="stat-box"><div class="stat-label">Conversion Rate</div><div class="stat-value small" id="affiliateConversionRate">0%</div></div>
-              <div class="stat-box"><div class="stat-label">Active Referral Rate</div><div class="stat-value small" id="affiliateActiveRate">0%</div></div>
-              <div class="stat-box"><div class="stat-label">Top Source</div><div class="stat-value small" id="affiliateTopSource">—</div></div>
-              <div class="stat-box"><div class="stat-label">Last Referral</div><div class="stat-value small" id="affiliateLastReferralDate">—</div></div>
-            </div>
-          </div>
-        </div>
-
-        <div class="grid-3" style="margin-top:18px;">
           <div class="card">
             <h2>Referral Funnel</h2>
-            <div class="list-block">
-              <div><strong>Invited:</strong> <span id="affiliateInvitedReferrals">0</span></div>
-              <div><strong>Signed Up:</strong> <span id="affiliateSignedUpReferrals">0</span></div>
-              <div><strong>Paying:</strong> <span id="affiliatePayingReferrals">0</span></div>
-              <div><strong>Churned:</strong> <span id="affiliateChurnedReferrals">0</span></div>
-            </div>
-          </div>
-
-          <div class="card">
-            <h2>Promo Tools</h2>
-            <div class="action-grid">
-              <button id="copyManagerPitchBtn" class="action-btn" type="button">Copy Manager Pitch</button>
-              <button id="copySalesPitchBtn" class="action-btn" type="button">Copy Salesperson Pitch</button>
-              <button id="copyFollowupPitchBtn" class="action-btn" type="button">Copy Follow-Up Script</button>
-              <button id="copyStoryCtaBtn" class="action-btn" type="button">Copy Story CTA</button>
-            </div>
-          </div>
-
-          <div class="card">
-            <h2>Recommended Actions</h2>
-            <div id="affiliateRecommendedActions" class="list-block">
-              <div>No affiliate actions yet.</div>
+            <div class="grid-2" style="gap:14px; margin-top:8px;">
+              <div class="sidebar-card"><div class="sidebar-card-label">Invited</div><div class="sidebar-card-value" id="affiliateInvitedCount">0</div></div>
+              <div class="sidebar-card"><div class="sidebar-card-label">Signed Up</div><div class="sidebar-card-value" id="affiliateSignedUpCount">0</div></div>
+              <div class="sidebar-card"><div class="sidebar-card-label">Paying</div><div class="sidebar-card-value" id="affiliatePayingCount">0</div></div>
+              <div class="sidebar-card"><div class="sidebar-card-label">Churned</div><div class="sidebar-card-value" id="affiliateChurnedCount">0</div></div>
             </div>
           </div>
         </div>
 
-        <div class="grid-2" style="margin-top:18px;">
+        <div class="grid-2">
           <div class="card">
             <h2>Recent Referrals</h2>
             <div id="affiliateRecentReferrals" class="list-block">
-              <div>No referrals yet.</div>
+              <div>No referrals tracked yet.</div>
             </div>
           </div>
           <div class="card">
-            <h2>Affiliate Center Notes</h2>
-            <div class="list-block">
-              <div>• Position this as a professional partner/referral program.</div>
-              <div>• Lead with recurring revenue and saved time, not hype.</div>
-              <div>• Managers, top Marketplace posters, and influencers are the highest-leverage referrals.</div>
+            <h2>Recommended Actions</h2>
+            <div id="affiliateRecommendedActions" class="list-block">
+              <div>No actions yet.</div>
             </div>
           </div>
         </div>
