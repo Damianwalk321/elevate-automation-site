@@ -315,99 +315,6 @@ async function getListingRows(userId, email) {
   ]);
   return mergeListingRows(userRows, legacyRows);
 }
-
-function estimatePlanMonthlyRevenue(planValue) {
-  const plan = normalizePlan(planValue);
-  if (!plan) return 39;
-  if (plan.includes('founder') && plan.includes('pro')) return 79;
-  if (plan === 'pro' || (!plan.includes('founder') && plan.includes('pro'))) return 79;
-  return 39;
-}
-async function getAffiliateSummary({ referralCode, email }) {
-  const code = clean(referralCode || '');
-  const ownerEmail = normalizeEmail(email || '');
-  const base = {
-    referral_code: code,
-    partner_type: 'Founding Partner',
-    direct_commission_percent: 20,
-    second_level_override_percent: 5,
-    payout_status: 'Manual founder-stage payouts',
-    total_referrals: 0,
-    active_referrals: 0,
-    invited_referrals: 0,
-    signed_up_referrals: 0,
-    paying_referrals: 0,
-    churned_referrals: 0,
-    commission_earned: 0,
-    estimated_mrr_commission: 0,
-    pending_payout: 0,
-    paid_out_all_time: 0,
-    recent_referrals: [],
-    recommended_actions: [
-      'Invite sales managers and top Marketplace posters first.',
-      'Share your referral link in one direct DM and one story this week.'
-    ]
-  };
-  if (!code) return base;
-
-  const { data, error } = await supabase
-    .from('subscriptions')
-    .select('id,user_id,email,plan,plan_name,plan_type,status,active,created_at,current_period_end,cancel_at_period_end,referral_code,account_snapshot')
-    .ilike('referral_code', code)
-    .order('created_at', { ascending: false })
-    .limit(200);
-  if (error) throw error;
-
-  const rows = (Array.isArray(data) ? data : []).filter((row) => normalizeEmail(row?.email) !== ownerEmail);
-  let active = 0;
-  let paying = 0;
-  let churned = 0;
-  let estimatedMrr = 0;
-  const recent = [];
-
-  for (const row of rows) {
-    const snapshot = row?.account_snapshot && typeof row.account_snapshot === 'object' ? row.account_snapshot : {};
-    const plan = clean(row?.plan_type || row?.plan_name || row?.plan || snapshot.plan || 'Starter');
-    const isActive = Boolean(row?.active === true || snapshot.active === true || isActiveStatus(row?.status || snapshot.status));
-    const estimatedCommission = isActive ? estimatePlanMonthlyRevenue(plan) * 0.20 : 0;
-    if (isActive) {
-      active += 1;
-      paying += 1;
-      estimatedMrr += estimatedCommission;
-    } else {
-      churned += 1;
-    }
-    recent.push({
-      name: clean(snapshot.full_name || row?.email || '').split('@')[0],
-      email: normalizeEmail(row?.email || ''),
-      plan,
-      status: isActive ? 'paying' : 'signed_up',
-      created_at: row?.created_at || '',
-      estimated_commission: Math.round(estimatedCommission * 100) / 100
-    });
-  }
-
-  const recommended = [];
-  if (!rows.length) recommended.push('Start with 10 direct outreach messages to salespeople or managers this week.');
-  if (rows.length > active) recommended.push(`Follow up with ${rows.length - active} inactive referral${rows.length - active === 1 ? '' : 's'}.`);
-  if (active) recommended.push('Ask active partners for one dealership or manager introduction.');
-  if (active >= 3) recommended.push('Highlight recurring commission in your outreach to attract stronger partners.');
-
-  return {
-    ...base,
-    total_referrals: rows.length,
-    active_referrals: active,
-    invited_referrals: rows.length,
-    signed_up_referrals: rows.length,
-    paying_referrals: paying,
-    churned_referrals: churned,
-    commission_earned: 0,
-    estimated_mrr_commission: Math.round(estimatedMrr * 100) / 100,
-    pending_payout: Math.round(estimatedMrr * 100) / 100,
-    recent_referrals: recent.slice(0, 8),
-    recommended_actions: recommended.length ? recommended : base.recommended_actions
-  };
-}
 function buildSetupStatus(user, profileRow) {
   const inventoryUrl = clean(profileRow?.inventory_url || '');
   const salespersonName = clean(profileRow?.full_name || `${clean(user?.first_name)} ${clean(user?.last_name)}`.trim());
@@ -537,6 +444,74 @@ function buildSegmentPerformance(rows) {
     opportunities: values.filter((item) => item.views >= 10 && item.messages === 0).slice(0, 6)
   };
 }
+
+async function buildAffiliateSummary({ supabaseClient, user, subscriptionRow, snapshot, email }) {
+  const rawCode = clean(user?.referral_code || snapshot?.referral_code || subscriptionRow?.partner_referral_code || '');
+  const partnerCode = rawCode || clean(normalizeEmail(email).split('@')[0]).toUpperCase();
+  let referredRows = [];
+  if (partnerCode) {
+    const { data } = await supabaseClient
+      .from('subscriptions')
+      .select('email, plan, plan_name, plan_type, status, active, updated_at, created_at, current_period_end, referral_code')
+      .eq('referral_code', partnerCode)
+      .neq('email', normalizeEmail(email))
+      .order('updated_at', { ascending: false })
+      .limit(100);
+    referredRows = Array.isArray(data) ? data : [];
+  }
+
+  const invitedReferrals = referredRows.length;
+  const signedUpReferrals = referredRows.filter((row) => clean(row.email)).length;
+  const payingReferrals = referredRows.filter((row) => isActiveStatus(row.status) || row.active === true).length;
+  const churnedReferrals = referredRows.filter((row) => ['canceled','cancelled','inactive'].includes(clean(row.status).toLowerCase())).length;
+  const activeReferrals = payingReferrals;
+  const directPercent = 20;
+  const secondLevelPercent = 5;
+  const commissionEarned = Number((payingReferrals * 39 * (directPercent / 100)).toFixed(2));
+  const estimatedMrrCommission = commissionEarned;
+  const pendingPayout = commissionEarned;
+  const paidOutAllTime = 0;
+  const conversionRate = invitedReferrals ? Number(((payingReferrals / invitedReferrals) * 100).toFixed(1)) : 0;
+  const activeRate = invitedReferrals ? Number(((activeReferrals / invitedReferrals) * 100).toFixed(1)) : 0;
+  const lastReferralDate = clean((referredRows[0]?.updated_at || referredRows[0]?.created_at || ''));
+  const topSource = invitedReferrals ? 'Referral code / direct outreach' : 'No source data yet';
+  const recentReferrals = referredRows.slice(0, 8).map((row) => ({
+    email: clean(row.email),
+    plan: clean(row.plan_name || row.plan_type || row.plan || 'Unknown'),
+    status: clean(row.status || (row.active ? 'active' : 'inactive')),
+    joined_at: row.created_at || row.updated_at || '',
+    commission_estimate: Number((((isActiveStatus(row.status) || row.active === true) ? 39 : 0) * (directPercent / 100)).toFixed(2))
+  }));
+  const recommendedActions = [];
+  if (!invitedReferrals) recommendedActions.push('Share your referral code with 5 salespeople or managers this week.');
+  if (invitedReferrals > 0 && payingReferrals === 0) recommendedActions.push('Follow up with signed users and push them toward founder access.');
+  if (payingReferrals > 0) recommendedActions.push('Double down on the outreach channel that produced your current paid referrals.');
+  recommendedActions.push('Prioritize dealership managers and top Marketplace posters for higher-leverage referrals.');
+  return {
+    referral_code: partnerCode || 'Not assigned yet',
+    partner_type: 'Founding Partner',
+    direct_commission_percent: directPercent,
+    second_level_override_percent: secondLevelPercent,
+    payout_status: 'Manual founder-stage payouts',
+    total_referrals: invitedReferrals,
+    active_referrals: activeReferrals,
+    invited_referrals: invitedReferrals,
+    signed_up_referrals: signedUpReferrals,
+    paying_referrals: payingReferrals,
+    churned_referrals: churnedReferrals,
+    commission_earned: commissionEarned,
+    estimated_mrr_commission: estimatedMrrCommission,
+    pending_payout: pendingPayout,
+    paid_out_all_time: paidOutAllTime,
+    conversion_rate: conversionRate,
+    active_referral_rate: activeRate,
+    top_source: topSource,
+    last_referral_date: lastReferralDate,
+    recent_referrals: recentReferrals,
+    recommended_actions: recommendedActions
+  };
+}
+
 function buildManagerRecommendations(summary, segmentIntel) {
   const recommendations = [];
   if (summary.action_center.review_today > 0) recommendations.push(`Review ${summary.action_center.review_today} listing${summary.action_center.review_today === 1 ? '' : 's'} currently in queue.`);
@@ -578,8 +553,6 @@ export default async function handler(req, res) {
     const segmentIntel = buildSegmentPerformance(rows);
     const alerts = buildAlerts({ ...computed, total_views: computed.total_views, total_messages: computed.total_messages });
     const scorecards = buildScorecards(computed, rows);
-    const referralCode = clean(snapshot.referral_code || subscriptionRow?.referral_code || user?.referral_code || '');
-    const affiliate = await getAffiliateSummary({ referralCode, email: finalEmail });
     const managerAccess = Boolean(snapshot.organization_role === 'admin' || snapshot.organization_role === 'manager' || snapshot.team_access === true || clean(snapshot.plan_type).toLowerCase() === 'team' || clean(snapshot.plan_type).toLowerCase() === 'dealership');
     const managerSummary = {
       live_inventory: computed.active_listings,
@@ -591,6 +564,8 @@ export default async function handler(req, res) {
       weak_listings: computed.weak_listings,
       needs_action: computed.needs_action_count
     };
+    const affiliateSummary = await buildAffiliateSummary({ supabaseClient: supabase, user, subscriptionRow, snapshot, email: finalEmail });
+
     const recentListings = rows.slice(0, 12).map((row) => ({
       id: row.id,
       title: row.title,
@@ -653,12 +628,12 @@ export default async function handler(req, res) {
         alerts,
         scorecards,
         intelligence: segmentIntel,
-        affiliate,
         daily_ops_queues: computed.action_center,
         manager_access: managerAccess,
         manager_summary: managerSummary,
         segment_performance: segmentIntel.top_segments,
         manager_recommendations: buildManagerRecommendations(computed, segmentIntel),
+        affiliate: affiliateSummary,
         ingest_debug: {
           posting_usage_row_found: Boolean(postingUsageRow),
           posting_usage_row_id: clean(postingUsageRow?.id || ''),
