@@ -30,6 +30,17 @@ function normalizeEmail(value) {
   return clean(value).toLowerCase();
 }
 
+function normalizeReferralSource(value) {
+  const source = clean(value).toLowerCase().replace(/[^a-z0-9_:-]+/g, "_");
+  if (!source) return "";
+  if (["ref","referral","link","direct_link"].includes(source)) return "link";
+  if (["checkout","stripe","billing"].includes(source)) return "checkout";
+  if (["signup","auth","register"].includes(source)) return "signup";
+  if (["story","ig_story","facebook_story"].includes(source)) return "story";
+  if (["dm","message","direct_message"].includes(source)) return "dm";
+  return source;
+}
+
 function firstNonEmpty(...values) {
   for (const value of values) {
     if (typeof value === "string" && value.trim()) return value.trim();
@@ -124,7 +135,7 @@ async function findUser({ email, customerId, subscriptionId, userId }) {
   return null;
 }
 
-async function updateUsersTable({ userId, email, customerId, subscriptionId, priceId, planName, status, referralCode = "", referralSource = "" }) {
+async function updateUsersTable({ userId, email, customerId, subscriptionId, priceId, planName, status }) {
   const normalizedEmail = normalizeEmail(email);
   const payload = {
     stripe_customer_id: customerId || null,
@@ -132,8 +143,6 @@ async function updateUsersTable({ userId, email, customerId, subscriptionId, pri
     stripe_price_id: priceId || null,
     subscription_status: status || null,
     plan: planName || "Active Plan",
-    ...(clean(referralCode) ? { referral_code: clean(referralCode) } : {}),
-    ...(clean(referralSource) ? { referral_source: clean(referralSource) } : {}),
     updated_at: new Date().toISOString()
   };
 
@@ -184,7 +193,7 @@ async function upsertSubscriptionsMirror({ user, email, customerId, subscription
   const lockedReferralCode = clean(existing?.referral_code || existingSnapshot.referral_code || "");
   const lockedReferralSource = clean(existingSnapshot.referral_source || "");
   const finalReferralCode = clean(lockedReferralCode || referralCode || "");
-  const finalReferralSource = clean(lockedReferralSource || referralSource || "");
+  const finalReferralSource = normalizeReferralSource(lockedReferralSource || referralSource || "");
   const payload = {
     user_id: user?.id || null,
     email: normalizedEmail || null,
@@ -244,9 +253,7 @@ async function syncBillingState({ userId, email, customerId, subscriptionId, pri
     subscriptionId,
     priceId,
     planName,
-    status,
-    referralCode,
-    referralSource
+    status
   });
 
   await upsertSubscriptionsMirror({
@@ -422,6 +429,7 @@ export default async function handler(req, res) {
         trialEnd: hydrated.trialEnd,
         cancelAtPeriodEnd: hydrated.cancelAtPeriodEnd,
         referralCode: invoice.metadata?.referral_code || hydrated.metadata?.referral_code || "",
+        referralSource: invoice.metadata?.referral_source || hydrated.metadata?.referral_source || "",
         accessType: invoice.metadata?.access_type || hydrated.metadata?.access_type || ""
       });
     }
