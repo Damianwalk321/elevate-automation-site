@@ -1023,7 +1023,15 @@
         <div class="card">
           <div class="section-head">
             <h2>Recent Listings</h2>
-            <div class="toolbar">
+            <div class="toolbar" style="gap:12px; flex-wrap:wrap;">
+              <div id="listingQuickFilters" style="display:flex; gap:8px; flex-wrap:wrap;">
+                <button class="action-btn active" type="button" data-filter="all">All</button>
+                <button class="action-btn" type="button" data-filter="review">Review</button>
+                <button class="action-btn" type="button" data-filter="stale">Stale</button>
+                <button class="action-btn" type="button" data-filter="price">Price Changes</button>
+                <button class="action-btn" type="button" data-filter="new">Review New</button>
+                <button class="action-btn" type="button" data-filter="active">Active</button>
+              </div>
               <select id="listingSortSelect">
                 <option value="popular">Sort: Most Popular</option>
                 <option value="newest">Sort: Newest</option>
