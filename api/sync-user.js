@@ -12,6 +12,15 @@ function clean(value) {
   return String(value || "").trim();
 }
 
+function normalizeEmail(value) {
+  return clean(value).toLowerCase();
+}
+
+function normalizeReferralSource(value) {
+  const normalized = clean(value).toLowerCase();
+  return normalized || "direct";
+}
+
 async function safeUsersUpdateByIdOrEmail(basePayload, referralPayload, id, email) {
   const payloadWithReferral = { ...basePayload, ...referralPayload };
   const payloadBaseOnly = { ...basePayload };
@@ -45,10 +54,10 @@ export default async function handler(req, res) {
   try {
     const body = typeof req.body === "string" ? JSON.parse(req.body || "{}") : (req.body || {});
     const id = clean(body.id || body.auth_user_id);
-    const email = clean(body.email).toLowerCase();
+    const email = normalizeEmail(body.email);
     const fullName = clean(body.full_name || body.fullName || "");
     const referralCode = clean(body.referral_code || body.referralCode || "");
-    const referralSource = clean(body.referral_source || body.referralSource || "");
+    const referralSource = normalizeReferralSource(body.referral_source || body.referralSource || "");
     const nowIso = new Date().toISOString();
 
     if (!id || !email) {
