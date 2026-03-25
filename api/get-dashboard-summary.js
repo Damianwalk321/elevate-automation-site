@@ -203,12 +203,12 @@ function buildComputedSummary(rows) {
 
     if (postedTime >= todayStart) postsToday += 1;
     if (postedTime >= monthStart) postsThisMonth += 1;
-    if (!["sold", "deleted", "inactive"].includes(status)) activeListings += 1;
+    if (!["sold", "deleted", "inactive", "stale"].includes(status) && lifecycleStatus !== "review_delete") activeListings += 1;
 
     totalViews += safeNumber(row.views_count, 0);
     totalMessages += safeNumber(row.messages_count, 0);
 
-    if (status === "stale" || lifecycleStatus === "stale") staleListings += 1;
+    if (status === "stale" || lifecycleStatus === "stale" || lifecycleStatus === "review_delete" || reviewBucket === "removedvehicles") staleListings += 1;
     if (lifecycleStatus === "review_delete" || reviewBucket === "removedvehicles") reviewDeleteCount += 1;
     if (lifecycleStatus === "review_price_update" || reviewBucket === "pricechanges") reviewPriceChangeCount += 1;
     if (lifecycleStatus === "review_new" || reviewBucket === "newvehicles") reviewNewCount += 1;
@@ -372,27 +372,14 @@ async function getProfileRow(finalUserId, finalEmail) {
 }
 
 async function getTableListingRows(tableName, finalUserId, finalEmail) {
-  const rows = [];
-  const seen = new Set();
+  let query = supabase.from(tableName).select("*").order("posted_at", { ascending: false });
 
-  async function runQuery(mode) {
-    let query = supabase.from(tableName).select("*").order("posted_at", { ascending: false });
-    if (mode === "user" && finalUserId) query = query.eq("user_id", finalUserId);
-    if (mode === "email" && finalEmail) query = query.ilike("email", finalEmail);
-    const { data, error } = await query;
-    if (error) throw error;
-    for (const row of Array.isArray(data) ? data : []) {
-      const key = clean(row?.id || "") || clean(row?.marketplace_listing_id || "") || clean(row?.vin || "") || clean(row?.stock_number || "") || `${clean(row?.email || "")}|${clean(row?.title || "")}|${clean(row?.posted_at || row?.created_at || "")}`;
-      if (!key || seen.has(key)) continue;
-      seen.add(key);
-      rows.push(row);
-    }
-  }
+  if (finalUserId) query = query.eq("user_id", finalUserId);
+  else if (finalEmail) query = query.ilike("email", finalEmail);
 
-  if (finalUserId) await runQuery("user");
-  if (finalEmail) await runQuery("email");
-
-  return rows;
+  const { data, error } = await query;
+  if (error) throw error;
+  return Array.isArray(data) ? data : [];
 }
 
 async function getListingRows(finalUserId, finalEmail) {
@@ -504,6 +491,13 @@ export default async function handler(req, res) {
 
     const postsRemaining = Math.max(dailyLimit - usageToday, 0);
     const setupStatus = buildSetupStatus(user, profileRow);
+    const accessGranted = Boolean(
+      hasTestingLimitOverride(finalEmail) ||
+      snapshot.access_granted === true ||
+      snapshot.active === true ||
+      isActiveStatus(effectiveStatus) ||
+      clean(effectivePlan)
+    );
 
     const recentListings = rows.slice(0, 5).map((row) => ({
       id: row.id,
@@ -516,7 +510,10 @@ export default async function handler(req, res) {
       posted_at: row.posted_at || row.created_at,
       views_count: safeNumber(row.views_count, 0),
       messages_count: safeNumber(row.messages_count, 0),
-      review_bucket: row.review_bucket || ""
+      review_bucket: row.review_bucket || "",
+      source_url: row.source_url || "",
+      stock_number: row.stock_number || "",
+      vin: row.vin || ""
     }));
 
     return res.status(200).json({
@@ -556,8 +553,8 @@ export default async function handler(req, res) {
           email: finalEmail,
           plan: effectivePlan,
           status: effectiveStatus,
-          access_granted: Boolean(hasTestingLimitOverride(finalEmail) || isActiveStatus(effectiveStatus) || effectivePlan),
-          active: Boolean(hasTestingLimitOverride(finalEmail) || isActiveStatus(effectiveStatus) || effectivePlan),
+          active: accessGranted,
+          access_granted: accessGranted,
           stripe_customer_id: clean(subscriptionRow?.stripe_customer_id || user?.stripe_customer_id || ""),
           stripe_subscription_id: clean(subscriptionRow?.stripe_subscription_id || user?.stripe_subscription_id || ""),
           posting_limit: dailyLimit,
