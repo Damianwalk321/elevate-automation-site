@@ -1,315 +1,40 @@
+
 import { createClient } from "@supabase/supabase-js";
-
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-);
-
-function clean(value) {
-  return String(value || "").replace(/\s+/g, " ").trim();
+const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+function clean(value){ return String(value||"").replace(/\s+/g," ").trim(); }
+function normalizeEmail(value){ return clean(value).toLowerCase(); }
+function safeNumber(value, fallback=0){ const n=Number(value); return Number.isFinite(n)?n:fallback; }
+function normalizeStatus(value){ const s=clean(value).toLowerCase(); if(["sold","deleted","inactive","failed","stale"].includes(s)) return s; if(["posted","active","live","approved","relisted","promote_now"].includes(s)) return "active"; return s||"active"; }
+function normalizeReviewBucket(value){ const bucket=clean(value).toLowerCase().replace(/[\s_-]+/g,""); if(!bucket) return ""; if(["removedvehicles","removed","reviewdelete"].includes(bucket)) return "removedvehicles"; if(["pricechanges","pricechange","reviewpriceupdate"].includes(bucket)) return "pricechanges"; if(["newvehicles","new","reviewnew"].includes(bucket)) return "newvehicles"; return bucket; }
+function normalizeLifecycleStatus(value, reviewBucket=""){ const status=clean(value).toLowerCase(); const review=normalizeReviewBucket(reviewBucket); if(status) return status; if(review==="removedvehicles") return "review_delete"; if(review==="pricechanges") return "review_price_update"; if(review==="newvehicles") return "review_new"; return "active"; }
+function listingIdentityKey(row){ const marketplace=clean(row.marketplace_listing_id||"").toUpperCase(); if(marketplace) return `MARKETPLACE:${marketplace}`; const vin=clean(row.vin||"").toUpperCase(); if(vin) return `VIN:${vin}`; const stock=clean(row.stock_number||"").toUpperCase(); if(stock) return `STOCK:${stock}`; const source=clean(row.source_url||"").toLowerCase(); if(source) return `URL:${source}`; const id=clean(row.id||""); if(id) return `ID:${id}`; return [clean(row.year),clean(row.make),clean(row.model),String(row.price||""),String(row.mileage||"")].filter(Boolean).join("|"); }
+function buildListingIntelligence(row={}){
+  const postedAt=row.posted_at||row.created_at||row.updated_at||null;
+  const ageDays=postedAt?Math.max(0,Math.floor((Date.now()-new Date(postedAt).getTime())/86400000)):0;
+  const views=safeNumber(row.views_count,0), messages=safeNumber(row.messages_count,0);
+  const status=normalizeStatus(row.status), lifecycle=normalizeLifecycleStatus(row.lifecycle_status,row.review_bucket), bucket=normalizeReviewBucket(row.review_bucket);
+  const staleLike=status==='stale'||lifecycle==='stale'||lifecycle==='review_delete'||bucket==='removedvehicles';
+  const likelySold=lifecycle==='review_delete'||bucket==='removedvehicles';
+  const promoteNow=!['sold','deleted','inactive'].includes(status)&&views>=20&&messages>=1;
+  const highViewsNoMessages=!['sold','deleted','inactive'].includes(status)&&views>=20&&messages===0;
+  const lowPerformance=!['sold','deleted','inactive'].includes(status)&&ageDays>=7&&views<5&&messages===0;
+  const weak=staleLike||lowPerformance; const needsAction=weak||highViewsNoMessages||lifecycle==='review_price_update'||bucket==='pricechanges';
+  let healthScore=100-Math.min(ageDays*2,30)+Math.min(messages*16,40)+Math.min(views,20); if(staleLike) healthScore-=35; if(lowPerformance) healthScore-=20; if(highViewsNoMessages) healthScore-=12; healthScore=Math.max(0,Math.min(100,Math.round(healthScore)));
+  const healthLabel=promoteNow?'High Performer':(needsAction?'Needs Action':(weak?'Weak':'Healthy'));
+  let recommendedAction='Keep live'; if(likelySold) recommendedAction='Check if sold or stale'; else if(lifecycle==='review_price_update'||bucket==='pricechanges'||highViewsNoMessages) recommendedAction='Review price'; else if(lifecycle==='review_new'||bucket==='newvehicles') recommendedAction='Review new listing'; else if(lowPerformance) recommendedAction='Refresh title/photos'; else if(promoteNow) recommendedAction='Promote now';
+  let predictedScore=50+Math.min(views,25)+Math.min(messages*18,36)-Math.min(ageDays*3,24); if(highViewsNoMessages) predictedScore-=8; if(weak) predictedScore-=20; predictedScore=Math.max(0,Math.min(100,Math.round(predictedScore)));
+  const predictedLabel=predictedScore>=75?'High Performer':(predictedScore>=55?'Likely Performer':(predictedScore<35?'Low Probability':'Uncertain'));
+  const pricingInsight=highViewsNoMessages?'Price may be limiting conversion.':(messages>=2?'Pricing appears competitive.':(views===0&&ageDays>=3?'Listing may need stronger value or visibility.':'Pricing signal still developing.'));
+  let contentScore=60; if(clean(row.title).length>=18) contentScore+=10; if(clean(row.stock_number)) contentScore+=5; if(clean(row.vin)) contentScore+=5; if(clean(row.exterior_color)) contentScore+=5; if(clean(row.body_style)) contentScore+=5; if(clean(row.fuel_type)) contentScore+=5; if(ageDays>=7&&views<5) contentScore-=10; contentScore=Math.max(0,Math.min(100,Math.round(contentScore)));
+  const contentFeedback=contentScore>=80?'Listing structure looks strong.':(contentScore>=65?'Content is workable but could be tightened.':'Listing likely needs a stronger title and better detail signals.');
+  return { age_days:ageDays, likely_sold:likelySold, promote_now:promoteNow, weak, needs_action:needsAction, health_score:healthScore, health_label:healthLabel, recommended_action:recommendedAction, predicted_score:predictedScore, predicted_label:predictedLabel, pricing_insight:pricingInsight, content_score:contentScore, content_feedback:contentFeedback, popularity_score:(messages*1000)+(views*10)+(postedAt?new Date(postedAt).getTime()/100000000:0) };
 }
-
-function normalizeEmail(value) {
-  return clean(value).toLowerCase();
-}
-
-function safeNumber(value, fallback = 0) {
-  const n = Number(value);
-  return Number.isFinite(n) ? n : fallback;
-}
-
-function normalizeStatus(value) {
-  const status = clean(value).toLowerCase();
-  if (["sold", "deleted", "inactive", "failed", "stale"].includes(status)) return status;
-  if (["posted", "active", "live"].includes(status)) return "active";
-  return status || "active";
-}
-
-function normalizeReviewBucket(value) {
-  const bucket = clean(value).toLowerCase().replace(/[\s_-]+/g, "");
-  if (!bucket) return "";
-  if (["removedvehicles", "removed", "reviewdelete"].includes(bucket)) return "removedvehicles";
-  if (["pricechanges", "pricechange", "reviewpriceupdate"].includes(bucket)) return "pricechanges";
-  if (["newvehicles", "new", "reviewnew"].includes(bucket)) return "newvehicles";
-  return bucket;
-}
-
-function normalizeLifecycleStatus(value, reviewBucket = "") {
-  const status = clean(value).toLowerCase();
-  const review = normalizeReviewBucket(reviewBucket);
-  if (status) return status;
-  if (review === "removedvehicles") return "review_delete";
-  if (review === "pricechanges") return "review_price_update";
-  if (review === "newvehicles") return "review_new";
-  return "active";
-}
-
-function listingIdentityKey(row) {
-  const marketplace = clean(row.marketplace_listing_id || "").toUpperCase();
-  if (marketplace) return `MARKETPLACE:${marketplace}`;
-  const vin = clean(row.vin || "").toUpperCase();
-  if (vin) return `VIN:${vin}`;
-  const stock = clean(row.stock_number || "").toUpperCase();
-  if (stock) return `STOCK:${stock}`;
-  const source = clean(row.source_url || "").toLowerCase();
-  if (source) return `URL:${source}`;
-  const id = clean(row.id || "");
-  if (id) return `ID:${id}`;
-  return [
-    clean(row.year || "").toUpperCase(),
-    clean(row.make || "").toUpperCase(),
-    clean(row.model || "").toUpperCase(),
-    String(row.price || "").replace(/[^\d]/g, ""),
-    String(row.mileage || row.kilometers || row.km || "").replace(/[^\d]/g, "")
-  ].filter(Boolean).join("|");
-}
-
-
-function buildListingIntelligence(row) {
-  const postedTs = row.posted_at ? new Date(row.posted_at).getTime() : 0;
-  const ageDays = postedTs > 0 ? Math.max(0, Math.floor((Date.now() - postedTs) / 86400000)) : 0;
-  const views = safeNumber(row.views_count, 0);
-  const messages = safeNumber(row.messages_count, 0);
-  const status = normalizeStatus(row.status);
-  const lifecycle = normalizeLifecycleStatus(row.lifecycle_status, row.review_bucket);
-  const reviewBucket = normalizeReviewBucket(row.review_bucket);
-  const staleLike = status === 'stale' || lifecycle === 'stale' || lifecycle === 'review_delete' || reviewBucket === 'removedvehicles';
-  const likelySold = lifecycle === 'review_delete' || reviewBucket === 'removedvehicles';
-  const promoteNow = !['sold', 'deleted', 'inactive'].includes(status) && views >= 20 && messages >= 1;
-  const lowPerformance = !['sold', 'deleted', 'inactive'].includes(status) && ageDays >= 7 && views < 5 && messages === 0;
-  const weak = staleLike || lowPerformance;
-  const needsAction = staleLike || lowPerformance || (views >= 20 && messages === 0) || lifecycle === 'review_price_update' || reviewBucket === 'pricechanges';
-  let healthScore = 100 - Math.min(ageDays * 2, 30) + Math.min(messages * 12, 36) + Math.min(views, 20);
-  if (staleLike) healthScore -= 35;
-  if (lowPerformance) healthScore -= 20;
-  healthScore = Math.max(0, Math.min(100, Math.round(healthScore)));
-  const healthLabel = promoteNow ? 'High Performer' : (needsAction ? 'Needs Action' : (weak ? 'Weak' : 'Healthy'));
-  let recommendedAction = 'Keep live';
-  if (likelySold) recommendedAction = 'Check if sold or stale';
-  else if (lifecycle === 'review_price_update' || reviewBucket === 'pricechanges' || (views >= 20 && messages === 0)) recommendedAction = 'Review price';
-  else if (lifecycle === 'review_new' || reviewBucket === 'newvehicles') recommendedAction = 'Review new listing';
-  else if (lowPerformance) recommendedAction = 'Refresh title/photos';
-  else if (promoteNow) recommendedAction = 'Promote now';
-  return { age_days: ageDays, likely_sold: likelySold, promote_now: promoteNow, weak, needs_action: needsAction, health_score: healthScore, health_label: healthLabel, recommended_action: recommendedAction };
-}
-
-function normalizeListingRow(row = {}, source = "user_listings") {
-  const reviewBucket = normalizeReviewBucket(row.review_bucket);
-  const intelligence = buildListingIntelligence({ ...row, posted_at: row.posted_at || row.created_at || null });
-  return {
-    ...row,
-    source_table: source,
-    identity_key: listingIdentityKey(row),
-    status: normalizeStatus(row.status),
-    lifecycle_status: normalizeLifecycleStatus(row.lifecycle_status, reviewBucket),
-    review_bucket: reviewBucket,
-    price: safeNumber(row.price, 0),
-    mileage: safeNumber(row.mileage || row.kilometers || row.km, 0),
-    views_count: safeNumber(row.views_count, 0),
-    messages_count: safeNumber(row.messages_count, 0),
-    posted_at: row.posted_at || row.created_at || null,
-    updated_at: row.updated_at || row.created_at || null,
-    ...intelligence
-  };
-}
-
-function preferListingRow(current, incoming) {
-  if (!current) return incoming;
-
-  const currentTs = new Date(current.updated_at || current.posted_at || current.created_at || 0).getTime();
-  const incomingTs = new Date(incoming.updated_at || incoming.posted_at || incoming.created_at || 0).getTime();
-
-  const currentScore =
-    (current.source_table === "user_listings" ? 1000 : 0) +
-    (clean(current.image_url) ? 100 : 0) +
-    (clean(current.marketplace_listing_id) ? 50 : 0) +
-    currentTs / 1000000000000;
-
-  const incomingScore =
-    (incoming.source_table === "user_listings" ? 1000 : 0) +
-    (clean(incoming.image_url) ? 100 : 0) +
-    (clean(incoming.marketplace_listing_id) ? 50 : 0) +
-    incomingTs / 1000000000000;
-
-  return incomingScore >= currentScore ? { ...current, ...incoming } : { ...incoming, ...current };
-}
-
-async function resolveUser({ userId, email }) {
-  if (userId) {
-    const { data, error } = await supabase.from("users").select("id,email").eq("id", userId).maybeSingle();
-    if (error) throw error;
-    if (data) return data;
-  }
-
-  if (email) {
-    const { data, error } = await supabase
-      .from("users")
-      .select("id,email")
-      .ilike("email", email)
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .maybeSingle();
-
-    if (error) throw error;
-    if (data) return data;
-  }
-
-  return null;
-}
-
-function sortRows(rows, sort) {
-  const items = [...rows];
-
-  if (sort === "price_high") return items.sort((a, b) => safeNumber(b.price) - safeNumber(a.price));
-  if (sort === "price_low") return items.sort((a, b) => safeNumber(a.price) - safeNumber(b.price));
-
-  if (sort === "popular") {
-    return items.sort((a, b) => {
-      const scoreA = safeNumber(a.messages_count) * 1000 + safeNumber(a.views_count) * 10 + new Date(a.posted_at || a.created_at || 0).getTime() / 100000000;
-      const scoreB = safeNumber(b.messages_count) * 1000 + safeNumber(b.views_count) * 10 + new Date(b.posted_at || b.created_at || 0).getTime() / 100000000;
-      return scoreB - scoreA;
-    });
-  }
-
-  return items.sort((a, b) => new Date(b.posted_at || b.created_at || 0).getTime() - new Date(a.posted_at || a.created_at || 0).getTime());
-}
-
-async function fetchTableRows(tableName, finalUserId, finalEmail) {
-  const rows = [];
-  const seen = new Set();
-
-  async function runQuery(mode) {
-    let query = supabase.from(tableName).select('*');
-    if (mode === 'user' && finalUserId) query = query.eq('user_id', finalUserId);
-    if (mode === 'email' && finalEmail) query = query.ilike('email', finalEmail);
-    const { data, error } = await query;
-    if (error) throw error;
-    for (const row of Array.isArray(data) ? data : []) {
-      const key = clean(row?.id || '') || `${clean(row?.marketplace_listing_id || '')}|${clean(row?.posted_at || row?.created_at || '')}`;
-      if (!key || seen.has(key)) continue;
-      seen.add(key);
-      rows.push(row);
-    }
-  }
-
-  if (finalUserId) await runQuery('user');
-  if (finalEmail) await runQuery('email');
-  return rows;
-}
-
-function matchesFilter(row, { status, lifecycleStatus, reviewBucket, search, preset }) {
-  const normalizedStatus = normalizeStatus(row.status);
-  const normalizedLifecycle = normalizeLifecycleStatus(row.lifecycle_status, row.review_bucket);
-  const normalizedBucket = normalizeReviewBucket(row.review_bucket);
-
-  if (status) {
-    if (status === "review") {
-      if (!["review_delete", "review_price_update", "review_new"].includes(normalizedLifecycle)) return false;
-    } else if (normalizedStatus !== status) {
-      return false;
-    }
-  }
-
-  if (lifecycleStatus && normalizedLifecycle !== lifecycleStatus) return false;
-  if (reviewBucket && normalizedBucket !== reviewBucket) return false;
-
-  if (preset) {
-    if (preset === "review" && !["review_delete", "review_price_update", "review_new"].includes(normalizedLifecycle)) return false;
-    if (preset === "stale" && !(normalizedStatus === "stale" || normalizedLifecycle === "stale" || normalizedLifecycle === "review_delete")) return false;
-    if (preset === "price" && normalizedLifecycle !== "review_price_update" && normalizedBucket !== "pricechanges") return false;
-    if (preset === "new" && normalizedLifecycle !== "review_new" && normalizedBucket !== "newvehicles") return false;
-    if (preset === "active" && ["sold", "deleted", "inactive", "stale"].includes(normalizedStatus)) return false;
-    if (preset === "promote" && !row.promote_now) return false;
-    if (preset === "likely_sold" && !row.likely_sold) return false;
-    if (preset === "weak" && !row.weak) return false;
-    if (preset === "needs_action" && !row.needs_action) return false;
-  }
-
-  if (search) {
-    const haystack = [
-      row.title,
-      row.make,
-      row.model,
-      row.trim,
-      row.vin,
-      row.stock_number,
-      row.body_style,
-      row.vehicle_type,
-      row.exterior_color,
-      row.fuel_type,
-      row.location,
-      row.lifecycle_status,
-      row.review_bucket,
-      row.source_url
-    ].map((v) => clean(v).toLowerCase()).join(" ");
-
-    if (!haystack.includes(search)) return false;
-  }
-
-  return true;
-}
-
-export default async function handler(req, res) {
-  res.setHeader("Content-Type", "application/json");
-
-  if (req.method !== "GET") {
-    return res.status(405).json({ error: "Method not allowed" });
-  }
-
-  try {
-    const userId = clean(req.query?.userId || req.query?.user_id || "");
-    const email = normalizeEmail(req.query?.email || "");
-    const status = clean(req.query?.status || "").toLowerCase();
-    const preset = clean(req.query?.preset || "").toLowerCase();
-    const lifecycleStatus = clean(req.query?.lifecycle_status || req.query?.lifecycleStatus || "").toLowerCase();
-    const reviewBucket = normalizeReviewBucket(req.query?.review_bucket || req.query?.reviewBucket || "");
-    const search = clean(req.query?.search || "").toLowerCase();
-    const sort = clean(req.query?.sort || "newest").toLowerCase();
-    const limit = Math.min(Math.max(Number(req.query?.limit || 100), 1), 250);
-
-    const user = await resolveUser({ userId, email });
-    const finalUserId = clean(user?.id || userId || "");
-    const finalEmail = normalizeEmail(user?.email || email || "");
-
-    if (!finalUserId && !finalEmail) {
-      return res.status(400).json({ error: "Missing userId or email" });
-    }
-
-    const [userListingRows, legacyListingRows] = await Promise.all([
-      fetchTableRows("user_listings", finalUserId, finalEmail),
-      fetchTableRows("listings", finalUserId, finalEmail)
-    ]);
-
-    const map = new Map();
-    for (const row of userListingRows) {
-      const normalized = normalizeListingRow(row, "user_listings");
-      map.set(normalized.identity_key, preferListingRow(map.get(normalized.identity_key), normalized));
-    }
-    for (const row of legacyListingRows) {
-      const normalized = normalizeListingRow(row, "listings");
-      map.set(normalized.identity_key, preferListingRow(map.get(normalized.identity_key), normalized));
-    }
-
-    let rows = [...map.values()].filter((row) => matchesFilter(row, { status, lifecycleStatus, reviewBucket, search, preset }));
-    rows = sortRows(rows, sort).slice(0, limit);
-
-    return res.status(200).json({
-      success: true,
-      data: rows,
-      meta: {
-        total: rows.length,
-        limit,
-        sources: {
-          user_listings: userListingRows.length,
-          listings: legacyListingRows.length,
-          merged: map.size
-        }
-      }
-    });
-  } catch (error) {
-    console.error("get-user-listings fatal error:", error);
-    return res.status(500).json({
-      error: error.message || "Internal server error"
-    });
-  }
-}
+function normalizeListingRow(row={}, source='user_listings'){ const reviewBucket=normalizeReviewBucket(row.review_bucket); const base={...row,source_table:source,identity_key:listingIdentityKey(row),status:normalizeStatus(row.status),lifecycle_status:normalizeLifecycleStatus(row.lifecycle_status,reviewBucket),review_bucket:reviewBucket,price:safeNumber(row.price,0),mileage:safeNumber(row.mileage||row.kilometers||row.km,0),views_count:safeNumber(row.views_count,0),messages_count:safeNumber(row.messages_count,0),posted_at:row.posted_at||row.created_at||null,updated_at:row.updated_at||row.created_at||null}; return {...base,...buildListingIntelligence(base)}; }
+function preferListingRow(current,incoming){ if(!current) return incoming; const currentScore=(current.source_table==='user_listings'?1000:0)+safeNumber(current.views_count)+safeNumber(current.messages_count)*10+new Date(current.updated_at||current.posted_at||0).getTime()/1000000000000; const incomingScore=(incoming.source_table==='user_listings'?1000:0)+safeNumber(incoming.views_count)+safeNumber(incoming.messages_count)*10+new Date(incoming.updated_at||incoming.posted_at||0).getTime()/1000000000000; return incomingScore>=currentScore?{...current,...incoming}:{...incoming,...current}; }
+async function resolveUser({userId,email}){ if(userId){ const {data,error}=await supabase.from('users').select('id,email').eq('id',userId).maybeSingle(); if(error) throw error; if(data) return data; } if(email){ const {data,error}=await supabase.from('users').select('id,email').ilike('email',email).order('created_at',{ascending:false}).limit(1).maybeSingle(); if(error) throw error; if(data) return data; } return null; }
+async function fetchTableRows(tableName,userId,email){ const rows=[], seen=new Set(); async function run(mode){ let query=supabase.from(tableName).select('*'); if(mode==='user'&&userId) query=query.eq('user_id',userId); if(mode==='email'&&email) query=query.ilike('email',email); const {data,error}=await query; if(error) throw error; for(const row of (Array.isArray(data)?data:[])){ const key=clean(row?.id||'')||`${clean(row?.marketplace_listing_id||'')}|${clean(row?.posted_at||row?.created_at||'')}`; if(!key||seen.has(key)) continue; seen.add(key); rows.push(row); } } if(userId) await run('user'); if(email) await run('email'); return rows; }
+function matchesFilter(row,{status,lifecycleStatus,reviewBucket,search,preset}){ const normalizedStatus=normalizeStatus(row.status), normalizedLifecycle=normalizeLifecycleStatus(row.lifecycle_status,row.review_bucket), normalizedBucket=normalizeReviewBucket(row.review_bucket); if(status){ if(status==='review'){ if(!['review_delete','review_price_update','review_new'].includes(normalizedLifecycle)) return false; } else if(normalizedStatus!==status) return false; } if(lifecycleStatus&&normalizedLifecycle!==lifecycleStatus) return false; if(reviewBucket&&normalizedBucket!==reviewBucket) return false; if(preset){ if(preset==='review'&&!['review_delete','review_price_update','review_new'].includes(normalizedLifecycle)) return false; if(preset==='stale'&&!(normalizedStatus==='stale'||normalizedLifecycle==='stale'||normalizedLifecycle==='review_delete')) return false; if(preset==='price'&&normalizedLifecycle!=='review_price_update'&&normalizedBucket!=='pricechanges') return false; if(preset==='new'&&normalizedLifecycle!=='review_new'&&normalizedBucket!=='newvehicles') return false; if(preset==='active'&&['sold','deleted','inactive','stale'].includes(normalizedStatus)) return false; if(preset==='promote'&&!row.promote_now) return false; if(preset==='likely_sold'&&!row.likely_sold) return false; if(preset==='weak'&&!row.weak) return false; if(preset==='needs_action'&&!row.needs_action) return false; }
+if(search){ const haystack=[row.title,row.make,row.model,row.trim,row.vin,row.stock_number,row.body_style,row.vehicle_type,row.exterior_color,row.fuel_type,row.location,row.lifecycle_status,row.review_bucket,row.source_url,row.predicted_label,row.recommended_action,row.pricing_insight].map(v=>clean(v).toLowerCase()).join(' '); if(!haystack.includes(search)) return false; }
+return true; }
+function sortRows(rows, sort){ const items=[...rows]; if(sort==='price_high') return items.sort((a,b)=>safeNumber(b.price)-safeNumber(a.price)); if(sort==='price_low') return items.sort((a,b)=>safeNumber(a.price)-safeNumber(b.price)); if(sort==='popular') return items.sort((a,b)=>safeNumber(b.popularity_score)-safeNumber(a.popularity_score)); if(sort==='predicted') return items.sort((a,b)=>safeNumber(b.predicted_score)-safeNumber(a.predicted_score)); return items.sort((a,b)=>new Date(b.posted_at||b.created_at||0).getTime()-new Date(a.posted_at||a.created_at||0).getTime()); }
+export default async function handler(req,res){ res.setHeader('Content-Type','application/json'); if(req.method!=='GET') return res.status(405).json({error:'Method not allowed'}); try{ const userId=clean(req.query?.userId||req.query?.user_id||''), email=normalizeEmail(req.query?.email||''), status=clean(req.query?.status||'').toLowerCase(), preset=clean(req.query?.preset||'').toLowerCase(), lifecycleStatus=clean(req.query?.lifecycle_status||req.query?.lifecycleStatus||'').toLowerCase(), reviewBucket=normalizeReviewBucket(req.query?.review_bucket||req.query?.reviewBucket||''), search=clean(req.query?.search||'').toLowerCase(), sort=clean(req.query?.sort||'newest').toLowerCase(), limit=Math.min(Math.max(Number(req.query?.limit||100),1),250); const user=await resolveUser({userId,email}); const finalUserId=clean(user?.id||userId||''), finalEmail=normalizeEmail(user?.email||email||''); if(!finalUserId&&!finalEmail) return res.status(400).json({error:'Missing userId or email'}); const [userRows,legacyRows]=await Promise.all([fetchTableRows('user_listings',finalUserId,finalEmail),fetchTableRows('listings',finalUserId,finalEmail)]); const map=new Map(); for(const row of userRows){ const n=normalizeListingRow(row,'user_listings'); map.set(n.identity_key,preferListingRow(map.get(n.identity_key),n)); } for(const row of legacyRows){ const n=normalizeListingRow(row,'listings'); map.set(n.identity_key,preferListingRow(map.get(n.identity_key),n)); } let rows=[...map.values()].filter(row=>matchesFilter(row,{status,lifecycleStatus,reviewBucket,search,preset})); rows=sortRows(rows,sort).slice(0,limit); return res.status(200).json({ success:true, data:rows, meta:{ total:rows.length, limit, sources:{ user_listings:userRows.length, listings:legacyRows.length, merged:map.size } } }); } catch(error){ console.error('get-user-listings fatal error:', error); return res.status(500).json({error:error.message||'Internal server error'}); } }
