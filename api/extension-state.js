@@ -112,12 +112,26 @@ async function getTodayListingPostedCount(supabase, userId, email) {
   const finalUserId = clean(userId);
 
   async function fetchRows(tableName) {
-    let query = supabase.from(tableName).select('id,posted_at,created_at').gte('posted_at', iso);
-    if (finalUserId) query = query.eq('user_id', finalUserId);
-    else query = query.ilike('email', finalEmail);
-    const { data, error } = await query;
-    if (error) return [];
-    return Array.isArray(data) ? data : [];
+    const rows = [];
+    const seen = new Set();
+
+    async function runQuery(mode) {
+      let query = supabase.from(tableName).select('id,posted_at,created_at,email,user_id').gte('posted_at', iso);
+      if (mode === 'user' && finalUserId) query = query.eq('user_id', finalUserId);
+      if (mode === 'email' && finalEmail) query = query.ilike('email', finalEmail);
+      const { data, error } = await query;
+      if (error) return;
+      for (const row of Array.isArray(data) ? data : []) {
+        const key = clean(row?.id || '') || `${clean(row?.email || '')}|${clean(row?.posted_at || row?.created_at || '')}`;
+        if (!key || seen.has(key)) continue;
+        seen.add(key);
+        rows.push(row);
+      }
+    }
+
+    if (finalUserId) await runQuery('user');
+    if (finalEmail) await runQuery('email');
+    return rows;
   }
 
   const [userRows, legacyRows] = await Promise.all([fetchRows('user_listings'), fetchRows('listings')]);
@@ -612,6 +626,10 @@ export default async function handler(req, res) {
       subscription.posting_limit = 25;
       subscription.daily_posting_limit = 25;
       subscription.testing_limit_override = true;
+      subscription.active = true;
+      subscription.access_granted = true;
+      subscription.status = 'active';
+      subscription.normalized_status = 'active';
     }
     subscription.posts_remaining = Math.max(Number(subscription.posting_limit || 0) - Number(subscription.posts_today || 0), 0);
     const scannerConfigPayload = buildScannerConfigPayload(scannerConfig, dealership || {}, legacyProfile || {});
