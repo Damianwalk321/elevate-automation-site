@@ -77,14 +77,26 @@ function monthKey(value = new Date()) {
 function hasTestingLimitOverride(email) {
   return FORCE_25_EMAILS.has(normalizeEmail(email));
 }
+function normalizeListingUrl(value) {
+  const raw = clean(value);
+  if (!raw) return "";
+  try {
+    const url = new URL(raw);
+    ["fbclid", "utm_source", "utm_medium", "utm_campaign", "utm_term", "utm_content", "ref", "refsrc", "referral", "tracking", "tracking_id", "source"].forEach((key) => url.searchParams.delete(key));
+    const normalizedPath = url.pathname.replace(/\/$/, "");
+    return `${url.origin}${normalizedPath}${url.search ? `?${url.searchParams.toString()}` : ""}`.toLowerCase();
+  } catch {
+    return raw.replace(/[?#].*$/, "").replace(/\/$/, "").toLowerCase();
+  }
+}
 function listingIdentityKey(row) {
-  const marketplace = clean(row.marketplace_listing_id || "").toUpperCase();
+  const marketplace = clean(row.marketplace_listing_id || row.listing_id || "").toUpperCase();
   if (marketplace) return `MARKETPLACE:${marketplace}`;
   const vin = clean(row.vin || "").toUpperCase();
   if (vin) return `VIN:${vin}`;
-  const stock = clean(row.stock_number || "").toUpperCase();
+  const stock = clean(row.stock_number || row.stock || "").toUpperCase();
   if (stock) return `STOCK:${stock}`;
-  const source = clean(row.source_url || "").toLowerCase();
+  const source = normalizeListingUrl(row.source_url || row.marketplace_url || row.listing_url || "");
   if (source) return `URL:${source}`;
   const id = clean(row.id || "");
   if (id) return `ID:${id}`;
@@ -314,92 +326,6 @@ async function getListingRows(userId, email) {
     getTableListingRows('listings', userId, email)
   ]);
   return mergeListingRows(userRows, legacyRows);
-}
-
-async function getUsageLogRows(userId, email) {
-  const rows = [];
-  const seen = new Set();
-  async function run(mode) {
-    let query = supabase.from('usage_logs').select('id,user_id,email,action,listing_id,metadata,created_at').order('created_at', { ascending: false }).limit(2000);
-    if (mode === 'user' && userId) query = query.eq('user_id', userId);
-    if (mode === 'email' && email) query = query.ilike('email', email);
-    const { data, error } = await query;
-    if (error) throw error;
-    for (const row of (Array.isArray(data) ? data : [])) {
-      const key = clean(row?.id || '');
-      if (!key || seen.has(key)) continue;
-      seen.add(key);
-      rows.push(row);
-    }
-  }
-  if (userId) await run('user');
-  if (email) await run('email');
-  return rows;
-}
-
-function buildMessageTracking(rows = [], usageRows = []) {
-  const byListing = new Map();
-  const marketplaceIndex = new Map();
-  const sourceIndex = new Map();
-
-  for (const row of rows) {
-    const listingId = clean(row.id || '');
-    const trackedMessages = safeNumber(row.messages_count, 0);
-    byListing.set(listingId, {
-      listing_id: listingId,
-      title: clean(row.title || ''),
-      tracked_messages: trackedMessages,
-      thread_opens: 0,
-      thread_events: 0,
-      effective_messages: trackedMessages,
-      confidence: trackedMessages > 0 ? 'high' : 'low'
-    });
-    const marketplaceId = clean(row.marketplace_listing_id || '');
-    const sourceUrl = clean(row.source_url || '');
-    if (marketplaceId) marketplaceIndex.set(marketplaceId, listingId);
-    if (sourceUrl) sourceIndex.set(sourceUrl, listingId);
-  }
-
-  for (const log of usageRows) {
-    const action = clean(log?.action || '').toLowerCase();
-    if (!['message_thread_opened', 'listing_message', 'message_logged'].includes(action)) continue;
-    const metadata = log?.metadata && typeof log.metadata === 'object' ? log.metadata : {};
-    let listingId = clean(log?.listing_id || '');
-    if (!listingId) {
-      const marketplaceId = clean(metadata.marketplace_listing_id || '');
-      const sourceUrl = clean(metadata.source_url || '');
-      if (marketplaceId && marketplaceIndex.has(marketplaceId)) listingId = marketplaceIndex.get(marketplaceId) || '';
-      if (!listingId && sourceUrl && sourceIndex.has(sourceUrl)) listingId = sourceIndex.get(sourceUrl) || '';
-    }
-    if (!listingId || !byListing.has(listingId)) continue;
-    const entry = byListing.get(listingId);
-    if (action === 'message_thread_opened') {
-      entry.thread_events += 1;
-      entry.thread_opens = Math.max(entry.thread_opens, 1);
-      if (entry.tracked_messages <= 0) {
-        entry.effective_messages = Math.max(entry.effective_messages, 1);
-        entry.confidence = 'estimated';
-      }
-    } else {
-      entry.tracked_messages = Math.max(entry.tracked_messages, 1);
-      entry.effective_messages = Math.max(entry.effective_messages, entry.tracked_messages);
-      entry.confidence = 'high';
-    }
-  }
-
-  const listing_rows = [...byListing.values()].filter((row) => row.effective_messages > 0 || row.thread_events > 0);
-  const tracked_messages = listing_rows.reduce((sum, row) => sum + safeNumber(row.tracked_messages, 0), 0);
-  const estimated_conversations = listing_rows.reduce((sum, row) => sum + Math.max(0, safeNumber(row.effective_messages, 0) - safeNumber(row.tracked_messages, 0)), 0);
-  const effective_messages = listing_rows.reduce((sum, row) => sum + safeNumber(row.effective_messages, 0), 0);
-  const confidence = tracked_messages > 0 ? (estimated_conversations > 0 ? 'medium' : 'high') : (estimated_conversations > 0 ? 'estimated' : 'low');
-
-  return {
-    tracked_messages,
-    estimated_conversations,
-    effective_messages,
-    confidence,
-    listing_rows
-  };
 }
 
 function estimatePlanMonthlyRevenue(planValue) {
@@ -649,15 +575,13 @@ export default async function handler(req, res) {
     const finalEmail = normalizeEmail(user?.email || email || '');
     if (!finalUserId && !finalEmail) return res.status(400).json({ error: 'Missing userId or email' });
 
-    const [subscriptionRow, postingUsageRow, profileRow, rows, usageRows] = await Promise.all([
+    const [subscriptionRow, postingUsageRow, profileRow, rows] = await Promise.all([
       getSubscription(finalUserId, finalEmail),
       getPostingUsageRow(finalUserId, finalEmail),
       getProfileRow(finalUserId, finalEmail),
-      getListingRows(finalUserId, finalEmail),
-      getUsageLogRows(finalUserId, finalEmail)
+      getListingRows(finalUserId, finalEmail)
     ]);
     const computed = buildComputedSummary(rows);
-    const messageTracking = buildMessageTracking(rows, usageRows);
     const snapshot = subscriptionRow?.account_snapshot && typeof subscriptionRow.account_snapshot === 'object' ? subscriptionRow.account_snapshot : {};
     const planValue = clean(subscriptionRow?.plan_type || subscriptionRow?.plan_name || subscriptionRow?.plan || user?.plan || user?.user_type || 'Founder Beta');
     const forcedAccess = hasTestingLimitOverride(finalEmail);
@@ -669,7 +593,7 @@ export default async function handler(req, res) {
     const effectiveStatus = accessGranted ? 'active' : clean(subscriptionRow?.status || snapshot.status || 'inactive').toLowerCase();
     const setupStatus = buildSetupStatus(user, profileRow);
     const segmentIntel = buildSegmentPerformance(rows);
-    const alerts = buildAlerts({ ...computed, total_views: computed.total_views, total_messages: messageTracking.effective_messages });
+    const alerts = buildAlerts({ ...computed, total_views: computed.total_views, total_messages: computed.total_messages });
     const scorecards = buildScorecards(computed, rows);
     const referralCode = clean(snapshot.referral_code || subscriptionRow?.referral_code || user?.referral_code || '');
     const affiliate = await getAffiliateSummary({ referralCode, email: finalEmail });
@@ -677,8 +601,8 @@ export default async function handler(req, res) {
     const managerSummary = {
       live_inventory: computed.active_listings,
       avg_views_per_live: computed.active_listings ? Number((computed.total_views / computed.active_listings).toFixed(1)) : 0,
-      avg_messages_per_live: computed.active_listings ? Number((messageTracking.effective_messages / computed.active_listings).toFixed(1)) : 0,
-      view_to_message_rate: computed.total_views ? Number(((messageTracking.effective_messages / computed.total_views) * 100).toFixed(1)) : 0,
+      avg_messages_per_live: computed.active_listings ? Number((computed.total_messages / computed.active_listings).toFixed(1)) : 0,
+      view_to_message_rate: computed.total_views ? Number(((computed.total_messages / computed.total_views) * 100).toFixed(1)) : 0,
       stale_rate: computed.total_listings ? Number(((computed.stale_listings / computed.total_listings) * 100).toFixed(1)) : 0,
       weak_rate: computed.total_listings ? Number(((computed.weak_listings / computed.total_listings) * 100).toFixed(1)) : 0,
       weak_listings: computed.weak_listings,
@@ -695,8 +619,6 @@ export default async function handler(req, res) {
       posted_at: row.posted_at || row.created_at,
       views_count: safeNumber(row.views_count, 0),
       messages_count: safeNumber(row.messages_count, 0),
-      effective_messages_count: safeNumber(messageTracking.listing_rows.find((entry) => entry.listing_id === row.id)?.effective_messages, safeNumber(row.messages_count, 0)),
-      message_confidence: clean(messageTracking.listing_rows.find((entry) => entry.listing_id === row.id)?.confidence || (safeNumber(row.messages_count, 0) > 0 ? 'high' : 'low')),
       review_bucket: row.review_bucket || '',
       source_url: row.source_url || '',
       stock_number: row.stock_number || '',
@@ -730,8 +652,7 @@ export default async function handler(req, res) {
         active_listings: computed.active_listings,
         stale_listings: computed.stale_listings,
         total_views: computed.total_views,
-        total_messages: messageTracking.effective_messages,
-        message_tracking: messageTracking,
+        total_messages: computed.total_messages,
         review_delete_count: computed.review_delete_count,
         review_price_change_count: computed.review_price_change_count,
         review_new_count: computed.review_new_count,
