@@ -82,6 +82,99 @@ document.addEventListener("DOMContentLoaded", async () => {
   }
 });
 
+function deriveBillingCheckoutContext() {
+  const sessionPlan = clean(
+    currentNormalizedSession?.subscription?.normalized_plan ||
+    currentNormalizedSession?.subscription?.plan ||
+    dashboardSummary?.account_snapshot?.normalized_plan ||
+    dashboardSummary?.account_snapshot?.plan ||
+    currentProfile?.plan ||
+    "Founder Beta"
+  ).toLowerCase();
+
+  if (sessionPlan.includes("founder") && sessionPlan.includes("pro")) {
+    return { planType: "founder_pro", accessType: "founder", userType: "founder" };
+  }
+
+  if (sessionPlan === "pro" || (!sessionPlan.includes("founder") && sessionPlan.includes("pro"))) {
+    return { planType: "pro", accessType: "public", userType: "sales" };
+  }
+
+  if (sessionPlan === "starter" || (!sessionPlan.includes("founder") && sessionPlan.includes("starter"))) {
+    return { planType: "starter", accessType: "public", userType: "sales" };
+  }
+
+  return { planType: "founder_beta", accessType: "founder", userType: "founder" };
+}
+
+function billingLooksProvisioned() {
+  const snapshot = dashboardSummary?.account_snapshot || {};
+  const status = clean(
+    currentNormalizedSession?.subscription?.normalized_status ||
+    currentNormalizedSession?.subscription?.status ||
+    snapshot?.normalized_status ||
+    snapshot?.status ||
+    ""
+  ).toLowerCase();
+
+  return ["active", "trialing", "past_due", "unpaid", "paused", "incomplete"].includes(status);
+}
+
+function updateBillingPortalButtonState() {
+  const button = document.getElementById("openBillingPortalBtn");
+  if (!button) return;
+
+  const provisioned = billingLooksProvisioned();
+  button.textContent = provisioned ? "Open Billing Portal" : "Activate Plan";
+}
+
+async function startDashboardCheckout(context = {}) {
+  const checkoutContext = {
+    ...deriveBillingCheckoutContext(),
+    ...(context || {})
+  };
+
+  if (!currentUser?.email) {
+    throw new Error("No logged-in user found.");
+  }
+
+  setStatus("accountStatusBilling", "Starting secure checkout...");
+
+  const response = await fetch("/api/create-checkout-session", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      email: currentUser.email,
+      userId: currentUser.id,
+      planType: checkoutContext.planType,
+      userType: checkoutContext.userType,
+      accessType: checkoutContext.accessType
+    })
+  });
+
+  const rawText = await response.text();
+  let data = null;
+
+  try {
+    data = JSON.parse(rawText);
+  } catch (parseError) {
+    console.error("[checkout] Non-JSON response:", rawText);
+    throw new Error("Server error (non-JSON checkout response)");
+  }
+
+  if (!response.ok) {
+    throw new Error(data?.error || "Checkout session could not be created.");
+  }
+
+  if (!data?.url) {
+    throw new Error("Checkout URL missing.");
+  }
+
+  window.location.href = data.url;
+}
+
 function bindDashboardUI() {
   document.querySelectorAll("[data-section]").forEach((button) => {
     button.addEventListener("click", () => {
@@ -210,13 +303,14 @@ function bindDashboardUI() {
   if (openBillingPortalBtn) {
     openBillingPortalBtn.addEventListener("click", async () => {
       try {
-        if (!currentUser?.id) {
+        if (!currentUser?.id || !currentUser?.email) {
           setStatus("accountStatusBilling", "No logged-in user found.");
           return;
         }
 
-        setStatus("accountStatusBilling", "Opening billing portal...");
+        setStatus("accountStatusBilling", "Checking billing access...");
 
+        const checkoutContext = deriveBillingCheckoutContext();
         const response = await fetch("/api/create-billing-portal-session", {
           method: "POST",
           headers: {
@@ -224,7 +318,11 @@ function bindDashboardUI() {
           },
           body: JSON.stringify({
             userId: currentUser.id,
-            email: currentUser.email
+            email: currentUser.email,
+            returnPath: "/dashboard.html",
+            planType: checkoutContext.planType,
+            userType: checkoutContext.userType,
+            accessType: checkoutContext.accessType
           })
         });
 
@@ -239,13 +337,20 @@ function bindDashboardUI() {
         }
 
         if (!response.ok) {
-          throw new Error(data.error || "Could not open billing portal.");
+          throw new Error(data?.error || "Could not open billing portal.");
         }
 
-        if (!data.url) {
+        if (data?.redirectToCheckout) {
+          setStatus("accountStatusBilling", data?.message || "No active billing plan found. Redirecting to checkout...");
+          await startDashboardCheckout(data?.checkoutContext || checkoutContext);
+          return;
+        }
+
+        if (!data?.url) {
           throw new Error("Billing portal URL missing.");
         }
 
+        setStatus("accountStatusBilling", "Opening billing portal...");
         window.location.href = data.url;
       } catch (error) {
         console.error("Billing portal error:", error);
@@ -1350,6 +1455,7 @@ async function loadAccountData(user, forceFresh = false) {
     const extensionLoaded = Boolean(result);
     setStatus("accountStatus", extensionLoaded ? "Account data loaded." : "Account data loaded from dashboard summary.");
     setStatus("accountStatusBilling", extensionLoaded ? "Account data loaded." : "Account data loaded from dashboard summary.");
+    updateBillingPortalButtonState();
     if (!extensionLoaded && extensionStateError) {
       console.warn("[dashboard] proceeding without extension-state:", extensionStateError);
     } else {
@@ -1411,6 +1517,7 @@ async function loadAccountData(user, forceFresh = false) {
     persistProfileSnapshots(buildExtensionProfileSnapshot(currentNormalizedSession, currentProfile, currentUser), currentNormalizedSession);
     setStatus("accountStatus", "Failed to load extension-state. Using dashboard summary.");
     setStatus("accountStatusBilling", "Failed to load extension-state. Using dashboard summary.");
+    updateBillingPortalButtonState();
     setStatus("extensionActionStatus", "Extension state unavailable. Using saved account summary.");
   }
 }
