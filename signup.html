@@ -77,6 +77,7 @@
   <div class="card">
     <h2>Create Account</h2>
     <p>Create your Elevate Automation account.</p>
+    <p id="referralHint" style="display:none;color:#d4af37;font-size:14px;margin-top:-4px;"></p>
 
     <form id="signupForm">
       <input id="name" type="text" placeholder="Full Name" />
@@ -100,6 +101,12 @@
       const email = document.getElementById("email").value.trim();
       const password = document.getElementById("password").value;
       const message = document.getElementById("message");
+      const referralHint = document.getElementById("referralHint");
+      const lockedReferralCode = String(localStorage.getItem("elevate_referral_code") || "").trim();
+      if (lockedReferralCode && referralHint) {
+        referralHint.style.display = "block";
+        referralHint.textContent = `Referral code applied: ${lockedReferralCode}`;
+      }
 
       message.textContent = "Creating account...";
 
