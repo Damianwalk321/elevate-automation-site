@@ -654,9 +654,11 @@ function renderListingsGrid(listings) {
 
           <div class="listing-actions">
             <button class="action-btn" type="button" onclick="markListingSold('${escapeJs(item.id)}')">Mark Sold</button>
+            <button class="action-btn" type="button" onclick="trackListingView('${escapeJs(item.id)}')">Log View</button>
+            <button class="action-btn" type="button" onclick="trackListingMessage('${escapeJs(item.id)}')">Log Message</button>
             ${
               item.source_url
-                ? `<button class="action-btn" type="button" onclick="window.open('${escapeJs(item.source_url)}','_blank')">Open Source</button>`
+                ? `<button class="action-btn" type="button" onclick="openListingSource('${escapeJs(item.id)}', '${escapeJs(item.source_url)}')">Open Source</button>`
                 : `<button class="action-btn" type="button" onclick="copyVehicleSummary('${escapeJs(item.id)}')">Copy Summary</button>`
             }
           </div>
@@ -1630,6 +1632,51 @@ function redirectToLogin() {
   window.location.href = "/login.html";
 }
 
+
+async function logListingUsage(action, listingId, metadata = {}) {
+  try {
+    if (!currentUser?.email || !listingId) return null;
+    const response = await fetch("/api/log-usage", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        userId: currentUser?.id || "",
+        email: currentUser?.email || "",
+        action,
+        listingId,
+        metadata
+      })
+    });
+
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(result?.error || `Usage log failed (${response.status})`);
+    await loadListingDashboardData(true);
+    return result;
+  } catch (error) {
+    console.error("logListingUsage error:", error);
+    setStatus("listingGridStatus", `Tracking error: ${error.message || "Unknown error"}`);
+    return null;
+  }
+}
+
+async function trackListingView(listingId) {
+  const item = dashboardListings.find((row) => row.id === listingId);
+  const result = await logListingUsage("listing_viewed", listingId, { source_url: item?.source_url || "" });
+  if (result?.success) setStatus("listingGridStatus", "View tracked.");
+}
+
+async function trackListingMessage(listingId) {
+  const item = dashboardListings.find((row) => row.id === listingId);
+  const result = await logListingUsage("listing_message", listingId, { source_url: item?.source_url || "" });
+  if (result?.success) setStatus("listingGridStatus", "Message tracked.");
+}
+
+async function openListingSource(listingId, sourceUrl) {
+  const item = dashboardListings.find((row) => row.id === listingId);
+  await logListingUsage("listing_card_opened", listingId, { source_url: item?.source_url || sourceUrl || "" });
+  if (sourceUrl) window.open(sourceUrl, "_blank");
+}
+
 async function markListingSold(listingId) {
   try {
     const row = dashboardListings.find((item) => item.id === listingId);
@@ -1894,3 +1941,6 @@ function cryptoRandomFallback() {
 
 window.markListingSold = markListingSold;
 window.copyVehicleSummary = copyVehicleSummary;
+window.trackListingView = trackListingView;
+window.trackListingMessage = trackListingMessage;
+window.openListingSource = openListingSource;
