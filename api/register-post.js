@@ -182,20 +182,20 @@ function buildTitle(payload) {
   );
 }
 
-function buildListingRow(payload, resolved) {
+function buildListingRow(payload, resolved, existing = null) {
   const timestamp = nowIso();
   const listingId = buildListingId(payload);
 
   return {
-    id: listingId,
+    id: clean(existing?.id || listingId),
     user_id: clean(resolved.user_id),
     email: lower(resolved.email || payload.email),
     dealership_id: clean(payload.dealership_id),
-    marketplace_listing_id: clean(payload.marketplace_listing_id),
-    vin: clean(payload.vin),
-    stock_number: clean(payload.stock_number || payload.stock),
-    source_url: clean(payload.source_url),
-    image_url: clean(payload.image_url),
+    marketplace_listing_id: clean(payload.marketplace_listing_id || existing?.marketplace_listing_id),
+    vin: clean(payload.vin || existing?.vin),
+    stock_number: clean(payload.stock_number || payload.stock || existing?.stock_number),
+    source_url: normalizeListingUrl(payload.source_url || existing?.source_url),
+    image_url: clean(payload.image_url || existing?.image_url),
     year: integerOrZero(payload.year),
     make: clean(payload.make),
     model: clean(payload.model),
@@ -288,6 +288,55 @@ function isSamePostingWindow(existingRow, incomingRow) {
   return sameDay && withinWindow && existingStatus === incomingStatus;
 }
 
+function isDuplicateRegister(existingRow, incomingRow) {
+  if (!existingRow || !incomingRow) return false;
+  if (!isSamePostingWindow(existingRow, incomingRow)) return false;
+
+  const sameMarketplaceId = clean(existingRow.marketplace_listing_id || "") && clean(existingRow.marketplace_listing_id || "") === clean(incomingRow.marketplace_listing_id || "");
+  const sameVin = clean(existingRow.vin || "") && clean(existingRow.vin || "") === clean(incomingRow.vin || "");
+  const sameStock = clean(existingRow.stock_number || "") && clean(existingRow.stock_number || "") === clean(incomingRow.stock_number || "");
+  const sameUrl = normalizeListingUrl(existingRow.source_url || "") && normalizeListingUrl(existingRow.source_url || "") === normalizeListingUrl(incomingRow.source_url || "");
+
+  return Boolean(sameMarketplaceId || sameVin || sameStock || sameUrl);
+}
+
+async function getCurrentPostingUsage(supabase, resolved) {
+  const today = dayKey();
+  let existing = null;
+
+  if (lower(resolved.email)) {
+    const { data, error } = await supabase
+      .from("posting_usage")
+      .select("*")
+      .ilike("email", lower(resolved.email))
+      .eq("date_key", today)
+      .order("updated_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (error) throw error;
+    existing = data || null;
+  }
+
+  if (!existing && clean(resolved.user_id)) {
+    const { data, error } = await supabase
+      .from("posting_usage")
+      .select("*")
+      .eq("user_id", clean(resolved.user_id))
+      .eq("date_key", today)
+      .order("updated_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (error) throw error;
+    existing = data || null;
+  }
+
+  return Math.max(
+    integerOrZero(existing?.posts_today),
+    integerOrZero(existing?.posts_used),
+    integerOrZero(existing?.used_today)
+  );
+}
+
 async function upsertPostingUsage(supabase, resolved) {
   if (!clean(resolved.user_id) && !lower(resolved.email)) return { ok: false, reason: "missing_identity" };
 
@@ -314,7 +363,7 @@ async function upsertPostingUsage(supabase, resolved) {
     const { data, error } = await supabase
       .from("posting_usage")
       .select("*")
-      .ilike("email", lower(resolved.email))
+      .eq("user_id", clean(resolved.user_id))
       .eq("date_key", today)
       .maybeSingle();
 
@@ -451,39 +500,57 @@ export default async function handler(req, res) {
       return json(res, 400, { ok: false, error: "Missing user identity" });
     }
 
-    const listingRow = buildListingRow(payload, resolved);
-    const existingListing = await findExistingListing(supabase, resolved, listingRow, payload);
-    const duplicate = isSamePostingWindow(existingListing, listingRow);
+    const seedListingRow = buildListingRow(payload, resolved);
+    const existingListing = await findExistingListing(supabase, resolved, seedListingRow, payload);
+    const listingRow = buildListingRow(payload, resolved, existingListing);
+    const duplicate = isDuplicateRegister(existingListing, listingRow);
+
+    const rowForUpsert = duplicate && existingListing
+      ? {
+          ...existingListing,
+          ...listingRow,
+          id: clean(existingListing.id || listingRow.id),
+          posted_at: clean(existingListing.posted_at || listingRow.posted_at),
+          updated_at: nowIso(),
+          last_seen_at: nowIso(),
+          views_count: Math.max(integerOrZero(existingListing.views_count), integerOrZero(listingRow.views_count)),
+          messages_count: Math.max(integerOrZero(existingListing.messages_count), integerOrZero(listingRow.messages_count))
+        }
+      : listingRow;
 
     const { error: userListingsError } = await supabase
       .from("user_listings")
-      .upsert(listingRow, { onConflict: "id" });
+      .upsert(rowForUpsert, { onConflict: "id" });
 
     if (userListingsError) throw userListingsError;
 
-    await mirrorListingToLegacyTable(supabase, listingRow);
+    await mirrorListingToLegacyTable(supabase, rowForUpsert);
 
     let usageResult = null;
+    const currentPostsUsed = await getCurrentPostingUsage(supabase, resolved);
 
-    // Always increment posting usage on a confirmed register-post call.
-    // A listing row may already exist because of lifecycle sync or pre-publish writes,
-    // but a successful publish still consumes one daily posting slot.
-    usageResult = await upsertPostingUsage(supabase, resolved);
+    if (!duplicate) {
+      usageResult = await upsertPostingUsage(supabase, resolved);
+    }
 
-    const snapshotResult = await syncSubscriptionSnapshot(supabase, resolved, usageResult?.posts_used || 0);
+    const snapshotResult = await syncSubscriptionSnapshot(
+      supabase,
+      resolved,
+      duplicate ? currentPostsUsed : (usageResult?.posts_used || currentPostsUsed || 0)
+    );
 
     return json(res, 200, {
       ok: true,
       duplicate,
       user_id: resolved.user_id,
       email: resolved.email,
-      listing_id: listingRow.id,
-      posts_used_today: usageResult?.posts_used || 0,
+      listing_id: rowForUpsert.id,
+      posts_used_today: duplicate ? currentPostsUsed : (usageResult?.posts_used || currentPostsUsed || 0),
       posting_usage_updated_at: nowIso(),
       posting_state: snapshotResult?.snapshot || null,
       debug: {
         duplicate,
-        usage_incremented: true,
+        usage_incremented: !duplicate,
         resolved_user_id: resolved.user_id,
         resolved_email: resolved.email
       }
