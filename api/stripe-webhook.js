@@ -156,8 +156,33 @@ async function updateUsersTable({ userId, email, customerId, subscriptionId, pri
   }
 }
 
-async function upsertSubscriptionsMirror({ user, email, customerId, subscriptionId, priceId, planName, status, currentPeriodEnd, trialEnd, cancelAtPeriodEnd, referralCode, accessType }) {
+
+async function getExistingSubscriptionByEmail(email) {
+  const normalizedEmail = normalizeEmail(email);
+  if (!normalizedEmail) return null;
+  const { data, error } = await supabase
+    .from("subscriptions")
+    .select("*")
+    .ilike("email", normalizedEmail)
+    .order("updated_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) {
+    console.error("existing subscription lookup warning:", error.message);
+    return null;
+  }
+  return data || null;
+}
+
+async function upsertSubscriptionsMirror({ user, email, customerId, subscriptionId, priceId, planName, status, currentPeriodEnd, trialEnd, cancelAtPeriodEnd, referralCode, referralSource, accessType }) {
   const normalizedEmail = normalizeEmail(firstNonEmpty(email, user?.email));
+  const existing = await getExistingSubscriptionByEmail(normalizedEmail);
+  const existingSnapshot = existing?.account_snapshot && typeof existing.account_snapshot === "object" ? existing.account_snapshot : {};
+  const lockedReferralCode = clean(existing?.referral_code || existingSnapshot.referral_code || "");
+  const lockedReferralSource = clean(existingSnapshot.referral_source || "");
+  const finalReferralCode = clean(lockedReferralCode || referralCode || "");
+  const finalReferralSource = clean(lockedReferralSource || referralSource || "");
   const payload = {
     user_id: user?.id || null,
     email: normalizedEmail || null,
@@ -175,7 +200,7 @@ async function upsertSubscriptionsMirror({ user, email, customerId, subscription
     current_period_end: currentPeriodEnd || null,
     trial_end: trialEnd || null,
     cancel_at_period_end: Boolean(cancelAtPeriodEnd),
-    referral_code: clean(referralCode) || null,
+    referral_code: finalReferralCode || null,
     access_type: clean(accessType) || null,
     account_snapshot: {
       user_id: user?.id || null,
@@ -191,7 +216,9 @@ async function upsertSubscriptionsMirror({ user, email, customerId, subscription
       posts_remaining: getDailyPostingLimit(planName, status),
       current_period_end: currentPeriodEnd || null,
       trial_end: trialEnd || null,
-      cancel_at_period_end: Boolean(cancelAtPeriodEnd)
+      cancel_at_period_end: Boolean(cancelAtPeriodEnd),
+      referral_code: finalReferralCode || null,
+      referral_source: finalReferralSource || null
     },
     updated_at: new Date().toISOString()
   };
@@ -205,7 +232,7 @@ async function upsertSubscriptionsMirror({ user, email, customerId, subscription
   }
 }
 
-async function syncBillingState({ userId, email, customerId, subscriptionId, priceId, planName, status, currentPeriodEnd, trialEnd, cancelAtPeriodEnd, referralCode, accessType }) {
+async function syncBillingState({ userId, email, customerId, subscriptionId, priceId, planName, status, currentPeriodEnd, trialEnd, cancelAtPeriodEnd, referralCode, referralSource, accessType }) {
   const user = await findUser({ email, customerId, subscriptionId, userId });
 
   await updateUsersTable({
@@ -230,6 +257,7 @@ async function syncBillingState({ userId, email, customerId, subscriptionId, pri
     trialEnd,
     cancelAtPeriodEnd,
     referralCode,
+    referralSource,
     accessType
   });
 }
@@ -313,6 +341,7 @@ export default async function handler(req, res) {
         trialEnd: hydrated.trialEnd,
         cancelAtPeriodEnd: hydrated.cancelAtPeriodEnd,
         referralCode: session.metadata?.referral_code || hydrated.metadata?.referral_code || "",
+        referralSource: session.metadata?.referral_source || hydrated.metadata?.referral_source || "",
         accessType: session.metadata?.access_type || hydrated.metadata?.access_type || ""
       });
     }
@@ -338,6 +367,7 @@ export default async function handler(req, res) {
         trialEnd: subscription.trial_end ? new Date(subscription.trial_end * 1000).toISOString() : null,
         cancelAtPeriodEnd: Boolean(subscription.cancel_at_period_end),
         referralCode: subscription.metadata?.referral_code || "",
+        referralSource: subscription.metadata?.referral_source || "",
         accessType: subscription.metadata?.access_type || ""
       });
     }
@@ -362,6 +392,7 @@ export default async function handler(req, res) {
         trialEnd: subscription.trial_end ? new Date(subscription.trial_end * 1000).toISOString() : null,
         cancelAtPeriodEnd: Boolean(subscription.cancel_at_period_end),
         referralCode: subscription.metadata?.referral_code || "",
+        referralSource: subscription.metadata?.referral_source || "",
         accessType: subscription.metadata?.access_type || ""
       });
     }
