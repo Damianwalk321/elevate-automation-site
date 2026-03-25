@@ -16,6 +16,18 @@ function normalizeEmail(value) {
   return clean(value).toLowerCase();
 }
 
+function normalizeReferralSource(value) {
+  const source = clean(value).toLowerCase().replace(/[^a-z0-9_:-]+/g, '_');
+  if (!source) return '';
+  if (["ref","referral","link","direct_link"].includes(source)) return 'link';
+  if (["checkout","stripe","billing"].includes(source)) return 'checkout';
+  if (["signup","auth","register"].includes(source)) return 'signup';
+  if (["story","ig_story","facebook_story"].includes(source)) return 'story';
+  if (["dm","message","direct_message"].includes(source)) return 'dm';
+  return source;
+}
+
+
 function getSiteUrl(req) {
   return (
     process.env.SITE_URL ||
@@ -124,7 +136,7 @@ function getTrialEndUnix(trialUntilIso) {
   return unix;
 }
 
-async function findOrCreateCustomer({ stripeClient, email, userId, referralCode = "", referralSource = "" }) {
+async function findOrCreateCustomer({ stripeClient, email, userId }) {
   const normalizedEmail = normalizeEmail(email);
 
   const existing = await stripeClient.customers.list({
@@ -146,12 +158,6 @@ async function findOrCreateCustomer({ stripeClient, email, userId, referralCode 
     if (normalizedEmail && !nextMetadata.email) {
       nextMetadata.email = normalizedEmail;
     }
-    if (clean(referralCode) && !nextMetadata.referral_code) {
-      nextMetadata.referral_code = clean(referralCode);
-    }
-    if (clean(referralSource) && !nextMetadata.referral_source) {
-      nextMetadata.referral_source = clean(referralSource);
-    }
 
     if (
       JSON.stringify(nextMetadata) !== JSON.stringify(customer.metadata || {})
@@ -168,9 +174,7 @@ async function findOrCreateCustomer({ stripeClient, email, userId, referralCode 
     email: normalizedEmail,
     metadata: {
       email: normalizedEmail,
-      user_id: clean(userId || ""),
-      referral_code: clean(referralCode || ""),
-      referral_source: clean(referralSource || "")
+      user_id: clean(userId || "")
     }
   });
 }
@@ -294,6 +298,7 @@ export default async function handler(req, res) {
     const lockedReferral = await getLockedReferralFromSupabase({ email, userId });
     if (!referralCode) referralCode = clean(lockedReferral.referralCode || "");
     if (!referralSource) referralSource = clean(lockedReferral.referralSource || "");
+    referralSource = normalizeReferralSource(referralSource);
     if (!referralSource && referralCode) referralSource = "checkout";
     const plan = getPlanConfig(planType, accessType, userType);
 
@@ -317,9 +322,7 @@ export default async function handler(req, res) {
     const customer = await findOrCreateCustomer({
       stripeClient: stripe,
       email,
-      userId,
-      referralCode,
-      referralSource
+      userId
     });
 
     await mirrorCustomerToSupabase({
