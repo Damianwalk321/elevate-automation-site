@@ -323,38 +323,6 @@ function estimatePlanMonthlyRevenue(planValue) {
   if (plan === 'pro' || (!plan.includes('founder') && plan.includes('pro'))) return 79;
   return 39;
 }
-
-function buildOnboardingSummary(setupStatus = {}, computed = {}, snapshot = {}) {
-  const profileComplete = Boolean(setupStatus.profile_complete);
-  const inventoryReady = Boolean(setupStatus.inventory_url_present || clean(setupStatus.inventory_url));
-  const firstScanComplete = Boolean(safeNumber(snapshot.queue_count, 0) > 0 || safeNumber(computed.total_listings, 0) > 0 || clean(snapshot.lifecycle_updated_at));
-  const firstPostComplete = Boolean(safeNumber(snapshot.posts_today ?? snapshot.posts_used_today, 0) > 0 || safeNumber(computed.posts_today, 0) > 0 || safeNumber(computed.total_listings, 0) > 0);
-  const steps = [
-    { key: 'profile', label: 'Complete profile', complete: profileComplete },
-    { key: 'inventory', label: 'Add inventory URL', complete: inventoryReady },
-    { key: 'scan', label: 'Run first scan', complete: firstScanComplete },
-    { key: 'post', label: 'Post first listing', complete: firstPostComplete }
-  ];
-  const completedSteps = steps.filter((step) => step.complete).length;
-  const totalSteps = steps.length;
-  let nextBestAction = 'Keep your dashboard active and review your live listings.';
-  const firstIncomplete = steps.find((step) => !step.complete);
-  if (firstIncomplete?.key === 'profile') nextBestAction = 'Complete your profile so the extension can sync your salesperson and dealer details.';
-  else if (firstIncomplete?.key === 'inventory') nextBestAction = 'Add your dealer inventory URL so Elevate can scan the correct site.';
-  else if (firstIncomplete?.key === 'scan') nextBestAction = 'Run your first scan to pull inventory into your posting workflow.';
-  else if (firstIncomplete?.key === 'post') nextBestAction = 'Post your first listing to complete activation and start tracking results.';
-  return {
-    steps,
-    completed_steps: completedSteps,
-    total_steps: totalSteps,
-    completion_percent: totalSteps ? Math.round((completedSteps / totalSteps) * 100) : 0,
-    first_scan_complete: firstScanComplete,
-    first_post_complete: firstPostComplete,
-    next_best_action: nextBestAction,
-    complete: completedSteps === totalSteps
-  };
-}
-
 async function getAffiliateSummary({ referralCode, referralSource, email }) {
   const code = clean(referralCode || '');
   const ownerSource = clean(referralSource || '');
@@ -574,6 +542,59 @@ function buildSegmentPerformance(rows) {
     opportunities: values.filter((item) => item.views >= 10 && item.messages === 0).slice(0, 6)
   };
 }
+
+function buildFirstWin(summary) {
+  const postsToday = safeNumber(summary.posts_today, 0);
+  const totalViews = safeNumber(summary.total_views, 0);
+  const totalMessages = safeNumber(summary.total_messages, 0);
+  const activeListings = safeNumber(summary.active_listings, 0);
+  const reviewToday = safeNumber(summary.action_center?.review_today, 0);
+  const promoteToday = safeNumber(summary.action_center?.promote_today, 0);
+
+  let stage = 'setup';
+  let title = 'Start your first win';
+  let message = 'Complete setup and publish your first listing so the platform can start generating traction.';
+  let nextAction = 'Complete profile setup and post your first listing.';
+  let momentum = 5;
+  let show = true;
+
+  if (postsToday > 0 || activeListings > 0) {
+    stage = 'posted';
+    title = 'You're live';
+    message = `You have ${Math.max(postsToday, activeListings)} live posting signal${Math.max(postsToday, activeListings) === 1 ? '' : 's'} in the system. Keep momentum going.`;
+    nextAction = totalViews > 0 ? 'Focus on converting views into your first message.' : 'Promote one live listing and open it to sync views.';
+    momentum = 35;
+  }
+
+  if (totalViews > 0) {
+    stage = 'views';
+    title = 'Your listings are getting attention';
+    message = `${totalViews} tracked view${totalViews === 1 ? '' : 's'} means buyers are seeing your inventory.`;
+    nextAction = totalMessages > 0 ? 'Keep engaging and review what is already converting.' : 'Push one strong listing again to generate your first buyer message.';
+    momentum = 65;
+  }
+
+  if (totalMessages > 0) {
+    stage = 'message';
+    title = 'You generated traction';
+    message = `${totalMessages} buyer message${totalMessages === 1 ? '' : 's'} tracked so far. The engine is working.`;
+    nextAction = reviewToday > 0 ? `Review ${reviewToday} listing${reviewToday === 1 ? '' : 's'} next.` : (promoteToday > 0 ? `Promote ${promoteToday} high-performing listing${promoteToday === 1 ? '' : 's'} next.` : 'Keep posting consistently and reinforce top-performing listings.');
+    momentum = 100;
+  }
+
+  return {
+    show,
+    stage,
+    title,
+    message,
+    next_action: nextAction,
+    momentum_score: momentum,
+    posts_today: postsToday,
+    total_views: totalViews,
+    total_messages: totalMessages
+  };
+}
+
 function buildManagerRecommendations(summary, segmentIntel) {
   const recommendations = [];
   if (summary.action_center.review_today > 0) recommendations.push(`Review ${summary.action_center.review_today} listing${summary.action_center.review_today === 1 ? '' : 's'} currently in queue.`);
@@ -617,7 +638,7 @@ export default async function handler(req, res) {
     const scorecards = buildScorecards(computed, rows);
     const referralCode = clean(snapshot.referral_code || subscriptionRow?.referral_code || user?.referral_code || '');
     const affiliate = await getAffiliateSummary({ referralCode, email: finalEmail });
-    const onboarding = buildOnboardingSummary(setupStatus, computed, snapshot);
+    const firstWin = buildFirstWin({ ...computed, total_views: computed.total_views, total_messages: computed.total_messages });
     const managerAccess = Boolean(snapshot.organization_role === 'admin' || snapshot.organization_role === 'manager' || snapshot.team_access === true || clean(snapshot.plan_type).toLowerCase() === 'team' || clean(snapshot.plan_type).toLowerCase() === 'dealership');
     const managerSummary = {
       live_inventory: computed.active_listings,
@@ -692,7 +713,7 @@ export default async function handler(req, res) {
         scorecards,
         intelligence: segmentIntel,
         affiliate,
-        onboarding,
+        first_win: firstWin,
         daily_ops_queues: computed.action_center,
         manager_access: managerAccess,
         manager_summary: managerSummary,
