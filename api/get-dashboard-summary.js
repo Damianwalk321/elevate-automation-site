@@ -22,6 +22,14 @@ function dayKeyNow() {
   return new Date().toISOString().slice(0, 10);
 }
 
+const TEST_LIMIT_25_EMAILS = new Set([
+  'damian044@icloud.com'
+]);
+
+function hasTestingLimitOverride(email) {
+  return TEST_LIMIT_25_EMAILS.has(normalizeEmail(email));
+}
+
 function monthStartIso() {
   const d = new Date();
   d.setDate(1);
@@ -461,7 +469,7 @@ export default async function handler(req, res) {
       "inactive"
     ).toLowerCase();
 
-    const dailyLimit = safeNumber(
+    const configuredDailyLimit = safeNumber(
       postingLimitRow?.daily_limit ??
       postingLimitRow?.posting_limit ??
       snapshot.posting_limit ??
@@ -471,17 +479,17 @@ export default async function handler(req, res) {
       inferPostingLimitFromPlan(effectivePlan)
     );
 
-    const usageToday = safeNumber(
-      postingUsageRow?.posts_today ??
-      postingUsageRow?.posts_used ??
-      postingUsageRow?.used_today ??
-      snapshot.posts_today ??
-      snapshot.posts_used_today ??
-      computed.posts_today,
-      computed.posts_today
+    const dailyLimit = hasTestingLimitOverride(finalEmail)
+      ? 25
+      : configuredDailyLimit;
+
+    const usageToday = Math.max(
+      safeNumber(postingUsageRow?.posts_today ?? postingUsageRow?.posts_used ?? postingUsageRow?.used_today, 0),
+      safeNumber(snapshot.posts_today ?? snapshot.posts_used_today, 0),
+      safeNumber(computed.posts_today, 0)
     );
 
-    const postsRemaining = Math.max(safeNumber(snapshot.posts_remaining, dailyLimit - usageToday), 0);
+    const postsRemaining = Math.max(dailyLimit - usageToday, 0);
     const setupStatus = buildSetupStatus(user, profileRow);
 
     const recentListings = rows.slice(0, 5).map((row) => ({
@@ -525,7 +533,9 @@ export default async function handler(req, res) {
           posting_usage_date_key: clean(postingUsageRow?.date_key || postingUsageRow?.date || ""),
           listing_rows_found: rows.length,
           subscription_snapshot_posts_today: safeNumber(snapshot.posts_today ?? snapshot.posts_used_today, 0),
-          usage_today_row: safeNumber(postingUsageRow?.posts_today ?? postingUsageRow?.posts_used ?? postingUsageRow?.used_today, 0)
+          usage_today_row: safeNumber(postingUsageRow?.posts_today ?? postingUsageRow?.posts_used ?? postingUsageRow?.used_today, 0),
+          usage_today_computed: safeNumber(computed.posts_today, 0),
+          testing_limit_override: hasTestingLimitOverride(finalEmail)
         },
         account_snapshot: {
           ...(snapshot || {}),
