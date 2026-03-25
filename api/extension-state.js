@@ -29,6 +29,36 @@ function normalizeEmail(value) {
   return clean(value).toLowerCase();
 }
 
+
+const BUSINESS_TIME_ZONE = 'America/Edmonton';
+
+function getBusinessDateParts(date = new Date()) {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: BUSINESS_TIME_ZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
+  }).formatToParts(date instanceof Date ? date : new Date(date));
+  const map = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  return {
+    year: map.year || '0000',
+    month: map.month || '00',
+    day: map.day || '00'
+  };
+}
+
+function businessDayKey(date = new Date()) {
+  const { year, month, day } = getBusinessDateParts(date);
+  return `${year}-${month}-${day}`;
+}
+
+function toBusinessDayKey(value) {
+  if (!value) return '';
+  const parsed = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(parsed.getTime())) return '';
+  return businessDayKey(parsed);
+}
+
 function safeHostname(input) {
   try {
     return new URL(input).hostname.replace(/^www\./, "").toLowerCase();
@@ -105,18 +135,20 @@ function dealershipMatchesHostname(dealership, hostname) {
 }
 
 async function getTodayListingPostedCount(supabase, userId, email) {
-  const todayStart = new Date();
-  todayStart.setHours(0, 0, 0, 0);
-  const iso = todayStart.toISOString();
   const finalEmail = normalizeEmail(email);
   const finalUserId = clean(userId);
+  const todayKey = businessDayKey();
 
   async function fetchRows(tableName) {
     const rows = [];
     const seen = new Set();
 
     async function runQuery(mode) {
-      let query = supabase.from(tableName).select('id,posted_at,created_at,email,user_id').gte('posted_at', iso);
+      let query = supabase
+        .from(tableName)
+        .select('id,posted_at,created_at,email,user_id')
+        .order('updated_at', { ascending: false })
+        .limit(500);
       if (mode === 'user' && finalUserId) query = query.eq('user_id', finalUserId);
       if (mode === 'email' && finalEmail) query = query.ilike('email', finalEmail);
       const { data, error } = await query;
@@ -138,10 +170,10 @@ async function getTodayListingPostedCount(supabase, userId, email) {
   const seen = new Set();
   let count = 0;
   for (const row of [...userRows, ...legacyRows]) {
-    const key = clean(row?.id || '') || `${clean(row?.posted_at || row?.created_at || '')}`;
-    if (!key || seen.has(key)) continue;
-    seen.add(key);
-    count += 1;
+    const identity = clean(row?.id || '') || `${clean(row?.email || '')}|${clean(row?.posted_at || row?.created_at || '')}`;
+    if (!identity || seen.has(identity)) continue;
+    seen.add(identity);
+    if (toBusinessDayKey(row?.posted_at || row?.created_at || '') === todayKey) count += 1;
   }
   return count;
 }
@@ -502,7 +534,7 @@ export default async function handler(req, res) {
         .from("posting_usage")
         .select("*")
         .or(`user_id.eq.${user.id},email.eq.${email}`)
-        .eq("date_key", new Date().toISOString().slice(0, 10))
+        .eq("date_key", businessDayKey())
         .order("updated_at", { ascending: false })
         .limit(1)
         .maybeSingle(),
@@ -666,6 +698,17 @@ export default async function handler(req, res) {
     subscription.update_required = updateRequired;
     subscription.allowed_dealer_hosts = allowedDealerHosts;
     subscription.access_granted = Boolean(subscription.active);
+    if (hasTestingLimitOverride(email)) {
+      subscription.active = true;
+      subscription.access_granted = true;
+      subscription.status = 'active';
+      subscription.normalized_status = 'active';
+      subscription.plan = subscription.plan || 'Founder Beta';
+      subscription.normalized_plan = subscription.normalized_plan || subscription.plan;
+      subscription.posting_limit = 25;
+      subscription.daily_posting_limit = 25;
+      subscription.posts_remaining = Math.max(25 - Number(subscription.posts_today || 0), 0);
+    }
 
     const session = {
       user: {
