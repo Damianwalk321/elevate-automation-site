@@ -920,72 +920,29 @@
         </div>
 
 
-        <div id="onboardingCompactBar" class="card" style="display:none; margin-top:18px;">
+        <div id="firstWinSection" class="card" style="margin-top:18px;">
           <div class="section-head">
-            <h2>Onboarding Complete</h2>
-            <div class="subtext">Your core setup is complete. Reopen the checklist any time.</div>
+            <h2 id="firstWinTitle">First Win</h2>
+            <div class="subtext">Activation momentum and next best action</div>
           </div>
-          <div class="grid-3" style="margin-top: 12px;">
+          <div class="grid-3" style="align-items:start;">
             <div>
-              <div class="stat-label">Completion</div>
-              <div id="onboardingCompactPercent" class="stat-value">100%</div>
-            </div>
-            <div>
-              <div class="stat-label">First Scan</div>
-              <div id="onboardingCompactScan" class="stat-value" style="font-size:18px;">Complete</div>
+              <div id="firstWinMessage" class="list-block">Loading first-win status...</div>
             </div>
             <div>
-              <div class="stat-label">First Post</div>
-              <div id="onboardingCompactPost" class="stat-value" style="font-size:18px;">Complete</div>
+              <div class="stat-label">Momentum</div>
+              <div id="firstWinMomentum" class="stat-value">0%</div>
+              <div class="stat-sub">Progress from first post to first traction</div>
             </div>
-          </div>
-          <div style="display:flex; gap:10px; margin-top:14px; flex-wrap:wrap;">
-            <button id="reopenOnboardingBtn" class="btn-secondary" type="button">Reopen Checklist</button>
-          </div>
-        </div>
-
-        <div id="onboardingFullSection" class="grid-2" style="margin-top:18px; display:none;">
-          <div class="card">
-            <div class="section-head">
-              <h2>Getting Started</h2>
-              <div class="subtext">Complete your first-win path in under 10 minutes.</div>
-            </div>
-            <div id="onboardingChecklist" class="list-block" style="margin-top:12px;"></div>
-            <div style="display:flex; gap:10px; margin-top:14px; flex-wrap:wrap;">
-              <button id="copyOnboardingStepsBtn" class="btn-secondary" type="button">Copy Onboarding Steps</button>
-              <button id="openProfileSetupBtn" class="btn-secondary" type="button">Open Profile Setup</button>
-              <button id="toggleOnboardingBtn" class="btn-secondary" type="button">Collapse</button>
-              <button id="dismissOnboardingBtn" class="btn-danger" type="button">Dismiss</button>
-            </div>
-          </div>
-          <div class="card">
-            <div class="section-head">
-              <h2>Activation Snapshot</h2>
-              <div class="subtext">Live progress toward your first result.</div>
-            </div>
-            <div class="grid-2" style="margin-top:12px;">
-              <div>
-                <div class="stat-label">Checklist Progress</div>
-                <div id="onboardingProgressText" class="stat-value" style="font-size:22px;">0 / 4</div>
-              </div>
-              <div>
-                <div class="stat-label">Completion</div>
-                <div id="onboardingCompletionPercent" class="stat-value" style="font-size:22px;">0%</div>
-              </div>
-              <div>
-                <div class="stat-label">First Scan</div>
-                <div id="onboardingFirstScan" class="stat-value" style="font-size:18px;">Pending</div>
-              </div>
-              <div>
-                <div class="stat-label">First Post</div>
-                <div id="onboardingFirstPost" class="stat-value" style="font-size:18px;">Pending</div>
-              </div>
-            </div>
-            <div class="list-block" style="margin-top:14px;">
+            <div>
               <div class="stat-label">Next Best Action</div>
-              <div id="onboardingNextBestAction">Loading...</div>
+              <div id="firstWinNextAction" class="list-block">Loading next action...</div>
+              <div class="action-grid" style="margin-top:12px;">
+                <button id="copyFirstWinPlanBtn" class="action-btn" type="button">Copy Action Plan</button>
+              </div>
             </div>
           </div>
+          <div id="firstWinProgress" class="status-line" style="margin-top:12px;"></div>
         </div>
 
         <div class="grid-5">
