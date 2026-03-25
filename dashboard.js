@@ -105,6 +105,101 @@ document.addEventListener("DOMContentLoaded", async () => {
   }
 });
 
+function deriveBillingCheckoutContext() {
+  const sessionPlan = clean(
+    currentNormalizedSession?.subscription?.normalized_plan ||
+    currentNormalizedSession?.subscription?.plan ||
+    dashboardSummary?.account_snapshot?.normalized_plan ||
+    dashboardSummary?.account_snapshot?.plan ||
+    currentProfile?.plan ||
+    "Founder Beta"
+  ).toLowerCase();
+
+  if (sessionPlan.includes("founder") && sessionPlan.includes("pro")) {
+    return { planType: "founder_pro", accessType: "founder", userType: "founder" };
+  }
+
+  if (sessionPlan === "pro" || (!sessionPlan.includes("founder") && sessionPlan.includes("pro"))) {
+    return { planType: "pro", accessType: "public", userType: "sales" };
+  }
+
+  if (sessionPlan === "starter" || (!sessionPlan.includes("founder") && sessionPlan.includes("starter"))) {
+    return { planType: "starter", accessType: "public", userType: "sales" };
+  }
+
+  return { planType: "founder_beta", accessType: "founder", userType: "founder" };
+}
+
+function getBillingActionState() {
+  const snapshot = dashboardSummary?.account_snapshot || {};
+  const subscription = currentNormalizedSession?.subscription || {};
+
+  const status = clean(
+    subscription?.normalized_status ||
+    subscription?.status ||
+    snapshot?.normalized_status ||
+    snapshot?.status ||
+    ""
+  ).toLowerCase();
+
+  const hasCustomer = Boolean(clean(
+    subscription?.stripe_customer_id ||
+    subscription?.customer_id ||
+    snapshot?.stripe_customer_id ||
+    snapshot?.customer_id ||
+    currentProfile?.stripe_customer_id ||
+    ""
+  ));
+
+  const hasSubscriptionRecord = Boolean(clean(
+    subscription?.id ||
+    subscription?.stripe_subscription_id ||
+    snapshot?.subscription_id ||
+    snapshot?.stripe_subscription_id ||
+    ""
+  ));
+
+  const provisioned = ["active", "trialing", "past_due", "unpaid", "paused"].includes(status);
+  const partialBilling = hasCustomer || hasSubscriptionRecord || ["incomplete", "incomplete_expired"].includes(status);
+
+  if (provisioned) {
+    return {
+      mode: "manage",
+      label: "Manage Billing",
+      helper: "Your billing profile is active. Open Stripe to manage payment method, invoices, or plan changes."
+    };
+  }
+
+  if (partialBilling) {
+    return {
+      mode: "activate",
+      label: "Complete Plan Activation",
+      helper: "Your account exists, but billing is not fully activated yet. Complete checkout to finish setup."
+    };
+  }
+
+  return {
+    mode: "activate",
+    label: "Activate Plan",
+    helper: "Set up billing to unlock subscription access and Stripe account management."
+  };
+}
+
+function updateBillingPortalButtonState() {
+  const button = document.getElementById("openBillingPortalBtn");
+  if (!button) return;
+
+  const actionState = getBillingActionState();
+  button.textContent = actionState.label;
+  button.dataset.billingMode = actionState.mode;
+  button.setAttribute("aria-label", actionState.label);
+
+  const helper = document.getElementById("billingActionHint");
+  if (helper) {
+    helper.textContent = actionState.helper;
+  }
+}
+
 function bindDashboardUI() {
   document.querySelectorAll("[data-section]").forEach((button) => {
     button.addEventListener("click", () => {
@@ -295,7 +390,11 @@ const openBillingPortalBtn = document.getElementById("openBillingPortalBtn");
           return;
         }
 
-        setStatus("accountStatusBilling", "Checking billing access...");
+        const actionState = getBillingActionState();
+        setStatus(
+          "accountStatusBilling",
+          actionState.mode === "manage" ? "Checking billing access..." : "Preparing secure checkout..."
+        );
 
         const response = await fetch("/api/create-billing-portal-session", {
           method: "POST",
@@ -304,7 +403,8 @@ const openBillingPortalBtn = document.getElementById("openBillingPortalBtn");
           },
           body: JSON.stringify({
             userId: currentUser.id,
-            email: currentUser.email
+            email: currentUser.email,
+            planType: deriveBillingCheckoutContext().planType
           })
         });
 
@@ -324,7 +424,7 @@ const openBillingPortalBtn = document.getElementById("openBillingPortalBtn");
 
         if (data.redirectToCheckout) {
           setStatus("accountStatusBilling", data.message || "Billing profile not active yet. Redirecting to checkout...");
-          const checkoutResult = await createCheckoutSessionFromContext(data.checkoutContext || {});
+          const checkoutResult = await createCheckoutSessionFromContext(data.checkoutContext || deriveBillingCheckoutContext());
           if (!checkoutResult?.url) {
             throw new Error(checkoutResult?.error || "Checkout URL missing.");
           }
@@ -1533,6 +1633,8 @@ async function loadAccountData(user, forceFresh = false) {
       el.classList.add(access ? "active" : "inactive");
     });
 
+    updateBillingPortalButtonState();
+
     const softwareLicenseInput = document.getElementById("software_license_key");
     if (softwareLicenseInput) {
       softwareLicenseInput.value = currentNormalizedSession?.subscription?.license_key || "";
@@ -1552,6 +1654,7 @@ async function loadAccountData(user, forceFresh = false) {
     renderAccessState(currentNormalizedSession);
     renderExtensionControl(currentNormalizedSession, currentProfile);
     updateSetupStates(currentProfile, currentNormalizedSession);
+    updateBillingPortalButtonState();
     persistProfileSnapshots(buildExtensionProfileSnapshot(currentNormalizedSession, currentProfile, currentUser), currentNormalizedSession);
     setStatus("accountStatus", "Failed to load extension-state. Using dashboard summary.");
     setStatus("accountStatusBilling", "Failed to load extension-state. Using dashboard summary.");
