@@ -36,10 +36,32 @@ const ALLOWED_ACTIONS = new Set([
   "listing_status_updated",
   "listing_viewed",
   "listing_message",
-  "listing_card_opened"
+  "listing_card_opened",
+  "listing_view_sync"
 ]);
 
 
+
+async function resolveListingId(payload) {
+  const directId = clean(payload.listing_id || payload.listingId || "");
+  if (directId) return directId;
+  const marketplaceId = clean(payload.metadata?.marketplace_listing_id || payload.marketplace_listing_id || "");
+  const sourceUrl = clean(payload.metadata?.source_url || payload.source_url || "");
+  const email = normalizeEmail(payload.email || "");
+  if (marketplaceId) {
+    let query = supabase.from("user_listings").select("id").eq("marketplace_listing_id", marketplaceId).limit(1).maybeSingle();
+    if (email) query = query.ilike("email", email);
+    const { data } = await query;
+    if (data?.id) return data.id;
+  }
+  if (sourceUrl) {
+    let query = supabase.from("user_listings").select("id").eq("source_url", sourceUrl).limit(1).maybeSingle();
+    if (email) query = query.ilike("email", email);
+    const { data } = await query;
+    if (data?.id) return data.id;
+  }
+  return "";
+}
 
 async function bumpListingMetric(listingId, updates) {
   if (!listingId) return;
@@ -79,6 +101,7 @@ export default async function handler(req, res) {
       metadata: typeof body.metadata === "object" && body.metadata !== null ? body.metadata : {},
       created_at: nowIso()
     };
+    payload.listing_id = payload.listing_id || await resolveListingId({ ...body, ...payload });
 
     if (!payload.user_id && !payload.email) {
       return res.status(400).json({ error: "Missing userId or email" });
@@ -121,6 +144,17 @@ export default async function handler(req, res) {
           await bumpListingMetric(payload.listing_id, { messages_count: nextMessages, last_seen_at: nowIso() });
         } catch (metricError) {
           console.warn("listing message metric warning:", metricError);
+        }
+      }
+
+      if (payload.action === "listing_view_sync") {
+        try {
+          const incomingViews = Number(payload.metadata?.views_count ?? payload.metadata?.views ?? body.views_count ?? body.views ?? 0);
+          const { data: row } = await supabase.from("user_listings").select("views_count").eq("id", payload.listing_id).maybeSingle();
+          const nextViews = Math.max(Number(row?.views_count || 0), incomingViews);
+          await bumpListingMetric(payload.listing_id, { views_count: nextViews, last_seen_at: nowIso() });
+        } catch (metricError) {
+          console.warn("listing view sync metric warning:", metricError);
         }
       }
     }
