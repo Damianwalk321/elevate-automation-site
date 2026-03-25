@@ -107,9 +107,13 @@ function buildListingIntelligence(row = {}) {
   const status = normalizeStatus(row.status);
   const lifecycle = normalizeLifecycleStatus(row.lifecycle_status, row.review_bucket);
   const reviewBucket = normalizeReviewBucket(row.review_bucket);
-  const staleLike = status === 'stale' || lifecycle === 'stale' || lifecycle === 'review_delete' || reviewBucket === 'removedvehicles';
+  const lastSeenValue = row.last_seen_at || row.updated_at || row.posted_at || row.created_at || null;
+  const lastSeenTs = lastSeenValue ? new Date(lastSeenValue).getTime() : 0;
+  const daysSinceSeen = lastSeenTs > 0 ? Math.max(0, Math.floor((Date.now() - lastSeenTs) / 86400000)) : ageDays;
+  const staleByTime = daysSinceSeen >= 2;
+  const staleLike = status === 'stale' || lifecycle === 'stale' || lifecycle === 'review_delete' || reviewBucket === 'removedvehicles' || staleByTime;
   const likelySold = lifecycle === 'review_delete' || reviewBucket === 'removedvehicles';
-  const activeLike = !['sold', 'deleted', 'inactive'].includes(status) && lifecycle !== 'review_delete';
+  const activeLike = !['sold', 'deleted', 'inactive'].includes(status) && lifecycle !== 'review_delete' && !staleLike;
   const highViewsNoMessages = activeLike && views >= 20 && messages === 0;
   const promoteNow = activeLike && views >= 20 && messages >= 1;
   const lowPerformance = activeLike && ageDays >= 7 && views < 5 && messages === 0;
@@ -177,6 +181,9 @@ function buildListingIntelligence(row = {}) {
 
   return {
     age_days: ageDays,
+    days_since_seen: daysSinceSeen,
+    stale_like: staleLike,
+    active_like: activeLike,
     likely_sold: likelySold,
     promote_now: promoteNow,
     low_performance: lowPerformance,
@@ -422,38 +429,6 @@ function buildSetupStatus(user, profileRow) {
   const completion = Object.values(checks).filter(Boolean).length;
   return { profile_complete: completion === 4, profile_completion_score: completion / 4, inventory_url: inventoryUrl, salesperson_name: salespersonName, dealership_name: dealershipName, compliance_mode: complianceMode, ...checks };
 }
-
-function buildOnboardingSummary(setupStatus = {}, computed = {}, rows = []) {
-  const stepProfile = Boolean(setupStatus.profile_complete || (setupStatus.salesperson_name_present && setupStatus.dealership_name_present && setupStatus.compliance_mode_present));
-  const stepInventory = Boolean(setupStatus.inventory_url_present);
-  const stepScan = rows.length > 0 || safeNumber(computed.total_listings, 0) > 0;
-  const stepPost = safeNumber(computed.posts_today, 0) > 0 || safeNumber(computed.posts_this_month, 0) > 0 || rows.some((row) => Boolean(row.posted_at || row.created_at));
-  const steps = [
-    { key: 'profile', label: 'Complete profile', complete: stepProfile },
-    { key: 'inventory', label: 'Add inventory URL', complete: stepInventory },
-    { key: 'scan', label: 'Run first scan', complete: stepScan },
-    { key: 'post', label: 'Post first listing', complete: stepPost }
-  ];
-  const completed_steps = steps.filter((step) => step.complete).length;
-  const total_steps = steps.length;
-  const completion_percent = Math.round((completed_steps / total_steps) * 100);
-  let next_best_action = 'Keep building momentum.';
-  if (!stepProfile) next_best_action = 'Complete your profile details.';
-  else if (!stepInventory) next_best_action = 'Add your inventory URL.';
-  else if (!stepScan) next_best_action = 'Run your first inventory scan.';
-  else if (!stepPost) next_best_action = 'Post your first listing.';
-  return {
-    steps,
-    completed_steps,
-    total_steps,
-    completion_percent,
-    first_scan_complete: stepScan,
-    first_post_complete: stepPost,
-    next_best_action,
-    complete: completed_steps === total_steps
-  };
-}
-
 function buildComputedSummary(rows = []) {
   const today = dayKey();
   const month = monthKey();
@@ -481,10 +456,10 @@ function buildComputedSummary(rows = []) {
     const bucket = normalizeReviewBucket(row.review_bucket);
     if (rowDay === today) summary.posts_today += 1;
     if (rowMonth === month) summary.posts_this_month += 1;
-    if (!['sold', 'deleted', 'inactive', 'stale'].includes(status) && lifecycle !== 'review_delete') summary.active_listings += 1;
+    if (row.active_like && !row.stale_like) summary.active_listings += 1;
     summary.total_views += safeNumber(row.views_count, 0);
     summary.total_messages += safeNumber(row.messages_count, 0);
-    if (status === 'stale' || lifecycle === 'stale' || lifecycle === 'review_delete' || bucket === 'removedvehicles') summary.stale_listings += 1;
+    if (row.stale_like || status === 'stale' || lifecycle === 'stale' || lifecycle === 'review_delete' || bucket === 'removedvehicles') summary.stale_listings += 1;
     if (lifecycle === 'review_delete' || bucket === 'removedvehicles') summary.review_delete_count += 1;
     if (lifecycle === 'review_price_update' || bucket === 'pricechanges') summary.review_price_change_count += 1;
     if (lifecycle === 'review_new' || bucket === 'newvehicles') summary.review_new_count += 1;
@@ -612,7 +587,6 @@ export default async function handler(req, res) {
     const scorecards = buildScorecards(computed, rows);
     const referralCode = clean(snapshot.referral_code || subscriptionRow?.referral_code || user?.referral_code || '');
     const affiliate = await getAffiliateSummary({ referralCode, email: finalEmail });
-    const onboarding = buildOnboardingSummary(setupStatus, computed, rows);
     const managerAccess = Boolean(snapshot.organization_role === 'admin' || snapshot.organization_role === 'manager' || snapshot.team_access === true || clean(snapshot.plan_type).toLowerCase() === 'team' || clean(snapshot.plan_type).toLowerCase() === 'dealership');
     const managerSummary = {
       live_inventory: computed.active_listings,
@@ -687,7 +661,6 @@ export default async function handler(req, res) {
         scorecards,
         intelligence: segmentIntel,
         affiliate,
-        onboarding,
         daily_ops_queues: computed.action_center,
         manager_access: managerAccess,
         manager_summary: managerSummary,
