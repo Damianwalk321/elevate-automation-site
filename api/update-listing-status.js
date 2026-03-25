@@ -1,4 +1,3 @@
-
 import { createClient } from "@supabase/supabase-js";
 
 const supabase = createClient(
@@ -16,7 +15,12 @@ function normalizeEmail(value) {
 
 function allowedStatus(value) {
   const status = clean(value).toLowerCase();
-  const allowed = ["posted", "active", "stale", "sold", "deleted", "inactive", "failed"];
+  const allowed = [
+    "posted", "active", "stale", "sold", "deleted", "inactive", "failed",
+    "approved", "dismissed", "actioned", "relisted", "archived",
+    "needs_price_review", "needs_content_refresh", "needs_manager_review",
+    "promote_now", "likely_sold"
+  ];
   return allowed.includes(status) ? status : null;
 }
 
@@ -31,7 +35,12 @@ function normalizeReviewBucket(value) {
 
 function allowedLifecycleStatus(value) {
   const lifecycle = clean(value).toLowerCase();
-  const allowed = ["active", "stale", "review_delete", "review_price_update", "review_new", "sold", "deleted", "inactive", "failed"];
+  const allowed = [
+    "active", "stale", "review_delete", "review_price_update", "review_new",
+    "sold", "deleted", "inactive", "failed", "approved", "dismissed",
+    "actioned", "relisted", "archived", "needs_price_review",
+    "needs_content_refresh", "needs_manager_review", "promote_now", "likely_sold"
+  ];
   return allowed.includes(lifecycle) ? lifecycle : null;
 }
 
@@ -73,63 +82,72 @@ export default async function handler(req, res) {
     const body = typeof req.body === "string" ? JSON.parse(req.body || "{}") : (req.body || {});
 
     const listingId = clean(body.listingId || body.listing_id || "");
+    const listingIds = Array.isArray(body.listingIds || body.listing_ids)
+      ? (body.listingIds || body.listing_ids).map((v) => clean(v)).filter(Boolean)
+      : [];
     const userId = clean(body.userId || body.user_id || "");
     const email = normalizeEmail(body.email || "");
     const nextStatus = allowedStatus(body.status);
     const nextLifecycleStatus = allowedLifecycleStatus(body.lifecycle_status || body.lifecycleStatus || body.review_status || "");
     const nextReviewBucket = normalizeReviewBucket(body.review_bucket || body.reviewBucket || "");
 
-    if (!listingId) return res.status(400).json({ error: "Missing listingId" });
+    if (!listingId && !listingIds.length) return res.status(400).json({ error: "Missing listingId" });
     if (!nextStatus) return res.status(400).json({ error: "Invalid status" });
 
     const user = await resolveUser({ userId, email });
     const finalUserId = clean(user?.id || userId || "");
     const finalEmail = normalizeEmail(user?.email || email || "");
 
-    const shouldClearReview = ["sold", "deleted", "inactive"].includes(nextStatus);
+    const shouldClearReview = ["sold", "deleted", "inactive", "approved", "dismissed", "archived", "relisted"].includes(nextStatus);
     const updatePayload = {
       status: nextStatus,
       updated_at: nowIso(),
       last_seen_at: nowIso(),
-      lifecycle_status: nextLifecycleStatus || (shouldClearReview ? nextStatus : undefined),
+      lifecycle_status: nextLifecycleStatus || (shouldClearReview ? "active" : undefined),
       review_bucket: shouldClearReview ? "" : (nextReviewBucket || undefined)
     };
 
     Object.keys(updatePayload).forEach((key) => updatePayload[key] === undefined && delete updatePayload[key]);
 
-    const filters = { listingId, userId: finalUserId, email: finalEmail };
-    const { data, error } = await updateInTable("user_listings", filters, updatePayload);
-    if (error) {
-      console.error("update-listing-status error:", error);
-      return res.status(500).json({ error: error.message });
+    const targetIds = listingIds.length ? listingIds : [listingId];
+    let firstData = null;
+
+    for (const targetId of targetIds) {
+      const filters = { listingId: targetId, userId: finalUserId, email: finalEmail };
+      const { data, error } = await updateInTable("user_listings", filters, updatePayload);
+      if (error) {
+        console.error("update-listing-status error:", error);
+        return res.status(500).json({ error: error.message });
+      }
+      if (!firstData && data) firstData = data;
+
+      try {
+        await updateInTable("listings", filters, updatePayload);
+      } catch (legacyError) {
+        console.warn("legacy listings mirror update warning:", legacyError);
+      }
+
+      try {
+        await supabase.from("usage_logs").insert([
+          {
+            user_id: finalUserId || null,
+            email: finalEmail || "",
+            action: "listing_status_updated",
+            listing_id: targetId,
+            metadata: {
+              status: nextStatus,
+              lifecycle_status: nextLifecycleStatus || null,
+              review_bucket: shouldClearReview ? "" : nextReviewBucket
+            },
+            created_at: nowIso()
+          }
+        ]);
+      } catch (logError) {
+        console.warn("usage_logs insert warning:", logError);
+      }
     }
 
-    try {
-      await updateInTable("listings", filters, updatePayload);
-    } catch (legacyError) {
-      console.warn("legacy listings mirror update warning:", legacyError);
-    }
-
-    try {
-      await supabase.from("usage_logs").insert([
-        {
-          user_id: finalUserId || null,
-          email: finalEmail || "",
-          action: "listing_status_updated",
-          listing_id: listingId,
-          metadata: {
-            status: nextStatus,
-            lifecycle_status: nextLifecycleStatus || null,
-            review_bucket: shouldClearReview ? "" : nextReviewBucket
-          },
-          created_at: nowIso()
-        }
-      ]);
-    } catch (logError) {
-      console.warn("usage_logs insert warning:", logError);
-    }
-
-    return res.status(200).json({ success: true, data });
+    return res.status(200).json({ success: true, data: firstData, updated_count: targetIds.length });
   } catch (error) {
     console.error("update-listing-status fatal error:", error);
     return res.status(500).json({ error: error.message || "Internal server error" });
