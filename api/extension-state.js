@@ -123,9 +123,7 @@ function dealershipMatchesHostname(dealership, hostname) {
 }
 
 async function getTodayListingPostedCount(supabase, userId, email) {
-  const todayStart = new Date();
-  todayStart.setHours(0, 0, 0, 0);
-  const iso = todayStart.toISOString();
+  const dayKey = businessDayKey();
   const finalEmail = normalizeEmail(email);
   const finalUserId = clean(userId);
 
@@ -134,7 +132,7 @@ async function getTodayListingPostedCount(supabase, userId, email) {
     const seen = new Set();
 
     async function runQuery(mode) {
-      let query = supabase.from(tableName).select('id,posted_at,created_at,email,user_id').gte('posted_at', iso);
+      let query = supabase.from(tableName).select('id,posted_at,created_at,email,user_id');
       if (mode === 'user' && finalUserId) query = query.eq('user_id', finalUserId);
       if (mode === 'email' && finalEmail) query = query.ilike('email', finalEmail);
       const { data, error } = await query;
@@ -158,6 +156,8 @@ async function getTodayListingPostedCount(supabase, userId, email) {
   for (const row of [...userRows, ...legacyRows]) {
     const key = clean(row?.id || '') || `${clean(row?.posted_at || row?.created_at || '')}`;
     if (!key || seen.has(key)) continue;
+    const postedAt = row?.posted_at || row?.created_at;
+    if (businessDayKey(postedAt) !== dayKey) continue;
     seen.add(key);
     count += 1;
   }
