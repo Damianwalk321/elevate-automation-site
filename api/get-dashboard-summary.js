@@ -323,6 +323,38 @@ function estimatePlanMonthlyRevenue(planValue) {
   if (plan === 'pro' || (!plan.includes('founder') && plan.includes('pro'))) return 79;
   return 39;
 }
+
+function buildOnboardingSummary(setupStatus = {}, computed = {}, snapshot = {}) {
+  const profileComplete = Boolean(setupStatus.profile_complete);
+  const inventoryReady = Boolean(setupStatus.inventory_url_present || clean(setupStatus.inventory_url));
+  const firstScanComplete = Boolean(safeNumber(snapshot.queue_count, 0) > 0 || safeNumber(computed.total_listings, 0) > 0 || clean(snapshot.lifecycle_updated_at));
+  const firstPostComplete = Boolean(safeNumber(snapshot.posts_today ?? snapshot.posts_used_today, 0) > 0 || safeNumber(computed.posts_today, 0) > 0 || safeNumber(computed.total_listings, 0) > 0);
+  const steps = [
+    { key: 'profile', label: 'Complete profile', complete: profileComplete },
+    { key: 'inventory', label: 'Add inventory URL', complete: inventoryReady },
+    { key: 'scan', label: 'Run first scan', complete: firstScanComplete },
+    { key: 'post', label: 'Post first listing', complete: firstPostComplete }
+  ];
+  const completedSteps = steps.filter((step) => step.complete).length;
+  const totalSteps = steps.length;
+  let nextBestAction = 'Keep your dashboard active and review your live listings.';
+  const firstIncomplete = steps.find((step) => !step.complete);
+  if (firstIncomplete?.key === 'profile') nextBestAction = 'Complete your profile so the extension can sync your salesperson and dealer details.';
+  else if (firstIncomplete?.key === 'inventory') nextBestAction = 'Add your dealer inventory URL so Elevate can scan the correct site.';
+  else if (firstIncomplete?.key === 'scan') nextBestAction = 'Run your first scan to pull inventory into your posting workflow.';
+  else if (firstIncomplete?.key === 'post') nextBestAction = 'Post your first listing to complete activation and start tracking results.';
+  return {
+    steps,
+    completed_steps: completedSteps,
+    total_steps: totalSteps,
+    completion_percent: totalSteps ? Math.round((completedSteps / totalSteps) * 100) : 0,
+    first_scan_complete: firstScanComplete,
+    first_post_complete: firstPostComplete,
+    next_best_action: nextBestAction,
+    complete: completedSteps === totalSteps
+  };
+}
+
 async function getAffiliateSummary({ referralCode, referralSource, email }) {
   const code = clean(referralCode || '');
   const ownerSource = clean(referralSource || '');
@@ -427,52 +459,6 @@ function buildSetupStatus(user, profileRow) {
   const completion = Object.values(checks).filter(Boolean).length;
   return { profile_complete: completion === 4, profile_completion_score: completion / 4, inventory_url: inventoryUrl, salesperson_name: salespersonName, dealership_name: dealershipName, compliance_mode: complianceMode, ...checks };
 }
-
-function buildOnboardingStatus({ setupStatus = {}, snapshot = {}, computed = {}, rows = [] } = {}) {
-  const profileReady = Boolean(setupStatus.profile_complete || (setupStatus.profile_completion_score || 0) >= 1);
-  const inventoryReady = Boolean(clean(setupStatus.inventory_url || '') || setupStatus.inventory_url_present);
-  const firstScanComplete = Boolean(
-    safeNumber(snapshot.queue_count, 0) > 0 ||
-    safeNumber(computed.total_listings, 0) > 0 ||
-    clean(snapshot.lifecycle_updated_at || '')
-  );
-  const firstPostComplete = Boolean(
-    safeNumber(computed.posts_today, 0) > 0 ||
-    safeNumber(snapshot.posts_today ?? snapshot.posts_used_today, 0) > 0 ||
-    safeNumber(computed.total_listings, 0) > 0 ||
-    rows.some((row) => clean(row.posted_at || row.created_at || ''))
-  );
-
-  const steps = [
-    { key: 'profile', label: 'Complete profile', complete: profileReady },
-    { key: 'inventory', label: 'Add inventory URL', complete: inventoryReady },
-    { key: 'scan', label: 'Run first scan', complete: firstScanComplete },
-    { key: 'post', label: 'Post first listing', complete: firstPostComplete }
-  ];
-
-  const completedSteps = steps.filter((step) => step.complete).length;
-  const totalSteps = steps.length;
-  let nextBestAction = 'Keep using Elevate consistently.';
-  const firstIncomplete = steps.find((step) => !step.complete);
-  if (firstIncomplete) {
-    if (firstIncomplete.key === 'profile') nextBestAction = 'Complete your profile and dealership setup.';
-    else if (firstIncomplete.key === 'inventory') nextBestAction = 'Add your inventory URL so the scanner knows where to start.';
-    else if (firstIncomplete.key === 'scan') nextBestAction = 'Run your first inventory scan.';
-    else if (firstIncomplete.key === 'post') nextBestAction = 'Post your first listing through the platform.';
-  }
-
-  return {
-    steps,
-    completed_steps: completedSteps,
-    total_steps: totalSteps,
-    completion_percent: totalSteps ? Math.round((completedSteps / totalSteps) * 100) : 0,
-    first_scan_complete: firstScanComplete,
-    first_post_complete: firstPostComplete,
-    next_best_action: nextBestAction,
-    complete: completedSteps === totalSteps
-  };
-}
-
 function buildComputedSummary(rows = []) {
   const today = dayKey();
   const month = monthKey();
@@ -626,12 +612,12 @@ export default async function handler(req, res) {
     const accessGranted = Boolean(forcedAccess || snapshot.access_granted === true || snapshot.active === true || subscriptionRow?.active === true || isActiveStatus(subscriptionRow?.status) || (clean(planValue) && dailyLimit > 0));
     const effectiveStatus = accessGranted ? 'active' : clean(subscriptionRow?.status || snapshot.status || 'inactive').toLowerCase();
     const setupStatus = buildSetupStatus(user, profileRow);
-    const onboarding = buildOnboardingStatus({ setupStatus, snapshot, computed, rows });
     const segmentIntel = buildSegmentPerformance(rows);
     const alerts = buildAlerts({ ...computed, total_views: computed.total_views, total_messages: computed.total_messages });
     const scorecards = buildScorecards(computed, rows);
     const referralCode = clean(snapshot.referral_code || subscriptionRow?.referral_code || user?.referral_code || '');
     const affiliate = await getAffiliateSummary({ referralCode, email: finalEmail });
+    const onboarding = buildOnboardingSummary(setupStatus, computed, snapshot);
     const managerAccess = Boolean(snapshot.organization_role === 'admin' || snapshot.organization_role === 'manager' || snapshot.team_access === true || clean(snapshot.plan_type).toLowerCase() === 'team' || clean(snapshot.plan_type).toLowerCase() === 'dealership');
     const managerSummary = {
       live_inventory: computed.active_listings,
@@ -706,6 +692,7 @@ export default async function handler(req, res) {
         scorecards,
         intelligence: segmentIntel,
         affiliate,
+        onboarding,
         daily_ops_queues: computed.action_center,
         manager_access: managerAccess,
         manager_summary: managerSummary,
@@ -741,7 +728,6 @@ export default async function handler(req, res) {
           cancel_at_period_end: Boolean(subscriptionRow?.cancel_at_period_end)
         },
         setup_status: setupStatus,
-        onboarding,
         data_integrity: {
           listing_rows_merged: rows.length,
           listing_sources: rows.reduce((acc, row) => { const k = clean(row.source_table || 'unknown'); acc[k] = safeNumber(acc[k], 0) + 1; return acc; }, {}),
