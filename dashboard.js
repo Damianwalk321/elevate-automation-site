@@ -177,28 +177,6 @@ function bindDashboardUI() {
       }
     });
   }
-
-  const copyOnboardingStepsBtn = document.getElementById("copyOnboardingStepsBtn");
-  if (copyOnboardingStepsBtn) {
-    copyOnboardingStepsBtn.addEventListener("click", async () => {
-      const onboardingText = buildOnboardingChecklistText();
-      try {
-        await navigator.clipboard.writeText(onboardingText);
-        setStatus("onboardingStatusLine", "Onboarding steps copied.");
-      } catch (error) {
-        console.error("copyOnboardingStepsBtn error:", error);
-        setStatus("onboardingStatusLine", "Could not copy onboarding steps.");
-      }
-    });
-  }
-
-  const openProfileSetupBtn = document.getElementById("openProfileSetupBtn");
-  if (openProfileSetupBtn) {
-    openProfileSetupBtn.addEventListener("click", () => {
-      showSection("profile");
-      window.scrollTo({ top: 0, behavior: "smooth" });
-    });
-  }
   const copyReferralCodeBtn = document.getElementById("copyReferralCodeBtn");
   if (copyReferralCodeBtn) {
     copyReferralCodeBtn.addEventListener("click", async () => {
@@ -665,14 +643,38 @@ function mergeSummaryWithListings(summary, listings) {
   };
 }
 
+
+function getMergedPostingMetrics() {
+  const extSub = currentNormalizedSession?.subscription || {};
+  const snap = dashboardSummary?.account_snapshot || {};
+  const summary = dashboardSummary || {};
+  const postsToday = Math.max(
+    numberOrZero(extSub.posts_today),
+    numberOrZero(snap.posts_today ?? snap.posts_used_today),
+    numberOrZero(summary.posts_today)
+  );
+  const dailyLimit = Math.max(
+    numberOrZero(extSub.daily_posting_limit ?? extSub.posting_limit),
+    numberOrZero(snap.daily_posting_limit ?? snap.posting_limit),
+    numberOrZero(summary.daily_limit)
+  );
+  const postsRemaining = Math.max(
+    numberOrZero(extSub.posts_remaining),
+    numberOrZero(snap.posts_remaining),
+    Math.max(dailyLimit - postsToday, 0)
+  );
+  return { postsToday, dailyLimit, postsRemaining };
+}
+
 function renderDashboardAnalytics() {
-  setTextByIdForAll("kpiPostsToday", String(numberOrZero(dashboardSummary?.posts_today)));
+  const posting = getMergedPostingMetrics();
+  setTextByIdForAll("kpiPostsToday", String(numberOrZero(posting.postsToday)));
   setTextByIdForAll("kpiPostsMonth", String(numberOrZero(dashboardSummary?.posts_this_month)));
   setTextByIdForAll("kpiActiveListings", String(numberOrZero(dashboardSummary?.active_listings)));
   setTextByIdForAll("kpiViews", String(numberOrZero(dashboardSummary?.total_views)));
   setTextByIdForAll("kpiMessages", String(numberOrZero(dashboardSummary?.total_messages)));
-  setTextByIdForAll("kpiPostsRemaining", String(numberOrZero(currentNormalizedSession?.subscription?.posts_remaining ?? dashboardSummary?.account_snapshot?.posts_remaining)));
-  setTextByIdForAll("kpiDailyLimit", String(numberOrZero(currentNormalizedSession?.subscription?.posting_limit ?? dashboardSummary?.account_snapshot?.posting_limit)));
+  setTextByIdForAll("kpiPostsRemaining", String(numberOrZero(posting.postsRemaining)));
+  setTextByIdForAll("kpiDailyLimit", String(numberOrZero(posting.dailyLimit)));
 
   // lifecycle-ready safe no-op if ids do not exist yet
   setTextByIdForAll("kpiReviewQueue", String(numberOrZero(dashboardSummary?.review_queue_count)));
@@ -685,7 +687,6 @@ function renderDashboardAnalytics() {
   setTextByIdForAll("kpiNeedsAction", String(numberOrZero(dashboardSummary?.needs_action_count)));
 
   renderPrioritiesPanels();
-  renderOnboardingCenter();
   renderAlertsPanel();
   renderScorecards();
   renderIntelligencePanels();
@@ -862,71 +863,6 @@ function renderListingsGrid(listings) {
   setStatus("listingGridStatus", `${listings.length} listing${listings.length === 1 ? "" : "s"} loaded.`);
 }
 
-
-
-function deriveOnboardingState() {
-  const summary = dashboardSummary?.onboarding;
-  if (summary && typeof summary === "object") return summary;
-
-  const setup = dashboardSummary?.setup_status || {};
-  const stepProfile = Boolean(setup.profile_complete || (setup.salesperson_name_present && setup.dealership_name_present && setup.compliance_mode_present));
-  const stepInventory = Boolean(setup.inventory_url_present || currentProfile?.inventory_url || currentNormalizedSession?.dealership?.inventory_url);
-  const stepScan = Array.isArray(dashboardListings) && dashboardListings.length > 0;
-  const stepPost = numberOrZero(dashboardSummary?.posts_today) > 0 || numberOrZero(dashboardSummary?.posts_this_month) > 0 || dashboardListings.some((row) => Boolean(row.posted_at || row.created_at));
-  const steps = [
-    { key: "profile", label: "Complete profile", complete: stepProfile },
-    { key: "inventory", label: "Add inventory URL", complete: stepInventory },
-    { key: "scan", label: "Run first scan", complete: stepScan },
-    { key: "post", label: "Post first listing", complete: stepPost }
-  ];
-  const completedSteps = steps.filter((step) => step.complete).length;
-  let nextBestAction = "Keep building momentum.";
-  if (!stepProfile) nextBestAction = "Complete your profile details.";
-  else if (!stepInventory) nextBestAction = "Add your inventory URL.";
-  else if (!stepScan) nextBestAction = "Run your first inventory scan.";
-  else if (!stepPost) nextBestAction = "Post your first listing.";
-
-  return {
-    steps,
-    completed_steps: completedSteps,
-    total_steps: steps.length,
-    completion_percent: Math.round((completedSteps / steps.length) * 100),
-    first_scan_complete: stepScan,
-    first_post_complete: stepPost,
-    next_best_action: nextBestAction,
-    complete: completedSteps === steps.length
-  };
-}
-
-function renderOnboardingCenter() {
-  const onboarding = deriveOnboardingState();
-  const stepMap = Object.fromEntries((onboarding.steps || []).map((step) => [step.key, Boolean(step.complete)]));
-
-  setSetupState("onboardingStepProfile", Boolean(stepMap.profile));
-  setSetupState("onboardingStepInventory", Boolean(stepMap.inventory));
-  setSetupState("onboardingStepScan", Boolean(stepMap.scan));
-  setSetupState("onboardingStepPost", Boolean(stepMap.post));
-
-  setTextByIdForAll("onboardingProgressText", `${numberOrZero(onboarding.completed_steps)} / ${numberOrZero(onboarding.total_steps || 4)} complete`);
-  setTextByIdForAll("onboardingPercentText", `${numberOrZero(onboarding.completion_percent)}%`);
-  setTextByIdForAll("onboardingFirstScan", onboarding.first_scan_complete ? "Completed" : "Pending");
-  setTextByIdForAll("onboardingFirstPost", onboarding.first_post_complete ? "Completed" : "Pending");
-  setTextByIdForAll("onboardingNextAction", cleanText(onboarding.next_best_action || "Complete your profile details."));
-  setStatus("onboardingStatusLine", onboarding.complete ? "Onboarding complete. You are ready to operate daily." : "Complete the next highlighted step to unlock your first win.");
-}
-
-function buildOnboardingChecklistText() {
-  const onboarding = deriveOnboardingState();
-  const lines = [
-    "Elevate Automation — Getting Started",
-    "",
-    ...((onboarding.steps || []).map((step, index) => `${index + 1}. ${step.label} — ${step.complete ? "Complete" : "Pending"}`)),
-    "",
-    `Progress: ${numberOrZero(onboarding.completed_steps)} / ${numberOrZero(onboarding.total_steps || 4)}`,
-    `Next Best Action: ${cleanText(onboarding.next_best_action || "Complete your profile details.")}`
-  ];
-  return lines.join("\n");
-}
 
 function renderAffiliateCenter() {
   const affiliate = dashboardSummary?.affiliate || {};
