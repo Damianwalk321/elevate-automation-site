@@ -1051,6 +1051,39 @@
           </div>
         </div>
 
+
+        <div class="grid-3">
+          <div class="card">
+            <div class="section-head"><h2>Manager Summary</h2><div class="subtext">Dealership and operator rollup</div></div>
+            <div class="list-block">
+              <div><strong>Avg Views / Live:</strong> <span id="managerAvgViewsPerLive">0</span></div>
+              <div><strong>Avg Messages / Live:</strong> <span id="managerAvgMessagesPerLive">0</span></div>
+              <div><strong>View → Message Rate:</strong> <span id="managerConversionRate">0%</span></div>
+              <div><strong>Stale Rate:</strong> <span id="managerStaleRate">0%</span></div>
+              <div><strong>Weak Rate:</strong> <span id="managerWeakRate">0%</span></div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="section-head"><h2>Daily Ops Queues</h2><div class="subtext">Automation-ready workflow buckets</div></div>
+            <div id="dailyOpsQueues" class="activity-feed"><div class="listing-empty">No ops queues yet.</div></div>
+          </div>
+          <div class="card">
+            <div class="section-head"><h2>Sales Leaderboard</h2><div class="subtext">Current account performance snapshot</div></div>
+            <div id="salesLeaderboard" class="activity-feed"><div class="listing-empty">No leaderboard data yet.</div></div>
+          </div>
+        </div>
+
+        <div class="grid-2">
+          <div class="card">
+            <div class="section-head"><h2>Segment Performance</h2><div class="subtext">Makes, body styles, and price bands</div></div>
+            <div id="segmentPerformance" class="activity-feed"><div class="listing-empty">No segment data yet.</div></div>
+          </div>
+          <div class="card">
+            <div class="section-head"><h2>Manager Recommendations</h2><div class="subtext">High-level guidance from current listing data</div></div>
+            <div id="managerRecommendations" class="activity-feed"><div class="listing-empty">No manager recommendations yet.</div></div>
+          </div>
+        </div>
+
         <div class="card">
           <div class="section-head">
             <h2>Recent Listings</h2>
@@ -1063,6 +1096,8 @@
                 <button class="action-btn" type="button" data-filter="new">Review New</button>
                 <button class="action-btn" type="button" data-filter="weak">Weak</button>
                 <button class="action-btn" type="button" data-filter="needs_action">Needs Action</button>
+                <button class="action-btn" type="button" data-filter="promote">Promote</button>
+                <button class="action-btn" type="button" data-filter="likely_sold">Likely Sold</button>
                 <button class="action-btn" type="button" data-filter="active">Active</button>
               </div>
               <select id="listingSortSelect">
