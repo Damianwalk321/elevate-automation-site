@@ -1434,37 +1434,57 @@
 
       <!-- AFFILIATE -->
       <section id="affiliate" class="dashboard-section">
+        <div class="grid-4">
+          <div class="card"><h2>Commission Earned</h2><div class="stat-value" id="affiliateCommissionEarned">$0.00</div><div class="stat-sub">Recurring commission earned so far</div></div>
+          <div class="card"><h2>Pending Payout</h2><div class="stat-value" id="affiliatePendingPayout">$0.00</div><div class="stat-sub">Projected next founder payout</div></div>
+          <div class="card"><h2>Total Referrals</h2><div class="stat-value" id="affiliateTotalReferrals">0</div><div class="stat-sub">All referred signups tracked</div></div>
+          <div class="card"><h2>Active Referrals</h2><div class="stat-value" id="affiliateActiveReferrals">0</div><div class="stat-sub">Currently paying referred users</div></div>
+        </div>
+
         <div class="grid-2">
           <div class="card">
-            <h2>Affiliate Center</h2>
+            <h2>Affiliate Snapshot</h2>
             <div class="list-block">
               <div><strong>Your Referral Code:</strong> <span id="referralCodeAffiliate">Loading...</span></div>
               <div><strong>Partner Type:</strong> <span id="affiliatePartnerType">Loading...</span></div>
               <div><strong>Direct Referral Commission:</strong> <span id="affiliateDirectCommission">Loading...</span></div>
               <div><strong>Second-Level Override:</strong> <span id="affiliateTierOverride">Loading...</span></div>
               <div><strong>Payout Status:</strong> <span id="affiliatePayoutStatus">Loading...</span></div>
+              <div><strong>Estimated Monthly Recurring:</strong> <span id="affiliateEstimatedMRR">$0.00</span></div>
+              <div><strong>Paid Out All-Time:</strong> <span id="affiliatePaidOutAllTime">$0.00</span></div>
             </div>
             <div class="action-grid" style="margin-top:14px;">
               <button id="copyReferralCodeBtn" class="action-btn" type="button">Copy Referral Code</button>
+              <button id="copyReferralLinkBtn" class="action-btn" type="button">Copy Referral Link</button>
+              <button id="copyAffiliateDMBtn" class="action-btn" type="button">Copy DM Script</button>
+              <button id="copyAffiliatePitchBtn" class="action-btn" type="button">Copy Short Pitch</button>
+              <button id="copyAffiliatePostBtn" class="action-btn" type="button">Copy Story/Post</button>
             </div>
-            <div class="subtext" style="margin-top:14px;">Built for clean founder-stage promotion: simple referral code, clean positioning, and dealership-level partner conversations.</div>
+            <div class="subtext" style="margin-top:14px;">Professional partner program positioning: recurring commissions, clean referral economics, and dealership-level conversations.</div>
           </div>
 
-          <div class="grid-2" style="gap:18px;">
-            <div class="card">
-              <h2>Commission Earned</h2>
-              <div class="stat-value" id="affiliateCommissionEarned">$0.00</div>
-              <div class="stat-sub">Founder-stage payout tracking</div>
+          <div class="card">
+            <h2>Referral Funnel</h2>
+            <div class="grid-2" style="gap:14px; margin-top:8px;">
+              <div class="sidebar-card"><div class="sidebar-card-label">Invited</div><div class="sidebar-card-value" id="affiliateInvitedCount">0</div></div>
+              <div class="sidebar-card"><div class="sidebar-card-label">Signed Up</div><div class="sidebar-card-value" id="affiliateSignedUpCount">0</div></div>
+              <div class="sidebar-card"><div class="sidebar-card-label">Paying</div><div class="sidebar-card-value" id="affiliatePayingCount">0</div></div>
+              <div class="sidebar-card"><div class="sidebar-card-label">Churned</div><div class="sidebar-card-value" id="affiliateChurnedCount">0</div></div>
             </div>
-            <div class="card">
-              <h2>Total Referrals</h2>
-              <div class="stat-value" id="affiliateTotalReferrals">0</div>
-              <div class="stat-sub">Confirmed referred users</div>
+          </div>
+        </div>
+
+        <div class="grid-2">
+          <div class="card">
+            <h2>Recent Referrals</h2>
+            <div id="affiliateRecentReferrals" class="list-block">
+              <div>No referrals tracked yet.</div>
             </div>
-            <div class="card">
-              <h2>Pending Payout</h2>
-              <div class="stat-value" id="affiliatePendingPayout">$0.00</div>
-              <div class="stat-sub">Projected next payout</div>
+          </div>
+          <div class="card">
+            <h2>Recommended Actions</h2>
+            <div id="affiliateRecommendedActions" class="list-block">
+              <div>No actions yet.</div>
             </div>
           </div>
         </div>
