@@ -36,6 +36,8 @@ const ALLOWED_ACTIONS = new Set([
   "listing_status_updated",
   "listing_viewed",
   "listing_message",
+  "message_logged",
+  "message_thread_opened",
   "listing_card_opened",
   "listing_view_sync",
   "listing_view_sync_v2"
@@ -138,13 +140,21 @@ export default async function handler(req, res) {
         }
       }
 
-      if (payload.action === "listing_message") {
+      if (payload.action === "listing_message" || payload.action === "message_logged") {
         try {
           const { data: row } = await supabase.from("user_listings").select("messages_count").eq("id", payload.listing_id).maybeSingle();
           const nextMessages = Number(row?.messages_count || 0) + 1;
           await bumpListingMetric(payload.listing_id, { messages_count: nextMessages, last_seen_at: nowIso() });
         } catch (metricError) {
           console.warn("listing message metric warning:", metricError);
+        }
+      }
+
+      if (payload.action === "message_thread_opened") {
+        try {
+          await bumpListingMetric(payload.listing_id, { last_seen_at: nowIso() });
+        } catch (metricError) {
+          console.warn("listing message thread metric warning:", metricError);
         }
       }
 
