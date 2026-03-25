@@ -31,12 +31,32 @@ function nowIso() {
   return new Date().toISOString();
 }
 
+
+const BUSINESS_TIME_ZONE = 'America/Edmonton';
+
+function getBusinessDateParts(date = new Date()) {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: BUSINESS_TIME_ZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
+  }).formatToParts(date instanceof Date ? date : new Date(date));
+  const map = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  return {
+    year: map.year || '0000',
+    month: map.month || '00',
+    day: map.day || '00'
+  };
+}
+
 function dayKey() {
-  return nowIso().slice(0, 10);
+  const { year, month, day } = getBusinessDateParts();
+  return `${year}-${month}-${day}`;
 }
 
 function monthKey() {
-  return nowIso().slice(0, 7);
+  const { year, month } = getBusinessDateParts();
+  return `${year}-${month}`;
 }
 
 const TEST_LIMIT_25_EMAILS = new Set(['damian044@icloud.com']);
@@ -295,7 +315,7 @@ async function upsertPostingUsage(supabase, resolved) {
     const { data, error } = await supabase
       .from("posting_usage")
       .select("*")
-      .ilike("email", lower(resolved.email))
+      .eq("user_id", clean(resolved.user_id))
       .eq("date_key", today)
       .maybeSingle();
 
