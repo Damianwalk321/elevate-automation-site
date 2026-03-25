@@ -963,7 +963,7 @@
           </div>
         </div>
 
-        <div class="grid-4">
+        <div class="grid-3">
           <div class="card kpi-card">
             <div class="stat-label">Review Queue</div>
             <div id="kpiReviewQueue" class="stat-value">0</div>
@@ -983,6 +983,16 @@
             <div class="stat-label">Review New</div>
             <div id="kpiReviewNew" class="stat-value">0</div>
             <div class="stat-sub">New units to validate</div>
+          </div>
+          <div class="card kpi-card">
+            <div class="stat-label">Weak Listings</div>
+            <div id="kpiWeakListings" class="stat-value">0</div>
+            <div class="stat-sub">Low traction or aging</div>
+          </div>
+          <div class="card kpi-card">
+            <div class="stat-label">Needs Action</div>
+            <div id="kpiNeedsAction" class="stat-value">0</div>
+            <div class="stat-sub">Priority actions today</div>
           </div>
         </div>
 
@@ -1020,6 +1030,27 @@
           </div>
         </div>
 
+        <div class="grid-2">
+          <div class="card">
+            <div class="section-head">
+              <h2>Action Center</h2>
+              <div class="subtext">What needs attention right now</div>
+            </div>
+            <div id="actionCenterList" class="activity-feed">
+              <div class="listing-empty">No recommendations yet.</div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="section-head">
+              <h2>Recommendations</h2>
+              <div class="subtext">Operator suggestions from performance and review state</div>
+            </div>
+            <div id="recommendationsList" class="activity-feed">
+              <div class="listing-empty">No recommendations yet.</div>
+            </div>
+          </div>
+        </div>
+
         <div class="card">
           <div class="section-head">
             <h2>Recent Listings</h2>
@@ -1030,6 +1061,8 @@
                 <button class="action-btn" type="button" data-filter="stale">Stale</button>
                 <button class="action-btn" type="button" data-filter="price">Price Changes</button>
                 <button class="action-btn" type="button" data-filter="new">Review New</button>
+                <button class="action-btn" type="button" data-filter="weak">Weak</button>
+                <button class="action-btn" type="button" data-filter="needs_action">Needs Action</button>
                 <button class="action-btn" type="button" data-filter="active">Active</button>
               </div>
               <select id="listingSortSelect">
