@@ -7,6 +7,29 @@ function cleanText(value) {
   return String(value).trim();
 }
 
+function formatDateTime(value) {
+  const normalized = cleanText(value);
+  if (!normalized) return "";
+
+  const parsed = new Date(normalized);
+  if (Number.isNaN(parsed.getTime())) {
+    return normalized;
+  }
+
+  try {
+    return parsed.toLocaleString("en-CA", {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit"
+    });
+  } catch (error) {
+    console.warn("formatDateTime warning:", error);
+    return normalized;
+  }
+}
+
 let bootStages = [];
 
 let supabaseClient = null;
@@ -128,11 +151,11 @@ function bindDashboardUI() {
   if (downloadExtensionBtn) {
     downloadExtensionBtn.addEventListener("click", async () => {
       const target = await resolveExtensionDownloadUrl();
-      window.open(target, "_blank");
+      triggerFileDownload(target);
       setStatus(
         "extensionActionStatus",
         target === EXTENSION_DOWNLOAD_URL
-          ? "Opening hosted extension download..."
+          ? "Starting extension download..."
           : "Hosted extension file missing. Opening GitHub fallback..."
       );
     });
@@ -272,7 +295,7 @@ const openBillingPortalBtn = document.getElementById("openBillingPortalBtn");
           return;
         }
 
-        setStatus("accountStatusBilling", "Opening billing portal...");
+        setStatus("accountStatusBilling", "Checking billing access...");
 
         const response = await fetch("/api/create-billing-portal-session", {
           method: "POST",
@@ -289,7 +312,7 @@ const openBillingPortalBtn = document.getElementById("openBillingPortalBtn");
 
         let data;
         try {
-          data = JSON.parse(rawText);
+          data = rawText ? JSON.parse(rawText) : {};
         } catch (parseError) {
           console.error("[billing] Non-JSON response:", rawText);
           throw new Error("Server error (non-JSON response)");
@@ -299,11 +322,23 @@ const openBillingPortalBtn = document.getElementById("openBillingPortalBtn");
           throw new Error(data.error || "Could not open billing portal.");
         }
 
-        if (!data.url) {
+        if (data.redirectToCheckout) {
+          setStatus("accountStatusBilling", data.message || "Billing profile not active yet. Redirecting to checkout...");
+          const checkoutResult = await createCheckoutSessionFromContext(data.checkoutContext || {});
+          if (!checkoutResult?.url) {
+            throw new Error(checkoutResult?.error || "Checkout URL missing.");
+          }
+          window.location.href = checkoutResult.url;
+          return;
+        }
+
+        const portalUrl = cleanText(data.url || data.portalUrl || "");
+        if (!portalUrl) {
           throw new Error("Billing portal URL missing.");
         }
 
-        window.location.href = data.url;
+        setStatus("accountStatusBilling", "Opening billing portal...");
+        window.location.href = portalUrl;
       } catch (error) {
         console.error("Billing portal error:", error);
         setStatus("accountStatusBilling", error.message || "Could not open billing portal.");
@@ -2093,6 +2128,56 @@ function pushBootStage(stage, detail) {
   bootStages.push(line);
   bootStages = bootStages.slice(-5);
   setBootStatus(bootStages.join("  |  "));
+}
+
+async function createCheckoutSessionFromContext(checkoutContext = {}) {
+  const response = await fetch("/api/create-checkout-session", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      email: currentUser?.email || "",
+      userId: currentUser?.id || "",
+      planType: checkoutContext.planType || "founder_beta",
+      accessType: checkoutContext.accessType || "founder",
+      userType: checkoutContext.userType || "founder"
+    })
+  });
+
+  const rawText = await response.text();
+  let data;
+  try {
+    data = rawText ? JSON.parse(rawText) : {};
+  } catch (error) {
+    console.error("[checkout] Non-JSON response:", rawText);
+    throw new Error("Checkout server error (non-JSON response)");
+  }
+
+  if (!response.ok) {
+    throw new Error(data.error || "Could not start checkout.");
+  }
+
+  return data;
+}
+
+function triggerFileDownload(url) {
+  const target = cleanText(url);
+  if (!target) return;
+
+  const link = document.createElement("a");
+  link.href = target;
+  link.rel = "noopener";
+
+  if (/^https?:\/\//i.test(target)) {
+    link.target = "_blank";
+  } else {
+    link.setAttribute("download", "");
+  }
+
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
 }
 
 async function resolveExtensionDownloadUrl() {
