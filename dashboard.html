@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -922,7 +923,7 @@
           <div class="card kpi-card">
             <div class="stat-label">Posts Today</div>
             <div id="kpiPostsToday" class="stat-value">0</div>
-            <div class="stat-sub">Committed posts today</div>
+            <div class="stat-sub">Committed or inferred today</div>
           </div>
 
           <div class="card kpi-card">
@@ -959,6 +960,29 @@
             <div class="stat-label">Queued Vehicles</div>
             <div id="kpiQueuedVehicles" class="stat-value">0</div>
             <div class="stat-sub">Ready to post</div>
+          </div>
+        </div>
+
+        <div class="grid-4">
+          <div class="card kpi-card">
+            <div class="stat-label">Review Queue</div>
+            <div id="kpiReviewQueue" class="stat-value">0</div>
+            <div class="stat-sub">Needs attention</div>
+          </div>
+          <div class="card kpi-card">
+            <div class="stat-label">Stale Listings</div>
+            <div id="kpiStaleListings" class="stat-value">0</div>
+            <div class="stat-sub">Potential refresh or delete</div>
+          </div>
+          <div class="card kpi-card">
+            <div class="stat-label">Price Changes</div>
+            <div id="kpiPriceChanges" class="stat-value">0</div>
+            <div class="stat-sub">Detected pricing movement</div>
+          </div>
+          <div class="card kpi-card">
+            <div class="stat-label">Review New</div>
+            <div id="kpiReviewNew" class="stat-value">0</div>
+            <div class="stat-sub">New units to validate</div>
           </div>
         </div>
 
@@ -1208,6 +1232,10 @@
               <div><strong>Daily Limit:</strong> <span id="extensionPostLimit">Loading.</span></div>
               <div><strong>Backend Sync:</strong> <span id="extensionSyncStatus">Checking...</span></div>
               <div><strong>Committed Listing Rows:</strong> <span id="extensionCommittedRows">0</span></div>
+              <div><strong>Views Tracked:</strong> <span id="extensionViewsTracked">0</span></div>
+              <div><strong>Messages Tracked:</strong> <span id="extensionMessagesTracked">0</span></div>
+              <div><strong>Review Queue:</strong> <span id="extensionReviewQueue">0</span></div>
+              <div><strong>Stale Listings:</strong> <span id="extensionStaleListings">0</span></div>
               <div><strong>Scanner Type:</strong> <span id="extensionScannerType">Loading.</span></div>
               <div><strong>Dealer Website:</strong> <span id="extensionDealerWebsite">Loading.</span></div>
               <div><strong>Inventory URL:</strong> <span id="extensionInventoryUrl">Loading.</span></div>
@@ -1321,6 +1349,11 @@
               <h2>Total Referrals</h2>
               <div class="stat-value" id="affiliateTotalReferrals">0</div>
               <div class="stat-sub">Confirmed referred users</div>
+            </div>
+            <div class="card">
+              <h2>Pending Payout</h2>
+              <div class="stat-value" id="affiliatePendingPayout">$0.00</div>
+              <div class="stat-sub">Projected next payout</div>
             </div>
           </div>
         </div>
