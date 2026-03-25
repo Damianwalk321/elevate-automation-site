@@ -1,3 +1,4 @@
+
 const EXTENSION_DOWNLOAD_URL = "/downloads/elevate-automation-extension.zip";
 const EXTENSION_FALLBACK_URL = "https://github.com/Damianwalk321/elevate-automation-vehicle-poster/archive/refs/heads/Dev.zip";
 
@@ -1155,6 +1156,7 @@ async function loadAccountData(user, forceFresh = false) {
     setTextByIdForAll("affiliateTierOverride", "5% second level");
     setTextByIdForAll("affiliatePartnerType", "Founding Partner");
     setTextByIdForAll("affiliatePayoutStatus", "Manual founder-stage payouts");
+    setTextByIdForAll("affiliatePendingPayout", "$0.00");
 
     const access = Boolean(currentNormalizedSession?.subscription?.active);
     setTextByIdForAll("accessBadgeBilling", access ? "Active Access" : "Inactive Access");
@@ -1520,6 +1522,10 @@ function renderExtensionControl(session, profile) {
     : "No committed post sync yet";
   setTextByIdForAll("extensionSyncStatus", syncStatusText);
   setTextByIdForAll("extensionCommittedRows", String(numberOrZero(dashboardSummary?.ingest_debug?.listing_rows_found)));
+  setTextByIdForAll("extensionViewsTracked", String(numberOrZero(dashboardSummary?.total_views)));
+  setTextByIdForAll("extensionMessagesTracked", String(numberOrZero(dashboardSummary?.total_messages)));
+  setTextByIdForAll("extensionReviewQueue", String(numberOrZero(dashboardSummary?.review_queue_count)));
+  setTextByIdForAll("extensionStaleListings", String(numberOrZero(dashboardSummary?.stale_listings)));
 
   const accessText = !session
     ? "Unavailable"
