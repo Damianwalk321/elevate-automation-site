@@ -67,6 +67,28 @@ function dayKey() {
 function monthKey() {
   return nowIso().slice(0, 7);
 }
+function sameDay(a, b) {
+  return String(a || "").slice(0, 10) === String(b || "").slice(0, 10);
+}
+
+function priceChanged(previousValue, nextValue) {
+  const prev = numberOrZero(previousValue);
+  const next = numberOrZero(nextValue);
+  if (!prev || !next) return false;
+  return Math.abs(prev - next) >= 1;
+}
+
+function identityTokens(row = {}) {
+  return [clean(row.id), clean(row.marketplace_listing_id), clean(row.vin), clean(row.stock_number), clean(row.source_url)].filter(Boolean);
+}
+
+function buildSeenSet(rows = []) {
+  const set = new Set();
+  for (const row of rows) {
+    for (const token of identityTokens(row)) set.add(token);
+  }
+  return set;
+}
 
 async function resolveUserId(supabase, userId, email) {
   const cleanedUserId = clean(userId);
@@ -126,9 +148,33 @@ function buildListingId(row) {
   );
 }
 
-function buildListingRow(row, resolved, existing = null) {
-  const reviewBucket = normalizeReviewBucket(row.review_bucket || existing?.review_bucket || "");
-  const lifecycleStatus = normalizeLifecycleStatus(row.lifecycle_status || existing?.lifecycle_status || "", reviewBucket);
+function buildListingRow(row, resolved, existing = null, options = {}) {
+  const explicitReviewBucket = normalizeReviewBucket(row.review_bucket || "");
+  const explicitLifecycle = clean(row.lifecycle_status || "").toLowerCase();
+  const existingReviewBucket = normalizeReviewBucket(existing?.review_bucket || "");
+  const existingLifecycle = clean(existing?.lifecycle_status || "").toLowerCase();
+
+  let reviewBucket = explicitReviewBucket;
+  let lifecycleStatus = explicitLifecycle;
+
+  if (!reviewBucket && !lifecycleStatus && !existing) {
+    reviewBucket = "newvehicles";
+    lifecycleStatus = "review_new";
+  }
+
+  if (!reviewBucket && !lifecycleStatus && existing && priceChanged(existing?.price, row.price)) {
+    reviewBucket = "pricechanges";
+    lifecycleStatus = "review_price_update";
+  }
+
+  if (!reviewBucket) reviewBucket = existingReviewBucket;
+  if (!lifecycleStatus) lifecycleStatus = existingLifecycle;
+
+  reviewBucket = normalizeReviewBucket(reviewBucket);
+  lifecycleStatus = normalizeLifecycleStatus(lifecycleStatus, reviewBucket);
+
+  const nextStatus = clean(row.status || existing?.status || "active") || "active";
+  const postedAt = clean(row.posted_at || existing?.posted_at) || nowIso();
 
   return {
     id: clean(existing?.id || row.id || buildListingId(row)),
@@ -152,12 +198,12 @@ function buildListingRow(row, resolved, existing = null) {
     price: numberOrZero(row.price || existing?.price),
     title: clean(row.title || existing?.title) || [row.year || existing?.year, row.make || existing?.make, row.model || existing?.model, row.trim || existing?.trim].map(clean).filter(Boolean).join(" "),
     location: clean(row.location || existing?.location),
-    status: clean(row.status || existing?.status || "active") || "active",
+    status: nextStatus,
     lifecycle_status: lifecycleStatus,
     review_bucket: reviewBucket,
     views_count: integerOrZero(row.views_count ?? existing?.views_count),
     messages_count: integerOrZero(row.messages_count ?? existing?.messages_count),
-    posted_at: clean(row.posted_at || existing?.posted_at) || nowIso(),
+    posted_at: postedAt,
     updated_at: nowIso(),
     last_seen_at: nowIso()
   };
@@ -257,6 +303,49 @@ async function syncSubscriptionSnapshot(supabase, resolved, payload) {
   if (updateError) throw updateError;
 }
 
+
+async function markMissingListingsForReview(supabase, resolved, seenRows, payload = {}) {
+  const shouldMarkMissing = Array.isArray(payload.listings) && payload.listings.length > 0 && payload.partial_sync !== true && clean(payload.sync_reason || "").toLowerCase() !== "post_commit";
+  if (!shouldMarkMissing) return { stale_marked: 0 };
+
+  let query = supabase.from("user_listings").select("*").order("updated_at", { ascending: false });
+  if (clean(resolved.user_id)) query = query.eq("user_id", clean(resolved.user_id));
+  else if (lower(resolved.email)) query = query.ilike("email", lower(resolved.email));
+
+  const { data, error } = await query;
+  if (error) throw error;
+
+  const seen = buildSeenSet(seenRows);
+  let staleMarked = 0;
+  for (const row of (Array.isArray(data) ? data : [])) {
+    const tokens = identityTokens(row);
+    const isSeen = tokens.some((token) => seen.has(token));
+    const currentStatus = clean(row.status || "").toLowerCase();
+    const currentLifecycle = clean(row.lifecycle_status || "").toLowerCase();
+    if (isSeen || ["sold", "deleted", "inactive"].includes(currentStatus)) continue;
+
+    const updatePayload = {
+      status: "stale",
+      lifecycle_status: "review_delete",
+      review_bucket: "removedvehicles",
+      updated_at: nowIso()
+    };
+
+    const { error: updateError } = await supabase.from("user_listings").update(updatePayload).eq("id", row.id);
+    if (updateError) throw updateError;
+
+    try {
+      await supabase.from("listings").update(updatePayload).eq("id", row.id);
+    } catch (legacyMirrorError) {
+      console.warn("sync-lifecycle stale legacy mirror warning:", legacyMirrorError);
+    }
+
+    staleMarked += 1;
+  }
+
+  return { stale_marked: staleMarked };
+}
+
 export default async function handler(req, res) {
   if (req.method !== "POST") {
     return json(res, 405, { ok: false, error: "Method not allowed" });
@@ -277,6 +366,7 @@ export default async function handler(req, res) {
 
     const listingRows = Array.isArray(payload.listings) ? payload.listings : [];
     let synced = 0;
+    const syncedRows = [];
 
     for (const rawRow of listingRows) {
       const existing = await findExistingListing(supabase, resolved, rawRow);
@@ -292,7 +382,10 @@ export default async function handler(req, res) {
       }
 
       synced += 1;
+      syncedRows.push(row);
     }
+
+    const staleResult = await markMissingListingsForReview(supabase, resolved, syncedRows, payload);
 
     const shouldSyncPostingUsage = payload?.authoritative_posting_usage === true || (!payload?.partial_sync && payload?.sync_reason !== "post_commit");
     if (shouldSyncPostingUsage) {
@@ -305,6 +398,7 @@ export default async function handler(req, res) {
       user_id: resolved.user_id,
       email: resolved.email,
       synced_listings: synced,
+      stale_marked: staleResult.stale_marked,
       posting_usage_synced: shouldSyncPostingUsage
     });
   } catch (error) {
