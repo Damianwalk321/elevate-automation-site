@@ -82,71 +82,6 @@ document.addEventListener("DOMContentLoaded", async () => {
   }
 });
 
-
-function buildReferralLink(referralCode) {
-  const base = window.location.origin || '';
-  const code = cleanText(referralCode || '');
-  return code ? `${base}/?ref=${encodeURIComponent(code)}` : base;
-}
-
-function buildAffiliateManagerPitch(referralCode) {
-  const link = buildReferralLink(referralCode);
-  return `We built Elevate Automation to help sales teams post inventory faster, stay consistent, and manage listing performance from one dashboard. If you want to see founder access, here is my referral link: ${link}`;
-}
-
-function buildAffiliateSalesPitch(referralCode) {
-  const link = buildReferralLink(referralCode);
-  return `If you're posting inventory on Marketplace, Elevate Automation can save a lot of time and keep your listings moving. Founder access is available here: ${link}`;
-}
-
-function buildAffiliateFollowupPitch(referralCode) {
-  const link = buildReferralLink(referralCode);
-  return `Quick follow-up — if you want to see how Elevate Automation works for Marketplace posting and listing management, here’s my referral link: ${link}`;
-}
-
-function buildAffiliateStoryCTA(referralCode) {
-  const link = buildReferralLink(referralCode);
-  return `If you post inventory on Marketplace and want to save time, message me. Founder access: ${link}`;
-}
-
-function renderAffiliateCenter() {
-  const affiliate = dashboardSummary?.affiliate || {};
-  const referralCode = cleanText(affiliate.referral_code || document.getElementById('referralCodeAffiliate')?.textContent || 'Not assigned yet');
-  setTextByIdForAll('referralCodeAffiliate', referralCode || 'Not assigned yet');
-  setTextByIdForAll('affiliatePartnerType', affiliate.partner_type || 'Founding Partner');
-  setTextByIdForAll('affiliateDirectCommission', `${numberOrZero(affiliate.direct_commission_percent || 20)}% recurring`);
-  setTextByIdForAll('affiliateTierOverride', `${numberOrZero(affiliate.second_level_override_percent || 5)}% second level`);
-  setTextByIdForAll('affiliatePayoutStatus', affiliate.payout_status || 'Manual founder-stage payouts');
-  setTextByIdForAll('affiliateCommissionEarned', formatCurrency(affiliate.commission_earned || 0));
-  setTextByIdForAll('affiliatePendingPayout', formatCurrency(affiliate.pending_payout || 0));
-  setTextByIdForAll('affiliateTotalReferrals', String(numberOrZero(affiliate.total_referrals)));
-  setTextByIdForAll('affiliateActiveReferrals', String(numberOrZero(affiliate.active_referrals)));
-  setTextByIdForAll('affiliateInvitedReferrals', String(numberOrZero(affiliate.invited_referrals)));
-  setTextByIdForAll('affiliateSignedUpReferrals', String(numberOrZero(affiliate.signed_up_referrals)));
-  setTextByIdForAll('affiliatePayingReferrals', String(numberOrZero(affiliate.paying_referrals)));
-  setTextByIdForAll('affiliateChurnedReferrals', String(numberOrZero(affiliate.churned_referrals)));
-  setTextByIdForAll('affiliateEstimatedMrr', formatCurrency(affiliate.estimated_mrr_commission || 0));
-  setTextByIdForAll('affiliatePaidOutAllTime', formatCurrency(affiliate.paid_out_all_time || 0));
-  setTextByIdForAll('affiliateConversionRate', `${numberOrZero(affiliate.conversion_rate)}%`);
-  setTextByIdForAll('affiliateActiveRate', `${numberOrZero(affiliate.active_referral_rate)}%`);
-  setTextByIdForAll('affiliateTopSource', affiliate.top_source || '—');
-  setTextByIdForAll('affiliateLastReferralDate', formatShortDate(affiliate.last_referral_date || ''));
-
-  const referralsWrap = document.getElementById('affiliateRecentReferrals');
-  if (referralsWrap) {
-    const rows = Array.isArray(affiliate.recent_referrals) ? affiliate.recent_referrals : [];
-    referralsWrap.innerHTML = rows.length
-      ? rows.map((row) => `<div><strong>${escapeHtml(row.email || 'Unknown')}</strong> • ${escapeHtml(row.plan || 'Unknown')} • ${escapeHtml(row.status || 'unknown')} • ${formatCurrency(row.commission_estimate || 0)}</div>`).join('')
-      : '<div>No referrals yet.</div>';
-  }
-
-  const actionsWrap = document.getElementById('affiliateRecommendedActions');
-  if (actionsWrap) {
-    const actions = Array.isArray(affiliate.recommended_actions) ? affiliate.recommended_actions : [];
-    actionsWrap.innerHTML = actions.length ? actions.map((item) => `<div>• ${escapeHtml(item)}</div>`).join('') : '<div>No affiliate actions yet.</div>';
-  }
-}
-
 function bindDashboardUI() {
   document.querySelectorAll("[data-section]").forEach((button) => {
     button.addEventListener("click", () => {
@@ -242,6 +177,28 @@ function bindDashboardUI() {
       }
     });
   }
+
+  const copyOnboardingStepsBtn = document.getElementById("copyOnboardingStepsBtn");
+  if (copyOnboardingStepsBtn) {
+    copyOnboardingStepsBtn.addEventListener("click", async () => {
+      const onboardingText = buildOnboardingChecklistText();
+      try {
+        await navigator.clipboard.writeText(onboardingText);
+        setStatus("onboardingStatusLine", "Onboarding steps copied.");
+      } catch (error) {
+        console.error("copyOnboardingStepsBtn error:", error);
+        setStatus("onboardingStatusLine", "Could not copy onboarding steps.");
+      }
+    });
+  }
+
+  const openProfileSetupBtn = document.getElementById("openProfileSetupBtn");
+  if (openProfileSetupBtn) {
+    openProfileSetupBtn.addEventListener("click", () => {
+      showSection("profile");
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    });
+  }
   const copyReferralCodeBtn = document.getElementById("copyReferralCodeBtn");
   if (copyReferralCodeBtn) {
     copyReferralCodeBtn.addEventListener("click", async () => {
@@ -256,38 +213,56 @@ function bindDashboardUI() {
     });
   }
 
+  function getAffiliateCode() {
+    return document.getElementById("referralCodeAffiliate")?.textContent?.trim() || "";
+  }
+  function getAffiliateLink() {
+    const code = getAffiliateCode();
+    return code && code !== "Loading..." ? `${window.location.origin}/signup.html?ref=${encodeURIComponent(code)}` : "";
+  }
+  async function copyAffiliateText(text, successMessage) {
+    if (!text) return;
+    try {
+      await navigator.clipboard.writeText(text);
+      setBootStatus(successMessage);
+    } catch (error) {
+      console.error("affiliate copy error:", error);
+    }
+  }
+
   const copyReferralLinkBtn = document.getElementById("copyReferralLinkBtn");
   if (copyReferralLinkBtn) {
     copyReferralLinkBtn.addEventListener("click", async () => {
-      try {
-        const referral = document.getElementById("referralCodeAffiliate")?.textContent?.trim() || "";
-        await navigator.clipboard.writeText(buildReferralLink(referral));
-        setBootStatus("Referral link copied.");
-      } catch (error) {
-        console.error("copyReferralLinkBtn error:", error);
-      }
+      await copyAffiliateText(getAffiliateLink(), "Referral link copied.");
     });
   }
 
-  const affiliateCopyButtons = [
-    ["copyManagerPitchBtn", buildAffiliateManagerPitch, "Manager pitch copied."],
-    ["copySalesPitchBtn", buildAffiliateSalesPitch, "Salesperson pitch copied."],
-    ["copyFollowupPitchBtn", buildAffiliateFollowupPitch, "Follow-up script copied."],
-    ["copyStoryCtaBtn", buildAffiliateStoryCTA, "Story CTA copied."]
-  ];
-  affiliateCopyButtons.forEach(([id, builder, successMessage]) => {
-    const btn = document.getElementById(id);
-    if (!btn) return;
-    btn.addEventListener("click", async () => {
-      try {
-        const referral = document.getElementById("referralCodeAffiliate")?.textContent?.trim() || "";
-        await navigator.clipboard.writeText(builder(referral));
-        setBootStatus(successMessage);
-      } catch (error) {
-        console.error(`${id} error:`, error);
-      }
+  const copyAffiliateDMBtn = document.getElementById("copyAffiliateDMBtn");
+  if (copyAffiliateDMBtn) {
+    copyAffiliateDMBtn.addEventListener("click", async () => {
+      const code = getAffiliateCode() || "[YOUR CODE]";
+      const dm = `I have early access to Elevate Automation. It helps salespeople post inventory faster, stay consistent, and track performance. If you want founder access, use my code ${code}.`;
+      await copyAffiliateText(dm, "Affiliate DM script copied.");
     });
-  });
+  }
+
+  const copyAffiliatePitchBtn = document.getElementById("copyAffiliatePitchBtn");
+  if (copyAffiliatePitchBtn) {
+    copyAffiliatePitchBtn.addEventListener("click", async () => {
+      const code = getAffiliateCode() || "[YOUR CODE]";
+      const pitch = `I’m a founding partner with Elevate Automation. It helps salespeople post inventory faster and manage listing performance more consistently. Use my code ${code} if you want founder access.`;
+      await copyAffiliateText(pitch, "Affiliate pitch copied.");
+    });
+  }
+
+  const copyAffiliatePostBtn = document.getElementById("copyAffiliatePostBtn");
+  if (copyAffiliatePostBtn) {
+    copyAffiliatePostBtn.addEventListener("click", async () => {
+      const link = getAffiliateLink() || "[YOUR LINK]";
+      const post = `I’m a founding partner with Elevate Automation. If you post inventory consistently and want a faster way to build Marketplace presence, message me or use this link: ${link}`;
+      await copyAffiliateText(post, "Affiliate story/post copy copied.");
+    });
+  }
 
 
   const openBillingPortalBtn = document.getElementById("openBillingPortalBtn");
@@ -685,7 +660,8 @@ function mergeSummaryWithListings(summary, listings) {
     segment_performance: Array.isArray(summary.segment_performance) ? summary.segment_performance : [],
     alerts: Array.isArray(summary.alerts) ? summary.alerts : [],
     scorecards: summary.scorecards || {},
-    intelligence: summary.intelligence || {}
+    intelligence: summary.intelligence || {},
+    affiliate: summary.affiliate || {}
   };
 }
 
@@ -709,6 +685,7 @@ function renderDashboardAnalytics() {
   setTextByIdForAll("kpiNeedsAction", String(numberOrZero(dashboardSummary?.needs_action_count)));
 
   renderPrioritiesPanels();
+  renderOnboardingCenter();
   renderAlertsPanel();
   renderScorecards();
   renderIntelligencePanels();
@@ -885,6 +862,107 @@ function renderListingsGrid(listings) {
   setStatus("listingGridStatus", `${listings.length} listing${listings.length === 1 ? "" : "s"} loaded.`);
 }
 
+
+
+function deriveOnboardingState() {
+  const summary = dashboardSummary?.onboarding;
+  if (summary && typeof summary === "object") return summary;
+
+  const setup = dashboardSummary?.setup_status || {};
+  const stepProfile = Boolean(setup.profile_complete || (setup.salesperson_name_present && setup.dealership_name_present && setup.compliance_mode_present));
+  const stepInventory = Boolean(setup.inventory_url_present || currentProfile?.inventory_url || currentNormalizedSession?.dealership?.inventory_url);
+  const stepScan = Array.isArray(dashboardListings) && dashboardListings.length > 0;
+  const stepPost = numberOrZero(dashboardSummary?.posts_today) > 0 || numberOrZero(dashboardSummary?.posts_this_month) > 0 || dashboardListings.some((row) => Boolean(row.posted_at || row.created_at));
+  const steps = [
+    { key: "profile", label: "Complete profile", complete: stepProfile },
+    { key: "inventory", label: "Add inventory URL", complete: stepInventory },
+    { key: "scan", label: "Run first scan", complete: stepScan },
+    { key: "post", label: "Post first listing", complete: stepPost }
+  ];
+  const completedSteps = steps.filter((step) => step.complete).length;
+  let nextBestAction = "Keep building momentum.";
+  if (!stepProfile) nextBestAction = "Complete your profile details.";
+  else if (!stepInventory) nextBestAction = "Add your inventory URL.";
+  else if (!stepScan) nextBestAction = "Run your first inventory scan.";
+  else if (!stepPost) nextBestAction = "Post your first listing.";
+
+  return {
+    steps,
+    completed_steps: completedSteps,
+    total_steps: steps.length,
+    completion_percent: Math.round((completedSteps / steps.length) * 100),
+    first_scan_complete: stepScan,
+    first_post_complete: stepPost,
+    next_best_action: nextBestAction,
+    complete: completedSteps === steps.length
+  };
+}
+
+function renderOnboardingCenter() {
+  const onboarding = deriveOnboardingState();
+  const stepMap = Object.fromEntries((onboarding.steps || []).map((step) => [step.key, Boolean(step.complete)]));
+
+  setSetupState("onboardingStepProfile", Boolean(stepMap.profile));
+  setSetupState("onboardingStepInventory", Boolean(stepMap.inventory));
+  setSetupState("onboardingStepScan", Boolean(stepMap.scan));
+  setSetupState("onboardingStepPost", Boolean(stepMap.post));
+
+  setTextByIdForAll("onboardingProgressText", `${numberOrZero(onboarding.completed_steps)} / ${numberOrZero(onboarding.total_steps || 4)} complete`);
+  setTextByIdForAll("onboardingPercentText", `${numberOrZero(onboarding.completion_percent)}%`);
+  setTextByIdForAll("onboardingFirstScan", onboarding.first_scan_complete ? "Completed" : "Pending");
+  setTextByIdForAll("onboardingFirstPost", onboarding.first_post_complete ? "Completed" : "Pending");
+  setTextByIdForAll("onboardingNextAction", cleanText(onboarding.next_best_action || "Complete your profile details."));
+  setStatus("onboardingStatusLine", onboarding.complete ? "Onboarding complete. You are ready to operate daily." : "Complete the next highlighted step to unlock your first win.");
+}
+
+function buildOnboardingChecklistText() {
+  const onboarding = deriveOnboardingState();
+  const lines = [
+    "Elevate Automation — Getting Started",
+    "",
+    ...((onboarding.steps || []).map((step, index) => `${index + 1}. ${step.label} — ${step.complete ? "Complete" : "Pending"}`)),
+    "",
+    `Progress: ${numberOrZero(onboarding.completed_steps)} / ${numberOrZero(onboarding.total_steps || 4)}`,
+    `Next Best Action: ${cleanText(onboarding.next_best_action || "Complete your profile details.")}`
+  ];
+  return lines.join("\n");
+}
+
+function renderAffiliateCenter() {
+  const affiliate = dashboardSummary?.affiliate || {};
+  const referralCode = cleanText(affiliate.referral_code || document.getElementById("referralCodeAffiliate")?.textContent || "Not assigned yet") || "Not assigned yet";
+  setTextByIdForAll("referralCodeAffiliate", referralCode);
+  setTextByIdForAll("affiliatePartnerType", cleanText(affiliate.partner_type || "Founding Partner"));
+  setTextByIdForAll("affiliateDirectCommission", `${numberOrZero(affiliate.direct_commission_percent || 20)}% recurring`);
+  setTextByIdForAll("affiliateTierOverride", `${numberOrZero(affiliate.second_level_override_percent || 5)}% second level`);
+  setTextByIdForAll("affiliatePayoutStatus", cleanText(affiliate.payout_status || "Manual founder-stage payouts"));
+  setTextByIdForAll("affiliateCommissionEarned", formatCurrency(affiliate.commission_earned || 0));
+  setTextByIdForAll("affiliatePendingPayout", formatCurrency(affiliate.pending_payout || 0));
+  setTextByIdForAll("affiliateTotalReferrals", String(numberOrZero(affiliate.total_referrals)));
+  setTextByIdForAll("affiliateActiveReferrals", String(numberOrZero(affiliate.active_referrals)));
+  setTextByIdForAll("affiliateEstimatedMRR", formatCurrency(affiliate.estimated_mrr_commission || 0));
+  setTextByIdForAll("affiliatePaidOutAllTime", formatCurrency(affiliate.paid_out_all_time || 0));
+  setTextByIdForAll("affiliateInvitedCount", String(numberOrZero(affiliate.invited_referrals ?? affiliate.total_referrals)));
+  setTextByIdForAll("affiliateSignedUpCount", String(numberOrZero(affiliate.signed_up_referrals ?? affiliate.total_referrals)));
+  setTextByIdForAll("affiliatePayingCount", String(numberOrZero(affiliate.paying_referrals ?? affiliate.active_referrals)));
+  setTextByIdForAll("affiliateChurnedCount", String(numberOrZero(affiliate.churned_referrals)));
+
+  const recentWrap = document.getElementById('affiliateRecentReferrals');
+  if (recentWrap) {
+    const rows = Array.isArray(affiliate.recent_referrals) ? affiliate.recent_referrals : [];
+    recentWrap.innerHTML = rows.length
+      ? rows.map((row) => `<div><strong>${escapeHtml(cleanText(row.name || row.email || 'Referral'))}</strong> • ${escapeHtml(cleanText(row.status || 'signed_up'))} • ${escapeHtml(cleanText(row.plan || 'Starter'))}<br><span style="color:var(--muted)">${escapeHtml(cleanText(row.email || ''))} • ${formatCurrency(row.estimated_commission || 0)} est.</span></div>`).join('')
+      : '<div>No referrals tracked yet.</div>';
+  }
+
+  const actionsWrap = document.getElementById('affiliateRecommendedActions');
+  if (actionsWrap) {
+    const actions = Array.isArray(affiliate.recommended_actions) ? affiliate.recommended_actions : [];
+    actionsWrap.innerHTML = actions.length
+      ? actions.map((item) => `<div>• ${escapeHtml(cleanText(item))}</div>`).join('')
+      : '<div>No actions yet.</div>';
+  }
+}
 
 function renderPrioritiesPanels() {
   const queues = dashboardSummary?.daily_ops_queues || dashboardSummary?.action_center || {};
