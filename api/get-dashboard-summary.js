@@ -586,6 +586,8 @@ export default async function handler(req, res) {
       ? 25
       : configuredDailyLimit;
 
+    const forcedAccess = hasTestingLimitOverride(finalEmail);
+
     const usageToday = Math.max(
       safeNumber(postingUsageRow?.posts_today ?? postingUsageRow?.posts_used ?? postingUsageRow?.used_today, 0),
       safeNumber(snapshot.posts_today ?? snapshot.posts_used_today, 0),
@@ -595,11 +597,11 @@ export default async function handler(req, res) {
     const postsRemaining = Math.max(dailyLimit - usageToday, 0);
     const setupStatus = buildSetupStatus(user, profileRow);
     const accessGranted = Boolean(
-      hasTestingLimitOverride(finalEmail) ||
+      forcedAccess ||
       snapshot.access_granted === true ||
       snapshot.active === true ||
       isActiveStatus(effectiveStatus) ||
-      clean(effectivePlan)
+      (clean(effectivePlan) && dailyLimit > 0)
     );
     const effectiveStatusNormalized = accessGranted ? "active" : (effectiveStatus || "inactive");
 
