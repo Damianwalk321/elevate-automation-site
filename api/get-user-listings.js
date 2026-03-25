@@ -126,6 +126,44 @@ async function resolveUser({ userId, email }) {
   return null;
 }
 
+
+function calculateHealthScore(row = {}) {
+  const views = safeNumber(row.views_count, 0);
+  const messages = safeNumber(row.messages_count, 0);
+  const postedAt = row.posted_at || row.created_at || row.updated_at || null;
+  const ageDays = postedAt ? Math.max(0, Math.floor((Date.now() - new Date(postedAt).getTime()) / 86400000)) : 0;
+  const lifecycle = clean(row.lifecycle_status || '').toLowerCase();
+  const status = clean(row.status || '').toLowerCase();
+  let score = 50 + Math.min(views, 50) + Math.min(messages * 12, 60) - Math.min(ageDays * 2, 35);
+  if (["stale", "review_delete", "review_price_update", "review_new"].includes(lifecycle)) score -= 25;
+  if (["sold", "deleted", "inactive"].includes(status)) score -= 20;
+  if (views >= 10 && messages === 0) score -= 10;
+  score = Math.max(0, Math.min(100, score));
+  let label = 'Healthy';
+  if (score >= 85) label = 'High Performer';
+  else if (score >= 60) label = 'Healthy';
+  else if (score >= 35) label = 'Watch';
+  else if (score >= 15) label = 'Weak';
+  else label = 'Needs Action';
+  return { score, label, age_days: ageDays };
+}
+
+function recommendListingAction(row = {}) {
+  const views = safeNumber(row.views_count, 0);
+  const messages = safeNumber(row.messages_count, 0);
+  const postedAt = row.posted_at || row.created_at || row.updated_at || null;
+  const ageDays = postedAt ? Math.max(0, Math.floor((Date.now() - new Date(postedAt).getTime()) / 86400000)) : 0;
+  const lifecycle = clean(row.lifecycle_status || '').toLowerCase();
+  const status = clean(row.status || '').toLowerCase();
+  if (lifecycle === 'review_price_update') return 'Review price';
+  if (lifecycle === 'review_delete' || status === 'stale') return 'Check if sold or stale';
+  if (lifecycle === 'review_new') return 'Review new listing';
+  if (views >= 15 && messages === 0) return 'Refresh title/photos';
+  if (ageDays >= 7 && views < 5) return 'Promote now';
+  if (messages >= 3) return 'Keep live';
+  return 'Monitor performance';
+}
+
 function sortRows(rows, sort) {
   const items = [...rows];
 
@@ -188,6 +226,9 @@ function matchesFilter(row, { status, lifecycleStatus, reviewBucket, search, pre
     if (preset === "price" && normalizedLifecycle !== "review_price_update" && normalizedBucket !== "pricechanges") return false;
     if (preset === "new" && normalizedLifecycle !== "review_new" && normalizedBucket !== "newvehicles") return false;
     if (preset === "active" && ["sold", "deleted", "inactive", "stale"].includes(normalizedStatus)) return false;
+    const health = calculateHealthScore(row);
+    if (preset === "weak" && !["Weak", "Needs Action"].includes(health.label)) return false;
+    if (preset === "needs_action" && health.label !== "Needs Action" && !["review_delete","review_price_update","review_new"].includes(normalizedLifecycle)) return false;
   }
 
   if (search) {
@@ -255,7 +296,16 @@ export default async function handler(req, res) {
       map.set(normalized.identity_key, preferListingRow(map.get(normalized.identity_key), normalized));
     }
 
-    let rows = [...map.values()].filter((row) => matchesFilter(row, { status, lifecycleStatus, reviewBucket, search, preset }));
+    let rows = [...map.values()].map((row) => {
+      const health = calculateHealthScore(row);
+      return {
+        ...row,
+        health_score: health.score,
+        health_label: health.label,
+        age_days: health.age_days,
+        recommended_action: recommendListingAction(row)
+      };
+    }).filter((row) => matchesFilter(row, { status, lifecycleStatus, reviewBucket, search, preset }));
     rows = sortRows(rows, sort).slice(0, limit);
 
     return res.status(200).json({
