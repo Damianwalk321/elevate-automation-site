@@ -546,7 +546,23 @@ function computeListingIntelligence(item = {}) {
   else if (bucket === 'newvehicles' || lifecycle === 'review_new') recommendedAction = 'Review new listing';
   else if (lowPerformance) recommendedAction = 'Refresh title/photos';
   else if (promoteNow) recommendedAction = 'Promote now';
-  return { age_days: ageDays, likely_sold: likelySold, promote_now: promoteNow, weak, needs_action: needsAction, health_score: healthScore, health_label: healthLabel, recommended_action: recommendedAction };
+  let predictedScore = 50 + Math.min(views, 25) + Math.min(messages * 18, 36) - Math.min(ageDays * 3, 24);
+  if (views >= 20 && messages === 0) predictedScore -= 8;
+  if (weak) predictedScore -= 20;
+  predictedScore = Math.max(0, Math.min(100, Math.round(predictedScore)));
+  const predictedLabel = predictedScore >= 75 ? 'High Performer' : (predictedScore >= 55 ? 'Likely Performer' : (predictedScore < 35 ? 'Low Probability' : 'Uncertain'));
+  const pricingInsight = (views >= 20 && messages === 0) ? 'Price may be limiting conversion.' : (messages >= 2 ? 'Pricing appears competitive.' : (views === 0 && ageDays >= 3 ? 'Listing may need stronger value or visibility.' : 'Pricing signal still developing.'));
+  let contentScore = 60;
+  if (cleanText(item.title).length >= 18) contentScore += 10;
+  if (cleanText(item.stock_number)) contentScore += 5;
+  if (cleanText(item.vin)) contentScore += 5;
+  if (cleanText(item.exterior_color)) contentScore += 5;
+  if (cleanText(item.body_style)) contentScore += 5;
+  if (cleanText(item.fuel_type)) contentScore += 5;
+  if (ageDays >= 7 && views < 5) contentScore -= 10;
+  contentScore = Math.max(0, Math.min(100, Math.round(contentScore)));
+  const contentFeedback = contentScore >= 80 ? 'Listing structure looks strong.' : (contentScore >= 65 ? 'Content is workable but could be tightened.' : 'Listing likely needs a stronger title and better detail signals.');
+  return { age_days: ageDays, likely_sold: likelySold, promote_now: promoteNow, weak, needs_action: needsAction, health_score: healthScore, health_label: healthLabel, recommended_action: recommendedAction, predicted_score: predictedScore, predicted_label: predictedLabel, pricing_insight: pricingInsight, content_score: contentScore, content_feedback: contentFeedback };
 }
 
 function mergeSummaryWithListings(summary, listings) {
@@ -582,7 +598,10 @@ function mergeSummaryWithListings(summary, listings) {
     daily_ops_queues: summary.daily_ops_queues || summary.action_center || {},
     manager_summary: summary.manager_summary || {},
     manager_recommendations: Array.isArray(summary.manager_recommendations) ? summary.manager_recommendations : [],
-    segment_performance: Array.isArray(summary.segment_performance) ? summary.segment_performance : []
+    segment_performance: Array.isArray(summary.segment_performance) ? summary.segment_performance : [],
+    alerts: Array.isArray(summary.alerts) ? summary.alerts : [],
+    scorecards: summary.scorecards || {},
+    intelligence: summary.intelligence || {}
   };
 }
 
@@ -606,6 +625,9 @@ function renderDashboardAnalytics() {
   setTextByIdForAll("kpiNeedsAction", String(numberOrZero(dashboardSummary?.needs_action_count)));
 
   renderPrioritiesPanels();
+  renderAlertsPanel();
+  renderScorecards();
+  renderIntelligencePanels();
   renderTopListings(dashboardListings);
   renderRecentActivity(dashboardListings);
   drawActivityChart(buildChartSeries());
@@ -741,6 +763,8 @@ function renderListingsGrid(listings) {
             </div>
           </div>
 
+          <div class="listing-note" style="margin:0 0 12px;color:var(--muted);font-size:12px;"><strong>Recommended:</strong> ${escapeHtml(item.recommended_action || 'Keep live')}<br/><strong>Pricing:</strong> ${escapeHtml(item.pricing_insight || 'Pricing signal still developing.')}<br/><strong>Content:</strong> ${escapeHtml(item.content_feedback || 'Listing structure looks strong.')}</div>
+
           <div class="listing-metrics">
             <div class="metric-pill">
               <div class="metric-pill-label">Views</div>
@@ -806,6 +830,46 @@ function renderPrioritiesPanels() {
       const recs = Array.isArray(dashboardSummary?.manager_recommendations) ? dashboardSummary.manager_recommendations : [];
       recEl.innerHTML = recs.length ? recs.map((item) => `<div>• ${escapeHtml(item)}</div>`).join('') : '<div>No recommendations yet.</div>';
     }
+  }
+}
+
+
+function renderAlertsPanel() {
+  const wrap = document.getElementById('alertsPanel');
+  if (!wrap) return;
+  const alerts = Array.isArray(dashboardSummary?.alerts) ? dashboardSummary.alerts : [];
+  if (!alerts.length) { wrap.innerHTML = '<div>No active alerts right now.</div>'; return; }
+  wrap.innerHTML = alerts.map((alert) => `<div><strong>${escapeHtml(alert.title || 'Alert')}:</strong> ${escapeHtml(alert.message || '')}</div>`).join('');
+}
+
+function renderScorecards() {
+  const dailyWrap = document.getElementById('dailyScorecardPanel');
+  const weeklyWrap = document.getElementById('weeklyScorecardPanel');
+  const daily = dashboardSummary?.scorecards?.daily || {};
+  const weekly = dashboardSummary?.scorecards?.weekly || {};
+  if (dailyWrap) {
+    dailyWrap.innerHTML = [`<div><strong>Posts:</strong> ${numberOrZero(daily.posts_today)}</div>`,`<div><strong>Views Est:</strong> ${numberOrZero(daily.views_today_est)}</div>`,`<div><strong>Messages Est:</strong> ${numberOrZero(daily.messages_today_est)}</div>`,`<div><strong>Weak Listings:</strong> ${numberOrZero(daily.weak_listings)}</div>`,`<div><strong>Completion Score:</strong> ${numberOrZero(daily.completion_score)}%</div>`].join('');
+  }
+  if (weeklyWrap) {
+    weeklyWrap.innerHTML = [`<div><strong>7-Day Views:</strong> ${numberOrZero(weekly.views_7d)}</div>`,`<div><strong>7-Day Messages:</strong> ${numberOrZero(weekly.messages_7d)}</div>`,`<div><strong>Views Delta:</strong> ${numberOrZero(weekly.views_delta)}</div>`,`<div><strong>Messages Delta:</strong> ${numberOrZero(weekly.messages_delta)}</div>`,`<div><strong>Activity Delta:</strong> ${numberOrZero(weekly.activity_delta)}</div>`].join('');
+  }
+}
+
+function renderIntelligencePanels() {
+  const intelWrap = document.getElementById('intelligencePanel');
+  const oppWrap = document.getElementById('opportunitiesPanel');
+  const intelligence = dashboardSummary?.intelligence || {};
+  if (intelWrap) {
+    const top = Array.isArray(intelligence.top_segments) ? intelligence.top_segments.slice(0, 4) : [];
+    const weak = Array.isArray(intelligence.weak_segments) ? intelligence.weak_segments.slice(0, 3) : [];
+    const blocks = [];
+    if (top.length) blocks.push(`<div><strong>Top Segments</strong></div>${top.map((seg) => `<div>${escapeHtml(seg.key || 'Segment')} • ${numberOrZero(seg.listings)} listings • ${numberOrZero(seg.messages)} messages</div>`).join('')}`);
+    if (weak.length) blocks.push(`<div style="margin-top:10px;"><strong>Watch Segments</strong></div>${weak.map((seg) => `<div>${escapeHtml(seg.key || 'Segment')} • weak ${numberOrZero(seg.weak)} • conv ${numberOrZero(seg.conversion_rate)}%</div>`).join('')}`);
+    intelWrap.innerHTML = blocks.length ? blocks.join('') : '<div>Intelligence is still building as more listing data comes in.</div>';
+  }
+  if (oppWrap) {
+    const opps = Array.isArray(intelligence.opportunities) ? intelligence.opportunities.slice(0, 5) : [];
+    oppWrap.innerHTML = opps.length ? opps.map((seg) => `<div><strong>${escapeHtml(seg.key || 'Segment')}</strong> • ${numberOrZero(seg.views)} views • ${numberOrZero(seg.messages)} messages • ${numberOrZero(seg.conversion_rate)}% conversion</div>`).join('') : '<div>No opportunity clusters detected yet.</div>';
   }
 }
 
