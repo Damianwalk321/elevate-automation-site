@@ -59,6 +59,17 @@ function normalizeLifecycleStatus(value, reviewBucket = "") {
 function nowIso() {
   return new Date().toISOString();
 }
+function normalizeListingUrl(value) {
+  const raw = clean(value);
+  if (!raw) return "";
+  try {
+    const url = new URL(raw);
+    ["fbclid", "utm_source", "utm_medium", "utm_campaign", "utm_term", "utm_content", "ref", "tracking", "tracking_id"].forEach((key) => url.searchParams.delete(key));
+    return `${url.origin}${url.pathname.replace(/\/$/, "")}${url.search ? `?${url.searchParams.toString()}` : ""}`.toLowerCase();
+  } catch {
+    return raw.replace(/[?#].*$/, "").replace(/\/$/, "").toLowerCase();
+  }
+}
 
 function dayKey() {
   return nowIso().slice(0, 10);
@@ -123,10 +134,10 @@ async function resolveUserId(supabase, userId, email) {
 function buildIdentityCandidates(row) {
   const candidates = [];
   const id = clean(row.id || "");
-  const marketplace = clean(row.marketplace_listing_id || "");
+  const marketplace = clean(row.marketplace_listing_id || row.listing_id || "");
   const vin = clean(row.vin || "");
-  const stock = clean(row.stock_number || "");
-  const source = clean(row.source_url || "");
+  const stock = clean(row.stock_number || row.stock || "");
+  const source = normalizeListingUrl(row.source_url || row.listing_url || "");
 
   if (id) candidates.push({ column: "id", value: id });
   if (marketplace) candidates.push({ column: "marketplace_listing_id", value: marketplace });
@@ -140,10 +151,10 @@ function buildIdentityCandidates(row) {
 function buildListingId(row) {
   return (
     clean(row.id) ||
-    clean(row.marketplace_listing_id) ||
+    clean(row.marketplace_listing_id || row.listing_id) ||
     clean(row.vin) ||
-    clean(row.stock_number) ||
-    clean(row.source_url) ||
+    clean(row.stock_number || row.stock) ||
+    normalizeListingUrl(row.source_url || row.listing_url) ||
     `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
   );
 }
