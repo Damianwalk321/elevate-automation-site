@@ -22,16 +22,6 @@ function safeNumber(value, fallback = 0) {
 function normalizePlan(value) {
   return clean(value).toLowerCase();
 }
-function normalizeReferralSource(value) {
-  const source = clean(value).toLowerCase().replace(/[^a-z0-9_:-]+/g, "_");
-  if (!source) return "";
-  if (["ref","referral","link","direct_link"].includes(source)) return "link";
-  if (["checkout","stripe","billing"].includes(source)) return "checkout";
-  if (["signup","auth","register"].includes(source)) return "signup";
-  if (["story","ig_story","facebook_story"].includes(source)) return "story";
-  if (["dm","message","direct_message"].includes(source)) return "dm";
-  return source;
-}
 function inferPostingLimitFromPlan(planValue) {
   const plan = normalizePlan(planValue);
   if (!plan) return 5;
@@ -326,6 +316,92 @@ async function getListingRows(userId, email) {
   return mergeListingRows(userRows, legacyRows);
 }
 
+async function getUsageLogRows(userId, email) {
+  const rows = [];
+  const seen = new Set();
+  async function run(mode) {
+    let query = supabase.from('usage_logs').select('id,user_id,email,action,listing_id,metadata,created_at').order('created_at', { ascending: false }).limit(2000);
+    if (mode === 'user' && userId) query = query.eq('user_id', userId);
+    if (mode === 'email' && email) query = query.ilike('email', email);
+    const { data, error } = await query;
+    if (error) throw error;
+    for (const row of (Array.isArray(data) ? data : [])) {
+      const key = clean(row?.id || '');
+      if (!key || seen.has(key)) continue;
+      seen.add(key);
+      rows.push(row);
+    }
+  }
+  if (userId) await run('user');
+  if (email) await run('email');
+  return rows;
+}
+
+function buildMessageTracking(rows = [], usageRows = []) {
+  const byListing = new Map();
+  const marketplaceIndex = new Map();
+  const sourceIndex = new Map();
+
+  for (const row of rows) {
+    const listingId = clean(row.id || '');
+    const trackedMessages = safeNumber(row.messages_count, 0);
+    byListing.set(listingId, {
+      listing_id: listingId,
+      title: clean(row.title || ''),
+      tracked_messages: trackedMessages,
+      thread_opens: 0,
+      thread_events: 0,
+      effective_messages: trackedMessages,
+      confidence: trackedMessages > 0 ? 'high' : 'low'
+    });
+    const marketplaceId = clean(row.marketplace_listing_id || '');
+    const sourceUrl = clean(row.source_url || '');
+    if (marketplaceId) marketplaceIndex.set(marketplaceId, listingId);
+    if (sourceUrl) sourceIndex.set(sourceUrl, listingId);
+  }
+
+  for (const log of usageRows) {
+    const action = clean(log?.action || '').toLowerCase();
+    if (!['message_thread_opened', 'listing_message', 'message_logged'].includes(action)) continue;
+    const metadata = log?.metadata && typeof log.metadata === 'object' ? log.metadata : {};
+    let listingId = clean(log?.listing_id || '');
+    if (!listingId) {
+      const marketplaceId = clean(metadata.marketplace_listing_id || '');
+      const sourceUrl = clean(metadata.source_url || '');
+      if (marketplaceId && marketplaceIndex.has(marketplaceId)) listingId = marketplaceIndex.get(marketplaceId) || '';
+      if (!listingId && sourceUrl && sourceIndex.has(sourceUrl)) listingId = sourceIndex.get(sourceUrl) || '';
+    }
+    if (!listingId || !byListing.has(listingId)) continue;
+    const entry = byListing.get(listingId);
+    if (action === 'message_thread_opened') {
+      entry.thread_events += 1;
+      entry.thread_opens = Math.max(entry.thread_opens, 1);
+      if (entry.tracked_messages <= 0) {
+        entry.effective_messages = Math.max(entry.effective_messages, 1);
+        entry.confidence = 'estimated';
+      }
+    } else {
+      entry.tracked_messages = Math.max(entry.tracked_messages, 1);
+      entry.effective_messages = Math.max(entry.effective_messages, entry.tracked_messages);
+      entry.confidence = 'high';
+    }
+  }
+
+  const listing_rows = [...byListing.values()].filter((row) => row.effective_messages > 0 || row.thread_events > 0);
+  const tracked_messages = listing_rows.reduce((sum, row) => sum + safeNumber(row.tracked_messages, 0), 0);
+  const estimated_conversations = listing_rows.reduce((sum, row) => sum + Math.max(0, safeNumber(row.effective_messages, 0) - safeNumber(row.tracked_messages, 0)), 0);
+  const effective_messages = listing_rows.reduce((sum, row) => sum + safeNumber(row.effective_messages, 0), 0);
+  const confidence = tracked_messages > 0 ? (estimated_conversations > 0 ? 'medium' : 'high') : (estimated_conversations > 0 ? 'estimated' : 'low');
+
+  return {
+    tracked_messages,
+    estimated_conversations,
+    effective_messages,
+    confidence,
+    listing_rows
+  };
+}
+
 function estimatePlanMonthlyRevenue(planValue) {
   const plan = normalizePlan(planValue);
   if (!plan) return 39;
@@ -335,7 +411,7 @@ function estimatePlanMonthlyRevenue(planValue) {
 }
 async function getAffiliateSummary({ referralCode, referralSource, email }) {
   const code = clean(referralCode || '');
-  const ownerSource = normalizeReferralSource(referralSource || '');
+  const ownerSource = clean(referralSource || '');
   const ownerEmail = normalizeEmail(email || '');
   const base = {
     referral_code: code,
@@ -353,12 +429,7 @@ async function getAffiliateSummary({ referralCode, referralSource, email }) {
     estimated_mrr_commission: 0,
     pending_payout: 0,
     paid_out_all_time: 0,
-    conversion_rate: 0,
-    active_referral_rate: 0,
-    top_source: ownerSource || 'link',
-    last_referral_date: '',
     recent_referrals: [],
-    attribution_confidence: 'low',
     recommended_actions: [
       'Invite sales managers and top Marketplace posters first.',
       'Share your referral link in one direct DM and one story this week.'
@@ -368,88 +439,63 @@ async function getAffiliateSummary({ referralCode, referralSource, email }) {
 
   const { data, error } = await supabase
     .from('subscriptions')
-    .select('id,user_id,email,plan,plan_name,plan_type,status,active,created_at,current_period_end,cancel_at_period_end,referral_code,referral_source,account_snapshot')
+    .select('id,user_id,email,plan,plan_name,plan_type,status,active,created_at,current_period_end,cancel_at_period_end,referral_code,account_snapshot')
     .ilike('referral_code', code)
     .order('created_at', { ascending: false })
-    .limit(300);
+    .limit(200);
   if (error) throw error;
 
   const rows = (Array.isArray(data) ? data : []).filter((row) => normalizeEmail(row?.email) !== ownerEmail);
   let active = 0;
   let paying = 0;
   let churned = 0;
-  let signedUp = 0;
   let estimatedMrr = 0;
-  let commissionEarned = 0;
   const recent = [];
   const sourceCounts = new Map();
 
   for (const row of rows) {
     const snapshot = row?.account_snapshot && typeof row.account_snapshot === 'object' ? row.account_snapshot : {};
-    const createdAt = row?.created_at || snapshot.created_at || '';
     const plan = clean(row?.plan_type || row?.plan_name || row?.plan || snapshot.plan || 'Starter');
-    const normalizedStatus = clean(row?.status || snapshot.status || '').toLowerCase();
-    const isActive = Boolean(row?.active === true || snapshot.active === true || isActiveStatus(normalizedStatus));
-    const isSignedUp = Boolean(createdAt || normalizeEmail(row?.email));
-    const isChurned = !isActive && ['canceled','cancelled','unpaid','past_due','incomplete_expired','inactive'].includes(normalizedStatus);
-    const monthlyRevenue = estimatePlanMonthlyRevenue(plan);
-    const estimatedCommission = isActive ? monthlyRevenue * 0.20 : 0;
-    const source = normalizeReferralSource(snapshot.referral_source || row?.referral_source || ownerSource || 'link') || 'link';
-
-    if (isSignedUp) signedUp += 1;
+    const isActive = Boolean(row?.active === true || snapshot.active === true || isActiveStatus(row?.status || snapshot.status));
+    const estimatedCommission = isActive ? estimatePlanMonthlyRevenue(plan) * 0.20 : 0;
     if (isActive) {
       active += 1;
       paying += 1;
       estimatedMrr += estimatedCommission;
-      commissionEarned += estimatedCommission;
-    } else if (isChurned) {
+    } else {
       churned += 1;
     }
-
+    const source = clean(snapshot.referral_source || row?.referral_source || ownerSource || 'link');
     sourceCounts.set(source, (sourceCounts.get(source) || 0) + 1);
     recent.push({
       name: clean(snapshot.full_name || row?.email || '').split('@')[0],
       email: normalizeEmail(row?.email || ''),
       plan,
-      status: isActive ? 'paying' : (isChurned ? 'churned' : 'signed_up'),
-      created_at: createdAt,
+      status: isActive ? 'paying' : 'signed_up',
+      created_at: row?.created_at || '',
       estimated_commission: Math.round(estimatedCommission * 100) / 100,
       source
     });
   }
 
-  const sortedSources = [...sourceCounts.entries()].sort((a, b) => b[1] - a[1]);
-  const topSource = sortedSources.length ? sortedSources[0][0] : (ownerSource || 'link');
-  const total = rows.length;
-  const conversionRate = signedUp > 0 ? Math.round((paying / signedUp) * 100) : 0;
-  const activeReferralRate = total > 0 ? Math.round((active / total) * 100) : 0;
-  const attributionConfidence = total >= 5 ? 'high' : (total >= 1 ? 'medium' : 'low');
-
   const recommended = [];
   if (!rows.length) recommended.push('Start with 10 direct outreach messages to salespeople or managers this week.');
-  if (signedUp > paying) recommended.push(`Follow up with ${signedUp - paying} signed referral${signedUp - paying === 1 ? '' : 's'} who have not converted to paying yet.`);
-  if (active > 0) recommended.push('Double down on your highest-converting source and repeat that outreach pattern.');
-  if (topSource && topSource !== 'link') recommended.push(`Your top source is ${topSource}. Add that source to your next outreach push.`);
-
-  recent.sort((a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime());
+  if (rows.length > active) recommended.push(`Follow up with ${rows.length - active} inactive referral${rows.length - active === 1 ? '' : 's'}.`);
+  if (active) recommended.push('Ask active partners for one dealership or manager introduction.');
+  if (active >= 3) recommended.push('Highlight recurring commission in your outreach to attract stronger partners.');
 
   return {
     ...base,
-    total_referrals: total,
+    total_referrals: rows.length,
     active_referrals: active,
-    invited_referrals: total,
-    signed_up_referrals: signedUp,
+    invited_referrals: rows.length,
+    signed_up_referrals: rows.length,
     paying_referrals: paying,
     churned_referrals: churned,
-    commission_earned: Math.round(commissionEarned * 100) / 100,
+    commission_earned: 0,
     estimated_mrr_commission: Math.round(estimatedMrr * 100) / 100,
-    pending_payout: Math.round(commissionEarned * 100) / 100,
-    conversion_rate: conversionRate,
-    active_referral_rate: activeReferralRate,
-    top_source: topSource,
-    last_referral_date: recent[0]?.created_at || '',
+    pending_payout: Math.round(estimatedMrr * 100) / 100,
     recent_referrals: recent.slice(0, 8),
-    attribution_confidence: attributionConfidence,
     recommended_actions: recommended.length ? recommended : base.recommended_actions
   };
 }
@@ -603,13 +649,15 @@ export default async function handler(req, res) {
     const finalEmail = normalizeEmail(user?.email || email || '');
     if (!finalUserId && !finalEmail) return res.status(400).json({ error: 'Missing userId or email' });
 
-    const [subscriptionRow, postingUsageRow, profileRow, rows] = await Promise.all([
+    const [subscriptionRow, postingUsageRow, profileRow, rows, usageRows] = await Promise.all([
       getSubscription(finalUserId, finalEmail),
       getPostingUsageRow(finalUserId, finalEmail),
       getProfileRow(finalUserId, finalEmail),
-      getListingRows(finalUserId, finalEmail)
+      getListingRows(finalUserId, finalEmail),
+      getUsageLogRows(finalUserId, finalEmail)
     ]);
     const computed = buildComputedSummary(rows);
+    const messageTracking = buildMessageTracking(rows, usageRows);
     const snapshot = subscriptionRow?.account_snapshot && typeof subscriptionRow.account_snapshot === 'object' ? subscriptionRow.account_snapshot : {};
     const planValue = clean(subscriptionRow?.plan_type || subscriptionRow?.plan_name || subscriptionRow?.plan || user?.plan || user?.user_type || 'Founder Beta');
     const forcedAccess = hasTestingLimitOverride(finalEmail);
@@ -621,7 +669,7 @@ export default async function handler(req, res) {
     const effectiveStatus = accessGranted ? 'active' : clean(subscriptionRow?.status || snapshot.status || 'inactive').toLowerCase();
     const setupStatus = buildSetupStatus(user, profileRow);
     const segmentIntel = buildSegmentPerformance(rows);
-    const alerts = buildAlerts({ ...computed, total_views: computed.total_views, total_messages: computed.total_messages });
+    const alerts = buildAlerts({ ...computed, total_views: computed.total_views, total_messages: messageTracking.effective_messages });
     const scorecards = buildScorecards(computed, rows);
     const referralCode = clean(snapshot.referral_code || subscriptionRow?.referral_code || user?.referral_code || '');
     const affiliate = await getAffiliateSummary({ referralCode, email: finalEmail });
@@ -629,8 +677,8 @@ export default async function handler(req, res) {
     const managerSummary = {
       live_inventory: computed.active_listings,
       avg_views_per_live: computed.active_listings ? Number((computed.total_views / computed.active_listings).toFixed(1)) : 0,
-      avg_messages_per_live: computed.active_listings ? Number((computed.total_messages / computed.active_listings).toFixed(1)) : 0,
-      view_to_message_rate: computed.total_views ? Number(((computed.total_messages / computed.total_views) * 100).toFixed(1)) : 0,
+      avg_messages_per_live: computed.active_listings ? Number((messageTracking.effective_messages / computed.active_listings).toFixed(1)) : 0,
+      view_to_message_rate: computed.total_views ? Number(((messageTracking.effective_messages / computed.total_views) * 100).toFixed(1)) : 0,
       stale_rate: computed.total_listings ? Number(((computed.stale_listings / computed.total_listings) * 100).toFixed(1)) : 0,
       weak_rate: computed.total_listings ? Number(((computed.weak_listings / computed.total_listings) * 100).toFixed(1)) : 0,
       weak_listings: computed.weak_listings,
@@ -647,6 +695,8 @@ export default async function handler(req, res) {
       posted_at: row.posted_at || row.created_at,
       views_count: safeNumber(row.views_count, 0),
       messages_count: safeNumber(row.messages_count, 0),
+      effective_messages_count: safeNumber(messageTracking.listing_rows.find((entry) => entry.listing_id === row.id)?.effective_messages, safeNumber(row.messages_count, 0)),
+      message_confidence: clean(messageTracking.listing_rows.find((entry) => entry.listing_id === row.id)?.confidence || (safeNumber(row.messages_count, 0) > 0 ? 'high' : 'low')),
       review_bucket: row.review_bucket || '',
       source_url: row.source_url || '',
       stock_number: row.stock_number || '',
@@ -680,7 +730,8 @@ export default async function handler(req, res) {
         active_listings: computed.active_listings,
         stale_listings: computed.stale_listings,
         total_views: computed.total_views,
-        total_messages: computed.total_messages,
+        total_messages: messageTracking.effective_messages,
+        message_tracking: messageTracking,
         review_delete_count: computed.review_delete_count,
         review_price_change_count: computed.review_price_change_count,
         review_new_count: computed.review_new_count,
