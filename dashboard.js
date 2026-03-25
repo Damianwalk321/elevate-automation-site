@@ -348,6 +348,10 @@ async function onSaveProfilePressed() {
 async function refreshDashboardState(forceFresh = false) {
   await loadAccountData(currentUser, forceFresh);
   await loadListingDashboardData(forceFresh);
+  currentNormalizedSession = normalizeExtensionStateResponse(currentAccountData || {}, currentUser, currentProfile) || currentNormalizedSession || buildFallbackSessionFromLocalState();
+  renderAccessState(currentNormalizedSession);
+  renderExtensionControl(currentNormalizedSession, currentProfile);
+  updateSetupStates(currentProfile, currentNormalizedSession);
 }
 
 async function loadListingDashboardData(forceFresh = false) {
@@ -366,6 +370,12 @@ async function loadListingDashboardData(forceFresh = false) {
     }
 
     filteredListings = [...dashboardListings];
+
+    if (!currentAccountData) {
+      currentNormalizedSession = buildFallbackSessionFromLocalState();
+      renderAccessState(currentNormalizedSession);
+      renderExtensionControl(currentNormalizedSession, currentProfile);
+    }
 
     renderDashboardAnalytics();
     renderSetupSnapshot();
@@ -594,7 +604,12 @@ function mergeSummaryWithListings(summary, listings) {
     lifecycle_updated_at: clean(summary.lifecycle_updated_at || ""),
     top_listing_title: clean(summary.top_listing_title || computed.top_listing_title || "None yet"),
     account_snapshot: summary.account_snapshot || {},
-    setup_status: summary.setup_status || {}
+    setup_status: summary.setup_status || {},
+    manager_summary: summary.manager_summary || {},
+    segment_performance: summary.segment_performance || {},
+    daily_ops_queues: summary.daily_ops_queues || {},
+    salesperson_leaderboard: summary.salesperson_leaderboard || [],
+    manager_recommendations: summary.manager_recommendations || []
   };
 }
 
@@ -620,6 +635,11 @@ function renderDashboardAnalytics() {
   renderTopListings(dashboardListings);
   renderRecentActivity(dashboardListings);
   renderActionCenter(dashboardListings);
+  renderManagerSummary(dashboardSummary?.manager_summary || {});
+  renderDailyOpsQueues(dashboardSummary?.daily_ops_queues || {});
+  renderSegmentPerformance(dashboardSummary?.segment_performance || {});
+  renderSalesLeaderboard(dashboardSummary?.salesperson_leaderboard || []);
+  renderManagerRecommendations(dashboardSummary?.manager_recommendations || []);
   drawActivityChart(buildChartSeries());
 }
 
@@ -641,6 +661,8 @@ function applyListingFiltersAndRender() {
       if (listingQuickFilter === "new") return lifecycle === "review_new" || bucket === "newvehicles";
       if (listingQuickFilter === "weak") return ["Weak","Needs Action"].includes(item.health_label);
       if (listingQuickFilter === "needs_action") return item.health_label === "Needs Action" || ["review_delete","review_price_update","review_new"].includes(lifecycle);
+      if (listingQuickFilter === "promote") return (numberOrZero(item.age_days) >= 7 && numberOrZero(item.views_count) < 5) || item.recommended_action === "Promote now";
+      if (listingQuickFilter === "likely_sold") return numberOrZero(item.views_count) >= 12 && numberOrZero(item.messages_count) === 0;
       if (listingQuickFilter === "active") return !["sold", "deleted", "inactive", "stale"].includes(status) && lifecycle !== "review_delete";
       return true;
     });
@@ -735,6 +757,61 @@ function renderActionCenter(listings) {
 
   if (actionWrap) actionWrap.innerHTML = actions.length ? actions.map((row) => buildItem(row, 'action')).join('') : `<div class="listing-empty">No action items right now.</div>`;
   if (recWrap) recWrap.innerHTML = recs.length ? recs.map((row) => buildItem(row, 'rec')).join('') : `<div class="listing-empty">No recommendations yet.</div>`;
+}
+
+
+function renderManagerSummary(summary = {}) {
+  setTextByIdForAll("managerAvgViewsPerLive", String(summary.avg_views_per_live ?? 0));
+  setTextByIdForAll("managerAvgMessagesPerLive", String(summary.avg_messages_per_live ?? 0));
+  setTextByIdForAll("managerConversionRate", `${numberOrZero(summary.view_to_message_rate)}%`);
+  setTextByIdForAll("managerStaleRate", `${numberOrZero(summary.stale_rate)}%`);
+  setTextByIdForAll("managerWeakRate", `${numberOrZero(summary.weak_rate)}%`);
+}
+
+function renderDailyOpsQueues(queues = {}) {
+  const wrap = document.getElementById("dailyOpsQueues");
+  if (!wrap) return;
+  const labels = {
+    repost_today: 'Repost Today',
+    review_today: 'Review Today',
+    promote_today: 'Promote Today',
+    likely_sold: 'Likely Sold',
+    low_performance: 'Low Performance'
+  };
+  const items = Object.entries(labels).map(([key, label]) => {
+    const count = Array.isArray(queues[key]) ? queues[key].length : 0;
+    return `<div class="activity-item"><div><div class="activity-item-title">${escapeHtml(label)}</div><div class="activity-item-sub">${count} listing${count === 1 ? '' : 's'} in queue</div></div><div class="activity-item-time">${count}</div></div>`;
+  }).join('');
+  wrap.innerHTML = items || '<div class="listing-empty">No ops queues yet.</div>';
+}
+
+function renderSegmentPerformance(segments = {}) {
+  const wrap = document.getElementById("segmentPerformance");
+  if (!wrap) return;
+  const rows = [];
+  const addRows = (title, items=[]) => {
+    if (!items.length) return;
+    rows.push(`<div class="activity-item"><div><div class="activity-item-title">${escapeHtml(title)}</div><div class="activity-item-sub">Top segments by views/messages</div></div><div class="activity-item-time">Top 3</div></div>`);
+    items.slice(0,3).forEach((item) => {
+      rows.push(`<div class="activity-item"><div><div class="activity-item-title">${escapeHtml(item.key)}</div><div class="activity-item-sub">${numberOrZero(item.views)} views • ${numberOrZero(item.messages)} messages • ${numberOrZero(item.conversion_rate)}% conversion</div></div><div class="activity-item-time">${numberOrZero(item.listings)} listings</div></div>`);
+    });
+  };
+  addRows('Make', segments.make || []);
+  addRows('Body Style', segments.body_style || []);
+  addRows('Price Band', segments.price_band || []);
+  wrap.innerHTML = rows.join('') || '<div class="listing-empty">No segment data yet.</div>';
+}
+
+function renderSalesLeaderboard(rows = []) {
+  const wrap = document.getElementById("salesLeaderboard");
+  if (!wrap) return;
+  wrap.innerHTML = rows.length ? rows.map((item, idx) => `<div class="activity-item"><div><div class="activity-item-title">#${idx+1} ${escapeHtml(item.name || 'Current Account')}</div><div class="activity-item-sub">${numberOrZero(item.posts_today)} posts • ${numberOrZero(item.views)} views • ${numberOrZero(item.messages)} messages</div></div><div class="activity-item-time">${numberOrZero(item.conversion_rate)}%</div></div>`).join('') : '<div class="listing-empty">No leaderboard data yet.</div>';
+}
+
+function renderManagerRecommendations(rows = []) {
+  const wrap = document.getElementById("managerRecommendations");
+  if (!wrap) return;
+  wrap.innerHTML = rows.length ? rows.map((item) => `<div class="activity-item"><div><div class="activity-item-title">${escapeHtml(item.title || 'Recommendation')}</div><div class="activity-item-sub">${escapeHtml(item.detail || '')}</div></div><div class="activity-item-time">Now</div></div>`).join('') : '<div class="listing-empty">No manager recommendations yet.</div>';
 }
 
 function renderListingsGrid(listings) {
