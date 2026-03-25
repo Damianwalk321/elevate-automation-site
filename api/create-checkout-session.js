@@ -210,6 +210,52 @@ async function mirrorCustomerToSupabase({ email, userId, stripeCustomerId }) {
   }
 }
 
+
+async function getLockedReferralFromSupabase({ email, userId }) {
+  const supabaseUrl = process.env.SUPABASE_URL;
+  const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!supabaseUrl || !supabaseServiceRoleKey) {
+    return { referralCode: "", referralSource: "" };
+  }
+
+  const supabase = createClient(supabaseUrl, supabaseServiceRoleKey);
+  const normalizedEmail = normalizeEmail(email);
+  const cleanedUserId = clean(userId);
+
+  const extract = (row) => {
+    if (!row || typeof row !== "object") return { referralCode: "", referralSource: "" };
+    const snapshot = row.account_snapshot && typeof row.account_snapshot === "object" ? row.account_snapshot : {};
+    return {
+      referralCode: clean(row.referral_code || snapshot.referral_code || ""),
+      referralSource: clean(row.referral_source || snapshot.referral_source || "")
+    };
+  };
+
+  const trySelect = async (table, filters) => {
+    try {
+      let query = supabase.from(table).select("*").limit(1);
+      for (const [key, value] of filters) {
+        if (!value) continue;
+        query = key === "email" ? query.ilike("email", value) : query.eq(key, value);
+      }
+      const { data, error } = await query.maybeSingle();
+      if (error) return null;
+      return extract(data);
+    } catch {
+      return null;
+    }
+  };
+
+  return (
+    (cleanedUserId && (await trySelect("users", [["id", cleanedUserId]]))) ||
+    (normalizedEmail && (await trySelect("users", [["email", normalizedEmail]]))) ||
+    (cleanedUserId && (await trySelect("profiles", [["id", cleanedUserId]]))) ||
+    (normalizedEmail && (await trySelect("profiles", [["email", normalizedEmail]]))) ||
+    (normalizedEmail && (await trySelect("subscriptions", [["email", normalizedEmail]]))) ||
+    { referralCode: "", referralSource: "" }
+  );
+}
+
 export default async function handler(req, res) {
   if (req.method !== "POST") {
     return json(res, 405, { error: "Method not allowed" });
@@ -230,12 +276,17 @@ export default async function handler(req, res) {
     const planType = clean(body.planType || "");
     const userType = clean(body.userType || "");
     const accessType = clean(body.accessType || "");
-    const referralCode = clean(body.referralCode || "");
+    let referralCode = clean(body.referralCode || "");
+    let referralSource = clean(body.referralSource || "");
 
     if (!email) {
       return json(res, 400, { error: "Missing email" });
     }
 
+    const lockedReferral = await getLockedReferralFromSupabase({ email, userId });
+    if (!referralCode) referralCode = clean(lockedReferral.referralCode || "");
+    if (!referralSource) referralSource = clean(lockedReferral.referralSource || "");
+    if (!referralSource && referralCode) referralSource = "checkout";
     const plan = getPlanConfig(planType, accessType, userType);
 
     if (!plan) {
@@ -292,7 +343,8 @@ export default async function handler(req, res) {
         normalized_plan: normalizePlanRequest(planType, accessType, userType),
         user_type: userType,
         access_type: accessType,
-        referral_code: referralCode
+        referral_code: referralCode,
+        referral_source: referralSource
       },
       subscription_data: {
         metadata: {
@@ -303,7 +355,8 @@ export default async function handler(req, res) {
         normalized_plan: normalizePlanRequest(planType, accessType, userType),
           user_type: userType,
           access_type: accessType,
-          referral_code: referralCode
+          referral_code: referralCode,
+          referral_source: referralSource
         },
         ...(trialEnd ? { trial_end: trialEnd } : {})
       }
