@@ -539,13 +539,19 @@ function mergeSummaryWithListings(summary, listings) {
 }
 
 function renderDashboardAnalytics() {
-  setTextByIdForAll("kpiPostsToday", String(numberOrZero(dashboardSummary?.posts_today)));
+  const snapshot = dashboardSummary?.account_snapshot || {};
+  const sessionSub = currentNormalizedSession?.subscription || {};
+  const postsToday = Math.max(numberOrZero(dashboardSummary?.posts_today), numberOrZero(snapshot.posts_today ?? snapshot.posts_used_today), numberOrZero(sessionSub.posts_today));
+  const dailyLimit = Math.max(numberOrZero(dashboardSummary?.daily_limit), numberOrZero(snapshot.posting_limit), numberOrZero(sessionSub.posting_limit));
+  const postsRemaining = Math.max(numberOrZero(dashboardSummary?.posts_remaining), numberOrZero(snapshot.posts_remaining), numberOrZero(sessionSub.posts_remaining), Math.max(dailyLimit - postsToday, 0));
+
+  setTextByIdForAll("kpiPostsToday", String(postsToday));
   setTextByIdForAll("kpiPostsMonth", String(numberOrZero(dashboardSummary?.posts_this_month)));
   setTextByIdForAll("kpiActiveListings", String(numberOrZero(dashboardSummary?.active_listings)));
   setTextByIdForAll("kpiViews", String(numberOrZero(dashboardSummary?.total_views)));
   setTextByIdForAll("kpiMessages", String(numberOrZero(dashboardSummary?.total_messages)));
-  setTextByIdForAll("kpiPostsRemaining", String(numberOrZero(currentNormalizedSession?.subscription?.posts_remaining ?? dashboardSummary?.account_snapshot?.posts_remaining)));
-  setTextByIdForAll("kpiDailyLimit", String(numberOrZero(currentNormalizedSession?.subscription?.posting_limit ?? dashboardSummary?.account_snapshot?.posting_limit)));
+  setTextByIdForAll("kpiPostsRemaining", String(postsRemaining));
+  setTextByIdForAll("kpiDailyLimit", String(dailyLimit));
 
   // lifecycle-ready safe no-op if ids do not exist yet
   setTextByIdForAll("kpiReviewQueue", String(numberOrZero(dashboardSummary?.review_queue_count)));
@@ -1208,7 +1214,7 @@ async function loadAccountData(user, forceFresh = false) {
     setTextByIdForAll("affiliatePayoutStatus", "Manual founder-stage payouts");
     setTextByIdForAll("affiliatePendingPayout", "$0.00");
 
-    const access = Boolean(currentNormalizedSession?.subscription?.active);
+    const access = Boolean(currentNormalizedSession?.subscription?.access_granted ?? currentNormalizedSession?.subscription?.active ?? dashboardSummary?.account_snapshot?.access_granted ?? dashboardSummary?.account_snapshot?.active);
     setTextByIdForAll("accessBadgeBilling", access ? "Active Access" : "Inactive Access");
     document.querySelectorAll("#accessBadgeBilling").forEach((el) => {
       el.classList.remove("active", "inactive", "warn");
@@ -1366,13 +1372,16 @@ function buildFallbackSessionFromLocalState() {
       full_name: fullName || ""
     },
     subscription: {
-      active: false,
-      status: "inactive",
-      plan: "Founder Beta",
-      license_key: currentProfile?.software_license_key || "",
-      posting_limit: Number(dashboardSummary?.account_snapshot?.posting_limit || 0),
-      posts_today: Number(dashboardSummary?.account_snapshot?.posts_today || 0),
-      posts_remaining: Number(dashboardSummary?.account_snapshot?.posts_remaining || 0)
+      active: Boolean(dashboardSummary?.account_snapshot?.access_granted ?? dashboardSummary?.account_snapshot?.active ?? false),
+      access_granted: Boolean(dashboardSummary?.account_snapshot?.access_granted ?? dashboardSummary?.account_snapshot?.active ?? false),
+      status: cleanText(dashboardSummary?.account_snapshot?.status || (dashboardSummary?.account_snapshot?.active ? 'active' : 'inactive')) || 'inactive',
+      normalized_status: cleanText(dashboardSummary?.account_snapshot?.status || (dashboardSummary?.account_snapshot?.active ? 'active' : 'inactive')) || 'inactive',
+      plan: cleanText(dashboardSummary?.account_snapshot?.plan || 'Founder Beta') || 'Founder Beta',
+      normalized_plan: cleanText(dashboardSummary?.account_snapshot?.plan || 'Founder Beta') || 'Founder Beta',
+      license_key: currentProfile?.software_license_key || '',
+      posting_limit: Number(dashboardSummary?.account_snapshot?.posting_limit || dashboardSummary?.daily_limit || 0),
+      posts_today: Number(dashboardSummary?.account_snapshot?.posts_today ?? dashboardSummary?.posts_today ?? 0),
+      posts_remaining: Number(dashboardSummary?.account_snapshot?.posts_remaining ?? dashboardSummary?.posts_remaining ?? 0)
     },
     dealership: {
       name: dealerName || "",
@@ -1497,34 +1506,52 @@ function renderSetupSnapshot() {
 }
 
 function renderAccessState(session) {
-  const hasAccess = Boolean(session?.subscription?.access_granted ?? session?.subscription?.active);
-  const plan = session?.subscription?.plan || "Founder Beta";
-  const status = session?.subscription?.normalized_status || session?.subscription?.status || (hasAccess ? "active" : "inactive");
+  const snapshot = dashboardSummary?.account_snapshot || {};
+  const hasAccess = Boolean(
+    session?.subscription?.access_granted ??
+    session?.subscription?.active ??
+    snapshot.access_granted ??
+    snapshot.active ??
+    false
+  );
+  const plan = cleanText(session?.subscription?.plan || snapshot.plan || 'Founder Beta') || 'Founder Beta';
+  const status = cleanText(
+    session?.subscription?.normalized_status ||
+    session?.subscription?.status ||
+    snapshot.status ||
+    (hasAccess ? 'active' : 'inactive')
+  ) || (hasAccess ? 'active' : 'inactive');
 
-  setTextByIdForAll("accessBadge", hasAccess ? "Active Access" : "Inactive Access");
-  setTextByIdForAll("planName", plan);
-  setTextByIdForAll("subscriptionStatus", status);
+  setTextByIdForAll('accessBadge', hasAccess ? 'Active Access' : 'Inactive Access');
+  setTextByIdForAll('planName', plan);
+  setTextByIdForAll('subscriptionStatus', status);
 
-  document.querySelectorAll("#accessBadge").forEach((el) => {
-    el.classList.remove("active", "inactive", "warn");
-    el.classList.add(hasAccess ? "active" : "inactive");
+  document.querySelectorAll('#accessBadge').forEach((el) => {
+    el.classList.remove('active', 'inactive', 'warn');
+    el.classList.add(hasAccess ? 'active' : 'inactive');
   });
 }
 
 function renderExtensionControl(session, profile) {
   const mergedProfile = profile || {};
-  const hasAccess = Boolean(session?.subscription?.access_granted ?? session?.subscription?.active);
   const summarySnapshot = dashboardSummary?.account_snapshot || {};
+  const hasAccess = Boolean(session?.subscription?.access_granted ?? session?.subscription?.active ?? summarySnapshot?.access_granted ?? summarySnapshot?.active);
   const limit = Math.max(
     Number(session?.subscription?.posting_limit || 0),
-    Number(summarySnapshot?.posting_limit || 0)
+    Number(summarySnapshot?.posting_limit || 0),
+    Number(dashboardSummary?.daily_limit || 0)
   );
   const used = Math.max(
     Number(session?.subscription?.posts_today || 0),
     Number(summarySnapshot?.posts_today ?? summarySnapshot?.posts_used_today ?? 0),
     Number(dashboardSummary?.posts_today || 0)
   );
-  const remaining = Math.max(Number(session?.subscription?.posts_remaining ?? (limit - used)), Number(summarySnapshot?.posts_remaining ?? (limit - used)), 0);
+  const remaining = Math.max(
+    Number(session?.subscription?.posts_remaining ?? (limit - used)),
+    Number(summarySnapshot?.posts_remaining ?? (limit - used)),
+    Number(dashboardSummary?.posts_remaining ?? (limit - used)),
+    0
+  );
 
   const dealerWebsite =
     session?.dealership?.website ||
