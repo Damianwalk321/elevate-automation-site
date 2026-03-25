@@ -963,7 +963,7 @@
           </div>
         </div>
 
-        <div class="grid-3">
+        <div class="grid-4">
           <div class="card kpi-card">
             <div class="stat-label">Review Queue</div>
             <div id="kpiReviewQueue" class="stat-value">0</div>
@@ -987,12 +987,12 @@
           <div class="card kpi-card">
             <div class="stat-label">Weak Listings</div>
             <div id="kpiWeakListings" class="stat-value">0</div>
-            <div class="stat-sub">Low traction or aging</div>
+            <div class="stat-sub">Low traction or stale risk</div>
           </div>
           <div class="card kpi-card">
             <div class="stat-label">Needs Action</div>
             <div id="kpiNeedsAction" class="stat-value">0</div>
-            <div class="stat-sub">Priority actions today</div>
+            <div class="stat-sub">Listings needing intervention</div>
           </div>
         </div>
 
@@ -1030,60 +1030,44 @@
           </div>
         </div>
 
-        <div class="grid-2">
-          <div class="card">
-            <div class="section-head">
-              <h2>Action Center</h2>
-              <div class="subtext">What needs attention right now</div>
-            </div>
-            <div id="actionCenterList" class="activity-feed">
-              <div class="listing-empty">No recommendations yet.</div>
-            </div>
-          </div>
-          <div class="card">
-            <div class="section-head">
-              <h2>Recommendations</h2>
-              <div class="subtext">Operator suggestions from performance and review state</div>
-            </div>
-            <div id="recommendationsList" class="activity-feed">
-              <div class="listing-empty">No recommendations yet.</div>
-            </div>
-          </div>
-        </div>
-
-
-        <div class="grid-3">
-          <div class="card">
-            <div class="section-head"><h2>Manager Summary</h2><div class="subtext">Dealership and operator rollup</div></div>
-            <div class="list-block">
-              <div><strong>Avg Views / Live:</strong> <span id="managerAvgViewsPerLive">0</span></div>
-              <div><strong>Avg Messages / Live:</strong> <span id="managerAvgMessagesPerLive">0</span></div>
-              <div><strong>View → Message Rate:</strong> <span id="managerConversionRate">0%</span></div>
-              <div><strong>Stale Rate:</strong> <span id="managerStaleRate">0%</span></div>
-              <div><strong>Weak Rate:</strong> <span id="managerWeakRate">0%</span></div>
-            </div>
-          </div>
-          <div class="card">
-            <div class="section-head"><h2>Daily Ops Queues</h2><div class="subtext">Automation-ready workflow buckets</div></div>
-            <div id="dailyOpsQueues" class="activity-feed"><div class="listing-empty">No ops queues yet.</div></div>
-          </div>
-          <div class="card">
-            <div class="section-head"><h2>Sales Leaderboard</h2><div class="subtext">Current account performance snapshot</div></div>
-            <div id="salesLeaderboard" class="activity-feed"><div class="listing-empty">No leaderboard data yet.</div></div>
-          </div>
-        </div>
 
         <div class="grid-2">
           <div class="card">
-            <div class="section-head"><h2>Segment Performance</h2><div class="subtext">Makes, body styles, and price bands</div></div>
-            <div id="segmentPerformance" class="activity-feed"><div class="listing-empty">No segment data yet.</div></div>
+            <div class="section-head">
+              <h2>Today's Priorities</h2>
+              <div class="subtext">Automated action queue based on live listing conditions</div>
+            </div>
+            <div id="todaysPrioritiesPanel" class="list-block">
+              <div>Loading priorities...</div>
+            </div>
           </div>
-          <div class="card">
-            <div class="section-head"><h2>Manager Recommendations</h2><div class="subtext">High-level guidance from current listing data</div></div>
-            <div id="managerRecommendations" class="activity-feed"><div class="listing-empty">No manager recommendations yet.</div></div>
+          <div id="managerInsightsSection" class="card" style="display:none;">
+            <div class="section-head">
+              <h2>Manager Insights</h2>
+              <div class="subtext">Visible only for team / dealership manager access</div>
+            </div>
+            <div class="grid-2" style="margin-bottom:14px;">
+              <div class="card" style="padding:14px; background:var(--panel-2);">
+                <div class="stat-label">Live Inventory</div>
+                <div id="managerLiveInventory" class="stat-value">0</div>
+              </div>
+              <div class="card" style="padding:14px; background:var(--panel-2);">
+                <div class="stat-label">View→Message Rate</div>
+                <div id="managerViewToMessageRate" class="stat-value">0%</div>
+              </div>
+            </div>
+            <div class="grid-2" style="margin-bottom:14px;">
+              <div>
+                <h3 style="margin-bottom:8px;">Top Segments</h3>
+                <div id="managerTopSegments" class="list-block"><div>Loading...</div></div>
+              </div>
+              <div>
+                <h3 style="margin-bottom:8px;">Recommendations</h3>
+                <div id="managerRecommendations" class="list-block"><div>Loading...</div></div>
+              </div>
+            </div>
           </div>
         </div>
-
         <div class="card">
           <div class="section-head">
             <h2>Recent Listings</h2>
