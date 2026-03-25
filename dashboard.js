@@ -7,44 +7,6 @@ function cleanText(value) {
   return String(value).trim();
 }
 
-
-function calculateListingHealth(listing = {}) {
-  const views = numberOrZero(listing.views_count);
-  const messages = numberOrZero(listing.messages_count);
-  const postedAt = listing.posted_at || listing.created_at || new Date().toISOString();
-  const ageDays = Math.max(0, Math.floor((Date.now() - new Date(postedAt).getTime()) / 86400000));
-  const lifecycle = cleanText(listing.lifecycle_status || '').toLowerCase();
-  const status = cleanText(listing.status || '').toLowerCase();
-  let score = 50 + Math.min(views, 50) + Math.min(messages * 12, 60) - Math.min(ageDays * 2, 35);
-  if (["stale", "review_delete", "review_price_update", "review_new"].includes(lifecycle)) score -= 25;
-  if (["sold", "deleted", "inactive"].includes(status)) score -= 20;
-  if (views >= 10 && messages === 0) score -= 10;
-  score = Math.max(0, Math.min(100, score));
-  let label = 'Healthy';
-  if (score >= 85) label = 'High Performer';
-  else if (score >= 60) label = 'Healthy';
-  else if (score >= 35) label = 'Watch';
-  else if (score >= 15) label = 'Weak';
-  else label = 'Needs Action';
-  return { score, label, ageDays };
-}
-
-function recommendListingAction(listing = {}) {
-  const views = numberOrZero(listing.views_count);
-  const messages = numberOrZero(listing.messages_count);
-  const postedAt = listing.posted_at || listing.created_at || new Date().toISOString();
-  const ageDays = Math.max(0, Math.floor((Date.now() - new Date(postedAt).getTime()) / 86400000));
-  const lifecycle = cleanText(listing.lifecycle_status || '').toLowerCase();
-  const status = cleanText(listing.status || '').toLowerCase();
-  if (lifecycle === 'review_price_update') return 'Review price';
-  if (lifecycle === 'review_delete' || status === 'stale') return 'Check if sold or stale';
-  if (lifecycle === 'review_new') return 'Review new listing';
-  if (views >= 15 && messages === 0) return 'Refresh title/photos';
-  if (ageDays >= 7 && views < 5) return 'Promote now';
-  if (messages >= 3) return 'Keep live';
-  return 'Monitor performance';
-}
-
 let bootStages = [];
 
 let supabaseClient = null;
@@ -348,10 +310,6 @@ async function onSaveProfilePressed() {
 async function refreshDashboardState(forceFresh = false) {
   await loadAccountData(currentUser, forceFresh);
   await loadListingDashboardData(forceFresh);
-  currentNormalizedSession = normalizeExtensionStateResponse(currentAccountData || {}, currentUser, currentProfile) || currentNormalizedSession || buildFallbackSessionFromLocalState();
-  renderAccessState(currentNormalizedSession);
-  renderExtensionControl(currentNormalizedSession, currentProfile);
-  updateSetupStates(currentProfile, currentNormalizedSession);
 }
 
 async function loadListingDashboardData(forceFresh = false) {
@@ -370,12 +328,6 @@ async function loadListingDashboardData(forceFresh = false) {
     }
 
     filteredListings = [...dashboardListings];
-
-    if (!currentAccountData) {
-      currentNormalizedSession = buildFallbackSessionFromLocalState();
-      renderAccessState(currentNormalizedSession);
-      renderExtensionControl(currentNormalizedSession, currentProfile);
-    }
 
     renderDashboardAnalytics();
     renderSetupSnapshot();
@@ -475,14 +427,7 @@ function normalizeListingRecord(row) {
   const status = clean(row.status || "posted").toLowerCase();
   const lifecycleStatus = clean(row.lifecycle_status || row.review_status || "").toLowerCase();
 
-  const health = calculateListingHealth({
-    views_count: views,
-    messages_count: messages,
-    posted_at: postedAt,
-    status,
-    lifecycle_status: lifecycleStatus
-  });
-
+  const intelligence = computeListingIntelligence({ ...row, posted_at: postedAt, status, lifecycle_status: lifecycleStatus, views_count: views, messages_count: messages, review_bucket: clean(row.review_bucket || '') });
   return {
     id: clean(row.id || row.marketplace_listing_id || row.source_url || cryptoRandomFallback()),
     user_id: clean(row.user_id || ""),
@@ -510,10 +455,7 @@ function normalizeListingRecord(row) {
     views_count: views,
     messages_count: messages,
     popularity_score: (messages * 1000) + (views * 10) + getTimestamp(postedAt) / 100000000,
-    health_score: health.score,
-    health_label: health.label,
-    age_days: health.ageDays,
-    recommended_action: recommendListingAction({ views_count: views, messages_count: messages, posted_at: postedAt, status, lifecycle_status: lifecycleStatus })
+    ...intelligence
   };
 }
 
@@ -551,8 +493,8 @@ function buildDashboardSummaryFromListings(listings) {
     if (item.lifecycle_status === "review_delete" || item.review_bucket === "removedVehicles") reviewDeleteCount += 1;
     if (item.lifecycle_status === "review_price_update" || item.review_bucket === "priceChanges") reviewPriceChangeCount += 1;
     if (item.lifecycle_status === "review_new" || item.review_bucket === "newVehicles") reviewNewCount += 1;
-    if (["Weak"].includes(item.health_label)) weakListings += 1;
-    if (["Needs Action"].includes(item.health_label) || ["review_delete","review_price_update","review_new"].includes(item.lifecycle_status)) needsActionCount += 1;
+    if (item.weak) weakListings += 1;
+    if (item.needs_action) needsActionCount += 1;
   }
 
   const topListing = [...listings]
@@ -573,6 +515,38 @@ function buildDashboardSummaryFromListings(listings) {
     needs_action_count: needsActionCount,
     top_listing_title: topListing?.title || "None yet"
   };
+}
+
+
+function computeListingIntelligence(item = {}) {
+  const postedAt = item.posted_at || item.created_at || item.updated_at || null;
+  const ageDays = postedAt ? Math.max(0, Math.floor((Date.now() - getTimestamp(postedAt)) / 86400000)) : 0;
+  const views = numberOrZero(item.views_count);
+  const messages = numberOrZero(item.messages_count);
+  const status = cleanText(item.status || '').toLowerCase();
+  const lifecycle = cleanText(item.lifecycle_status || '').toLowerCase();
+  const bucket = cleanText(item.review_bucket || '').toLowerCase().replace(/[\s_-]+/g, '');
+  const staleLike = status === 'stale' || lifecycle === 'stale' || lifecycle === 'review_delete' || bucket === 'removedvehicles';
+  const likelySold = lifecycle === 'review_delete' || bucket === 'removedvehicles';
+  const promoteNow = !['sold','deleted','inactive'].includes(status) && views >= 20 && messages >= 1;
+  const lowPerformance = !['sold','deleted','inactive'].includes(status) && ageDays >= 7 && views < 5 && messages === 0;
+  const weak = staleLike || lowPerformance;
+  const needsAction = staleLike || lowPerformance || (views >= 20 && messages === 0) || lifecycle === 'review_price_update' || bucket === 'pricechanges';
+  let healthScore = 100 - Math.min(ageDays * 2, 30) + Math.min(messages * 12, 36) + Math.min(views, 20);
+  if (staleLike) healthScore -= 35;
+  if (lowPerformance) healthScore -= 20;
+  healthScore = Math.max(0, Math.min(100, Math.round(healthScore)));
+  let healthLabel = 'Healthy';
+  if (promoteNow) healthLabel = 'High Performer';
+  else if (needsAction) healthLabel = 'Needs Action';
+  else if (weak) healthLabel = 'Weak';
+  let recommendedAction = 'Keep live';
+  if (likelySold) recommendedAction = 'Check if sold or stale';
+  else if (lifecycle === 'review_price_update' || bucket === 'pricechanges' || (views >= 20 && messages === 0)) recommendedAction = 'Review price';
+  else if (bucket === 'newvehicles' || lifecycle === 'review_new') recommendedAction = 'Review new listing';
+  else if (lowPerformance) recommendedAction = 'Refresh title/photos';
+  else if (promoteNow) recommendedAction = 'Promote now';
+  return { age_days: ageDays, likely_sold: likelySold, promote_now: promoteNow, weak, needs_action: needsAction, health_score: healthScore, health_label: healthLabel, recommended_action: recommendedAction };
 }
 
 function mergeSummaryWithListings(summary, listings) {
@@ -598,18 +572,17 @@ function mergeSummaryWithListings(summary, listings) {
     review_queue_count: numberOrZero(summary.review_queue_count ?? computed.review_queue_count),
     weak_listings: numberOrZero(summary.weak_listings ?? computed.weak_listings),
     needs_action_count: numberOrZero(summary.needs_action_count ?? computed.needs_action_count),
-    daily_limit: numberOrZero(summary.daily_limit ?? currentNormalizedSession?.subscription?.posting_limit ?? summary?.account_snapshot?.posting_limit),
-    posts_remaining: numberOrZero(summary.posts_remaining ?? currentNormalizedSession?.subscription?.posts_remaining ?? summary?.account_snapshot?.posts_remaining),
     queue_count: numberOrZero(summary.queue_count ?? 0),
     lifecycle_updated_at: clean(summary.lifecycle_updated_at || ""),
     top_listing_title: clean(summary.top_listing_title || computed.top_listing_title || "None yet"),
     account_snapshot: summary.account_snapshot || {},
     setup_status: summary.setup_status || {},
+    manager_access: Boolean(summary.manager_access),
+    action_center: summary.action_center || summary.daily_ops_queues || {},
+    daily_ops_queues: summary.daily_ops_queues || summary.action_center || {},
     manager_summary: summary.manager_summary || {},
-    segment_performance: summary.segment_performance || {},
-    daily_ops_queues: summary.daily_ops_queues || {},
-    salesperson_leaderboard: summary.salesperson_leaderboard || [],
-    manager_recommendations: summary.manager_recommendations || []
+    manager_recommendations: Array.isArray(summary.manager_recommendations) ? summary.manager_recommendations : [],
+    segment_performance: Array.isArray(summary.segment_performance) ? summary.segment_performance : []
   };
 }
 
@@ -619,8 +592,8 @@ function renderDashboardAnalytics() {
   setTextByIdForAll("kpiActiveListings", String(numberOrZero(dashboardSummary?.active_listings)));
   setTextByIdForAll("kpiViews", String(numberOrZero(dashboardSummary?.total_views)));
   setTextByIdForAll("kpiMessages", String(numberOrZero(dashboardSummary?.total_messages)));
-  setTextByIdForAll("kpiPostsRemaining", String(numberOrZero(currentNormalizedSession?.subscription?.posts_remaining ?? dashboardSummary?.posts_remaining ?? dashboardSummary?.account_snapshot?.posts_remaining)));
-  setTextByIdForAll("kpiDailyLimit", String(numberOrZero(currentNormalizedSession?.subscription?.posting_limit ?? dashboardSummary?.daily_limit ?? dashboardSummary?.account_snapshot?.posting_limit)));
+  setTextByIdForAll("kpiPostsRemaining", String(numberOrZero(currentNormalizedSession?.subscription?.posts_remaining ?? dashboardSummary?.account_snapshot?.posts_remaining)));
+  setTextByIdForAll("kpiDailyLimit", String(numberOrZero(currentNormalizedSession?.subscription?.posting_limit ?? dashboardSummary?.account_snapshot?.posting_limit)));
 
   // lifecycle-ready safe no-op if ids do not exist yet
   setTextByIdForAll("kpiReviewQueue", String(numberOrZero(dashboardSummary?.review_queue_count)));
@@ -632,14 +605,9 @@ function renderDashboardAnalytics() {
   setTextByIdForAll("kpiWeakListings", String(numberOrZero(dashboardSummary?.weak_listings)));
   setTextByIdForAll("kpiNeedsAction", String(numberOrZero(dashboardSummary?.needs_action_count)));
 
+  renderPrioritiesPanels();
   renderTopListings(dashboardListings);
   renderRecentActivity(dashboardListings);
-  renderActionCenter(dashboardListings);
-  renderManagerSummary(dashboardSummary?.manager_summary || {});
-  renderDailyOpsQueues(dashboardSummary?.daily_ops_queues || {});
-  renderSegmentPerformance(dashboardSummary?.segment_performance || {});
-  renderSalesLeaderboard(dashboardSummary?.salesperson_leaderboard || []);
-  renderManagerRecommendations(dashboardSummary?.manager_recommendations || []);
   drawActivityChart(buildChartSeries());
 }
 
@@ -659,10 +627,10 @@ function applyListingFiltersAndRender() {
       if (listingQuickFilter === "stale") return lifecycle === "stale" || status === "stale" || lifecycle === "review_delete" || bucket === "removedvehicles";
       if (listingQuickFilter === "price") return lifecycle === "review_price_update" || bucket === "pricechanges";
       if (listingQuickFilter === "new") return lifecycle === "review_new" || bucket === "newvehicles";
-      if (listingQuickFilter === "weak") return ["Weak","Needs Action"].includes(item.health_label);
-      if (listingQuickFilter === "needs_action") return item.health_label === "Needs Action" || ["review_delete","review_price_update","review_new"].includes(lifecycle);
-      if (listingQuickFilter === "promote") return (numberOrZero(item.age_days) >= 7 && numberOrZero(item.views_count) < 5) || item.recommended_action === "Promote now";
-      if (listingQuickFilter === "likely_sold") return numberOrZero(item.views_count) >= 12 && numberOrZero(item.messages_count) === 0;
+      if (listingQuickFilter === "weak") return Boolean(item.weak);
+      if (listingQuickFilter === "needs_action") return Boolean(item.needs_action);
+      if (listingQuickFilter === "promote") return Boolean(item.promote_now);
+      if (listingQuickFilter === "likely_sold") return Boolean(item.likely_sold);
       if (listingQuickFilter === "active") return !["sold", "deleted", "inactive", "stale"].includes(status) && lifecycle !== "review_delete";
       return true;
     });
@@ -731,89 +699,6 @@ async function openListingSource(listingId, sourceUrl) {
   setTimeout(() => { refreshDashboardData?.(); }, 400);
 }
 
-
-function renderActionCenter(listings) {
-  const actionWrap = document.getElementById("actionCenterList");
-  const recWrap = document.getElementById("recommendationsList");
-  if (!actionWrap && !recWrap) return;
-
-  const ranked = [...listings].sort((a, b) => {
-    const priorityA = (a.health_label === 'Needs Action' ? 100 : a.health_label === 'Weak' ? 60 : 0) + (a.lifecycle_status.startsWith('review_') ? 40 : 0) + numberOrZero(a.views_count);
-    const priorityB = (b.health_label === 'Needs Action' ? 100 : b.health_label === 'Weak' ? 60 : 0) + (b.lifecycle_status.startsWith('review_') ? 40 : 0) + numberOrZero(b.views_count);
-    return priorityB - priorityA;
-  });
-
-  const actions = ranked.filter((row) => row.health_label === 'Needs Action' || row.health_label === 'Weak' || ['review_delete','review_price_update','review_new'].includes(row.lifecycle_status)).slice(0, 6);
-  const recs = ranked.slice(0, 6);
-
-  const buildItem = (row, type='action') => `
-    <div class="activity-item">
-      <div>
-        <div class="activity-item-title">${escapeHtml(row.title)}</div>
-        <div class="activity-item-sub">${escapeHtml(row.recommended_action || 'Monitor performance')} • ${escapeHtml(row.health_label || 'Healthy')} • ${escapeHtml(formatRelativeOrDate(row.posted_at))}</div>
-      </div>
-      <div class="activity-item-time">${type === 'action' ? escapeHtml(row.lifecycle_status || row.status || 'active') : escapeHtml(row.health_label || 'Healthy')}</div>
-    </div>`;
-
-  if (actionWrap) actionWrap.innerHTML = actions.length ? actions.map((row) => buildItem(row, 'action')).join('') : `<div class="listing-empty">No action items right now.</div>`;
-  if (recWrap) recWrap.innerHTML = recs.length ? recs.map((row) => buildItem(row, 'rec')).join('') : `<div class="listing-empty">No recommendations yet.</div>`;
-}
-
-
-function renderManagerSummary(summary = {}) {
-  setTextByIdForAll("managerAvgViewsPerLive", String(summary.avg_views_per_live ?? 0));
-  setTextByIdForAll("managerAvgMessagesPerLive", String(summary.avg_messages_per_live ?? 0));
-  setTextByIdForAll("managerConversionRate", `${numberOrZero(summary.view_to_message_rate)}%`);
-  setTextByIdForAll("managerStaleRate", `${numberOrZero(summary.stale_rate)}%`);
-  setTextByIdForAll("managerWeakRate", `${numberOrZero(summary.weak_rate)}%`);
-}
-
-function renderDailyOpsQueues(queues = {}) {
-  const wrap = document.getElementById("dailyOpsQueues");
-  if (!wrap) return;
-  const labels = {
-    repost_today: 'Repost Today',
-    review_today: 'Review Today',
-    promote_today: 'Promote Today',
-    likely_sold: 'Likely Sold',
-    low_performance: 'Low Performance'
-  };
-  const items = Object.entries(labels).map(([key, label]) => {
-    const count = Array.isArray(queues[key]) ? queues[key].length : 0;
-    return `<div class="activity-item"><div><div class="activity-item-title">${escapeHtml(label)}</div><div class="activity-item-sub">${count} listing${count === 1 ? '' : 's'} in queue</div></div><div class="activity-item-time">${count}</div></div>`;
-  }).join('');
-  wrap.innerHTML = items || '<div class="listing-empty">No ops queues yet.</div>';
-}
-
-function renderSegmentPerformance(segments = {}) {
-  const wrap = document.getElementById("segmentPerformance");
-  if (!wrap) return;
-  const rows = [];
-  const addRows = (title, items=[]) => {
-    if (!items.length) return;
-    rows.push(`<div class="activity-item"><div><div class="activity-item-title">${escapeHtml(title)}</div><div class="activity-item-sub">Top segments by views/messages</div></div><div class="activity-item-time">Top 3</div></div>`);
-    items.slice(0,3).forEach((item) => {
-      rows.push(`<div class="activity-item"><div><div class="activity-item-title">${escapeHtml(item.key)}</div><div class="activity-item-sub">${numberOrZero(item.views)} views • ${numberOrZero(item.messages)} messages • ${numberOrZero(item.conversion_rate)}% conversion</div></div><div class="activity-item-time">${numberOrZero(item.listings)} listings</div></div>`);
-    });
-  };
-  addRows('Make', segments.make || []);
-  addRows('Body Style', segments.body_style || []);
-  addRows('Price Band', segments.price_band || []);
-  wrap.innerHTML = rows.join('') || '<div class="listing-empty">No segment data yet.</div>';
-}
-
-function renderSalesLeaderboard(rows = []) {
-  const wrap = document.getElementById("salesLeaderboard");
-  if (!wrap) return;
-  wrap.innerHTML = rows.length ? rows.map((item, idx) => `<div class="activity-item"><div><div class="activity-item-title">#${idx+1} ${escapeHtml(item.name || 'Current Account')}</div><div class="activity-item-sub">${numberOrZero(item.posts_today)} posts • ${numberOrZero(item.views)} views • ${numberOrZero(item.messages)} messages</div></div><div class="activity-item-time">${numberOrZero(item.conversion_rate)}%</div></div>`).join('') : '<div class="listing-empty">No leaderboard data yet.</div>';
-}
-
-function renderManagerRecommendations(rows = []) {
-  const wrap = document.getElementById("managerRecommendations");
-  if (!wrap) return;
-  wrap.innerHTML = rows.length ? rows.map((item) => `<div class="activity-item"><div><div class="activity-item-title">${escapeHtml(item.title || 'Recommendation')}</div><div class="activity-item-sub">${escapeHtml(item.detail || '')}</div></div><div class="activity-item-time">Now</div></div>`).join('') : '<div class="listing-empty">No manager recommendations yet.</div>';
-}
-
 function renderListingsGrid(listings) {
   const grid = document.getElementById("recentListingsGrid");
   if (!grid) return;
@@ -839,8 +724,7 @@ function renderListingsGrid(listings) {
           </div>
 
           <div class="listing-price">${formatCurrency(item.price)}</div>
-
-          <div class="listing-sub" style="margin-top:-4px; color:#d4af37;">${escapeHtml(item.health_label || "Healthy")} • ${escapeHtml(item.recommended_action || "Monitor performance")}</div>
+          <div class="status-line">${escapeHtml(item.health_label || 'Healthy')} • ${escapeHtml(item.recommended_action || 'Keep live')}</div>
 
           <div class="listing-specs">
             <div class="spec-chip">
@@ -873,8 +757,8 @@ function renderListingsGrid(listings) {
           </div>
 
           <div class="listing-actions">
-            <button class="action-btn" type="button" onclick="markListingSold('${escapeJs(item.id)}')">Mark Sold</button>
             <button class="action-btn" type="button" onclick="markListingAction('${escapeJs(item.id)}','approved')">Approve</button>
+            <button class="action-btn" type="button" onclick="markListingSold('${escapeJs(item.id)}')">Mark Sold</button>
             <button class="action-btn" type="button" onclick="trackListingView('${escapeJs(item.id)}')">Log View</button>
             <button class="action-btn" type="button" onclick="trackListingMessage('${escapeJs(item.id)}')">Log Message</button>
             ${
@@ -890,6 +774,52 @@ function renderListingsGrid(listings) {
 
   grid.innerHTML = html;
   setStatus("listingGridStatus", `${listings.length} listing${listings.length === 1 ? "" : "s"} loaded.`);
+}
+
+
+function renderPrioritiesPanels() {
+  const queues = dashboardSummary?.daily_ops_queues || dashboardSummary?.action_center || {};
+  const prioritiesEl = document.getElementById('todaysPrioritiesPanel');
+  if (prioritiesEl) {
+    const items = [
+      ['Repost Today', numberOrZero(queues.repost_today)],
+      ['Review Today', numberOrZero(queues.review_today)],
+      ['Promote Today', numberOrZero(queues.promote_today)],
+      ['Likely Sold', numberOrZero(queues.likely_sold)],
+      ['Low Performance', numberOrZero(queues.low_performance)]
+    ];
+    prioritiesEl.innerHTML = items.map(([label, value]) => `<div><strong>${escapeHtml(label)}:</strong> ${value}</div>`).join('');
+  }
+  const managerSection = document.getElementById('managerInsightsSection');
+  const managerEnabled = Boolean(dashboardSummary?.manager_access);
+  if (managerSection) managerSection.style.display = managerEnabled ? '' : 'none';
+  if (managerEnabled) {
+    setTextByIdForAll('managerLiveInventory', String(numberOrZero(dashboardSummary?.manager_summary?.live_inventory)));
+    setTextByIdForAll('managerViewToMessageRate', `${numberOrZero(dashboardSummary?.manager_summary?.view_to_message_rate)}%`);
+    const segEl = document.getElementById('managerTopSegments');
+    if (segEl) {
+      const segs = Array.isArray(dashboardSummary?.segment_performance) ? dashboardSummary.segment_performance : [];
+      segEl.innerHTML = segs.length ? segs.map((seg) => `<div><strong>${escapeHtml(seg.key || 'Segment')}:</strong> ${numberOrZero(seg.listings)} listings • ${numberOrZero(seg.views)} views • ${numberOrZero(seg.messages)} messages</div>`).join('') : '<div>No segment data yet.</div>';
+    }
+    const recEl = document.getElementById('managerRecommendations');
+    if (recEl) {
+      const recs = Array.isArray(dashboardSummary?.manager_recommendations) ? dashboardSummary.manager_recommendations : [];
+      recEl.innerHTML = recs.length ? recs.map((item) => `<div>• ${escapeHtml(item)}</div>`).join('') : '<div>No recommendations yet.</div>';
+    }
+  }
+}
+
+async function markListingAction(listingId, status) {
+  try {
+    await fetch('/api/update-listing-status', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ listingId, status })
+    });
+    await refreshDashboardData?.();
+  } catch (error) {
+    console.warn('mark listing action warning', error);
+  }
 }
 
 function renderTopListings(listings) {
@@ -1689,30 +1619,22 @@ function renderSetupSnapshot() {
 
 function renderAccessState(session) {
   const snapshot = dashboardSummary?.account_snapshot || {};
-  const ext = currentAccountData || {};
-  const extSub = ext.subscription || {};
   const hasAccess = Boolean(
-    extSub.access_granted ??
-    extSub.active ??
     session?.subscription?.access_granted ??
     session?.subscription?.active ??
     snapshot?.access_granted ??
     snapshot?.active ??
-    (cleanText(snapshot?.plan || session?.subscription?.plan || extSub.plan) && numberOrZero(snapshot?.posting_limit || session?.subscription?.posting_limit || extSub.posting_limit) > 0)
+    false
   );
   const plan =
-    extSub.plan ||
     session?.subscription?.plan ||
     snapshot?.plan ||
     "Founder Beta";
-  const status = hasAccess ? 'active' : (
-    extSub.normalized_status ||
-    extSub.status ||
+  const status =
     session?.subscription?.normalized_status ||
     session?.subscription?.status ||
     snapshot?.status ||
-    "inactive"
-  );
+    (hasAccess ? "active" : "inactive");
 
   setTextByIdForAll("accessBadge", hasAccess ? "Active Access" : "Inactive Access");
   setTextByIdForAll("planName", plan);
@@ -1726,7 +1648,7 @@ function renderAccessState(session) {
 
 function renderExtensionControl(session, profile) {
   const mergedProfile = profile || {};
-  const hasAccess = Boolean(session?.subscription?.access_granted ?? session?.subscription?.active ?? dashboardSummary?.account_snapshot?.access_granted ?? dashboardSummary?.account_snapshot?.active);
+  const hasAccess = Boolean(session?.subscription?.access_granted ?? session?.subscription?.active);
   const summarySnapshot = dashboardSummary?.account_snapshot || {};
   const limit = Math.max(
     Number(session?.subscription?.posting_limit || 0),
@@ -1810,7 +1732,7 @@ function updateSetupStates(profile, session) {
   const scannerReady = Boolean(profile?.scanner_type || session?.scanner_config?.scanner_type || session?.dealership?.scanner_type);
   const listingReady = Boolean(profile?.listing_location || session?.profile?.listing_location);
   const complianceReady = Boolean(setup.compliance_mode_present || profile?.compliance_mode || profile?.province || session?.profile?.compliance_mode || session?.dealership?.province);
-  const accessReady = Boolean(session?.subscription?.access_granted || session?.subscription?.active || snapshot.access_granted || snapshot.active);
+  const accessReady = Boolean(session?.subscription?.active || snapshot.active);
 
   setSetupState("setupDealerWebsite", websiteReady);
   setSetupState("setupInventoryUrl", inventoryReady);
@@ -1923,26 +1845,6 @@ async function markListingSold(listingId) {
   } catch (error) {
     console.error("markListingSold error:", error);
     setStatus("listingGridStatus", error.message || "Could not mark listing sold.");
-  }
-}
-
-
-async function markListingAction(listingId, status, lifecycleStatus = "active") {
-  try {
-    const response = await fetch("/api/update-listing-status", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ listingId, status, lifecycle_status: lifecycleStatus, userId: currentUser?.id || "", email: currentUser?.email || "" })
-    });
-    if (!response.ok) {
-      const data = await response.json().catch(() => ({}));
-      throw new Error(data.error || "Could not update listing action.");
-    }
-    await loadListingDashboardData(true);
-    setStatus("listingGridStatus", `Listing moved to ${status}.`);
-  } catch (error) {
-    console.error("markListingAction error:", error);
-    setStatus("listingGridStatus", error.message || "Could not update listing action.");
   }
 }
 
@@ -2181,3 +2083,5 @@ window.copyVehicleSummary = copyVehicleSummary;
 window.trackListingView = trackListingView;
 window.trackListingMessage = trackListingMessage;
 window.openListingSource = openListingSource;
+
+window.markListingAction = markListingAction;
