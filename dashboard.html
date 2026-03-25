@@ -919,32 +919,6 @@
           </div>
         </div>
 
-
-        <div id="firstWinSection" class="card" style="margin-top:18px;">
-          <div class="section-head">
-            <h2 id="firstWinTitle">First Win</h2>
-            <div class="subtext">Activation momentum and next best action</div>
-          </div>
-          <div class="grid-3" style="align-items:start;">
-            <div>
-              <div id="firstWinMessage" class="list-block">Loading first-win status...</div>
-            </div>
-            <div>
-              <div class="stat-label">Momentum</div>
-              <div id="firstWinMomentum" class="stat-value">0%</div>
-              <div class="stat-sub">Progress from first post to first traction</div>
-            </div>
-            <div>
-              <div class="stat-label">Next Best Action</div>
-              <div id="firstWinNextAction" class="list-block">Loading next action...</div>
-              <div class="action-grid" style="margin-top:12px;">
-                <button id="copyFirstWinPlanBtn" class="action-btn" type="button">Copy Action Plan</button>
-              </div>
-            </div>
-          </div>
-          <div id="firstWinProgress" class="status-line" style="margin-top:12px;"></div>
-        </div>
-
         <div class="grid-5">
           <div class="card kpi-card">
             <div class="stat-label">Posts Today</div>
@@ -979,7 +953,7 @@
           <div class="card kpi-card">
             <div class="stat-label">Messages</div>
             <div id="kpiMessages" class="stat-value">0</div>
-            <div class="stat-sub">Buyer conversations</div>
+            <div class="stat-sub">Buyer conversations <span id="kpiMessagesConfidence" style="opacity:.8"></span></div>
           </div>
 
           <div class="card kpi-card">
@@ -1370,7 +1344,7 @@
               <div><strong>Backend Sync:</strong> <span id="extensionSyncStatus">Checking...</span></div>
               <div><strong>Committed Listing Rows:</strong> <span id="extensionCommittedRows">0</span></div>
               <div><strong>Views Tracked:</strong> <span id="extensionViewsTracked">0</span></div>
-              <div><strong>Messages Tracked:</strong> <span id="extensionMessagesTracked">0</span></div>
+              <div><strong>Messages Tracked:</strong> <span id="extensionMessagesTracked">0</span> <span id="extensionMessagesConfidence" style="opacity:.8"></span></div>
               <div><strong>Review Queue:</strong> <span id="extensionReviewQueue">0</span></div>
               <div><strong>Stale Listings:</strong> <span id="extensionStaleListings">0</span></div>
               <div><strong>Scanner Type:</strong> <span id="extensionScannerType">Loading.</span></div>
