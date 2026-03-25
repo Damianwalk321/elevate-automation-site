@@ -94,6 +94,17 @@
     return data;
   }
 
+  async function lockReferralIfMissing(user) {
+    try {
+      if (!user?.email) return;
+      const referral = getStoredReferralData();
+      if (!referral?.referral_code) return;
+      await syncUserToAppTable(user, referral);
+    } catch (error) {
+      console.error("Referral lock-on-login failed:", error);
+    }
+  }
+
   async function signInWithEmail(email, password) {
     const supabase = getSupabaseClient();
     const nextReferral = getStoredReferralData();
