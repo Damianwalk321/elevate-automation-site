@@ -82,99 +82,6 @@ document.addEventListener("DOMContentLoaded", async () => {
   }
 });
 
-function deriveBillingCheckoutContext() {
-  const sessionPlan = clean(
-    currentNormalizedSession?.subscription?.normalized_plan ||
-    currentNormalizedSession?.subscription?.plan ||
-    dashboardSummary?.account_snapshot?.normalized_plan ||
-    dashboardSummary?.account_snapshot?.plan ||
-    currentProfile?.plan ||
-    "Founder Beta"
-  ).toLowerCase();
-
-  if (sessionPlan.includes("founder") && sessionPlan.includes("pro")) {
-    return { planType: "founder_pro", accessType: "founder", userType: "founder" };
-  }
-
-  if (sessionPlan === "pro" || (!sessionPlan.includes("founder") && sessionPlan.includes("pro"))) {
-    return { planType: "pro", accessType: "public", userType: "sales" };
-  }
-
-  if (sessionPlan === "starter" || (!sessionPlan.includes("founder") && sessionPlan.includes("starter"))) {
-    return { planType: "starter", accessType: "public", userType: "sales" };
-  }
-
-  return { planType: "founder_beta", accessType: "founder", userType: "founder" };
-}
-
-function billingLooksProvisioned() {
-  const snapshot = dashboardSummary?.account_snapshot || {};
-  const status = clean(
-    currentNormalizedSession?.subscription?.normalized_status ||
-    currentNormalizedSession?.subscription?.status ||
-    snapshot?.normalized_status ||
-    snapshot?.status ||
-    ""
-  ).toLowerCase();
-
-  return ["active", "trialing", "past_due", "unpaid", "paused", "incomplete"].includes(status);
-}
-
-function updateBillingPortalButtonState() {
-  const button = document.getElementById("openBillingPortalBtn");
-  if (!button) return;
-
-  const provisioned = billingLooksProvisioned();
-  button.textContent = provisioned ? "Open Billing Portal" : "Activate Plan";
-}
-
-async function startDashboardCheckout(context = {}) {
-  const checkoutContext = {
-    ...deriveBillingCheckoutContext(),
-    ...(context || {})
-  };
-
-  if (!currentUser?.email) {
-    throw new Error("No logged-in user found.");
-  }
-
-  setStatus("accountStatusBilling", "Starting secure checkout...");
-
-  const response = await fetch("/api/create-checkout-session", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify({
-      email: currentUser.email,
-      userId: currentUser.id,
-      planType: checkoutContext.planType,
-      userType: checkoutContext.userType,
-      accessType: checkoutContext.accessType
-    })
-  });
-
-  const rawText = await response.text();
-  let data = null;
-
-  try {
-    data = JSON.parse(rawText);
-  } catch (parseError) {
-    console.error("[checkout] Non-JSON response:", rawText);
-    throw new Error("Server error (non-JSON checkout response)");
-  }
-
-  if (!response.ok) {
-    throw new Error(data?.error || "Checkout session could not be created.");
-  }
-
-  if (!data?.url) {
-    throw new Error("Checkout URL missing.");
-  }
-
-  window.location.href = data.url;
-}
-
 function bindDashboardUI() {
   document.querySelectorAll("[data-section]").forEach((button) => {
     button.addEventListener("click", () => {
@@ -284,17 +191,54 @@ function bindDashboardUI() {
     });
   }
 
+  function getAffiliateCode() {
+    return document.getElementById("referralCodeAffiliate")?.textContent?.trim() || "";
+  }
+  function getAffiliateLink() {
+    const code = getAffiliateCode();
+    return code && code !== "Loading..." ? `${window.location.origin}/signup.html?ref=${encodeURIComponent(code)}` : "";
+  }
+  async function copyAffiliateText(text, successMessage) {
+    if (!text) return;
+    try {
+      await navigator.clipboard.writeText(text);
+      setBootStatus(successMessage);
+    } catch (error) {
+      console.error("affiliate copy error:", error);
+    }
+  }
+
+  const copyReferralLinkBtn = document.getElementById("copyReferralLinkBtn");
+  if (copyReferralLinkBtn) {
+    copyReferralLinkBtn.addEventListener("click", async () => {
+      await copyAffiliateText(getAffiliateLink(), "Referral link copied.");
+    });
+  }
+
+  const copyAffiliateDMBtn = document.getElementById("copyAffiliateDMBtn");
+  if (copyAffiliateDMBtn) {
+    copyAffiliateDMBtn.addEventListener("click", async () => {
+      const code = getAffiliateCode() || "[YOUR CODE]";
+      const dm = `I have early access to Elevate Automation. It helps salespeople post inventory faster, stay consistent, and track performance. If you want founder access, use my code ${code}.`;
+      await copyAffiliateText(dm, "Affiliate DM script copied.");
+    });
+  }
+
   const copyAffiliatePitchBtn = document.getElementById("copyAffiliatePitchBtn");
   if (copyAffiliatePitchBtn) {
     copyAffiliatePitchBtn.addEventListener("click", async () => {
-      const referral = document.getElementById("referralCodeAffiliate")?.textContent?.trim() || "";
-      const pitch = `I have early access to Elevate Automation. It helps salespeople post inventory faster and more consistently. Use my code ${referral || "[YOUR CODE]"} if you want founder access.`;
-      try {
-        await navigator.clipboard.writeText(pitch);
-        setBootStatus("Affiliate pitch copied.");
-      } catch (error) {
-        console.error("copyAffiliatePitchBtn error:", error);
-      }
+      const code = getAffiliateCode() || "[YOUR CODE]";
+      const pitch = `I’m a founding partner with Elevate Automation. It helps salespeople post inventory faster and manage listing performance more consistently. Use my code ${code} if you want founder access.`;
+      await copyAffiliateText(pitch, "Affiliate pitch copied.");
+    });
+  }
+
+  const copyAffiliatePostBtn = document.getElementById("copyAffiliatePostBtn");
+  if (copyAffiliatePostBtn) {
+    copyAffiliatePostBtn.addEventListener("click", async () => {
+      const link = getAffiliateLink() || "[YOUR LINK]";
+      const post = `I’m a founding partner with Elevate Automation. If you post inventory consistently and want a faster way to build Marketplace presence, message me or use this link: ${link}`;
+      await copyAffiliateText(post, "Affiliate story/post copy copied.");
     });
   }
 
@@ -303,14 +247,13 @@ function bindDashboardUI() {
   if (openBillingPortalBtn) {
     openBillingPortalBtn.addEventListener("click", async () => {
       try {
-        if (!currentUser?.id || !currentUser?.email) {
+        if (!currentUser?.id) {
           setStatus("accountStatusBilling", "No logged-in user found.");
           return;
         }
 
-        setStatus("accountStatusBilling", "Checking billing access...");
+        setStatus("accountStatusBilling", "Opening billing portal...");
 
-        const checkoutContext = deriveBillingCheckoutContext();
         const response = await fetch("/api/create-billing-portal-session", {
           method: "POST",
           headers: {
@@ -318,11 +261,7 @@ function bindDashboardUI() {
           },
           body: JSON.stringify({
             userId: currentUser.id,
-            email: currentUser.email,
-            returnPath: "/dashboard.html",
-            planType: checkoutContext.planType,
-            userType: checkoutContext.userType,
-            accessType: checkoutContext.accessType
+            email: currentUser.email
           })
         });
 
@@ -337,20 +276,13 @@ function bindDashboardUI() {
         }
 
         if (!response.ok) {
-          throw new Error(data?.error || "Could not open billing portal.");
+          throw new Error(data.error || "Could not open billing portal.");
         }
 
-        if (data?.redirectToCheckout) {
-          setStatus("accountStatusBilling", data?.message || "No active billing plan found. Redirecting to checkout...");
-          await startDashboardCheckout(data?.checkoutContext || checkoutContext);
-          return;
-        }
-
-        if (!data?.url) {
+        if (!data.url) {
           throw new Error("Billing portal URL missing.");
         }
 
-        setStatus("accountStatusBilling", "Opening billing portal...");
         window.location.href = data.url;
       } catch (error) {
         console.error("Billing portal error:", error);
@@ -706,7 +638,8 @@ function mergeSummaryWithListings(summary, listings) {
     segment_performance: Array.isArray(summary.segment_performance) ? summary.segment_performance : [],
     alerts: Array.isArray(summary.alerts) ? summary.alerts : [],
     scorecards: summary.scorecards || {},
-    intelligence: summary.intelligence || {}
+    intelligence: summary.intelligence || {},
+    affiliate: summary.affiliate || {}
   };
 }
 
@@ -733,6 +666,7 @@ function renderDashboardAnalytics() {
   renderAlertsPanel();
   renderScorecards();
   renderIntelligencePanels();
+  renderAffiliateCenter();
   renderTopListings(dashboardListings);
   renderRecentActivity(dashboardListings);
   drawActivityChart(buildChartSeries());
@@ -905,6 +839,42 @@ function renderListingsGrid(listings) {
   setStatus("listingGridStatus", `${listings.length} listing${listings.length === 1 ? "" : "s"} loaded.`);
 }
 
+
+function renderAffiliateCenter() {
+  const affiliate = dashboardSummary?.affiliate || {};
+  const referralCode = cleanText(affiliate.referral_code || document.getElementById("referralCodeAffiliate")?.textContent || "Not assigned yet") || "Not assigned yet";
+  setTextByIdForAll("referralCodeAffiliate", referralCode);
+  setTextByIdForAll("affiliatePartnerType", cleanText(affiliate.partner_type || "Founding Partner"));
+  setTextByIdForAll("affiliateDirectCommission", `${numberOrZero(affiliate.direct_commission_percent || 20)}% recurring`);
+  setTextByIdForAll("affiliateTierOverride", `${numberOrZero(affiliate.second_level_override_percent || 5)}% second level`);
+  setTextByIdForAll("affiliatePayoutStatus", cleanText(affiliate.payout_status || "Manual founder-stage payouts"));
+  setTextByIdForAll("affiliateCommissionEarned", formatCurrency(affiliate.commission_earned || 0));
+  setTextByIdForAll("affiliatePendingPayout", formatCurrency(affiliate.pending_payout || 0));
+  setTextByIdForAll("affiliateTotalReferrals", String(numberOrZero(affiliate.total_referrals)));
+  setTextByIdForAll("affiliateActiveReferrals", String(numberOrZero(affiliate.active_referrals)));
+  setTextByIdForAll("affiliateEstimatedMRR", formatCurrency(affiliate.estimated_mrr_commission || 0));
+  setTextByIdForAll("affiliatePaidOutAllTime", formatCurrency(affiliate.paid_out_all_time || 0));
+  setTextByIdForAll("affiliateInvitedCount", String(numberOrZero(affiliate.invited_referrals ?? affiliate.total_referrals)));
+  setTextByIdForAll("affiliateSignedUpCount", String(numberOrZero(affiliate.signed_up_referrals ?? affiliate.total_referrals)));
+  setTextByIdForAll("affiliatePayingCount", String(numberOrZero(affiliate.paying_referrals ?? affiliate.active_referrals)));
+  setTextByIdForAll("affiliateChurnedCount", String(numberOrZero(affiliate.churned_referrals)));
+
+  const recentWrap = document.getElementById('affiliateRecentReferrals');
+  if (recentWrap) {
+    const rows = Array.isArray(affiliate.recent_referrals) ? affiliate.recent_referrals : [];
+    recentWrap.innerHTML = rows.length
+      ? rows.map((row) => `<div><strong>${escapeHtml(cleanText(row.name || row.email || 'Referral'))}</strong> • ${escapeHtml(cleanText(row.status || 'signed_up'))} • ${escapeHtml(cleanText(row.plan || 'Starter'))}<br><span style="color:var(--muted)">${escapeHtml(cleanText(row.email || ''))} • ${formatCurrency(row.estimated_commission || 0)} est.</span></div>`).join('')
+      : '<div>No referrals tracked yet.</div>';
+  }
+
+  const actionsWrap = document.getElementById('affiliateRecommendedActions');
+  if (actionsWrap) {
+    const actions = Array.isArray(affiliate.recommended_actions) ? affiliate.recommended_actions : [];
+    actionsWrap.innerHTML = actions.length
+      ? actions.map((item) => `<div>• ${escapeHtml(cleanText(item))}</div>`).join('')
+      : '<div>No actions yet.</div>';
+  }
+}
 
 function renderPrioritiesPanels() {
   const queues = dashboardSummary?.daily_ops_queues || dashboardSummary?.action_center || {};
@@ -1455,7 +1425,6 @@ async function loadAccountData(user, forceFresh = false) {
     const extensionLoaded = Boolean(result);
     setStatus("accountStatus", extensionLoaded ? "Account data loaded." : "Account data loaded from dashboard summary.");
     setStatus("accountStatusBilling", extensionLoaded ? "Account data loaded." : "Account data loaded from dashboard summary.");
-    updateBillingPortalButtonState();
     if (!extensionLoaded && extensionStateError) {
       console.warn("[dashboard] proceeding without extension-state:", extensionStateError);
     } else {
@@ -1517,7 +1486,6 @@ async function loadAccountData(user, forceFresh = false) {
     persistProfileSnapshots(buildExtensionProfileSnapshot(currentNormalizedSession, currentProfile, currentUser), currentNormalizedSession);
     setStatus("accountStatus", "Failed to load extension-state. Using dashboard summary.");
     setStatus("accountStatusBilling", "Failed to load extension-state. Using dashboard summary.");
-    updateBillingPortalButtonState();
     setStatus("extensionActionStatus", "Extension state unavailable. Using saved account summary.");
   }
 }
