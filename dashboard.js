@@ -208,6 +208,7 @@ function bindDashboardUI() {
     }
   }
 
+  
   const copyReferralLinkBtn = document.getElementById("copyReferralLinkBtn");
   if (copyReferralLinkBtn) {
     copyReferralLinkBtn.addEventListener("click", async () => {
@@ -215,35 +216,54 @@ function bindDashboardUI() {
     });
   }
 
-  const copyAffiliateDMBtn = document.getElementById("copyAffiliateDMBtn");
-  if (copyAffiliateDMBtn) {
-    copyAffiliateDMBtn.addEventListener("click", async () => {
-      const code = getAffiliateCode() || "[YOUR CODE]";
-      const dm = `I have early access to Elevate Automation. It helps salespeople post inventory faster, stay consistent, and track performance. If you want founder access, use my code ${code}.`;
-      await copyAffiliateText(dm, "Affiliate DM script copied.");
+  function buildAffiliateManagerPitch() {
+    const code = getAffiliateCode() || "[YOUR CODE]";
+    const link = getAffiliateLink() || "[YOUR LINK]";
+    return `Quick question — do you have sales staff consistently posting inventory on Marketplace right now? I’m using Elevate Automation to help sales teams post faster, stay more consistent, and track listing performance. If you want founder access for your team, use my code ${code} or this link: ${link}`;
+  }
+  function buildAffiliateSalesPitch() {
+    const code = getAffiliateCode() || "[YOUR CODE]";
+    const link = getAffiliateLink() || "[YOUR LINK]";
+    return `I’ve got access to Elevate Automation. It helps salespeople scan dealer inventory, post faster, and keep listings more consistent. If you want founder access, use my code ${code} or this link: ${link}`;
+  }
+  function buildAffiliateFollowupPitch() {
+    const code = getAffiliateCode() || "[YOUR CODE]";
+    return `Following up — if you still want founder access to Elevate Automation, I can send you the direct signup link. Use my code ${code} when you sign up and I’ll point you in the right direction.`;
+  }
+  function buildAffiliateStoryCTA() {
+    const link = getAffiliateLink() || "[YOUR LINK]";
+    return `Posting inventory faster = more consistency and more chances to win attention. I’m using Elevate Automation right now. Message me or use this link if you want founder access: ${link}`;
+  }
+
+  const copyManagerPitchBtn = document.getElementById("copyManagerPitchBtn");
+  if (copyManagerPitchBtn) {
+    copyManagerPitchBtn.addEventListener("click", async () => {
+      await copyAffiliateText(buildAffiliateManagerPitch(), "Manager pitch copied.");
     });
   }
 
-  const copyAffiliatePitchBtn = document.getElementById("copyAffiliatePitchBtn");
-  if (copyAffiliatePitchBtn) {
-    copyAffiliatePitchBtn.addEventListener("click", async () => {
-      const code = getAffiliateCode() || "[YOUR CODE]";
-      const pitch = `I’m a founding partner with Elevate Automation. It helps salespeople post inventory faster and manage listing performance more consistently. Use my code ${code} if you want founder access.`;
-      await copyAffiliateText(pitch, "Affiliate pitch copied.");
+  const copySalesPitchBtn = document.getElementById("copySalesPitchBtn");
+  if (copySalesPitchBtn) {
+    copySalesPitchBtn.addEventListener("click", async () => {
+      await copyAffiliateText(buildAffiliateSalesPitch(), "Salesperson pitch copied.");
     });
   }
 
-  const copyAffiliatePostBtn = document.getElementById("copyAffiliatePostBtn");
-  if (copyAffiliatePostBtn) {
-    copyAffiliatePostBtn.addEventListener("click", async () => {
-      const link = getAffiliateLink() || "[YOUR LINK]";
-      const post = `I’m a founding partner with Elevate Automation. If you post inventory consistently and want a faster way to build Marketplace presence, message me or use this link: ${link}`;
-      await copyAffiliateText(post, "Affiliate story/post copy copied.");
+  const copyFollowupPitchBtn = document.getElementById("copyFollowupPitchBtn");
+  if (copyFollowupPitchBtn) {
+    copyFollowupPitchBtn.addEventListener("click", async () => {
+      await copyAffiliateText(buildAffiliateFollowupPitch(), "Follow-up script copied.");
     });
   }
 
+  const copyStoryCtaBtn = document.getElementById("copyStoryCtaBtn");
+  if (copyStoryCtaBtn) {
+    copyStoryCtaBtn.addEventListener("click", async () => {
+      await copyAffiliateText(buildAffiliateStoryCTA(), "Story CTA copied.");
+    });
+  }
 
-  const openBillingPortalBtn = document.getElementById("openBillingPortalBtn");
+const openBillingPortalBtn = document.getElementById("openBillingPortalBtn");
   if (openBillingPortalBtn) {
     openBillingPortalBtn.addEventListener("click", async () => {
       try {
@@ -643,38 +663,14 @@ function mergeSummaryWithListings(summary, listings) {
   };
 }
 
-
-function getMergedPostingMetrics() {
-  const extSub = currentNormalizedSession?.subscription || {};
-  const snap = dashboardSummary?.account_snapshot || {};
-  const summary = dashboardSummary || {};
-  const postsToday = Math.max(
-    numberOrZero(extSub.posts_today),
-    numberOrZero(snap.posts_today ?? snap.posts_used_today),
-    numberOrZero(summary.posts_today)
-  );
-  const dailyLimit = Math.max(
-    numberOrZero(extSub.daily_posting_limit ?? extSub.posting_limit),
-    numberOrZero(snap.daily_posting_limit ?? snap.posting_limit),
-    numberOrZero(summary.daily_limit)
-  );
-  const postsRemaining = Math.max(
-    numberOrZero(extSub.posts_remaining),
-    numberOrZero(snap.posts_remaining),
-    Math.max(dailyLimit - postsToday, 0)
-  );
-  return { postsToday, dailyLimit, postsRemaining };
-}
-
 function renderDashboardAnalytics() {
-  const posting = getMergedPostingMetrics();
-  setTextByIdForAll("kpiPostsToday", String(numberOrZero(posting.postsToday)));
+  setTextByIdForAll("kpiPostsToday", String(numberOrZero(dashboardSummary?.posts_today)));
   setTextByIdForAll("kpiPostsMonth", String(numberOrZero(dashboardSummary?.posts_this_month)));
   setTextByIdForAll("kpiActiveListings", String(numberOrZero(dashboardSummary?.active_listings)));
   setTextByIdForAll("kpiViews", String(numberOrZero(dashboardSummary?.total_views)));
   setTextByIdForAll("kpiMessages", String(numberOrZero(dashboardSummary?.total_messages)));
-  setTextByIdForAll("kpiPostsRemaining", String(numberOrZero(posting.postsRemaining)));
-  setTextByIdForAll("kpiDailyLimit", String(numberOrZero(posting.dailyLimit)));
+  setTextByIdForAll("kpiPostsRemaining", String(numberOrZero(currentNormalizedSession?.subscription?.posts_remaining ?? dashboardSummary?.account_snapshot?.posts_remaining)));
+  setTextByIdForAll("kpiDailyLimit", String(numberOrZero(currentNormalizedSession?.subscription?.posting_limit ?? dashboardSummary?.account_snapshot?.posting_limit)));
 
   // lifecycle-ready safe no-op if ids do not exist yet
   setTextByIdForAll("kpiReviewQueue", String(numberOrZero(dashboardSummary?.review_queue_count)));
@@ -864,6 +860,7 @@ function renderListingsGrid(listings) {
 }
 
 
+
 function renderAffiliateCenter() {
   const affiliate = dashboardSummary?.affiliate || {};
   const referralCode = cleanText(affiliate.referral_code || document.getElementById("referralCodeAffiliate")?.textContent || "Not assigned yet") || "Not assigned yet";
@@ -882,12 +879,16 @@ function renderAffiliateCenter() {
   setTextByIdForAll("affiliateSignedUpCount", String(numberOrZero(affiliate.signed_up_referrals ?? affiliate.total_referrals)));
   setTextByIdForAll("affiliatePayingCount", String(numberOrZero(affiliate.paying_referrals ?? affiliate.active_referrals)));
   setTextByIdForAll("affiliateChurnedCount", String(numberOrZero(affiliate.churned_referrals)));
+  setTextByIdForAll("affiliateConversionRate", `${numberOrZero(affiliate.conversion_rate)}%`);
+  setTextByIdForAll("affiliateActiveReferralRate", `${numberOrZero(affiliate.active_referral_rate)}%`);
+  setTextByIdForAll("affiliateTopSource", cleanText(affiliate.top_source || "Direct"));
+  setTextByIdForAll("affiliateLastReferralDate", formatDateTime(affiliate.last_referral_date) || "—");
 
   const recentWrap = document.getElementById('affiliateRecentReferrals');
   if (recentWrap) {
     const rows = Array.isArray(affiliate.recent_referrals) ? affiliate.recent_referrals : [];
     recentWrap.innerHTML = rows.length
-      ? rows.map((row) => `<div><strong>${escapeHtml(cleanText(row.name || row.email || 'Referral'))}</strong> • ${escapeHtml(cleanText(row.status || 'signed_up'))} • ${escapeHtml(cleanText(row.plan || 'Starter'))}<br><span style="color:var(--muted)">${escapeHtml(cleanText(row.email || ''))} • ${formatCurrency(row.estimated_commission || 0)} est.</span></div>`).join('')
+      ? rows.map((row) => `<div><strong>${escapeHtml(cleanText(row.name || row.email || 'Referral'))}</strong> • ${escapeHtml(cleanText(row.status || 'signed_up'))} • ${escapeHtml(cleanText(row.plan || 'Starter'))}<br><span style="color:var(--muted)">${escapeHtml(cleanText(row.email || ''))} • ${escapeHtml(cleanText(row.source || 'Direct'))} • ${formatCurrency(row.estimated_commission || 0)} est.</span></div>`).join('')
       : '<div>No referrals tracked yet.</div>';
   }
 
@@ -897,6 +898,15 @@ function renderAffiliateCenter() {
     actionsWrap.innerHTML = actions.length
       ? actions.map((item) => `<div>• ${escapeHtml(cleanText(item))}</div>`).join('')
       : '<div>No actions yet.</div>';
+  }
+
+  const notesWrap = document.getElementById('affiliateAttributionNotes');
+  if (notesWrap) {
+    const notes = [];
+    notes.push(`Attribution code: ${escapeHtml(referralCode)}`);
+    notes.push(`Top source: ${escapeHtml(cleanText(affiliate.top_source || 'Direct'))}`);
+    notes.push(`Conversion rate reflects paying referrals / signed-up referrals.`);
+    notesWrap.innerHTML = notes.map((item) => `<div>• ${item}</div>`).join('');
   }
 }
 
