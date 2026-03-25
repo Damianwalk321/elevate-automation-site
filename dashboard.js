@@ -42,9 +42,6 @@ let dashboardListings = [];
 let filteredListings = [];
 let listingQuickFilter = "all";
 
-const ONBOARDING_DISMISSED_KEY = "elevate_onboarding_dismissed";
-const ONBOARDING_COLLAPSED_KEY = "elevate_onboarding_collapsed";
-
 document.addEventListener("DOMContentLoaded", async () => {
   try {
     setBootStatus("Booting dashboard...");
@@ -298,15 +295,15 @@ function bindDashboardUI() {
       }
     });
   }
-
   const copyOnboardingStepsBtn = document.getElementById("copyOnboardingStepsBtn");
   if (copyOnboardingStepsBtn) {
     copyOnboardingStepsBtn.addEventListener("click", async () => {
       try {
         await navigator.clipboard.writeText(buildOnboardingChecklistText());
-        setBootStatus("Onboarding steps copied.");
+        setStatus("accountStatus", "Onboarding steps copied.");
       } catch (error) {
-        console.error("copyOnboardingStepsBtn error:", error);
+        console.error("Onboarding clipboard error:", error);
+        setStatus("accountStatus", "Could not copy onboarding steps.");
       }
     });
   }
@@ -315,29 +312,30 @@ function bindDashboardUI() {
   if (openProfileSetupBtn) {
     openProfileSetupBtn.addEventListener("click", () => {
       showSection("profile");
+      window.scrollTo({ top: 0, behavior: "smooth" });
     });
-  }
-
-  function toggleOnboardingCollapseState() {
-    const next = localStorage.getItem(ONBOARDING_COLLAPSED_KEY) === "true" ? "false" : "true";
-    localStorage.setItem(ONBOARDING_COLLAPSED_KEY, next);
-    renderOnboardingCenter();
   }
 
   const toggleOnboardingBtn = document.getElementById("toggleOnboardingBtn");
   if (toggleOnboardingBtn) {
-    toggleOnboardingBtn.addEventListener("click", toggleOnboardingCollapseState);
-  }
-
-  const toggleOnboardingSecondaryBtn = document.getElementById("toggleOnboardingSecondaryBtn");
-  if (toggleOnboardingSecondaryBtn) {
-    toggleOnboardingSecondaryBtn.addEventListener("click", toggleOnboardingCollapseState);
+    toggleOnboardingBtn.addEventListener("click", () => {
+      persistOnboardingUiState({ collapsed: !getOnboardingUiState().collapsed });
+      renderOnboardingCenter();
+    });
   }
 
   const dismissOnboardingBtn = document.getElementById("dismissOnboardingBtn");
   if (dismissOnboardingBtn) {
     dismissOnboardingBtn.addEventListener("click", () => {
-      localStorage.setItem(ONBOARDING_DISMISSED_KEY, "true");
+      persistOnboardingUiState({ dismissed: true, collapsed: true });
+      renderOnboardingCenter();
+    });
+  }
+
+  const reopenOnboardingBtn = document.getElementById("reopenOnboardingBtn");
+  if (reopenOnboardingBtn) {
+    reopenOnboardingBtn.addEventListener("click", () => {
+      persistOnboardingUiState({ dismissed: false, collapsed: false });
       renderOnboardingCenter();
     });
   }
@@ -845,120 +843,6 @@ function mergeSummaryWithListings(summary, listings) {
   };
 }
 
-
-function deriveOnboardingState() {
-  const summaryOnboarding = dashboardSummary?.onboarding;
-  if (summaryOnboarding && Array.isArray(summaryOnboarding.steps)) {
-    return summaryOnboarding;
-  }
-
-  const profileComplete = Boolean(dashboardSummary?.setup_status?.profile_complete);
-  const inventoryReady = Boolean(clean(dashboardSummary?.setup_status?.inventory_url || currentProfile?.inventory_url || ""));
-  const firstScanComplete = Boolean(numberOrZero(dashboardSummary?.queue_count) > 0 || dashboardListings.length > 0 || clean(dashboardSummary?.lifecycle_updated_at || ""));
-  const firstPostComplete = Boolean(numberOrZero(dashboardSummary?.posts_today) > 0 || dashboardListings.length > 0);
-
-  const steps = [
-    { key: "profile", label: "Complete profile", complete: profileComplete },
-    { key: "inventory", label: "Add inventory URL", complete: inventoryReady },
-    { key: "scan", label: "Run first scan", complete: firstScanComplete },
-    { key: "post", label: "Post first listing", complete: firstPostComplete }
-  ];
-  const completedSteps = steps.filter((step) => step.complete).length;
-  const totalSteps = steps.length;
-  const firstIncomplete = steps.find((step) => !step.complete);
-  let nextBestAction = "Keep using Elevate consistently.";
-  if (firstIncomplete?.key === "profile") nextBestAction = "Complete your profile and dealership setup.";
-  else if (firstIncomplete?.key === "inventory") nextBestAction = "Add your inventory URL so the scanner knows where to start.";
-  else if (firstIncomplete?.key === "scan") nextBestAction = "Run your first inventory scan.";
-  else if (firstIncomplete?.key === "post") nextBestAction = "Post your first listing through the platform.";
-  return {
-    steps,
-    completed_steps: completedSteps,
-    total_steps: totalSteps,
-    completion_percent: totalSteps ? Math.round((completedSteps / totalSteps) * 100) : 0,
-    first_scan_complete: firstScanComplete,
-    first_post_complete: firstPostComplete,
-    next_best_action: nextBestAction,
-    complete: completedSteps === totalSteps
-  };
-}
-
-function buildOnboardingChecklistText() {
-  const onboarding = deriveOnboardingState();
-  const lines = [
-    "Elevate Automation — Getting Started",
-    ""
-  ];
-  onboarding.steps.forEach((step, index) => {
-    lines.push(`${index + 1}. ${step.label}${step.complete ? " ✅" : ""}`);
-  });
-  lines.push("");
-  lines.push(`Next best action: ${clean(onboarding.next_best_action || "Complete the next pending setup step.")}`);
-  return lines.join("\n");
-}
-
-function renderOnboardingCenter() {
-  const wrap = document.getElementById("onboardingWrap");
-  const completeBar = document.getElementById("onboardingCompleteBar");
-  if (!wrap || !completeBar) return;
-
-  const onboarding = deriveOnboardingState();
-  const dismissed = localStorage.getItem(ONBOARDING_DISMISSED_KEY) === "true";
-  const collapsed = localStorage.getItem(ONBOARDING_COLLAPSED_KEY) === "true";
-
-  const checklist = document.getElementById("onboardingChecklist");
-  if (checklist) {
-    checklist.innerHTML = (onboarding.steps || []).map((step) => `
-      <div class="onboarding-step ${step.complete ? "complete" : ""}">
-        <div class="onboarding-step-label">${escapeHtml(step.label)}</div>
-        <span class="badge ${step.complete ? "active" : "inactive"}">${step.complete ? "Complete" : "Pending"}</span>
-      </div>
-    `).join("");
-  }
-
-  setTextByIdForAll("onboardingCompletionPercent", `${numberOrZero(onboarding.completion_percent)}%`);
-  setTextByIdForAll("onboardingProgressLabel", `${numberOrZero(onboarding.completed_steps)} / ${numberOrZero(onboarding.total_steps)}`);
-  setTextByIdForAll("onboardingNextBestAction", clean(onboarding.next_best_action || "Complete the setup steps to activate your account."));
-  setTextByIdForAll("onboardingCompleteText", onboarding.complete ? "You’re set up and ready to keep posting." : "Complete your setup to unlock your first win faster.");
-
-  const scanBadge = document.getElementById("onboardingFirstScan");
-  if (scanBadge) scanBadge.className = `badge ${onboarding.first_scan_complete ? "active" : "inactive"}`, scanBadge.textContent = onboarding.first_scan_complete ? "Complete" : "Pending";
-  const postBadge = document.getElementById("onboardingFirstPost");
-  if (postBadge) postBadge.className = `badge ${onboarding.first_post_complete ? "active" : "inactive"}`, postBadge.textContent = onboarding.first_post_complete ? "Complete" : "Pending";
-
-  const toggleBtn = document.getElementById("toggleOnboardingBtn");
-  const secondaryBtn = document.getElementById("toggleOnboardingSecondaryBtn");
-  if (toggleBtn) toggleBtn.textContent = onboarding.complete || collapsed ? "Reopen Checklist" : "Collapse";
-  if (secondaryBtn) secondaryBtn.textContent = collapsed ? "Expand" : "Collapse";
-
-  if (onboarding.complete && !dismissed) {
-    completeBar.classList.add("visible");
-  } else {
-    completeBar.classList.remove("visible");
-  }
-
-  if (dismissed) {
-    wrap.style.display = "none";
-    completeBar.style.display = onboarding.complete ? "none" : "none";
-    return;
-  }
-
-  if (onboarding.complete && collapsed) {
-    wrap.style.display = "none";
-    completeBar.classList.add("visible");
-    completeBar.style.display = "flex";
-    return;
-  }
-
-  wrap.style.display = "";
-  if (!onboarding.complete) {
-    completeBar.classList.remove("visible");
-    completeBar.style.display = "none";
-  } else {
-    completeBar.style.display = "flex";
-  }
-}
-
 function renderDashboardAnalytics() {
   setTextByIdForAll("kpiPostsToday", String(numberOrZero(dashboardSummary?.posts_today)));
   setTextByIdForAll("kpiPostsMonth", String(numberOrZero(dashboardSummary?.posts_this_month)));
@@ -978,12 +862,12 @@ function renderDashboardAnalytics() {
   setTextByIdForAll("kpiWeakListings", String(numberOrZero(dashboardSummary?.weak_listings)));
   setTextByIdForAll("kpiNeedsAction", String(numberOrZero(dashboardSummary?.needs_action_count)));
 
-  renderOnboardingCenter();
   renderPrioritiesPanels();
   renderAlertsPanel();
   renderScorecards();
   renderIntelligencePanels();
   renderAffiliateCenter();
+  renderOnboardingCenter();
   renderTopListings(dashboardListings);
   renderRecentActivity(dashboardListings);
   drawActivityChart(buildChartSeries());
@@ -1204,6 +1088,134 @@ function renderAffiliateCenter() {
     notes.push(`Top source: ${escapeHtml(cleanText(affiliate.top_source || 'Direct'))}`);
     notes.push(`Conversion rate reflects paying referrals / signed-up referrals.`);
     notesWrap.innerHTML = notes.map((item) => `<div>• ${item}</div>`).join('');
+  }
+}
+
+
+function getOnboardingStorageKey() {
+  const email = cleanText(currentUser?.email || currentNormalizedSession?.user?.email || dashboardSummary?.account_snapshot?.email || "").toLowerCase();
+  return `elevate_onboarding_ui_${email || "default"}`;
+}
+
+function getOnboardingUiState() {
+  try {
+    const raw = window.localStorage.getItem(getOnboardingStorageKey());
+    return raw ? JSON.parse(raw) : { collapsed: false, dismissed: false };
+  } catch (error) {
+    console.warn("onboarding state read warning", error);
+    return { collapsed: false, dismissed: false };
+  }
+}
+
+function persistOnboardingUiState(patch = {}) {
+  const next = { ...getOnboardingUiState(), ...patch };
+  try {
+    window.localStorage.setItem(getOnboardingStorageKey(), JSON.stringify(next));
+  } catch (error) {
+    console.warn("onboarding state write warning", error);
+  }
+  return next;
+}
+
+function deriveOnboardingState() {
+  const server = dashboardSummary?.onboarding;
+  if (server && Array.isArray(server.steps)) {
+    return {
+      steps: server.steps.map((step) => ({ key: step.key, label: step.label, complete: Boolean(step.complete) })),
+      completed_steps: numberOrZero(server.completed_steps),
+      total_steps: numberOrZero(server.total_steps || server.steps.length),
+      completion_percent: numberOrZero(server.completion_percent),
+      first_scan_complete: Boolean(server.first_scan_complete),
+      first_post_complete: Boolean(server.first_post_complete),
+      next_best_action: cleanText(server.next_best_action || "Keep moving through setup."),
+      complete: Boolean(server.complete)
+    };
+  }
+
+  const profileReady = Boolean(dashboardSummary?.setup_status?.profile_complete);
+  const inventoryReady = Boolean(dashboardSummary?.setup_status?.inventory_url_present || cleanText(currentProfile?.inventory_url));
+  const firstScanComplete = Boolean(numberOrZero(dashboardSummary?.queue_count) > 0 || numberOrZero(dashboardSummary?.total_listings) > 0 || cleanText(dashboardSummary?.lifecycle_updated_at));
+  const firstPostComplete = Boolean(numberOrZero(dashboardSummary?.posts_today) > 0 || numberOrZero(dashboardSummary?.total_listings) > 0);
+  const steps = [
+    { key: 'profile', label: 'Complete profile', complete: profileReady },
+    { key: 'inventory', label: 'Add inventory URL', complete: inventoryReady },
+    { key: 'scan', label: 'Run first scan', complete: firstScanComplete },
+    { key: 'post', label: 'Post first listing', complete: firstPostComplete }
+  ];
+  const completedSteps = steps.filter((step) => step.complete).length;
+  let nextBestAction = 'Keep moving through setup.';
+  const firstIncomplete = steps.find((step) => !step.complete);
+  if (firstIncomplete?.key === 'profile') nextBestAction = 'Complete your profile so your salesperson and dealer data sync correctly.';
+  else if (firstIncomplete?.key === 'inventory') nextBestAction = 'Add your inventory URL so Elevate can scan the correct dealer site.';
+  else if (firstIncomplete?.key === 'scan') nextBestAction = 'Run your first scan to load vehicles into your posting flow.';
+  else if (firstIncomplete?.key === 'post') nextBestAction = 'Post your first listing to complete activation and start tracking traction.';
+  else nextBestAction = 'Your activation is complete. Review your live dashboard and keep posting.';
+  return {
+    steps,
+    completed_steps: completedSteps,
+    total_steps: steps.length,
+    completion_percent: steps.length ? Math.round((completedSteps / steps.length) * 100) : 0,
+    first_scan_complete: firstScanComplete,
+    first_post_complete: firstPostComplete,
+    next_best_action: nextBestAction,
+    complete: completedSteps === steps.length
+  };
+}
+
+function buildOnboardingChecklistText() {
+  const onboarding = deriveOnboardingState();
+  const lines = ['Elevate Automation — Getting Started', ''];
+  onboarding.steps.forEach((step, index) => {
+    const mark = step.complete ? '✅' : '⬜';
+    lines.push(`${index + 1}. ${mark} ${step.label}`);
+  });
+  lines.push('');
+  lines.push(`Next best action: ${onboarding.next_best_action}`);
+  return lines.join('
+');
+}
+
+function renderOnboardingCenter() {
+  const onboarding = deriveOnboardingState();
+  const uiState = getOnboardingUiState();
+  const compact = document.getElementById('onboardingCompactBar');
+  const full = document.getElementById('onboardingFullSection');
+  const toggleBtn = document.getElementById('toggleOnboardingBtn');
+
+  if (toggleBtn) {
+    toggleBtn.textContent = uiState.collapsed ? 'Expand' : 'Collapse';
+  }
+
+  if (uiState.dismissed && onboarding.complete) {
+    if (compact) compact.style.display = 'none';
+    if (full) full.style.display = 'none';
+    return;
+  }
+
+  const showCompact = onboarding.complete || uiState.collapsed;
+  if (compact) compact.style.display = showCompact ? '' : 'none';
+  if (full) full.style.display = showCompact ? 'none' : '';
+
+  setTextByIdForAll('onboardingCompactPercent', `${numberOrZero(onboarding.completion_percent)}%`);
+  setTextByIdForAll('onboardingCompactScan', onboarding.first_scan_complete ? 'Complete' : 'Pending');
+  setTextByIdForAll('onboardingCompactPost', onboarding.first_post_complete ? 'Complete' : 'Pending');
+  setTextByIdForAll('onboardingProgressText', `${numberOrZero(onboarding.completed_steps)} / ${numberOrZero(onboarding.total_steps)}`);
+  setTextByIdForAll('onboardingCompletionPercent', `${numberOrZero(onboarding.completion_percent)}%`);
+  setTextByIdForAll('onboardingFirstScan', onboarding.first_scan_complete ? 'Complete' : 'Pending');
+  setTextByIdForAll('onboardingFirstPost', onboarding.first_post_complete ? 'Complete' : 'Pending');
+  setTextByIdForAll('onboardingNextBestAction', onboarding.next_best_action || 'Keep moving through setup.');
+
+  const checklist = document.getElementById('onboardingChecklist');
+  if (checklist) {
+    checklist.innerHTML = onboarding.steps.map((step) => `
+      <div style="display:flex; align-items:center; gap:10px; padding:10px 0; border-bottom:1px solid rgba(255,255,255,0.05);">
+        <span style="font-size:18px;">${step.complete ? '✅' : '⬜'}</span>
+        <div>
+          <div style="font-weight:700;">${escapeHtml(step.label)}</div>
+          <div class="subtext">${step.complete ? 'Complete' : 'Pending'}</div>
+        </div>
+      </div>
+    `).join('');
   }
 }
 
