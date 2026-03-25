@@ -17,7 +17,20 @@
     ]);
   }
 
-  async function syncUserToAppTable(user) {
+
+  function getStoredReferralData() {
+    try {
+      return {
+        referral_code: String(localStorage.getItem("elevate_referral_code") || "").trim(),
+        referral_source: String(localStorage.getItem("elevate_referral_source") || "").trim() || "direct"
+      };
+    } catch (error) {
+      console.error("Could not read referral data:", error);
+      return { referral_code: "", referral_source: "direct" };
+    }
+  }
+
+  async function syncUserToAppTable(user, referral = null) {
     if (!user || !user.id || !user.email) return;
 
     try {
@@ -29,7 +42,9 @@
         body: JSON.stringify({
           id: user.id,
           email: user.email,
-          full_name: user.user_metadata?.full_name || ""
+          full_name: user.user_metadata?.full_name || "",
+          referral_code: referral?.referral_code || user.user_metadata?.referral_code || "",
+          referral_source: referral?.referral_source || user.user_metadata?.referral_source || ""
         })
       });
 
@@ -48,8 +63,10 @@
     }
   }
 
-  async function signUpWithEmail(email, password, fullName = "") {
+  async function signUpWithEmail(email, password, fullName = "", referral = null) {
     const supabase = getSupabaseClient();
+
+    const nextReferral = referral || getStoredReferralData();
 
     const { data, error } = await withTimeout(
       supabase.auth.signUp({
@@ -57,7 +74,9 @@
         password,
         options: {
           data: {
-            full_name: fullName
+            full_name: fullName,
+            referral_code: nextReferral?.referral_code || "",
+            referral_source: nextReferral?.referral_source || ""
           },
           emailRedirectTo: `${window.location.origin}/login.html`
         }
@@ -69,7 +88,7 @@
     if (error) throw error;
 
     if (data?.user) {
-      await syncUserToAppTable(data.user);
+      await syncUserToAppTable(data.user, nextReferral);
     }
 
     return data;
@@ -91,7 +110,7 @@
 
     if (data?.user?.email) {
       localStorage.setItem("user_email", data.user.email);
-      await syncUserToAppTable(data.user);
+      await syncUserToAppTable(data.user, nextReferral);
     }
 
     return data;
