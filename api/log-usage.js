@@ -37,7 +37,8 @@ const ALLOWED_ACTIONS = new Set([
   "listing_viewed",
   "listing_message",
   "listing_card_opened",
-  "listing_view_sync"
+  "listing_view_sync",
+  "listing_view_sync_v2"
 ]);
 
 
@@ -147,7 +148,7 @@ export default async function handler(req, res) {
         }
       }
 
-      if (payload.action === "listing_view_sync") {
+      if (payload.action === "listing_view_sync" || payload.action === "listing_view_sync_v2") {
         try {
           const incomingViews = Number(payload.metadata?.views_count ?? payload.metadata?.views ?? body.views_count ?? body.views ?? 0);
           const { data: row } = await supabase.from("user_listings").select("views_count").eq("id", payload.listing_id).maybeSingle();
