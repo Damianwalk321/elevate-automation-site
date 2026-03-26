@@ -856,6 +856,16 @@
         min-width: 100%;
       }
     }
+  
+    .action-center-list{display:flex;flex-direction:column;gap:12px}
+    .action-center-item{background:var(--panel-2);border:1px solid var(--line);border-radius:14px;padding:14px}
+    .action-center-item-head{display:flex;justify-content:space-between;gap:12px;align-items:flex-start;margin-bottom:8px}
+    .action-center-item-title{font-weight:700}
+    .action-center-item-meta{font-size:12px;color:var(--muted);margin-top:4px}
+    .action-center-item-copy{font-size:13px;color:var(--text);line-height:1.55}
+    .action-center-item-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+    .section-collapsible{margin-top:14px}
+
   </style>
 </head>
 <body>
@@ -953,7 +963,7 @@
           <div class="card kpi-card">
             <div class="stat-label">Messages</div>
             <div id="kpiMessages" class="stat-value">0</div>
-            <div class="stat-sub">Buyer conversations <span id="kpiMessagesConfidence" style="opacity:.8"></span></div>
+            <div class="stat-sub">Buyer conversations</div>
           </div>
 
           <div class="card kpi-card">
@@ -996,6 +1006,7 @@
           </div>
         </div>
 
+        <div class="section-head" style="margin-top:20px;"><h2>Performance Snapshot</h2><div class="subtext">Secondary analytics and trend context</div></div>
         <div class="analytics-shell">
           <div class="card">
             <div class="graph-wrap">
@@ -1034,8 +1045,8 @@
         <div class="grid-2">
           <div class="card">
             <div class="section-head">
-              <h2>Today's Priorities</h2>
-              <div class="subtext">Automated action queue based on live listing conditions</div>
+              <h2>Action Center</h2>
+              <div class="subtext">Execute what matters now</div>
             </div>
             <div id="todaysPrioritiesPanel" class="list-block">
               <div>Loading priorities...</div>
@@ -1072,8 +1083,8 @@
         <div class="grid-3">
           <div class="card">
             <div class="section-head">
-              <h2>Alerts</h2>
-              <div class="subtext">Live notifications and performance warnings</div>
+              <h2>Needs Attention</h2>
+              <div class="subtext">Critical items that need intervention</div>
             </div>
             <div id="alertsPanel" class="list-block">
               <div>Loading alerts...</div>
@@ -1081,8 +1092,8 @@
           </div>
           <div class="card">
             <div class="section-head">
-              <h2>Today’s Scorecard</h2>
-              <div class="subtext">Daily operating score and activity snapshot</div>
+              <h2>Today</h2>
+              <div class="subtext">Clean snapshot of today’s operating performance</div>
             </div>
             <div id="dailyScorecardPanel" class="list-block">
               <div>Loading scorecard...</div>
@@ -1090,8 +1101,8 @@
           </div>
           <div class="card">
             <div class="section-head">
-              <h2>Weekly Scorecard</h2>
-              <div class="subtext">7-day movement and engagement trend</div>
+              <h2>Weekly Snapshot</h2>
+              <div class="subtext">7-day movement and trend context</div>
             </div>
             <div id="weeklyScorecardPanel" class="list-block">
               <div>Loading scorecard...</div>
@@ -1344,7 +1355,7 @@
               <div><strong>Backend Sync:</strong> <span id="extensionSyncStatus">Checking...</span></div>
               <div><strong>Committed Listing Rows:</strong> <span id="extensionCommittedRows">0</span></div>
               <div><strong>Views Tracked:</strong> <span id="extensionViewsTracked">0</span></div>
-              <div><strong>Messages Tracked:</strong> <span id="extensionMessagesTracked">0</span> <span id="extensionMessagesConfidence" style="opacity:.8"></span></div>
+              <div><strong>Messages Tracked:</strong> <span id="extensionMessagesTracked">0</span></div>
               <div><strong>Review Queue:</strong> <span id="extensionReviewQueue">0</span></div>
               <div><strong>Stale Listings:</strong> <span id="extensionStaleListings">0</span></div>
               <div><strong>Scanner Type:</strong> <span id="extensionScannerType">Loading.</span></div>
@@ -1432,7 +1443,6 @@
         </div>
       </section>
 
-      
       <!-- AFFILIATE -->
       <section id="affiliate" class="dashboard-section">
         <div class="grid-4">
@@ -1457,26 +1467,13 @@
             <div class="action-grid" style="margin-top:14px;">
               <button id="copyReferralCodeBtn" class="action-btn" type="button">Copy Referral Code</button>
               <button id="copyReferralLinkBtn" class="action-btn" type="button">Copy Referral Link</button>
-              <button id="copyManagerPitchBtn" class="action-btn" type="button">Copy Manager Pitch</button>
-              <button id="copySalesPitchBtn" class="action-btn" type="button">Copy Salesperson Pitch</button>
-              <button id="copyFollowupPitchBtn" class="action-btn" type="button">Copy Follow-Up Script</button>
-              <button id="copyStoryCtaBtn" class="action-btn" type="button">Copy Story CTA</button>
+              <button id="copyAffiliateDMBtn" class="action-btn" type="button">Copy DM Script</button>
+              <button id="copyAffiliatePitchBtn" class="action-btn" type="button">Copy Short Pitch</button>
+              <button id="copyAffiliatePostBtn" class="action-btn" type="button">Copy Story/Post</button>
             </div>
             <div class="subtext" style="margin-top:14px;">Professional partner program positioning: recurring commissions, clean referral economics, and dealership-level conversations.</div>
           </div>
 
-          <div class="card">
-            <h2>Affiliate Performance</h2>
-            <div class="grid-2" style="gap:14px; margin-top:8px;">
-              <div class="sidebar-card"><div class="sidebar-card-label">Conversion Rate</div><div class="sidebar-card-value" id="affiliateConversionRate">0%</div></div>
-              <div class="sidebar-card"><div class="sidebar-card-label">Active Referral Rate</div><div class="sidebar-card-value" id="affiliateActiveReferralRate">0%</div></div>
-              <div class="sidebar-card"><div class="sidebar-card-label">Top Source</div><div class="sidebar-card-value" id="affiliateTopSource">Direct</div></div>
-              <div class="sidebar-card"><div class="sidebar-card-label">Last Referral</div><div class="sidebar-card-value" id="affiliateLastReferralDate">—</div></div>
-            </div>
-          </div>
-        </div>
-
-        <div class="grid-2">
           <div class="card">
             <h2>Referral Funnel</h2>
             <div class="grid-2" style="gap:14px; margin-top:8px;">
@@ -1486,31 +1483,25 @@
               <div class="sidebar-card"><div class="sidebar-card-label">Churned</div><div class="sidebar-card-value" id="affiliateChurnedCount">0</div></div>
             </div>
           </div>
+        </div>
+
+        <div class="grid-2">
           <div class="card">
             <h2>Recent Referrals</h2>
             <div id="affiliateRecentReferrals" class="list-block">
               <div>No referrals tracked yet.</div>
             </div>
           </div>
-        </div>
-
-        <div class="grid-2">
           <div class="card">
             <h2>Recommended Actions</h2>
             <div id="affiliateRecommendedActions" class="list-block">
               <div>No actions yet.</div>
             </div>
           </div>
-          <div class="card">
-            <h2>Attribution Notes</h2>
-            <div id="affiliateAttributionNotes" class="list-block">
-              <div>Referrals are attributed from checkout metadata and mirrored subscription records.</div>
-            </div>
-          </div>
         </div>
       </section>
 
-<!-- BILLING -->
+      <!-- BILLING -->
       <section id="billing" class="dashboard-section">
         <div class="grid-2">
           <div class="card">
@@ -1523,10 +1514,9 @@
             </div>
 
             <div id="accountStatusBilling" class="status-line"></div>
-            <div id="billingActionHint" class="status-line" style="opacity:.85; font-size:13px; margin-top:6px;">Loading billing action...</div>
 
             <div class="action-grid">
-              <button id="openBillingPortalBtn" class="action-btn" type="button">Manage Billing</button>
+              <button id="openBillingPortalBtn" class="action-btn" type="button">Open Billing Portal</button>
               <button id="refreshBillingBtn" class="action-btn" type="button">Refresh Billing Data</button>
             </div>
           </div>
