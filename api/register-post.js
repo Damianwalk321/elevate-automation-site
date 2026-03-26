@@ -1,7 +1,7 @@
 
 import { createClient } from "@supabase/supabase-js";
-import { normalizePlanLabel, inferPostingLimitFromPlan, normalizeStatusValue, hasTestingLimitOverride, resolveAccountAccess } from "./_shared/account-access.js";
-import { getVerifiedRequestUser, getTrustedIdentity } from "./_shared/auth.js";
+import { normalizePlanLabel, inferPostingLimitFromPlan, normalizeStatusValue, hasTestingLimitOverride } from "./_shared/account-access.js";
+import { getVerifiedRequestUser } from "./_shared/auth.js";
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -453,7 +453,6 @@ async function syncSubscriptionSnapshot(supabase, resolved, postsUsedToday) {
 }
 
 export default async function handler(req, res) {
-  const verifiedUser = await getVerifiedRequestUser(req);
   if (req.method !== "POST") {
     return json(res, 405, { ok: false, error: "Method not allowed" });
   }
@@ -465,6 +464,11 @@ export default async function handler(req, res) {
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
+    const verifiedUser = await getVerifiedRequestUser(req);
+    if (!verifiedUser?.id || !verifiedUser?.email) {
+      return json(res, 401, { ok: false, error: "Unauthorized" });
+    }
+
     const payload =
       typeof req.body === "string"
         ? JSON.parse(req.body || "{}")
@@ -472,8 +476,8 @@ export default async function handler(req, res) {
 
     const resolved = await resolveUserId(
       supabase,
-      payload.user_id,
-      payload.email
+      verifiedUser.id,
+      verifiedUser.email
     );
 
     if (!clean(resolved.user_id) && !lower(resolved.email)) {
