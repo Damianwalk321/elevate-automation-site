@@ -177,6 +177,37 @@ function buildListingIntelligence(row = {}) {
       ? 'Content is workable but could be tightened.'
       : 'Listing likely needs a stronger title and better detail signals.';
 
+  const imageCount = safeNumber(row.image_count || row.photo_count || row.media_count || 0, 0);
+  let postPriority = 35;
+  if (!postedValue) postPriority += 28;
+  if (lifecycle === 'review_new' || reviewBucket === 'newvehicles') postPriority += 24;
+  if (views === 0 && messages === 0 && ageDays <= 2) postPriority += 12;
+  if (imageCount >= 8) postPriority += 6;
+  if (!clean(row.body_style)) postPriority -= 4;
+  postPriority = Math.max(0, Math.min(100, Math.round(postPriority)));
+
+  let refreshPriority = 10;
+  if (staleLike) refreshPriority += 45;
+  if (lowPerformance) refreshPriority += 22;
+  if (ageDays >= 7 && views < 8) refreshPriority += 14;
+  if (messages > 0) refreshPriority -= 10;
+  refreshPriority = Math.max(0, Math.min(100, Math.round(refreshPriority)));
+
+  let priceReviewPriority = 8;
+  if (highViewsNoMessages || lifecycle === 'review_price_update' || reviewBucket === 'pricechanges') priceReviewPriority += 52;
+  if (views >= 10 && messages === 0) priceReviewPriority += 12;
+  priceReviewPriority = Math.max(0, Math.min(100, Math.round(priceReviewPriority)));
+
+  let opportunityScore = Math.round((predictedScore * 0.45) + (healthScore * 0.2) + Math.min(views, 30) + Math.min(messages * 15, 30));
+  if (staleLike) opportunityScore -= 18;
+  if (highViewsNoMessages) opportunityScore -= 10;
+  opportunityScore = Math.max(0, Math.min(100, opportunityScore));
+
+  let actionBucket = 'low_priority';
+  if (priceReviewPriority >= 60 || refreshPriority >= 60 || lifecycle.startsWith('review')) actionBucket = 'do_now';
+  else if (postPriority >= 60 || promoteNow || needsAction) actionBucket = 'do_today';
+  else if (weak || opportunityScore >= 60) actionBucket = 'watch';
+
   return {
     age_days: ageDays,
     likely_sold: likelySold,
@@ -193,7 +224,13 @@ function buildListingIntelligence(row = {}) {
     pricing_insight: pricingInsight,
     content_score: contentScore,
     content_feedback: contentFeedback,
-    popularity_score: messages * 1000 + views * 10 + (postedTs / 100000000)
+    popularity_score: messages * 1000 + views * 10 + (postedTs / 100000000),
+    post_priority: postPriority,
+    refresh_priority: refreshPriority,
+    price_review_priority: priceReviewPriority,
+    opportunity_score: opportunityScore,
+    action_bucket: actionBucket,
+    action_bucket_label: actionBucket === 'do_now' ? 'Do Now' : actionBucket === 'do_today' ? 'Do Today' : actionBucket === 'watch' ? 'Watch' : 'Low Priority'
   };
 }
 function normalizeListingRow(row = {}, source = 'user_listings') {
@@ -619,11 +656,12 @@ export default async function handler(req, res) {
   res.setHeader('Content-Type', 'application/json');
   if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
   try {
-    const userId = clean(req.query?.userId || req.query?.user_id || '');
-    const email = normalizeEmail(req.query?.email || '');
-    const user = await resolveUser({ userId, email });
-    const finalUserId = clean(user?.id || userId || '');
-    const finalEmail = normalizeEmail(user?.email || email || '');
+    const verifiedUser = await getVerifiedRequestUser(req);
+    const requestUserId = clean(verifiedUser?.id || req.query?.userId || req.query?.user_id || '');
+    const requestEmail = normalizeEmail(verifiedUser?.email || req.query?.email || '');
+    const user = await resolveUser({ userId: requestUserId, email: requestEmail });
+    const finalUserId = clean(user?.id || requestUserId || '');
+    const finalEmail = normalizeEmail(user?.email || requestEmail || '');
     if (!finalUserId && !finalEmail) return res.status(400).json({ error: 'Missing userId or email' });
 
     const [subscriptionRow, postingUsageRow, profileRow, rows] = await Promise.all([
@@ -658,6 +696,69 @@ export default async function handler(req, res) {
       weak_rate: computed.total_listings ? Number(((computed.weak_listings / computed.total_listings) * 100).toFixed(1)) : 0,
       weak_listings: computed.weak_listings,
       needs_action: computed.needs_action_count
+    };
+    const accessState = resolveAccountAccess({
+      plan: planValue,
+      status: effectiveStatus,
+      postsToday: usageToday,
+      postingLimit: dailyLimit,
+      email: finalEmail,
+      stripeCustomerId: snapshot.stripe_customer_id || subscriptionRow?.stripe_customer_id || '',
+      currentPeriodEnd: subscriptionRow?.current_period_end || snapshot.current_period_end || null,
+      cancelAtPeriodEnd: Boolean(subscriptionRow?.cancel_at_period_end || snapshot.cancel_at_period_end),
+      minimumVersion: snapshot.minimum_version || '',
+      latestVersion: snapshot.latest_version || '',
+      extensionVersion: snapshot.extension_version || ''
+    });
+    const activationSteps = {
+      profile_complete: Boolean(setupStatus.profile_complete),
+      compliance_ready: Boolean(setupStatus.compliance_mode_present),
+      extension_connected: accessState.active,
+      first_post: usageToday > 0,
+      first_sync: rows.length > 0,
+      first_message: computed.total_messages > 0,
+      review_center_used: computed.review_queue_count > 0 || computed.needs_action_count > 0
+    };
+    const activationCompleted = Object.values(activationSteps).filter(Boolean).length;
+    const activationTotal = Object.keys(activationSteps).length;
+    const setupBlockers = [];
+    if (!setupStatus.inventory_url_present) setupBlockers.push('Add inventory URL');
+    if (!setupStatus.salesperson_name_present) setupBlockers.push('Complete salesperson profile');
+    if (!setupStatus.dealership_name_present) setupBlockers.push('Add dealership name');
+    if (!setupStatus.compliance_mode_present) setupBlockers.push('Set compliance mode');
+    if (!accessState.active) setupBlockers.push('Fix access or billing');
+    const nextBestActions = [
+      computed.review_queue_count > 0 ? `Review ${computed.review_queue_count} listing${computed.review_queue_count === 1 ? '' : 's'} in queue.` : '',
+      computed.needs_action_count > 0 ? `Work ${computed.needs_action_count} listing${computed.needs_action_count === 1 ? '' : 's'} marked needs action.` : '',
+      usageToday === 0 ? 'Get the first post live today to trigger your first win.' : '',
+      !setupStatus.profile_complete ? 'Finish setup fields so the extension can post with cleaner output.' : ''
+    ].filter(Boolean).slice(0, 4);
+    const listingActionSummary = {
+      do_now: rows.filter((row) => safeNumber(row.price_review_priority, 0) >= 60 || safeNumber(row.refresh_priority, 0) >= 60 || String(row.action_bucket || '') === 'do_now').length,
+      do_today: rows.filter((row) => String(row.action_bucket || '') === 'do_today').length,
+      watch: rows.filter((row) => String(row.action_bucket || '') === 'watch').length,
+      low_priority: rows.filter((row) => !String(row.action_bucket || '') || String(row.action_bucket || '') === 'low_priority').length
+    };
+    const opportunitySignals = [
+      computed.action_center.promote_today > 0 ? `${computed.action_center.promote_today} strong listing${computed.action_center.promote_today === 1 ? '' : 's'} are ready to promote.` : '',
+      computed.action_center.repost_today > 0 ? `${computed.action_center.repost_today} listing${computed.action_center.repost_today === 1 ? '' : 's'} should be refreshed today.` : '',
+      computed.total_views > 0 && computed.total_messages === 0 ? 'Views are coming in without messages. Review pricing and copy.' : '',
+      computed.weak_listings > 0 ? `${computed.weak_listings} weak listing${computed.weak_listings === 1 ? '' : 's'} are dragging portfolio quality.` : ''
+    ].filter(Boolean);
+    const growthActions = {
+      invite_teammate: 'I am using Elevate to post inventory faster and keep listings cleaner. Want me to send you the dashboard invite?',
+      invite_manager: 'We are using Elevate to speed up Marketplace posting and surface which listings need attention. Want the dealership view?',
+      affiliate_pitch_short: 'Elevate helps reps post faster, clean up weak listings, and see where opportunity is sitting inside inventory.',
+      affiliate_pitch_operator: 'This is not just a posting tool. It is an operator dashboard for listings, compliance, and daily action priorities.',
+      dealer_invite_pitch: 'If your team is posting inventory manually, Elevate gives them speed on day one and gives managers cleaner visibility.'
+    };
+    const revenueIntelligence = {
+      time_saved_today_minutes: usageToday * 18,
+      time_saved_week_minutes: Math.max(safeNumber(scorecards?.weekly?.posts_7d, usageToday) * 18, usageToday * 18),
+      missed_opportunity_estimate: computed.needs_action_count + computed.weak_listings,
+      weak_conversion_listings: computed.weak_listings,
+      refresh_candidates: computed.action_center.repost_today,
+      price_review_candidates: computed.review_price_change_count
     };
     const actionCenterDetails = buildActionCenterDetails(rows);
     const recentListings = rows.slice(0, 12).map((row) => ({
@@ -694,7 +795,13 @@ export default async function handler(req, res) {
       weak: Boolean(row.weak),
       needs_action: Boolean(row.needs_action),
       promote_now: Boolean(row.promote_now),
-      likely_sold: Boolean(row.likely_sold)
+      likely_sold: Boolean(row.likely_sold),
+      post_priority: safeNumber(row.post_priority, 0),
+      refresh_priority: safeNumber(row.refresh_priority, 0),
+      price_review_priority: safeNumber(row.price_review_priority, 0),
+      opportunity_score: safeNumber(row.opportunity_score, 0),
+      action_bucket: row.action_bucket || 'low_priority',
+      action_bucket_label: row.action_bucket_label || 'Low Priority'
     }));
     return res.status(200).json({
       success: true,
@@ -767,6 +874,29 @@ export default async function handler(req, res) {
           estimated_manual_posts_avoided: usageToday,
           estimated_value_saved: Number((((usageToday * 18) / 60) * 30).toFixed(2))
         },
+        activation: {
+          score: Math.round((activationCompleted / Math.max(activationTotal, 1)) * 100),
+          percent: Math.round((activationCompleted / Math.max(activationTotal, 1)) * 100),
+          completed_steps: activationCompleted,
+          total_steps: activationTotal,
+          steps: activationSteps,
+          first_win_complete: activationSteps.first_post && activationSteps.first_sync,
+          blocked_by: setupBlockers,
+          next_best_actions: nextBestActions
+        },
+        first_win: {
+          has_first_post: usageToday > 0,
+          has_first_sync: rows.length > 0,
+          has_first_message: computed.total_messages > 0,
+          milestone_text: usageToday > 0 ? 'First posting motion is live. Keep stacking inventory and review actions.' : 'Post your first vehicle to unlock immediate day-one value.'
+        },
+        growth_actions: growthActions,
+        setup_blockers: setupBlockers,
+        setup_recommendations: nextBestActions,
+        revenue_intelligence: revenueIntelligence,
+        listing_action_summary: listingActionSummary,
+        opportunity_signals: opportunitySignals,
+        priority_actions: actionCenterDetails,
         setup_status: setupStatus,
         data_integrity: {
           listing_rows_merged: rows.length,
