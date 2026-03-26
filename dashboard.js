@@ -248,6 +248,47 @@ function closeReadCopyModal() {
   modal.classList.remove("open");
   modal.setAttribute("aria-hidden", "true");
 }
+
+
+async function redeemCreditActionRequest(actionKey, quantity = 1) {
+  const response = await apiFetch("/api/redeem-credit-action", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ action: actionKey, quantity })
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok || data.success === false) {
+    throw new Error(cleanText(data.error || "Unable to redeem credit action."));
+  }
+  return data;
+}
+
+function bindCreditActionButtons() {
+  document.querySelectorAll("[data-credit-action]").forEach((button) => {
+    if (button.dataset.boundCreditAction === "true") return;
+    button.dataset.boundCreditAction = "true";
+    button.addEventListener("click", async () => {
+      const actionKey = cleanText(button.getAttribute("data-credit-action"));
+      if (!actionKey) return;
+      const original = button.textContent;
+      try {
+        button.disabled = true;
+        button.textContent = "Applying...";
+        const result = await redeemCreditActionRequest(actionKey, 1);
+        const statusEl = document.getElementById("creditActionStatus");
+        if (statusEl) statusEl.textContent = `${cleanText(result.action?.title || "Action applied")}: -${numberOrZero(result.amount_spent)} credits, +${numberOrZero(result.grants_posts)} post today.`;
+        await refreshDashboardData?.();
+      } catch (error) {
+        const statusEl = document.getElementById("creditActionStatus");
+        if (statusEl) statusEl.textContent = cleanText(error.message || "Unable to redeem credit action.");
+      } finally {
+        button.disabled = false;
+        button.textContent = original;
+      }
+    });
+  });
+}
+
 let dashboardListings = [];
 let filteredListings = [];
 let listingQuickFilter = "all";
@@ -1065,6 +1106,106 @@ function renderDashboardAnalytics() {
   renderAnalyticsHub();
   renderMonetizationPanels();
   drawActivityChart(buildChartSeries());
+}
+
+
+
+function renderOverviewOperatorPanel() {
+  const roi = dashboardSummary?.roi_snapshot || {};
+  const accountSnapshot = dashboardSummary?.account_snapshot || {};
+  const queues = dashboardSummary?.daily_ops_queues || dashboardSummary?.action_center || {};
+  const details = dashboardSummary?.action_center_details || {};
+  const timeSavedToday = numberOrZero(roi.estimated_minutes_saved_today || (numberOrZero(dashboardSummary?.posts_today) * 18));
+  const postsToday = numberOrZero(dashboardSummary?.posts_today);
+  const postingLimit = numberOrZero(
+    currentNormalizedSession?.subscription?.posting_limit ??
+    accountSnapshot?.effective_posting_limit ??
+    accountSnapshot?.posting_limit
+  );
+  const postsRemaining = Math.max(
+    0,
+    numberOrZero(
+      currentNormalizedSession?.subscription?.posts_remaining ??
+      accountSnapshot?.posts_remaining ??
+      (postingLimit > 0 ? postingLimit - postsToday : 0)
+    )
+  );
+  const reviewQueue = numberOrZero(dashboardSummary?.review_queue_count);
+  const staleListings = numberOrZero(dashboardSummary?.stale_listings);
+  const weakListings = numberOrZero(dashboardSummary?.weak_listings);
+  const needsAction = numberOrZero(dashboardSummary?.needs_action_count);
+  const planName = cleanText(
+    currentNormalizedSession?.subscription?.plan_name ||
+    accountSnapshot?.plan_name ||
+    dashboardSummary?.plan_name ||
+    'Founder Beta'
+  );
+  const accessActive = Boolean(
+    currentNormalizedSession?.access?.has_access ??
+    accountSnapshot?.access_active ??
+    dashboardSummary?.has_access ??
+    true
+  );
+
+  setTextByIdForAll('overviewTimeSavedToday', `${timeSavedToday} min`);
+  setTextByIdForAll('overviewPlanChip', planName || 'Founder Beta');
+  setTextByIdForAll('overviewAccessChip', accessActive ? 'Active Access' : 'Access Needs Attention');
+
+  const overviewActionList = document.getElementById('overviewActionList');
+  if (overviewActionList) {
+    const actionItems = []
+      .concat(Array.isArray(details.today) ? details.today : [])
+      .concat(Array.isArray(details.opportunities) ? details.opportunities.slice(0, 2) : [])
+      .slice(0, 4);
+
+    overviewActionList.innerHTML = actionItems.length
+      ? actionItems.map((item, index) => {
+          const title = cleanText(item?.title || item?.label || `Priority ${index + 1}`);
+          const copy = cleanText(item?.copy || item?.description || item?.reason || '');
+          const actionId = cleanText(item?.id || item?.action || '');
+          const actionBtn = actionId
+            ? `<button class="mini-btn" type="button" onclick="executeActionCenterItemById('${escapeJs(actionId)}')">Run</button>`
+            : '';
+          return `
+            <div class="overview-action-item">
+              <div>
+                <div class="title">${escapeHtml(title)}</div>
+                <div class="sub">${escapeHtml(copy || 'Keep momentum moving on the highest-value task next.')}</div>
+              </div>
+              ${actionBtn}
+            </div>
+          `;
+        }).join('')
+      : `
+        <div class="overview-action-item">
+          <div>
+            <div class="title">No urgent blockers detected</div>
+            <div class="sub">Keep posting, watch traction, and use credits when volume creates leverage.</div>
+          </div>
+        </div>
+      `;
+  }
+
+  const blockers = [];
+  if (!accessActive) blockers.push('Billing or access needs attention.');
+  if (reviewQueue > 0) blockers.push(`${reviewQueue} listing${reviewQueue === 1 ? '' : 's'} waiting for review.`);
+  if (staleListings > 0) blockers.push(`${staleListings} stale listing${staleListings === 1 ? '' : 's'} need refresh.`);
+  if (weakListings > 0) blockers.push(`${weakListings} weak listing${weakListings === 1 ? '' : 's'} need stronger copy or media.`);
+  if (postsRemaining <= 0 && postingLimit > 0) blockers.push('Daily posting limit reached.');
+
+  const blockersEl = document.getElementById('overviewBlockers');
+  if (blockersEl) {
+    const summaryBits = [
+      `<strong>Posts:</strong> ${postsToday}/${postingLimit || 0}`,
+      `<strong>Remaining:</strong> ${postsRemaining}`,
+      `<strong>Ready Queue:</strong> ${numberOrZero(dashboardSummary?.queue_count)}`,
+      `<strong>Opportunities:</strong> ${numberOrZero(queues.promote_today ?? needsAction)}`
+    ];
+    const blockerCopy = blockers.length
+      ? blockers.map((item) => `• ${escapeHtml(item)}`).join(' ')
+      : '• No major blockers right now. Stay in flow and keep the queue moving.';
+    blockersEl.innerHTML = `${summaryBits.join(' &nbsp;•&nbsp; ')}<br>${blockerCopy}`;
+  }
 }
 
 
