@@ -1,5 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
-import { getVerifiedRequestUser, getTrustedIdentity } from "./_shared/auth.js";
+import { getVerifiedRequestUser } from "./_shared/auth.js";
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -7,18 +7,15 @@ const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 function clean(value) {
   return String(value || "").trim();
 }
-
 function lower(value) {
   return clean(value).toLowerCase();
 }
-
 function normalizeUrl(value) {
   const v = clean(value);
   if (!v) return "";
   if (/^https?:\/\//i.test(v)) return v;
   return `https://${v}`;
 }
-
 function buildCompletion(data = {}) {
   const checks = {
     full_name: Boolean(clean(data.full_name || data.salesperson_name)),
@@ -52,7 +49,6 @@ function buildCompletion(data = {}) {
     checks
   };
 }
-
 function sendJson(res, status, body) {
   res.status(status).setHeader("Content-Type", "application/json");
   return res.json(body);
@@ -61,46 +57,30 @@ function sendJson(res, status, body) {
 export default async function handler(req, res) {
   try {
     if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
-      return sendJson(res, 500, {
-        error: "Missing server env",
-        detail: {
-          hasSupabaseUrl: !!SUPABASE_URL,
-          hasServiceRoleKey: !!SUPABASE_SERVICE_ROLE_KEY
-        }
-      });
+      return sendJson(res, 500, { error: "Missing server env" });
+    }
+    const verifiedUser = await getVerifiedRequestUser(req);
+    if (!verifiedUser?.id || !verifiedUser?.email) {
+      return sendJson(res, 401, { error: "Unauthorized" });
     }
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
-    const verifiedUser = await getVerifiedRequestUser(req);
 
     if (req.method === "GET") {
-      const identity = getTrustedIdentity({ verifiedUser, query: req.query || {} });
-      const id = clean(identity.id || req.query?.id);
-      if (!id) return sendJson(res, 400, { error: "Missing profile id" });
-
-      const { data, error } = await supabase.from("profiles").select("*").eq("id", id).maybeSingle();
+      const { data, error } = await supabase.from("profiles").select("*").eq("id", verifiedUser.id).maybeSingle();
       if (error) {
         console.error("profile GET error:", error);
         return sendJson(res, 500, { error: "Failed to load profile", detail: error.message });
       }
-
-      return sendJson(res, 200, {
-        ok: true,
-        data: data || null,
-        meta: { completion: buildCompletion(data || {}), verified_request: Boolean(verifiedUser?.id) }
-      });
+      return sendJson(res, 200, { ok: true, data: data || null, meta: { completion: buildCompletion(data || {}) } });
     }
 
     if (req.method === "POST") {
       const body = typeof req.body === "string" ? JSON.parse(req.body || "{}") : (req.body || {});
       const nowIso = new Date().toISOString();
-
-      const identity = getTrustedIdentity({ verifiedUser, body });
-      const id = clean(identity.id || body.id);
-      const email = lower(identity.email || body.email);
       const payload = {
-        id,
-        email,
+        id: clean(verifiedUser.id),
+        email: lower(verifiedUser.email),
         full_name: clean(body.full_name) || null,
         dealership: clean(body.dealership) || null,
         city: clean(body.city) || null,
@@ -117,10 +97,7 @@ export default async function handler(req, res) {
         updated_at: nowIso
       };
 
-      if (!id) return sendJson(res, 400, { error: "Missing profile id" });
-      if (!email) return sendJson(res, 400, { error: "Missing email" });
-
-      const { data: existingProfile, error: lookupError } = await supabase.from("profiles").select("id, created_at").eq("id", id).maybeSingle();
+      const { data: existingProfile, error: lookupError } = await supabase.from("profiles").select("id, created_at").eq("id", payload.id).maybeSingle();
       if (lookupError) {
         console.error("profile lookup error:", lookupError);
         return sendJson(res, 500, { error: "Failed to lookup profile", detail: lookupError.message });
@@ -129,29 +106,20 @@ export default async function handler(req, res) {
       let result;
       let writeError;
       if (existingProfile) {
-        ({ data: result, error: writeError } = await supabase.from("profiles").update(payload).eq("id", id).select().single());
+        ({ data: result, error: writeError } = await supabase.from("profiles").update(payload).eq("id", payload.id).select().single());
       } else {
         ({ data: result, error: writeError } = await supabase.from("profiles").insert({ ...payload, created_at: nowIso }).select().single());
       }
-
       if (writeError) {
         console.error("profile save error:", writeError);
         return sendJson(res, 500, { error: "Failed to save profile", detail: writeError.message });
       }
-
-      return sendJson(res, 200, {
-        ok: true,
-        data: result,
-        meta: { completion: buildCompletion(result || payload), verified_request: Boolean(verifiedUser?.id) }
-      });
+      return sendJson(res, 200, { ok: true, data: result, meta: { completion: buildCompletion(result || payload) } });
     }
 
     return sendJson(res, 405, { error: "Method not allowed" });
   } catch (error) {
     console.error("profile fatal error:", error);
-    return sendJson(res, 500, {
-      error: "Unexpected profile error",
-      detail: error?.message || String(error)
-    });
+    return sendJson(res, 500, { error: "Unexpected profile error", detail: error?.message || String(error) });
   }
 }
