@@ -864,52 +864,16 @@
     .action-center-item-meta{font-size:12px;color:var(--muted);margin-top:4px}
     .action-center-item-copy{font-size:13px;color:var(--text);line-height:1.55}
     .action-center-item-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
-    .section-collapsible{margin-top:14px}
 
-
-    .phase1-top-grid {
-      display: grid;
-      grid-template-columns: repeat(5, minmax(0, 1fr));
-      gap: 16px;
-      margin-bottom: 20px;
-    }
-    .progress-shell {
-      width: 100%; height: 10px; border-radius: 999px; background: rgba(255,255,255,0.08);
-      overflow: hidden; margin-top: 12px; border: 1px solid rgba(255,255,255,0.06);
-    }
-    .progress-bar {
-      height: 100%; width: 0%; background: linear-gradient(90deg, rgba(212,175,55,0.9), rgba(243,221,176,0.9));
-      transition: width 0.2s ease;
-    }
-    .mini-list { display:flex; flex-direction:column; gap:8px; margin-top:12px; }
-    .mini-list div {
-      padding:10px 12px; border-radius:10px; background:var(--panel-2); border:1px solid rgba(255,255,255,0.06);
-      font-size:13px; line-height:1.45;
-    }
-    .eyebrow {
-      font-size:12px; color:var(--gold); text-transform:uppercase; letter-spacing:1.3px; font-weight:700; margin-bottom:8px;
-    }
-    .inline-actions { display:flex; gap:10px; flex-wrap:wrap; margin-top:12px; }
-    .modal-overlay {
-      position:fixed; inset:0; background:rgba(0,0,0,0.7); display:none; align-items:center; justify-content:center;
-      z-index:9999; padding:20px;
-    }
-    .modal-overlay.open { display:flex; }
-    .modal-card {
-      width:min(760px, 100%); max-height:88vh; overflow:auto; background:linear-gradient(180deg, #141414 0%, #101010 100%);
-      border:1px solid var(--line-strong); border-radius:18px; box-shadow:var(--shadow); padding:22px;
-    }
-    .modal-head { display:flex; align-items:flex-start; justify-content:space-between; gap:14px; margin-bottom:16px; }
-    .modal-title { font-size:22px; line-height:1.2; margin-bottom:6px; }
-    .modal-body {
-      white-space:pre-wrap; line-height:1.65; color:var(--text); background:var(--panel-2); border:1px solid rgba(255,255,255,0.07);
-      border-radius:14px; padding:16px; font-size:14px;
-    }
-    .modal-actions { display:flex; justify-content:flex-end; gap:10px; flex-wrap:wrap; margin-top:16px; }
-    @media (max-width: 1280px) { .phase1-top-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-    @media (max-width: 760px) { .phase1-top-grid { grid-template-columns: 1fr; } }
-
-  </style>
+  .section-collapsible{margin-top:14px}
+  .modal-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.72);display:none;align-items:center;justify-content:center;padding:20px;z-index:1200}
+  .modal-backdrop.open{display:flex}
+  .modal-card{width:min(760px,100%);background:var(--panel);border:1px solid var(--line);border-radius:20px;padding:22px;box-shadow:0 30px 60px rgba(0,0,0,.45)}
+  .modal-head{display:flex;justify-content:space-between;gap:16px;align-items:flex-start;margin-bottom:14px}
+  .modal-copy{white-space:pre-wrap;line-height:1.65;background:var(--panel-2);border:1px solid var(--line);border-radius:16px;padding:16px;max-height:52vh;overflow:auto}
+  .module-toolbar{display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:16px}
+  .module-group-label{font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--accent)}
+</style>
 </head>
 <body>
   <div class="app-shell">
@@ -930,11 +894,11 @@
       <nav class="sidebar-nav">
         <button class="nav-btn active" data-section="overview">Overview</button>
         <button class="nav-btn" data-section="profile">Profile & Dealer Setup</button>
-        <button class="nav-btn" data-section="extension">Extension Control</button>
+        <button class="nav-btn" data-section="extension">Tools</button>
+        <button class="nav-btn" data-section="tools">Analytics</button>
         <button class="nav-btn" data-section="compliance">Compliance</button>
         <button class="nav-btn" data-section="affiliate">Affiliate Center</button>
         <button class="nav-btn" data-section="billing">Billing & Access</button>
-        <button class="nav-btn" data-section="tools">Tools & Modules</button>
       </nav>
 
       <div class="sidebar-actions">
@@ -952,41 +916,6 @@
 
       <!-- OVERVIEW -->
       <section id="overview" class="dashboard-section">
-        <div class="phase1-top-grid">
-          <div class="card">
-            <div class="eyebrow">Activation</div>
-            <div id="activationPercent" class="stat-value">0%</div>
-            <div id="activationSummary" class="stat-sub">Loading activation status...</div>
-            <div class="progress-shell"><div id="activationProgressBar" class="progress-bar"></div></div>
-            <div id="activationBlockers" class="mini-list"><div>Loading blockers...</div></div>
-          </div>
-          <div class="card">
-            <div class="eyebrow">First Win</div>
-            <div id="firstWinStatus" class="stat-value">Loading...</div>
-            <div id="firstWinSummary" class="stat-sub">Checking first-win progress...</div>
-            <div id="firstWinChecklist" class="mini-list"><div>Loading milestones...</div></div>
-          </div>
-          <div class="card">
-            <div class="eyebrow">Time Saved</div>
-            <div id="roiMinutesToday" class="stat-value">0 min</div>
-            <div id="roiSummary" class="stat-sub">Loading ROI snapshot...</div>
-            <div id="roiMiniStats" class="mini-list"><div>Loading estimate...</div></div>
-          </div>
-          <div class="card">
-            <div class="eyebrow">Next Best Actions</div>
-            <div id="nextBestActions" class="mini-list"><div>Loading actions...</div></div>
-          </div>
-          <div class="card">
-            <div class="eyebrow">Growth Tools</div>
-            <div class="stat-sub">Read scripts in-dashboard, then copy only when needed.</div>
-            <div class="inline-actions">
-              <button id="viewTeammateInviteBtn" class="action-btn" type="button">View Teammate Invite</button>
-              <button id="viewDealerInviteBtn" class="action-btn" type="button">View Dealer Invite</button>
-              <button id="viewAffiliatePitchTopBtn" class="action-btn" type="button">View Affiliate Pitch</button>
-            </div>
-            <div id="growthQuickNote" class="status-line" style="margin-top:12px;">Loading growth prompts...</div>
-          </div>
-        </div>
         <div class="grid-3">
           <div class="card">
             <div class="stat-label">Access Status</div>
@@ -1084,130 +1013,6 @@
           </div>
         </div>
 
-        <div class="section-head" style="margin-top:20px;"><h2>Performance Snapshot</h2><div class="subtext">Secondary analytics and trend context</div></div>
-        <div class="analytics-shell">
-          <div class="card">
-            <div class="graph-wrap">
-              <div class="graph-meta">
-                <div>
-                  <div class="graph-title">7-Day Activity</div>
-                  <div class="subtext" style="margin-top:4px;">Posts and traction trend</div>
-                </div>
-                <div class="graph-legend">
-                  <span><span class="legend-dot gold"></span>Posts</span>
-                  <span><span class="legend-dot soft"></span>Views</span>
-                </div>
-              </div>
-
-              <div class="chart-canvas-wrap">
-                <canvas id="activityChart"></canvas>
-              </div>
-
-              <div id="graphXLabels" class="graph-xlabels"></div>
-            </div>
-          </div>
-
-          <div class="card">
-            <div class="section-head">
-              <h2>Most Popular</h2>
-              <div class="subtext">Messages &gt; Views &gt; Recency</div>
-            </div>
-
-            <div id="topListings" class="top-list">
-              <div class="listing-empty">No listings yet.</div>
-            </div>
-          </div>
-        </div>
-
-
-        <div class="grid-2">
-          <div class="card">
-            <div class="section-head">
-              <h2>Action Center</h2>
-              <div class="subtext">Execute what matters now</div>
-            </div>
-            <div id="todaysPrioritiesPanel" class="list-block">
-              <div>Loading priorities...</div>
-            </div>
-          </div>
-          <div id="managerInsightsSection" class="card" style="display:none;">
-            <div class="section-head">
-              <h2>Manager Insights</h2>
-              <div class="subtext">Visible only for team / dealership manager access</div>
-            </div>
-            <div class="grid-2" style="margin-bottom:14px;">
-              <div class="card" style="padding:14px; background:var(--panel-2);">
-                <div class="stat-label">Live Inventory</div>
-                <div id="managerLiveInventory" class="stat-value">0</div>
-              </div>
-              <div class="card" style="padding:14px; background:var(--panel-2);">
-                <div class="stat-label">View→Message Rate</div>
-                <div id="managerViewToMessageRate" class="stat-value">0%</div>
-              </div>
-            </div>
-            <div class="grid-2" style="margin-bottom:14px;">
-              <div>
-                <h3 style="margin-bottom:8px;">Top Segments</h3>
-                <div id="managerTopSegments" class="list-block"><div>Loading...</div></div>
-              </div>
-              <div>
-                <h3 style="margin-bottom:8px;">Recommendations</h3>
-                <div id="managerRecommendations" class="list-block"><div>Loading...</div></div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div class="grid-3">
-          <div class="card">
-            <div class="section-head">
-              <h2>Needs Attention</h2>
-              <div class="subtext">Critical items that need intervention</div>
-            </div>
-            <div id="alertsPanel" class="list-block">
-              <div>Loading alerts...</div>
-            </div>
-          </div>
-          <div class="card">
-            <div class="section-head">
-              <h2>Today</h2>
-              <div class="subtext">Clean snapshot of today’s operating performance</div>
-            </div>
-            <div id="dailyScorecardPanel" class="list-block">
-              <div>Loading scorecard...</div>
-            </div>
-          </div>
-          <div class="card">
-            <div class="section-head">
-              <h2>Weekly Snapshot</h2>
-              <div class="subtext">7-day movement and trend context</div>
-            </div>
-            <div id="weeklyScorecardPanel" class="list-block">
-              <div>Loading scorecard...</div>
-            </div>
-          </div>
-        </div>
-
-        <div class="grid-2">
-          <div class="card">
-            <div class="section-head">
-              <h2>Intelligence</h2>
-              <div class="subtext">Prediction, pricing, and content opportunity signals</div>
-            </div>
-            <div id="intelligencePanel" class="list-block">
-              <div>Loading intelligence...</div>
-            </div>
-          </div>
-          <div class="card">
-            <div class="section-head">
-              <h2>Opportunities</h2>
-              <div class="subtext">Segments and listings with upside potential</div>
-            </div>
-            <div id="opportunitiesPanel" class="list-block">
-              <div>Loading opportunities...</div>
-            </div>
-          </div>
-        </div>
         <div class="card">
           <div class="section-head">
             <h2>Recent Listings</h2>
@@ -1423,7 +1228,7 @@
       <section id="extension" class="dashboard-section">
         <div class="grid-2">
           <div class="card">
-            <h2>Extension Control</h2>
+            <h2>Tools</h2>
             <div class="list-block">
               <div><strong>Access State:</strong> <span id="extensionAccessState">Loading.</span></div>
               <div><strong>Current Plan:</strong> <span id="extensionPlan">Loading.</span></div>
@@ -1483,13 +1288,47 @@
               </div>
             </div>
 
-            <div class="subtext" style="margin-top:14px;">
-              Use this as the single operator panel before posting: verify access, verify live counts,
-              refresh backend state, then open inventory or Marketplace.
-            </div>
-          </div>
-        </div>
-      </section>
+
+      <div class="subtext" style="margin-top:14px;">
+        Use this as the single operator panel before posting: verify access, verify live counts,
+        refresh backend state, then open inventory or Marketplace.
+      </div>
+    </div>
+  </div>
+
+  <div class="card" style="margin-top:20px;">
+    <div class="module-toolbar">
+      <div>
+        <div class="module-group-label">Tools & Modules</div>
+        <h2 style="margin-top:6px;">Platform Stack</h2>
+        <div class="subtext">Filter live, pipeline, and growth modules without cluttering the overview.</div>
+      </div>
+      <div>
+        <label for="toolModuleFilter" class="subtext">Module Group</label><br/>
+        <select id="toolModuleFilter">
+          <option value="all">All Modules</option>
+          <option value="core">Core Tools</option>
+          <option value="pipeline">Pipeline & Follow-Up</option>
+          <option value="growth">Growth & Analytics</option>
+        </select>
+      </div>
+    </div>
+    <div class="tools-grid" id="toolsModuleGrid">
+      <div class="tool-tile" data-module-group="core"><h3>Vehicle Poster</h3><p>Inventory scan, queue build, Marketplace fill, and posting engine.</p><div class="tool-status">Live Beta Core</div></div>
+      <div class="tool-tile" data-module-group="core"><h3>Dealer Scanner Routing</h3><p>Dealer website, inventory URL, and scanner type stored per account.</p><div class="tool-status">Live</div></div>
+      <div class="tool-tile" data-module-group="core"><h3>Compliance Engine</h3><p>AB / BC output blocks powered by saved profile data.</p><div class="tool-status">Live</div></div>
+      <div class="tool-tile" data-module-group="core"><h3>Posting Limits</h3><p>Daily plan enforcement and post registration through backend APIs.</p><div class="tool-status">Live</div></div>
+      <div class="tool-tile" data-module-group="pipeline"><h3>CRM</h3><p>Lead memory, pipeline tracking, and follow-up visibility for reps and managers.</p><div class="tool-status">Planned</div></div>
+      <div class="tool-tile" data-module-group="pipeline"><h3>Automation</h3><p>Workflow triggers for reminders, stale listing actions, and follow-up execution.</p><div class="tool-status">Planned</div></div>
+      <div class="tool-tile" data-module-group="pipeline"><h3>Mass SMS</h3><p>Outbound campaign engine for inventory, appointments, and reactivation.</p><div class="tool-status">Planned</div></div>
+      <div class="tool-tile" data-module-group="pipeline"><h3>Scheduler</h3><p>Booking, cadence, and timed action control inside one operator flow.</p><div class="tool-status">Planned</div></div>
+      <div class="tool-tile" data-module-group="growth"><h3>Analytics</h3><p>Time saved, efficiency, traction, and revenue-facing opportunity signals.</p><div class="tool-status">Rolling In</div></div>
+      <div class="tool-tile" data-module-group="growth"><h3>Affiliate Center</h3><p>Referral economics, scripts, payout visibility, and partner growth tools.</p><div class="tool-status">Live</div></div>
+      <div class="tool-tile" data-module-group="growth"><h3>AI Content</h3><p>Caption, title, and listing improvement support for faster execution.</p><div class="tool-status">Planned</div></div>
+      <div class="tool-tile" data-module-group="growth"><h3>Market Intelligence</h3><p>VIN-level learning, pricing feedback, and priority recommendations.</p><div class="tool-status">Planned</div></div>
+    </div>
+  </div>
+</section>
 
       <!-- COMPLIANCE -->
       <section id="compliance" class="dashboard-section">
@@ -1611,77 +1450,75 @@
         </div>
       </section>
 
-      <!-- TOOLS -->
-      <section id="tools" class="dashboard-section">
-        <div class="card">
-          <h2>Tools & Modules</h2>
-          <p>
-            The extension reads dealer onboarding settings here, then scans the correct dealer site,
-            enforces posting limits, and syncs profile/compliance data into the posting flow.
-          </p>
-
-          <div class="tools-grid">
-            <div class="tool-tile">
-              <h3>Vehicle Poster</h3>
-              <p>Inventory scan, queue build, Marketplace fill, and posting engine.</p>
-              <div class="tool-status">Beta Core</div>
-            </div>
-
-            <div class="tool-tile">
-              <h3>Dealer Scanner Routing</h3>
-              <p>Dealer website, inventory URL, and scanner type stored per account.</p>
-              <div class="tool-status">In Progress</div>
-            </div>
-
-            <div class="tool-tile">
-              <h3>Compliance Engine</h3>
-              <p>AB / BC output blocks powered by saved profile data.</p>
-              <div class="tool-status">In Progress</div>
-            </div>
-
-            <div class="tool-tile">
-              <h3>Posting Limits</h3>
-              <p>Daily plan enforcement and post registration through backend APIs.</p>
-              <div class="tool-status">In Progress</div>
-            </div>
-
-            <div class="tool-tile">
-              <h3>Queue Manager</h3>
-              <p>Queue integrity, next vehicle loading, and post-flow stability.</p>
-              <div class="tool-status">In Progress</div>
-            </div>
-
-            <div class="tool-tile">
-              <h3>Analytics Layer</h3>
-              <p>Listing memory, card views, performance tracking, and future attention flags.</p>
-              <div class="tool-status">Rolling In</div>
-            </div>
+      
+<!-- ANALYTICS -->
+<section id="tools" class="dashboard-section">
+  <div class="grid-4">
+    <div class="card"><div class="stat-label">Time Saved Today</div><div class="stat-value" id="analyticsTimeSavedToday">0 min</div><div class="stat-sub">Estimated posting time reclaimed today</div></div>
+    <div class="card"><div class="stat-label">Time Saved This Week</div><div class="stat-value" id="analyticsTimeSavedWeek">0 min</div><div class="stat-sub">Estimated operator time reclaimed this week</div></div>
+    <div class="card"><div class="stat-label">Estimated Weekly Value</div><div class="stat-value" id="analyticsEstimatedValue">$0</div><div class="stat-sub">Founder-stage ROI estimate from time saved</div></div>
+    <div class="card"><div class="stat-label">Execution Efficiency</div><div class="stat-value" id="analyticsEfficiencyScore">0%</div><div class="stat-sub">Posts used vs available capacity</div></div>
+  </div>
+  <div class="analytics-shell">
+    <div class="card">
+      <div class="graph-wrap">
+        <div class="graph-meta">
+          <div>
+            <div class="graph-title">7-Day Activity</div>
+            <div class="subtext" style="margin-top:4px;">Posts and traction trend</div>
+          </div>
+          <div class="graph-legend">
+            <span><span class="legend-dot gold"></span>Posts</span>
+            <span><span class="legend-dot soft"></span>Views</span>
           </div>
         </div>
-      </section>
+        <div class="chart-canvas-wrap"><canvas id="activityChart"></canvas></div>
+        <div id="graphXLabels" class="graph-xlabels"></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="section-head"><h2>Most Popular</h2><div class="subtext">Messages &gt; Views &gt; Recency</div></div>
+      <div id="topListings" class="top-list"><div class="listing-empty">No listings yet.</div></div>
+    </div>
+  </div>
+  <div class="grid-3">
+    <div class="card"><div class="section-head"><h2>Needs Attention</h2><div class="subtext">Critical items that need intervention</div></div><div id="alertsPanel" class="list-block"><div>Loading alerts...</div></div></div>
+    <div class="card"><div class="section-head"><h2>Today</h2><div class="subtext">Clean snapshot of today’s operating performance</div></div><div id="dailyScorecardPanel" class="list-block"><div>Loading scorecard...</div></div></div>
+    <div class="card"><div class="section-head"><h2>Weekly Snapshot</h2><div class="subtext">7-day movement and trend context</div></div><div id="weeklyScorecardPanel" class="list-block"><div>Loading scorecard...</div></div></div>
+  </div>
+  <div class="grid-2">
+    <div class="card"><div class="section-head"><h2>Intelligence</h2><div class="subtext">Prediction, pricing, and content opportunity signals</div></div><div id="intelligencePanel" class="list-block"><div>Loading intelligence...</div></div></div>
+    <div class="card"><div class="section-head"><h2>Opportunities</h2><div class="subtext">Segments and listings with upside potential</div></div><div id="opportunitiesPanel" class="list-block"><div>Loading opportunities...</div></div></div>
+  </div>
+  <div class="grid-3">
+    <div class="card"><div class="section-head"><h2>System Health</h2><div class="subtext">Data freshness and lifecycle visibility</div></div><div id="analyticsSystemHealth" class="list-block"><div>Loading system health...</div></div></div>
+    <div class="card"><div class="section-head"><h2>Growth Signals</h2><div class="subtext">What is improving and where to lean in</div></div><div id="analyticsGrowthSignals" class="list-block"><div>Loading growth signals...</div></div></div>
+    <div class="card"><div class="section-head"><h2>Opportunity Signals</h2><div class="subtext">Where time saved can convert into revenue actions</div></div><div id="analyticsOpportunitySignals" class="list-block"><div>Loading opportunity signals...</div></div></div>
+  </div>
+</section>
+
     </main>
   </div>
 
-  <script src="/js/supabase-client.js"></script>
-  <script src="/dashboard.js"></script>
 
-  <div id="dashboardReadModal" class="modal-overlay" aria-hidden="true">
-    <div class="modal-card">
-      <div class="modal-head">
-        <div>
-          <div id="dashboardReadModalEyebrow" class="eyebrow">Read in dashboard</div>
-          <div id="dashboardReadModalTitle" class="modal-title">Dashboard Copy</div>
-          <div id="dashboardReadModalSubtitle" class="subtext">Read here first. Copy only when needed.</div>
-        </div>
-        <button id="dashboardReadModalCloseTop" class="action-btn" type="button">Close</button>
+<div id="readCopyModal" class="modal-backdrop" aria-hidden="true">
+  <div class="modal-card">
+    <div class="modal-head">
+      <div>
+        <div class="module-group-label" id="readCopyModalEyebrow">Dashboard Script</div>
+        <h2 id="readCopyModalTitle" style="margin-top:6px;">Read in Dashboard</h2>
+        <div class="subtext" id="readCopyModalSubtitle">Read this in the dashboard first, then copy only if needed.</div>
       </div>
-      <div id="dashboardReadModalBody" class="modal-body"></div>
-      <div class="modal-actions">
-        <button id="dashboardReadModalCopyBtn" class="btn-secondary" type="button">Copy Text</button>
-        <button id="dashboardReadModalCloseBtn" class="btn-primary" type="button">Done</button>
-      </div>
+      <button id="closeReadCopyModalBtn" class="action-btn" type="button">Close</button>
+    </div>
+    <div id="readCopyModalBody" class="modal-copy"></div>
+    <div class="action-grid" style="margin-top:16px;">
+      <button id="copyReadCopyModalBtn" class="action-btn" type="button">Copy Text</button>
     </div>
   </div>
+</div>
 
+<script src="/js/supabase-client.js"></script>
+  <script src="/dashboard.js"></script>
 </body>
 </html>
