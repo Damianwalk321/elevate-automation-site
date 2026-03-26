@@ -1,4 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
+import { getVerifiedRequestUser, getTrustedIdentity } from "./_shared/auth.js";
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -70,9 +71,11 @@ export default async function handler(req, res) {
     }
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+    const verifiedUser = await getVerifiedRequestUser(req);
 
     if (req.method === "GET") {
-      const id = clean(req.query?.id);
+      const identity = getTrustedIdentity({ verifiedUser, query: req.query || {} });
+      const id = clean(identity.id || req.query?.id);
       if (!id) return sendJson(res, 400, { error: "Missing profile id" });
 
       const { data, error } = await supabase.from("profiles").select("*").eq("id", id).maybeSingle();
@@ -84,7 +87,7 @@ export default async function handler(req, res) {
       return sendJson(res, 200, {
         ok: true,
         data: data || null,
-        meta: { completion: buildCompletion(data || {}) }
+        meta: { completion: buildCompletion(data || {}), verified_request: Boolean(verifiedUser?.id) }
       });
     }
 
@@ -92,8 +95,9 @@ export default async function handler(req, res) {
       const body = typeof req.body === "string" ? JSON.parse(req.body || "{}") : (req.body || {});
       const nowIso = new Date().toISOString();
 
-      const id = clean(body.id);
-      const email = lower(body.email);
+      const identity = getTrustedIdentity({ verifiedUser, body });
+      const id = clean(identity.id || body.id);
+      const email = lower(identity.email || body.email);
       const payload = {
         id,
         email,
@@ -138,7 +142,7 @@ export default async function handler(req, res) {
       return sendJson(res, 200, {
         ok: true,
         data: result,
-        meta: { completion: buildCompletion(result || payload) }
+        meta: { completion: buildCompletion(result || payload), verified_request: Boolean(verifiedUser?.id) }
       });
     }
 
