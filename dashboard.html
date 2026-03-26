@@ -989,6 +989,36 @@
           </div>
         </div>
 
+        <div class="grid-2" style="margin-bottom:20px;">
+          <div class="card">
+            <div class="section-head">
+              <div>
+                <h2>Listing Action Center</h2>
+                <div class="subtext">Revenue-priority buckets for what to do now, today, or later.</div>
+              </div>
+            </div>
+            <div class="grid-4" style="margin-bottom:0;">
+              <div class="sidebar-card"><div class="sidebar-card-label">Do Now</div><div class="sidebar-card-value" id="actionBucketDoNow">0</div></div>
+              <div class="sidebar-card"><div class="sidebar-card-label">Do Today</div><div class="sidebar-card-value" id="actionBucketDoToday">0</div></div>
+              <div class="sidebar-card"><div class="sidebar-card-label">Watch</div><div class="sidebar-card-value" id="actionBucketWatch">0</div></div>
+              <div class="sidebar-card"><div class="sidebar-card-label">Low Priority</div><div class="sidebar-card-value" id="actionBucketLow">0</div></div>
+            </div>
+            <div id="actionBucketSummary" class="status-line" style="margin-top:14px;">Loading action buckets...</div>
+          </div>
+
+          <div class="card">
+            <div class="section-head">
+              <div>
+                <h2>Revenue Intelligence</h2>
+                <div class="subtext">Time saved, missed opportunity, and next money moves.</div>
+              </div>
+            </div>
+            <div class="list-block" id="revenueIntelligencePanel">
+              <div>Loading intelligence...</div>
+            </div>
+          </div>
+        </div>
+
         <div class="grid-4">
           <div class="card kpi-card">
             <div class="stat-label">Active Listings</div>
@@ -1322,6 +1352,17 @@
       <div class="tool-tile" data-module-group="growth" data-module-state="beta"><h3>AI Content</h3><p>Caption, title, and listing improvement support for faster execution.</p><div class="tool-status beta">Founder Beta</div></div>
       <div class="tool-tile" data-module-group="growth" data-module-state="locked"><h3>Market Intelligence</h3><p>VIN-level learning, pricing feedback, and priority recommendations.</p><div class="tool-status locked">Locked</div></div>
     </div>
+    <div class="card" style="margin-top:20px;">
+      <div class="section-head">
+        <div>
+          <h2>Module Detail</h2>
+          <div class="subtext">Click a module tile to see why it matters and where it fits.</div>
+        </div>
+      </div>
+      <div id="toolModuleDetailPanel" class="list-block">
+        <div>Select a module to view more detail.</div>
+      </div>
+    </div>
   </div>
 </section>
 
@@ -1495,6 +1536,24 @@
     </main>
   </div>
 
+
+<div id="listingDetailModal" class="modal-backdrop" aria-hidden="true">
+  <div class="modal-card">
+    <div class="section-head">
+      <div>
+        <div class="module-group-label">Listing Control</div>
+        <h2 id="listingDetailTitle" style="margin-top:6px;">Listing Detail</h2>
+        <div class="subtext" id="listingDetailSubtitle">Health, pricing, and next best action.</div>
+      </div>
+      <button id="closeListingDetailModalBtn" class="action-btn" type="button">Close</button>
+    </div>
+    <div id="listingDetailBody" class="modal-copy"></div>
+    <div class="action-grid" style="margin-top:14px;">
+      <button id="listingDetailPrimaryBtn" class="btn-primary" type="button">Open Source</button>
+      <button id="listingDetailSecondaryBtn" class="action-btn" type="button">Copy Summary</button>
+    </div>
+  </div>
+</div>
 
 <div id="readCopyModal" class="modal-backdrop" aria-hidden="true">
   <div class="modal-card">
