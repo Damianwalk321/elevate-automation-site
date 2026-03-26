@@ -1817,9 +1817,13 @@ async function loadProfile(userId) {
       cache: "no-store"
     });
 
-    const result = await response.json();
+    const result = await response.json().catch(() => ({}));
 
-    if (!response.ok || !result.data) {
+    if (!response.ok) {
+      throw new Error(cleanText(result?.error || "Failed to load profile."));
+    }
+
+    if (!result?.data) {
       currentProfile = null;
       renderProfileSummary(null);
       updateSetupStates(null, currentNormalizedSession);
@@ -2357,12 +2361,14 @@ function renderSetupSnapshot() {
   setTextByIdForAll("snapshotQueuedVehicles", String(numberOrZero(dashboardSummary?.queue_count)));
   setTextByIdForAll("snapshotLifecycleUpdatedAt", formatShortDate(dashboardSummary?.lifecycle_updated_at || ""));
 
-  const summaryBits = [
-    setup.salesperson_name_present ? null : "salesperson name missing",
-    setup.dealership_name_present ? null : "dealership missing",
-    setup.inventory_url_present ? null : "inventory URL missing",
-    setup.compliance_mode_present ? null : "compliance mode missing"
-  ].filter(Boolean);
+  const summaryBits = Array.isArray(setup.setup_gaps) && setup.setup_gaps.length
+    ? setup.setup_gaps
+    : [
+        setup.salesperson_name_present ? null : "salesperson name missing",
+        setup.dealership_name_present ? null : "dealership missing",
+        setup.inventory_url_present ? null : "inventory URL missing",
+        setup.compliance_mode_present ? null : "compliance mode missing"
+      ].filter(Boolean);
 
   setStatus("snapshotSetupSummary", summaryBits.length ? `Setup gaps: ${summaryBits.join(" • ")}` : "Account setup looks complete for beta use.");
 }
