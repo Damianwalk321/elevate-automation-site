@@ -18,6 +18,19 @@
   }
 
 
+
+
+  async function getAccessToken() {
+    try {
+      const supabase = getSupabaseClient();
+      const sessionResult = await withTimeout(supabase.auth.getSession(), 8000, "Get session for token");
+      return sessionResult?.data?.session?.access_token || "";
+    } catch (error) {
+      console.warn("Could not read access token:", error);
+      return "";
+    }
+  }
+
   function getStoredReferralData() {
     try {
       return {
@@ -34,10 +47,12 @@
     if (!user || !user.id || !user.email) return;
 
     try {
+      const token = await getAccessToken();
       const response = await fetch("/api/sync-user", {
         method: "POST",
         headers: {
-          "Content-Type": "application/json"
+          "Content-Type": "application/json",
+          ...(token ? { "Authorization": `Bearer ${token}` } : {})
         },
         body: JSON.stringify({
           id: user.id,
