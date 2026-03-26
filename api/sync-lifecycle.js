@@ -59,17 +59,6 @@ function normalizeLifecycleStatus(value, reviewBucket = "") {
 function nowIso() {
   return new Date().toISOString();
 }
-function normalizeListingUrl(value) {
-  const raw = clean(value);
-  if (!raw) return "";
-  try {
-    const url = new URL(raw);
-    ["fbclid", "utm_source", "utm_medium", "utm_campaign", "utm_term", "utm_content", "ref", "tracking", "tracking_id"].forEach((key) => url.searchParams.delete(key));
-    return `${url.origin}${url.pathname.replace(/\/$/, "")}${url.search ? `?${url.searchParams.toString()}` : ""}`.toLowerCase();
-  } catch {
-    return raw.replace(/[?#].*$/, "").replace(/\/$/, "").toLowerCase();
-  }
-}
 
 function dayKey() {
   return nowIso().slice(0, 10);
@@ -77,6 +66,32 @@ function dayKey() {
 
 function monthKey() {
   return nowIso().slice(0, 7);
+}
+
+function normalizeStatus(value) {
+  const status = clean(value).toLowerCase();
+  if (['sold','deleted','inactive','failed','stale'].includes(status)) return status;
+  if (['posted','active','live','approved','relisted','promote_now'].includes(status)) return 'active';
+  return status || 'active';
+}
+function resolveLifecycleConflict({ row = {}, existing = null, seenNow = true }) {
+  const rawStatus = normalizeStatus(row.status || existing?.status);
+  const rawBucket = normalizeReviewBucket(row.review_bucket || existing?.review_bucket || '');
+  let rawLifecycle = clean(row.lifecycle_status || existing?.lifecycle_status || '').toLowerCase();
+  if (!rawLifecycle) rawLifecycle = normalizeLifecycleStatus('', rawBucket);
+  const explicitReview = rawLifecycle === 'review_price_update' || rawLifecycle === 'review_new' || ['pricechanges','newvehicles'].includes(rawBucket);
+
+  if (rawStatus === 'sold') return { status: 'sold', lifecycle_status: 'sold', review_bucket: '' };
+  if (['deleted','inactive','failed'].includes(rawStatus)) return { status: rawStatus, lifecycle_status: rawStatus, review_bucket: '' };
+  if (!seenNow) return { status: 'stale', lifecycle_status: 'review_delete', review_bucket: 'removedvehicles' };
+  if (explicitReview) {
+    return {
+      status: 'active',
+      lifecycle_status: rawLifecycle === 'review_new' ? 'review_new' : 'review_price_update',
+      review_bucket: rawBucket === 'newvehicles' ? 'newvehicles' : 'pricechanges'
+    };
+  }
+  return { status: 'active', lifecycle_status: 'active', review_bucket: '' };
 }
 function sameDay(a, b) {
   return String(a || "").slice(0, 10) === String(b || "").slice(0, 10);
@@ -134,10 +149,10 @@ async function resolveUserId(supabase, userId, email) {
 function buildIdentityCandidates(row) {
   const candidates = [];
   const id = clean(row.id || "");
-  const marketplace = clean(row.marketplace_listing_id || row.listing_id || "");
+  const marketplace = clean(row.marketplace_listing_id || "");
   const vin = clean(row.vin || "");
-  const stock = clean(row.stock_number || row.stock || "");
-  const source = normalizeListingUrl(row.source_url || row.listing_url || "");
+  const stock = clean(row.stock_number || "");
+  const source = clean(row.source_url || "");
 
   if (id) candidates.push({ column: "id", value: id });
   if (marketplace) candidates.push({ column: "marketplace_listing_id", value: marketplace });
@@ -148,69 +163,21 @@ function buildIdentityCandidates(row) {
   return candidates;
 }
 
-function identityKeyFromRow(row) {
-  const candidates = buildIdentityCandidates(row);
-  if (!candidates.length) return "";
-  const first = candidates[0];
-  return `${first.column}:${clean(first.value || "").toLowerCase()}`;
-}
-
-function dedupeIncomingRows(rows) {
-  const seen = new Map();
-  for (const raw of Array.isArray(rows) ? rows : []) {
-    const key = identityKeyFromRow(raw) || `fallback:${clean(raw.title || "")}:${clean(raw.price || "")}`;
-    const existing = seen.get(key);
-    if (!existing) {
-      seen.set(key, raw);
-      continue;
-    }
-    const existingUpdated = new Date(existing.updated_at || existing.last_seen_at || existing.posted_at || 0).getTime();
-    const incomingUpdated = new Date(raw.updated_at || raw.last_seen_at || raw.posted_at || 0).getTime();
-    if (incomingUpdated >= existingUpdated) {
-      seen.set(key, { ...existing, ...raw });
-    }
-  }
-  return Array.from(seen.values());
-}
-
 function buildListingId(row) {
   return (
     clean(row.id) ||
-    clean(row.marketplace_listing_id || row.listing_id) ||
+    clean(row.marketplace_listing_id) ||
     clean(row.vin) ||
-    clean(row.stock_number || row.stock) ||
-    normalizeListingUrl(row.source_url || row.listing_url) ||
+    clean(row.stock_number) ||
+    clean(row.source_url) ||
     `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
   );
 }
 
+
 function buildListingRow(row, resolved, existing = null, options = {}) {
-  const explicitReviewBucket = normalizeReviewBucket(row.review_bucket || "");
-  const explicitLifecycle = clean(row.lifecycle_status || "").toLowerCase();
-  const existingReviewBucket = normalizeReviewBucket(existing?.review_bucket || "");
-  const existingLifecycle = clean(existing?.lifecycle_status || "").toLowerCase();
-
-  let reviewBucket = explicitReviewBucket;
-  let lifecycleStatus = explicitLifecycle;
-
-  if (!reviewBucket && !lifecycleStatus && !existing) {
-    reviewBucket = "newvehicles";
-    lifecycleStatus = "review_new";
-  }
-
-  if (!reviewBucket && !lifecycleStatus && existing && priceChanged(existing?.price, row.price)) {
-    reviewBucket = "pricechanges";
-    lifecycleStatus = "review_price_update";
-  }
-
-  if (!reviewBucket) reviewBucket = existingReviewBucket;
-  if (!lifecycleStatus) lifecycleStatus = existingLifecycle;
-
-  reviewBucket = normalizeReviewBucket(reviewBucket);
-  lifecycleStatus = normalizeLifecycleStatus(lifecycleStatus, reviewBucket);
-
-  const nextStatus = clean(row.status || existing?.status || "active") || "active";
-  const postedAt = clean(row.posted_at || existing?.posted_at) || nowIso();
+  const conflict = resolveLifecycleConflict({ row, existing, seenNow: options.seenNow !== false });
+  const postedAt = clean(row.posted_at || existing?.posted_at) || (conflict.status === 'active' ? nowIso() : clean(existing?.posted_at) || nowIso());
 
   return {
     id: clean(existing?.id || row.id || buildListingId(row)),
@@ -220,7 +187,7 @@ function buildListingRow(row, resolved, existing = null, options = {}) {
     marketplace_listing_id: clean(row.marketplace_listing_id || existing?.marketplace_listing_id),
     vin: clean(row.vin || existing?.vin),
     stock_number: clean(row.stock_number || existing?.stock_number),
-    source_url: normalizeListingUrl(row.source_url || existing?.source_url),
+    source_url: clean(row.source_url || existing?.source_url),
     image_url: clean(row.image_url || existing?.image_url),
     year: integerOrZero(row.year || existing?.year),
     make: clean(row.make || existing?.make),
@@ -232,13 +199,13 @@ function buildListingRow(row, resolved, existing = null, options = {}) {
     fuel_type: clean(row.fuel_type || existing?.fuel_type),
     mileage: integerOrZero(row.mileage || existing?.mileage),
     price: numberOrZero(row.price || existing?.price),
-    title: clean(row.title || existing?.title) || [row.year || existing?.year, row.make || existing?.make, row.model || existing?.model, row.trim || existing?.trim].map(clean).filter(Boolean).join(" "),
+    title: clean(row.title || existing?.title) || [row.year || existing?.year, row.make || existing?.make, row.model || existing?.model, row.trim || existing?.trim].map(clean).filter(Boolean).join(' '),
     location: clean(row.location || existing?.location),
-    status: nextStatus,
-    lifecycle_status: lifecycleStatus,
-    review_bucket: reviewBucket,
-    views_count: Math.max(integerOrZero(existing?.views_count), integerOrZero(row.views_count)),
-    messages_count: Math.max(integerOrZero(existing?.messages_count), integerOrZero(row.messages_count)),
+    status: conflict.status,
+    lifecycle_status: conflict.lifecycle_status,
+    review_bucket: conflict.review_bucket,
+    views_count: Math.max(integerOrZero(row.views_count ?? 0), integerOrZero(existing?.views_count ?? 0)),
+    messages_count: Math.max(integerOrZero(row.messages_count ?? 0), integerOrZero(existing?.messages_count ?? 0)),
     posted_at: postedAt,
     updated_at: nowIso(),
     last_seen_at: nowIso()
@@ -281,11 +248,11 @@ async function upsertPostingUsageFromPayload(supabase, resolved, payload) {
     user_id: clean(resolved.user_id) || null,
     email: lower(resolved.email) || null,
     date_key: today,
-    date: today,
     month_key: month,
     posts_used: postsToday,
     posts_today: postsToday,
     used_today: postsToday,
+    date: today,
     updated_at: nowIso()
   };
 
@@ -359,14 +326,13 @@ async function markMissingListingsForReview(supabase, resolved, seenRows, payloa
   for (const row of (Array.isArray(data) ? data : [])) {
     const tokens = identityTokens(row);
     const isSeen = tokens.some((token) => seen.has(token));
-    const currentStatus = clean(row.status || "").toLowerCase();
-    const currentLifecycle = clean(row.lifecycle_status || "").toLowerCase();
-    if (isSeen || ["sold", "deleted", "inactive"].includes(currentStatus)) continue;
+    const currentStatus = clean(row.status || '').toLowerCase();
+    if (isSeen || ['sold', 'deleted', 'inactive'].includes(currentStatus)) continue;
 
     const updatePayload = {
-      status: "stale",
-      lifecycle_status: "review_delete",
-      review_bucket: "removedvehicles",
+      status: 'stale',
+      lifecycle_status: 'review_delete',
+      review_bucket: 'removedvehicles',
       updated_at: nowIso()
     };
 
@@ -383,6 +349,35 @@ async function markMissingListingsForReview(supabase, resolved, seenRows, payloa
   }
 
   return { stale_marked: staleMarked };
+}
+
+
+function identityKeyFromRow(row = {}) {
+  return [
+    clean(row.marketplace_listing_id),
+    clean(row.id),
+    clean(row.vin),
+    clean(row.stock_number),
+    clean(row.source_url).toLowerCase()
+  ].filter(Boolean)[0] || '';
+}
+function dedupeIncomingRows(rows = []) {
+  const map = new Map();
+  for (const raw of rows) {
+    const key = identityKeyFromRow(raw) || `${clean(raw.year)}|${clean(raw.make)}|${clean(raw.model)}|${clean(raw.price)}`;
+    const existing = map.get(key);
+    if (!existing) {
+      map.set(key, { ...raw });
+      continue;
+    }
+    map.set(key, {
+      ...existing,
+      ...raw,
+      views_count: Math.max(integerOrZero(existing.views_count), integerOrZero(raw.views_count)),
+      messages_count: Math.max(integerOrZero(existing.messages_count), integerOrZero(raw.messages_count))
+    });
+  }
+  return [...map.values()];
 }
 
 export default async function handler(req, res) {
