@@ -2,6 +2,7 @@
 import { createClient } from "@supabase/supabase-js";
 import { resolveAccountAccess } from "./_shared/account-access.js";
 import { getVerifiedRequestUser } from "./_shared/auth.js";
+import { getCreditSummary, listRecentCreditEvents, formatCreditEventLabel } from "./_shared/credits.js";
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -837,6 +838,16 @@ export default async function handler(req, res) {
     const accessGranted = Boolean(forcedAccess || snapshot.access_granted === true || snapshot.active === true || subscriptionRow?.active === true || isActiveStatus(subscriptionRow?.status) || (clean(planValue) && dailyLimit > 0));
     const effectiveStatus = accessGranted ? 'active' : clean(subscriptionRow?.status || snapshot.status || 'inactive').toLowerCase();
     const setupStatus = buildSetupStatus(user, profileRow);
+    const creditsSummary = await getCreditSummary(supabase, { userId: finalUserId, email: finalEmail });
+    const recentCreditEventsRaw = await listRecentCreditEvents(supabase, { userId: finalUserId, email: finalEmail, limit: 6 });
+    const recentCreditEvents = recentCreditEventsRaw.map((event) => ({
+      type: event.type,
+      label: formatCreditEventLabel(event.type),
+      amount: safeNumber(event.amount, 0),
+      created_at: event.created_at,
+      meta: event.meta || {},
+      dedupe_key: event.dedupe_key || ''
+    }));
     const segmentIntel = buildSegmentPerformance(rows);
     const alerts = buildAlerts({ ...computed, total_views: computed.total_views, total_messages: computed.total_messages });
     const scorecards = buildScorecards(computed, rows);
@@ -1043,6 +1054,15 @@ export default async function handler(req, res) {
           estimated_minutes_saved_week: Math.max(safeNumber(scorecards?.weekly?.posts_7d, usageToday) * 18, usageToday * 18),
           estimated_manual_posts_avoided: usageToday,
           estimated_value_saved: Number((((usageToday * 18) / 60) * 30).toFixed(2))
+        },
+        credits: {
+          balance: safeNumber(creditsSummary.balance, 0),
+          lifetime_earned: safeNumber(creditsSummary.lifetime_earned, 0),
+          lifetime_spent: safeNumber(creditsSummary.lifetime_spent, 0),
+          recent_earned: safeNumber(creditsSummary.recent_earned, 0),
+          updated_at: creditsSummary.updated_at || null,
+          schema_ready: Boolean(creditsSummary.schema_ready),
+          recent_events: recentCreditEvents
         },
         activation: {
           score: Math.round((activationCompleted / Math.max(activationTotal, 1)) * 100),
