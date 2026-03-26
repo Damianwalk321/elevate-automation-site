@@ -7,6 +7,106 @@ function cleanText(value) {
   return String(value).trim();
 }
 
+
+
+function getPlanAccessSnapshot() {
+  const summary = dashboardSummary || {};
+  const snapshot = summary.plan_access || {};
+  const sessionPlan = currentNormalizedSession?.subscription?.plan_access || {};
+  const planLabel = cleanText(snapshot.plan_label || sessionPlan.plan_label || summary.account_snapshot?.plan || currentNormalizedSession?.subscription?.plan || 'Founder Beta') || 'Founder Beta';
+  const normalized = planLabel.toLowerCase();
+  const isPro = typeof snapshot.is_pro === 'boolean' ? snapshot.is_pro : (typeof sessionPlan.is_pro === 'boolean' ? sessionPlan.is_pro : normalized.includes('pro'));
+  return {
+    plan_label: planLabel,
+    is_pro: isPro,
+    posting_limit: numberOrZero(snapshot.posting_limit || sessionPlan.posting_limit || summary.account_snapshot?.posting_limit),
+    upgrade_target: cleanText(snapshot.upgrade_target || (isPro ? 'Pro' : (normalized.includes('founder') ? 'Founder Pro' : 'Pro')))
+  };
+}
+
+function openPremiumPreviewModal(context = 'overview') {
+  const preview = dashboardSummary?.premium_preview || {};
+  const prompts = Array.isArray(dashboardSummary?.upgrade_prompts) ? dashboardSummary.upgrade_prompts : [];
+  const matching = prompts.filter((item) => !context || item.placement === context);
+  const promptCopy = matching.length
+    ? matching.map((item) => `• ${cleanText(item.title)} — ${cleanText(item.copy)}`).join('\n\n')
+    : 'Upgrade prompts will appear here as usage and traction build.';
+  const bullets = Array.isArray(preview.bullets) ? preview.bullets : [];
+  const body = [cleanText(preview.subheadline), bullets.length ? bullets.map((item) => `• ${item}`).join('\n') : '', '', promptCopy].filter(Boolean).join('\n\n');
+  openReadCopyModal({
+    title: cleanText(preview.headline || 'Premium Preview'),
+    subtitle: 'Read the upgrade path inside the dashboard first. Copy only if you want to reuse the positioning elsewhere.',
+    eyebrow: 'Monetization Layer',
+    body
+  });
+}
+
+function renderMonetizationPanels() {
+  const summary = dashboardSummary || {};
+  const planAccess = getPlanAccessSnapshot();
+  const prompts = Array.isArray(summary.upgrade_prompts) ? summary.upgrade_prompts : [];
+  const reasons = Array.isArray(summary.upgrade_reasons) ? summary.upgrade_reasons : [];
+  const lockedModules = Array.isArray(summary.locked_modules) ? summary.locked_modules : [];
+  const premiumPreview = summary.premium_preview || {};
+
+  const renderPromptBlock = (placement) => {
+    const matched = prompts.filter((item) => item.placement === placement);
+    if (!matched.length) {
+      return `<div><strong>${escapeHtml(planAccess.plan_label)}</strong> ${planAccess.is_pro ? 'is already active.' : 'currently includes the core dashboard and posting stack.'}</div>`;
+    }
+    return matched.map((item) => `
+      <div>
+        <div class="mini">${escapeHtml(item.title || 'Upgrade Trigger')}</div>
+        <div>${escapeHtml(item.copy || '')}</div>
+      </div>
+    `).join('');
+  };
+
+  const overviewPanel = document.getElementById('overviewUpgradePanel');
+  if (overviewPanel) {
+    overviewPanel.innerHTML = `${renderPromptBlock('overview')}
+      <div class="upgrade-reason-list">${reasons.slice(0, 2).map((item) => `<div>• ${escapeHtml(cleanText(item))}</div>`).join('') || '<div>• Keep using the core workflow until the next upgrade trigger appears.</div>'}</div>`;
+  }
+
+  const analyticsPanel = document.getElementById('analyticsUpgradePanel');
+  if (analyticsPanel) {
+    analyticsPanel.innerHTML = `${renderPromptBlock('analytics')}
+      <div><strong>${escapeHtml(cleanText(premiumPreview.headline || 'Premium Preview'))}</strong></div>
+      <div>${Array.isArray(premiumPreview.bullets) ? premiumPreview.bullets.map((item) => `• ${escapeHtml(cleanText(item))}`).join('<br/>') : ''}</div>`;
+  }
+
+  const toolsPanel = document.getElementById('toolsUpgradePanel');
+  if (toolsPanel) {
+    const locked = lockedModules.filter((item) => !item.unlocked).slice(0, 4);
+    toolsPanel.innerHTML = `${renderPromptBlock('tools')}
+      <div class="upgrade-reason-list">${locked.length ? locked.map((item) => `<div>• <strong>${escapeHtml(item.title)}</strong> — ${escapeHtml(cleanText(item.teaser || item.reason || 'Premium module'))}</div>`).join('') : '<div>• Premium tools are already active on this plan.</div>'}</div>`;
+  }
+
+  const bindButton = (id, placement) => {
+    const btn = document.getElementById(id);
+    if (!btn || btn.dataset.boundUpgrade === 'true') return;
+    btn.dataset.boundUpgrade = 'true';
+    btn.addEventListener('click', () => openPremiumPreviewModal(placement));
+  };
+  bindButton('overviewUpgradeBtn', 'overview');
+  bindButton('analyticsUpgradeBtn', 'analytics');
+  bindButton('toolsUpgradeBtn', 'tools');
+
+  document.querySelectorAll('.tool-tile').forEach((tile) => {
+    const requiredPlan = cleanText(tile.getAttribute('data-required-plan') || '').toLowerCase();
+    const isLocked = requiredPlan === 'pro' && !planAccess.is_pro;
+    tile.classList.toggle('is-locked-plan', isLocked);
+    const statusEl = tile.querySelector('.tool-status');
+    if (statusEl && requiredPlan === 'pro') {
+      statusEl.className = `tool-status ${planAccess.is_pro ? 'live' : 'pro'}`;
+      statusEl.textContent = planAccess.is_pro ? 'Live Now' : 'Pro';
+    }
+    if (isLocked) {
+      tile.setAttribute('title', `${tile.querySelector('h3')?.textContent || 'Module'} unlocks with ${planAccess.upgrade_target}.`);
+    }
+  });
+}
+
 function getActionLabel(actionType) {
   switch (clean(actionType).toLowerCase()) {
     case "promote_now": return "Promote";
@@ -260,6 +360,10 @@ const toolStateFilter = document.getElementById('toolStateFilter');
 if (toolStateFilter) toolStateFilter.addEventListener('change', applyToolModuleFilters);
 document.querySelectorAll('.tool-tile').forEach((tile) => {
   tile.addEventListener('click', () => {
+    const requiredPlan = cleanText(tile.getAttribute('data-required-plan') || '').toLowerCase();
+    if (requiredPlan === 'pro' && !getPlanAccessSnapshot().is_pro) {
+      openPremiumPreviewModal('tools');
+    }
     selectedToolModule = {
       title: cleanText(tile.querySelector('h3')?.textContent || 'Module'),
       description: cleanText(tile.querySelector('p')?.textContent || ''),
@@ -853,13 +957,13 @@ function renderToolModuleDetail() {
     group: 'core',
     state: 'live'
   };
-  const stateLabel = module.state === 'live' ? 'Live Now' : module.state === 'beta' ? 'Founder Beta' : module.state === 'planned' ? 'Coming Soon' : 'Locked';
+  const stateLabel = module.state === 'live' ? 'Live Now' : module.state === 'beta' ? 'Founder Beta' : module.state === 'planned' ? 'Coming Soon' : module.state === 'pro' ? 'Pro' : 'Locked';
   const why = module.group === 'core'
     ? 'This is directly tied to day-one execution and the operator flow.'
     : module.group === 'pipeline'
     ? 'This expands the platform into follow-up, lead handling, and repeatable workflows.'
     : 'This creates retention through insight, growth loops, and portfolio visibility.';
-  panel.innerHTML = `<div><strong>${escapeHtml(module.title)}</strong> <span class="tool-status ${escapeHtml(module.state)}">${escapeHtml(stateLabel)}</span></div><div>${escapeHtml(module.description)}</div><div><strong>Why it matters:</strong> ${escapeHtml(why)}</div><div><strong>When to use:</strong> ${escapeHtml(module.state === 'live' ? 'Use it now inside your current operating flow.' : module.state === 'beta' ? 'Use selectively while it continues to harden.' : module.state === 'planned' ? 'This is part of the near-term expansion roadmap.' : 'This remains reserved until supporting layers are complete.')}</div>`;
+  panel.innerHTML = `<div><strong>${escapeHtml(module.title)}</strong> <span class="tool-status ${escapeHtml(module.state)}">${escapeHtml(stateLabel)}</span></div><div>${escapeHtml(module.description)}</div><div><strong>Why it matters:</strong> ${escapeHtml(why)}</div><div><strong>When to use:</strong> ${escapeHtml(module.state === 'live' ? 'Use it now inside your current operating flow.' : module.state === 'beta' ? 'Use selectively while it continues to harden.' : module.state === 'planned' ? 'This is part of the near-term expansion roadmap.' : module.state === 'pro' ? 'This module becomes available on higher-access plans.' : 'This remains reserved until supporting layers are complete.')}</div>`;
 }
 
 function openListingDetailModal(listingId) {
@@ -958,6 +1062,7 @@ function renderDashboardAnalytics() {
   renderRecentActivity(dashboardListings);
   renderOverviewOperatorPanel();
   renderAnalyticsHub();
+  renderMonetizationPanels();
   drawActivityChart(buildChartSeries());
 }
 
