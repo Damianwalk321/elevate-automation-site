@@ -652,6 +652,162 @@ function buildManagerRecommendations(summary, segmentIntel) {
   if (weakSeg) recommendations.push(`Watch ${weakSeg.key} (${weakSeg.group.replace('_',' ')}) — this segment has the highest weak-listing concentration.`);
   return recommendations.length ? recommendations : ['Portfolio looks healthy today. Keep strong listings live and monitor momentum.'];
 }
+
+
+function buildPlanAccess(accessState = {}) {
+  const planLabel = clean(accessState.plan || 'Founder Beta') || 'Founder Beta';
+  const normalized = planLabel.toLowerCase();
+  const isPro = normalized.includes('pro');
+  const isFounder = normalized.includes('founder') || normalized.includes('beta');
+  return {
+    plan_label: planLabel,
+    plan_key: isPro ? (isFounder ? 'founder_pro' : 'pro') : (isFounder ? 'founder_beta' : 'starter'),
+    is_pro: isPro,
+    is_founder: isFounder,
+    posting_limit: safeNumber(accessState.posting_limit, isPro ? 25 : 5),
+    advanced_analytics: isPro,
+    revenue_intelligence: isPro,
+    advanced_action_center: isPro,
+    premium_tools: isPro,
+    crm: isPro,
+    automation: isPro,
+    mass_sms: isPro,
+    scheduler: isPro,
+    market_intelligence: isPro,
+    ai_content: isPro || isFounder,
+    founder_badge: isFounder,
+    upgrade_target: isPro ? 'Maintain Pro Momentum' : (isFounder ? 'Founder Pro' : 'Pro')
+  };
+}
+
+function buildMonetizationLayer({ planAccess = {}, accessState = {}, queueCount = 0, needsActionCount = 0, reviewQueueCount = 0, staleListings = 0, postsRemaining = 0, usageToday = 0, totalViews = 0, totalMessages = 0 } = {}) {
+  const lockedModules = [
+    {
+      key: 'revenue_intelligence',
+      title: 'Revenue Intelligence',
+      placement: 'analytics',
+      required_plan: 'Pro',
+      unlocked: Boolean(planAccess.revenue_intelligence),
+      teaser: 'See deeper priority scoring, opportunity estimates, and price-review pressure.',
+      reason: 'Unlock deeper monetization signals and stronger operator guidance.'
+    },
+    {
+      key: 'crm',
+      title: 'CRM',
+      placement: 'tools',
+      required_plan: 'Pro',
+      unlocked: Boolean(planAccess.crm),
+      teaser: 'Track lead memory, follow-up stages, and customer movement in one place.',
+      reason: 'Keep pipeline follow-up attached to inventory activity.'
+    },
+    {
+      key: 'automation',
+      title: 'Automation',
+      placement: 'tools',
+      required_plan: 'Pro',
+      unlocked: Boolean(planAccess.automation),
+      teaser: 'Automate reminders, stale listing actions, and follow-up execution.',
+      reason: 'Remove manual admin work from the daily workflow.'
+    },
+    {
+      key: 'mass_sms',
+      title: 'Mass SMS',
+      placement: 'tools',
+      required_plan: 'Pro',
+      unlocked: Boolean(planAccess.mass_sms),
+      teaser: 'Push inventory, appointment, and reactivation campaigns to your audience fast.',
+      reason: 'Scale outbound volume without leaving the platform.'
+    },
+    {
+      key: 'scheduler',
+      title: 'Scheduler',
+      placement: 'tools',
+      required_plan: 'Pro',
+      unlocked: Boolean(planAccess.scheduler),
+      teaser: 'Control bookings, timing windows, and workflow cadence from one place.',
+      reason: 'Keep scheduling and execution in the same operating layer.'
+    },
+    {
+      key: 'market_intelligence',
+      title: 'Market Intelligence',
+      placement: 'tools',
+      required_plan: 'Pro',
+      unlocked: Boolean(planAccess.market_intelligence),
+      teaser: 'See stronger pricing, listing priority, and inventory feedback loops.',
+      reason: 'Turn platform data into market-aware action recommendations.'
+    }
+  ];
+
+  const upgradeReasons = [];
+  if (!planAccess.is_pro && postsRemaining <= 1 && queueCount >= 3) upgradeReasons.push(`You have ${queueCount} queued vehicles with only ${postsRemaining} post${postsRemaining === 1 ? '' : 's'} left today.`);
+  if (!planAccess.is_pro && needsActionCount >= 3) upgradeReasons.push(`There are ${needsActionCount} listings needing action that would benefit from deeper prioritization.`);
+  if (!planAccess.is_pro && reviewQueueCount >= 2) upgradeReasons.push(`You have ${reviewQueueCount} items in review queue where stronger workflow controls would help.`);
+  if (!planAccess.is_pro && staleListings >= 2) upgradeReasons.push(`There are ${staleListings} stale listings that could use automation and deeper intelligence.`);
+  if (!planAccess.is_pro && totalViews >= 25 && totalMessages <= 1) upgradeReasons.push('Traffic is building, but conversion pressure suggests pricing and workflow leverage could help.');
+  if (!upgradeReasons.length) {
+    upgradeReasons.push(planAccess.is_pro
+      ? 'Pro access is active. Keep leaning into advanced tools and deeper analytics.'
+      : 'Upgrade when you want more capacity, stronger analytics, and premium workflow tools.');
+  }
+
+  const upgradePrompts = [];
+  if (!planAccess.is_pro && postsRemaining <= 1) {
+    upgradePrompts.push({
+      id: 'posting_limit',
+      placement: 'overview',
+      tone: 'high',
+      title: 'Increase Daily Output',
+      copy: `You are near today's posting ceiling. ${planAccess.upgrade_target} unlocks 25 posts/day and more room to work the queue.`,
+      cta_label: `Unlock ${planAccess.upgrade_target}`,
+      trigger: 'posting_limit'
+    });
+  }
+  if (!planAccess.is_pro && (needsActionCount >= 2 || reviewQueueCount >= 2 || staleListings >= 2)) {
+    upgradePrompts.push({
+      id: 'analytics_depth',
+      placement: 'analytics',
+      tone: 'medium',
+      title: 'Unlock Deeper Opportunity Signals',
+      copy: 'Advanced analytics adds stronger priority scoring, opportunity pressure, and clearer next actions.',
+      cta_label: `See ${planAccess.upgrade_target}`,
+      trigger: 'analytics_depth'
+    });
+  }
+  if (!planAccess.is_pro) {
+    upgradePrompts.push({
+      id: 'premium_tools',
+      placement: 'tools',
+      tone: 'medium',
+      title: 'Premium Tools Expand the Workflow',
+      copy: 'CRM, Automation, Mass SMS, Scheduler, and Market Intelligence stay visible so you can grow into them when ready.',
+      cta_label: `Upgrade to ${planAccess.upgrade_target}`,
+      trigger: 'premium_tools'
+    });
+  }
+
+  const premiumPreview = {
+    headline: planAccess.is_pro ? 'Pro Access Is Live' : `${planAccess.upgrade_target} unlocks deeper leverage`,
+    subheadline: planAccess.is_pro
+      ? 'Keep leaning into the advanced layer: richer analytics, stronger actioning, and premium workflow tools.'
+      : 'Upgrade to move from basic visibility into deeper operator guidance, stronger analytics, and premium tools.',
+    bullets: planAccess.is_pro
+      ? [
+          '25 posts/day capacity',
+          'Deeper revenue and opportunity analytics',
+          'Premium tools as they roll out inside the dashboard'
+        ]
+      : [
+          '25 posts/day instead of 5',
+          'Advanced analytics and revenue intelligence',
+          'CRM, Automation, Mass SMS, Scheduler, and Market Intelligence visibility'
+        ],
+    cta_label: planAccess.is_pro ? 'Open Billing & Access' : `Upgrade to ${planAccess.upgrade_target}`,
+    cta_target: 'billing'
+  };
+
+  return { lockedModules, upgradeReasons, upgradePrompts, premiumPreview };
+}
+
 export default async function handler(req, res) {
   res.setHeader('Content-Type', 'application/json');
   if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
@@ -761,6 +917,20 @@ export default async function handler(req, res) {
       price_review_candidates: computed.review_price_change_count
     };
     const actionCenterDetails = buildActionCenterDetails(rows);
+    const planAccess = buildPlanAccess(accessState);
+    const monetization = buildMonetizationLayer({
+      planAccess,
+      accessState,
+      queueCount: safeNumber(snapshot.queue_count, 0),
+      needsActionCount: computed.needs_action_count,
+      reviewQueueCount: computed.review_queue_count,
+      staleListings: computed.stale_listings,
+      postsRemaining,
+      usageToday,
+      totalViews: computed.total_views,
+      totalMessages: computed.total_messages
+    });
+
     const recentListings = rows.slice(0, 12).map((row) => ({
       id: row.id,
       title: row.title,
@@ -896,6 +1066,11 @@ export default async function handler(req, res) {
         revenue_intelligence: revenueIntelligence,
         listing_action_summary: listingActionSummary,
         opportunity_signals: opportunitySignals,
+        plan_access: planAccess,
+        locked_modules: monetization.lockedModules,
+        upgrade_reasons: monetization.upgradeReasons,
+        upgrade_prompts: monetization.upgradePrompts,
+        premium_preview: monetization.premiumPreview,
         priority_actions: actionCenterDetails,
         setup_status: setupStatus,
         data_integrity: {
