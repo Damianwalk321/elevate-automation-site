@@ -1,5 +1,6 @@
 
 import { createClient } from "@supabase/supabase-js";
+import { resolveAccountAccess } from "./_shared/account-access.js";
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -613,83 +614,6 @@ function buildManagerRecommendations(summary, segmentIntel) {
   if (weakSeg) recommendations.push(`Watch ${weakSeg.key} (${weakSeg.group.replace('_',' ')}) — this segment has the highest weak-listing concentration.`);
   return recommendations.length ? recommendations : ['Portfolio looks healthy today. Keep strong listings live and monitor momentum.'];
 }
-
-function buildActivationPayload({ setupStatus = {}, accessGranted = false, rows = [], actionCenter = {}, queueCount = 0 }) {
-  const hasFirstPost = rows.length > 0;
-  const hasFirstSync = rows.some((row) => clean(row.lifecycle_status || row.status));
-  const hasFirstMessage = rows.some((row) => safeNumber(row.messages_count, 0) > 0);
-  const hasActionCenter = safeNumber(actionCenter.review_today, 0) + safeNumber(actionCenter.repost_today, 0) + safeNumber(actionCenter.promote_today, 0) > 0;
-  const hasQueue = safeNumber(queueCount, 0) > 0;
-  const steps = [
-    { key: 'profile_complete', label: 'Complete profile', done: Boolean(setupStatus.profile_complete) },
-    { key: 'access_active', label: 'Activate account access', done: Boolean(accessGranted) },
-    { key: 'inventory_ready', label: 'Save inventory URL', done: Boolean(setupStatus.inventory_url_present) },
-    { key: 'first_queue', label: 'Queue first vehicle', done: Boolean(hasQueue) },
-    { key: 'first_post', label: 'Post first vehicle', done: Boolean(hasFirstPost) },
-    { key: 'first_sync', label: 'Sync first listing', done: Boolean(hasFirstSync) },
-    { key: 'first_message', label: 'Track first message', done: Boolean(hasFirstMessage) },
-    { key: 'first_action', label: 'Use action center', done: Boolean(hasActionCenter) }
-  ];
-  const completed = steps.filter((step) => step.done).length;
-  const blockers = [];
-  if (!setupStatus.profile_complete) blockers.push('Finish your profile and dealer setup.');
-  if (!accessGranted) blockers.push('Refresh billing/access so posting is unlocked.');
-  if (!setupStatus.inventory_url_present) blockers.push('Save your inventory URL to power scan and queue flow.');
-  if (!hasQueue) blockers.push('Queue your first vehicle from inventory.');
-  if (!hasFirstPost) blockers.push('Complete your first Marketplace post to create a first win.');
-  return {
-    score: completed,
-    percent: Math.round((completed / Math.max(steps.length, 1)) * 100),
-    completed_steps: completed,
-    total_steps: steps.length,
-    steps,
-    first_win_complete: Boolean(hasFirstPost),
-    blocked_by: blockers,
-    next_best_actions: blockers.slice(0, 3)
-  };
-}
-
-function buildFirstWinPayload(rows = []) {
-  const hasFirstPost = rows.length > 0;
-  const hasFirstSync = rows.some((row) => clean(row.lifecycle_status || row.status));
-  const hasFirstMessage = rows.some((row) => safeNumber(row.messages_count, 0) > 0);
-  return {
-    has_first_post: hasFirstPost,
-    has_first_sync: hasFirstSync,
-    has_first_message: hasFirstMessage,
-    milestone_text: hasFirstPost
-      ? 'First post complete. Keep momentum by stacking a few more listings today.'
-      : 'Your first win is still available. Complete one post and the platform becomes instantly more valuable.'
-  };
-}
-
-function buildRoiSnapshot({ postsToday = 0, postsWeek = 0, totalMessages = 0, queueCount = 0 }) {
-  const estimatedMinutesSavedToday = safeNumber(postsToday, 0) * 18;
-  const estimatedMinutesSavedWeek = safeNumber(postsWeek, 0) * 18;
-  const estimatedValueSaved = Math.round((estimatedMinutesSavedWeek / 60) * 35);
-  return {
-    estimated_minutes_saved_today: estimatedMinutesSavedToday,
-    estimated_minutes_saved_week: estimatedMinutesSavedWeek,
-    estimated_manual_posts_avoided: safeNumber(postsWeek, 0),
-    estimated_value_saved: estimatedValueSaved,
-    queue_count: safeNumber(queueCount, 0),
-    total_messages: safeNumber(totalMessages, 0)
-  };
-}
-
-function buildGrowthActions({ referralCode = '', affiliate = {} }) {
-  const code = clean(referralCode || affiliate.referral_code || '') || '[YOUR CODE]';
-  const referralLink = `https://elevateautomation.ca/signup.html?ref=${encodeURIComponent(code)}`;
-  return {
-    referral_link: referralLink,
-    invite_teammate: `Hey — I’ve been using Elevate Automation to post inventory faster and stay more consistent. If you want founder access, use my code ${code}.`,
-    invite_manager: `We’re using Elevate Automation to make Marketplace posting faster, cleaner, and more trackable. If you want to see it for the team, use my code ${code}.`,
-    affiliate_pitch_short: `I’m a founding partner with Elevate Automation. It helps salespeople post faster, stay consistent, and keep better control over listings. Use my code ${code} if you want in.`,
-    affiliate_pitch_operator: `Elevate Automation helps salespeople and managers tighten posting volume, listing quality, and day-to-day follow-through. Founder access is available with my code ${code}.`,
-    dealer_invite_pitch: `If your store wants cleaner posting consistency and better operator control, Elevate Automation is worth seeing. Use my code ${code} for founder access.`
-  };
-}
-
 export default async function handler(req, res) {
   res.setHeader('Content-Type', 'application/json');
   if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
@@ -723,10 +647,6 @@ export default async function handler(req, res) {
     const scorecards = buildScorecards(computed, rows);
     const referralCode = clean(snapshot.referral_code || subscriptionRow?.referral_code || user?.referral_code || '');
     const affiliate = await getAffiliateSummary({ referralCode, email: finalEmail });
-    const activation = buildActivationPayload({ setupStatus, accessGranted, rows, actionCenter: computed.action_center, queueCount: safeNumber(snapshot.queue_count, 0) });
-    const firstWin = buildFirstWinPayload(rows);
-    const roiSnapshot = buildRoiSnapshot({ postsToday: usageToday, postsWeek: Math.max(usageToday, safeNumber(scorecards?.weekly?.activity_delta, 0) + usageToday), totalMessages: computed.total_messages, queueCount: safeNumber(snapshot.queue_count, 0) });
-    const growthActions = buildGrowthActions({ referralCode, affiliate });
     const managerAccess = Boolean(snapshot.organization_role === 'admin' || snapshot.organization_role === 'manager' || snapshot.team_access === true || clean(snapshot.plan_type).toLowerCase() === 'team' || clean(snapshot.plan_type).toLowerCase() === 'dealership');
     const managerSummary = {
       live_inventory: computed.active_listings,
@@ -799,14 +719,9 @@ export default async function handler(req, res) {
         recent_listings: recentListings,
         daily_limit: dailyLimit,
         posts_remaining: postsRemaining,
+        can_post: Boolean(accessState.can_post),
         alerts,
         scorecards,
-        activation,
-        first_win: firstWin,
-        roi_snapshot: roiSnapshot,
-        growth_actions: growthActions,
-        setup_blockers: activation.blocked_by,
-        setup_recommendations: activation.next_best_actions,
         intelligence: segmentIntel,
         affiliate,
         daily_ops_queues: computed.action_center,
@@ -831,7 +746,7 @@ export default async function handler(req, res) {
           ...(snapshot || {}),
           user_id: finalUserId,
           email: finalEmail,
-          plan: planValue,
+          plan: accessState.plan,
           status: effectiveStatus,
           active: accessGranted,
           access_granted: accessGranted,
@@ -839,9 +754,17 @@ export default async function handler(req, res) {
           posts_used_today: usageToday,
           posts_today: usageToday,
           posts_remaining: postsRemaining,
+          can_post: Boolean(accessState.can_post),
+          billing: accessState.billing,
           current_period_end: subscriptionRow?.current_period_end || null,
           trial_end: subscriptionRow?.trial_end || null,
           cancel_at_period_end: Boolean(subscriptionRow?.cancel_at_period_end)
+        },
+        roi_snapshot: {
+          estimated_minutes_saved_today: usageToday * 18,
+          estimated_minutes_saved_week: Math.max(safeNumber(scorecards?.weekly?.posts_7d, usageToday) * 18, usageToday * 18),
+          estimated_manual_posts_avoided: usageToday,
+          estimated_value_saved: Number((((usageToday * 18) / 60) * 30).toFixed(2))
         },
         setup_status: setupStatus,
         data_integrity: {
