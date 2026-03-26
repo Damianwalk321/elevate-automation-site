@@ -933,7 +933,8 @@ function mergeSummaryWithListings(summary, listings) {
     revenue_intelligence: summary.revenue_intelligence || {},
     listing_action_summary: summary.listing_action_summary || {},
     opportunity_signals: Array.isArray(summary.opportunity_signals) ? summary.opportunity_signals : [],
-    roi_snapshot: summary.roi_snapshot || {}
+    roi_snapshot: summary.roi_snapshot || {},
+    credits: summary.credits || { balance: 0, lifetime_earned: 0, lifetime_spent: 0, recent_earned: 0, recent_events: [] }
   };
 }
 
@@ -1069,6 +1070,7 @@ function renderDashboardAnalytics() {
 
 function renderAnalyticsHub() {
   const roi = dashboardSummary?.roi_snapshot || {};
+  const credits = dashboardSummary?.credits || {};
   const postsToday = numberOrZero(dashboardSummary?.posts_today);
   const postingLimit = numberOrZero(currentNormalizedSession?.subscription?.posting_limit ?? dashboardSummary?.account_snapshot?.posting_limit);
   const reviewQueue = numberOrZero(dashboardSummary?.review_queue_count);
@@ -1085,6 +1087,10 @@ function renderAnalyticsHub() {
   setTextByIdForAll("analyticsTimeSavedWeek", `${weekMinutes} min`);
   setTextByIdForAll("analyticsEstimatedValue", formatCurrency(estimatedValue));
   setTextByIdForAll("analyticsEfficiencyScore", `${efficiency}%`);
+  setTextByIdForAll("kpiCreditsBalance", String(numberOrZero(credits.balance)));
+  setTextByIdForAll("kpiCreditsEarned", String(numberOrZero(credits.lifetime_earned)));
+  setTextByIdForAll("analyticsCreditsBalance", String(numberOrZero(credits.balance)));
+  setTextByIdForAll("analyticsCreditsEarned", String(numberOrZero(credits.lifetime_earned)));
 
   const systemHealth = document.getElementById("analyticsSystemHealth");
   if (systemHealth) {
@@ -1104,6 +1110,14 @@ function renderAnalyticsHub() {
       `<div><strong>Messages:</strong> ${messages}</div>`,
       `<div><strong>Top Listing:</strong> ${escapeHtml(cleanText(dashboardSummary?.top_listing_title || 'None yet'))}</div>`
     ].join("");
+  }
+
+  const creditActivity = document.getElementById("analyticsCreditActivity");
+  if (creditActivity) {
+    const events = Array.isArray(credits.recent_events) ? credits.recent_events : [];
+    creditActivity.innerHTML = events.length
+      ? events.map((event) => `<div><strong>+${numberOrZero(event.amount)}</strong> ${escapeHtml(cleanText(event.label || event.type || 'Credit event'))} <span style="color:var(--muted);">• ${escapeHtml(formatRelativeOrDate(event.created_at || ''))}</span></div>`).join('')
+      : '<div>No credit activity yet.</div>';
   }
 
   const oppSignals = document.getElementById("analyticsOpportunitySignals");
