@@ -1,6 +1,7 @@
 
 import { createClient } from "@supabase/supabase-js";
 import { resolveAccountAccess } from "./_shared/account-access.js";
+import { getVerifiedRequestUser, getTrustedIdentity } from "./_shared/auth.js";
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -760,6 +761,22 @@ export default async function handler(req, res) {
           trial_end: subscriptionRow?.trial_end || null,
           cancel_at_period_end: Boolean(subscriptionRow?.cancel_at_period_end)
         },
+        activation: {
+          percent: Math.round(([Boolean(accessGranted), Boolean(setupStatus?.dealer_website), Boolean(setupStatus?.inventory_url), Boolean(setupStatus?.scanner_type), Boolean(setupStatus?.listing_location), Boolean(setupStatus?.compliance_mode), usageToday > 0].filter(Boolean).length / 7) * 100),
+          blockers: [
+            ...(accessGranted ? [] : ['billing/access']),
+            ...(setupStatus?.dealer_website ? [] : ['dealer website']),
+            ...(setupStatus?.inventory_url ? [] : ['inventory URL']),
+            ...(setupStatus?.scanner_type ? [] : ['scanner type']),
+            ...(setupStatus?.listing_location ? [] : ['listing location']),
+            ...(setupStatus?.compliance_mode ? [] : ['compliance mode']),
+            ...(usageToday > 0 ? [] : ['first post'])
+          ]
+        },
+        first_win: {
+          has_first_post: usageToday > 0,
+          milestone_text: usageToday > 0 ? `First post tracked. ${usageToday} posts registered today.` : 'First live post not registered yet.'
+        },
         roi_snapshot: {
           estimated_minutes_saved_today: usageToday * 18,
           estimated_minutes_saved_week: Math.max(safeNumber(scorecards?.weekly?.posts_7d, usageToday) * 18, usageToday * 18),
@@ -771,7 +788,8 @@ export default async function handler(req, res) {
           listing_rows_merged: rows.length,
           listing_sources: rows.reduce((acc, row) => { const k = clean(row.source_table || 'unknown'); acc[k] = safeNumber(acc[k], 0) + 1; return acc; }, {}),
           posting_usage_source: postingUsageRow ? 'posting_usage' : 'computed_from_listings',
-          summary_source: 'merged_listings_plus_posting_usage'
+          summary_source: 'merged_listings_plus_posting_usage',
+          verified_request: Boolean(verifiedUser?.id)
         }
       }
     });
