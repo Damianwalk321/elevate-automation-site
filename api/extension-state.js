@@ -719,7 +719,7 @@ export default async function handler(req, res) {
         active: dealership.active !== false
       },
       profile,
-      subscription,
+      subscription: { ...(subscription || {}), plan_access: { is_pro: Boolean(subscription?.posting_limit >= 25 || String(subscription?.plan || subscription?.plan_name || "").toLowerCase().includes("pro")), posting_limit: Number(subscription?.posting_limit || 0), plan_label: clean(subscription?.plan || subscription?.plan_name || "Founder Beta") || "Founder Beta" } },
       scanner_config: scannerConfigPayload,
       meta: {
         requested_hostname: hostname,
