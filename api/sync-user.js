@@ -1,4 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
+import { getVerifiedRequestUser, getTrustedIdentity } from "./_shared/auth.js";
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -53,8 +54,10 @@ export default async function handler(req, res) {
 
   try {
     const body = typeof req.body === "string" ? JSON.parse(req.body || "{}") : (req.body || {});
-    const id = clean(body.id || body.auth_user_id);
-    const email = normalizeEmail(body.email);
+    const verifiedUser = await getVerifiedRequestUser(req);
+    const identity = getTrustedIdentity({ verifiedUser, body });
+    const id = clean(identity.id || body.id || body.auth_user_id);
+    const email = normalizeEmail(identity.email || body.email);
     const fullName = clean(body.full_name || body.fullName || "");
     const referralCode = clean(body.referral_code || body.referralCode || "");
     const referralSource = normalizeReferralSource(body.referral_source || body.referralSource || "");
@@ -213,7 +216,7 @@ export default async function handler(req, res) {
       console.error("sync-user subscriptions upsert warning:", subscriptionUpsertError.message);
     }
 
-    return res.status(200).json({ ok: true, id, email, full_name: fullName });
+    return res.status(200).json({ ok: true, id, email, full_name: fullName, verified_request: Boolean(verifiedUser?.id) });
   } catch (error) {
     console.error("sync-user fatal error:", error);
     return res.status(200).json({
