@@ -2,7 +2,7 @@
 import { createClient } from "@supabase/supabase-js";
 import { resolveAccountAccess } from "./_shared/account-access.js";
 import { getVerifiedRequestUser } from "./_shared/auth.js";
-import { getCreditSummary, listRecentCreditEvents, formatCreditEventLabel } from "./_shared/credits.js";
+import { getCreditSummary, listRecentCreditEvents, formatCreditEventLabel, getCreditEconomyState } from "./_shared/credits.js";
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -303,14 +303,14 @@ async function getSubscription(userId, email) {
 }
 async function getProfileRow(userId, email) {
   if (userId) {
-    const { data, error } = await supabase.from('profiles').select('*').eq('id', userId).maybeSingle();
-    if (error) throw error;
-    if (data) return data;
+    const direct = await supabase.from('profiles').select('*').eq('id', userId).maybeSingle();
+    if (!direct.error && direct.data) return direct.data;
+    const userLinked = await supabase.from('profiles').select('*').eq('user_id', userId).maybeSingle();
+    if (!userLinked.error && userLinked.data) return userLinked.data;
   }
   if (email) {
-    const { data, error } = await supabase.from('profiles').select('*').ilike('email', email).limit(1).maybeSingle();
-    if (error) throw error;
-    if (data) return data;
+    const byEmail = await supabase.from('profiles').select('*').ilike('email', email).order('updated_at', { ascending: false }).limit(1).maybeSingle();
+    if (!byEmail.error && byEmail.data) return byEmail.data;
   }
   return null;
 }
@@ -515,18 +515,56 @@ function buildActionCenterDetails(rows = []) {
 }
 
 function buildSetupStatus(user, profileRow) {
-  const inventoryUrl = clean(profileRow?.inventory_url || '');
-  const salespersonName = clean(profileRow?.full_name || `${clean(user?.first_name)} ${clean(user?.last_name)}`.trim());
-  const dealershipName = clean(profileRow?.dealership || profileRow?.dealer_name || user?.company || '');
-  const complianceMode = clean(profileRow?.compliance_mode || '');
+  const inventoryUrl = clean(profileRow?.inventory_url || profileRow?.inventory_link || '');
+  const salespersonName = clean(
+    profileRow?.full_name ||
+    profileRow?.salesperson_name ||
+    `${clean(user?.first_name)} ${clean(user?.last_name)}`.trim()
+  );
+  const dealershipName = clean(
+    profileRow?.dealership ||
+    profileRow?.dealer_name ||
+    profileRow?.company_name ||
+    user?.company ||
+    ''
+  );
+  const complianceMode = clean(profileRow?.compliance_mode || profileRow?.province || '');
+  const website = clean(profileRow?.dealer_website || profileRow?.website || '');
+  const scannerType = clean(profileRow?.scanner_type || profileRow?.scanner || '');
+  const listingLocation = clean(profileRow?.listing_location || profileRow?.city || '');
   const checks = {
     inventory_url_present: Boolean(inventoryUrl),
     salesperson_name_present: Boolean(salespersonName),
     dealership_name_present: Boolean(dealershipName),
-    compliance_mode_present: Boolean(complianceMode)
+    compliance_mode_present: Boolean(complianceMode),
+    dealer_website_present: Boolean(website),
+    scanner_type_present: Boolean(scannerType),
+    listing_location_present: Boolean(listingLocation)
   };
   const completion = Object.values(checks).filter(Boolean).length;
-  return { profile_complete: completion === 4, profile_completion_score: completion / 4, inventory_url: inventoryUrl, salesperson_name: salespersonName, dealership_name: dealershipName, compliance_mode: complianceMode, ...checks };
+  const total = Object.keys(checks).length;
+  const setupGaps = [
+    checks.salesperson_name_present ? '' : 'salesperson name missing',
+    checks.dealership_name_present ? '' : 'dealership missing',
+    checks.inventory_url_present ? '' : 'inventory URL missing',
+    checks.compliance_mode_present ? '' : 'compliance mode missing',
+    checks.dealer_website_present ? '' : 'dealer website missing',
+    checks.scanner_type_present ? '' : 'scanner type missing',
+    checks.listing_location_present ? '' : 'listing location missing'
+  ].filter(Boolean);
+  return {
+    profile_complete: completion === total,
+    profile_completion_score: total ? completion / total : 0,
+    inventory_url: inventoryUrl,
+    salesperson_name: salespersonName,
+    dealership_name: dealershipName,
+    compliance_mode: complianceMode,
+    dealer_website: website,
+    scanner_type: scannerType,
+    listing_location: listingLocation,
+    setup_gaps: setupGaps,
+    ...checks
+  };
 }
 function buildComputedSummary(rows = []) {
   const today = dayKey();
@@ -834,11 +872,12 @@ export default async function handler(req, res) {
     const configuredLimit = safeNumber(snapshot.posting_limit ?? subscriptionRow?.daily_posting_limit ?? subscriptionRow?.posting_limit ?? inferPostingLimitFromPlan(planValue), inferPostingLimitFromPlan(planValue));
     const dailyLimit = forcedAccess ? 25 : configuredLimit;
     const usageToday = Math.max(safeNumber(postingUsageRow?.posts_today ?? postingUsageRow?.posts_used ?? postingUsageRow?.used_today, 0), safeNumber(snapshot.posts_today ?? snapshot.posts_used_today, 0), safeNumber(computed.posts_today, 0));
-    const postsRemaining = Math.max(dailyLimit - usageToday, 0);
+    const postsRemainingBase = Math.max(dailyLimit - usageToday, 0);
     const accessGranted = Boolean(forcedAccess || snapshot.access_granted === true || snapshot.active === true || subscriptionRow?.active === true || isActiveStatus(subscriptionRow?.status) || (clean(planValue) && dailyLimit > 0));
     const effectiveStatus = accessGranted ? 'active' : clean(subscriptionRow?.status || snapshot.status || 'inactive').toLowerCase();
     const setupStatus = buildSetupStatus(user, profileRow);
-    const creditsSummary = await getCreditSummary(supabase, { userId: finalUserId, email: finalEmail });
+    const creditEconomy = await getCreditEconomyState(supabase, { userId: finalUserId, email: finalEmail, dateKey: today });
+    const creditsSummary = creditEconomy.summary || await getCreditSummary(supabase, { userId: finalUserId, email: finalEmail });
     const recentCreditEventsRaw = await listRecentCreditEvents(supabase, { userId: finalUserId, email: finalEmail, limit: 6 });
     const recentCreditEvents = recentCreditEventsRaw.map((event) => ({
       type: event.type,
@@ -864,11 +903,13 @@ export default async function handler(req, res) {
       weak_listings: computed.weak_listings,
       needs_action: computed.needs_action_count
     };
+    const creditExtraPostsToday = safeNumber(creditEconomy?.extra_posts_unlocked_today, 0);
     const accessState = resolveAccountAccess({
       plan: planValue,
       status: effectiveStatus,
       postsToday: usageToday,
       postingLimit: dailyLimit,
+      creditExtraPosts: creditExtraPostsToday,
       email: finalEmail,
       stripeCustomerId: snapshot.stripe_customer_id || subscriptionRow?.stripe_customer_id || '',
       currentPeriodEnd: subscriptionRow?.current_period_end || snapshot.current_period_end || null,
@@ -877,6 +918,7 @@ export default async function handler(req, res) {
       latestVersion: snapshot.latest_version || '',
       extensionVersion: snapshot.extension_version || ''
     });
+    const postsRemaining = Math.max(safeNumber(accessState.posting_limit, dailyLimit) - usageToday, 0);
     const activationSteps = {
       profile_complete: Boolean(setupStatus.profile_complete),
       compliance_ready: Boolean(setupStatus.compliance_mode_present),
@@ -1007,6 +1049,8 @@ export default async function handler(req, res) {
         total_listings: computed.total_listings,
         recent_listings: recentListings,
         daily_limit: dailyLimit,
+        extra_posts_unlocked_today: creditExtraPostsToday,
+        effective_posting_limit: safeNumber(accessState.posting_limit, dailyLimit),
         posts_remaining: postsRemaining,
         can_post: Boolean(accessState.can_post),
         alerts,
@@ -1039,7 +1083,9 @@ export default async function handler(req, res) {
           status: effectiveStatus,
           active: accessGranted,
           access_granted: accessGranted,
-          posting_limit: dailyLimit,
+          posting_limit: safeNumber(accessState.posting_limit, dailyLimit),
+          base_posting_limit: safeNumber(accessState.base_posting_limit, dailyLimit),
+          extra_posting_limit: safeNumber(accessState.extra_posting_limit, 0),
           posts_used_today: usageToday,
           posts_today: usageToday,
           posts_remaining: postsRemaining,
@@ -1062,6 +1108,8 @@ export default async function handler(req, res) {
           recent_earned: safeNumber(creditsSummary.recent_earned, 0),
           updated_at: creditsSummary.updated_at || null,
           schema_ready: Boolean(creditsSummary.schema_ready),
+          extra_posts_unlocked_today: creditExtraPostsToday,
+          actions: Array.isArray(creditEconomy?.actions) ? creditEconomy.actions : [],
           recent_events: recentCreditEvents
         },
         activation: {
