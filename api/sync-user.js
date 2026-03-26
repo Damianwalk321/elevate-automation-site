@@ -1,5 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import { getVerifiedRequestUser } from "./_shared/auth.js";
+import { ensureUserCreditLedger } from "./_shared/credits.js";
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -80,7 +81,18 @@ export default async function handler(req, res) {
       await supabase.from("profiles").upsert({ id, email, full_name: fullName || null, updated_at: nowIso }, { onConflict: "id" });
     }
 
-    return res.status(200).json({ ok: true, id, email });
+    const creditLedger = await ensureUserCreditLedger(supabase, { userId: id, email });
+
+    return res.status(200).json({
+      ok: true,
+      id,
+      email,
+      credits: {
+        balance: Number(creditLedger?.balance || 0),
+        lifetime_earned: Number(creditLedger?.lifetime_earned || 0),
+        schema_ready: Boolean(creditLedger?.schema_ready)
+      }
+    });
   } catch (error) {
     console.error("sync-user fatal:", error);
     return res.status(500).json({ ok: false, error: error.message || "Unexpected sync-user error" });
