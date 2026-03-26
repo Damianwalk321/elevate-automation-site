@@ -360,6 +360,20 @@
     return userResult?.data?.user || null;
   }
 
+  async function buildAuthHeaders(extraHeaders = {}) {
+    const headers = { Accept: "application/json", ...extraHeaders };
+    try {
+      const client = ensureSupabaseClient();
+      const sessionResult = await client.auth.getSession();
+      const token = sessionResult?.data?.session?.access_token || "";
+      if (token) headers.Authorization = `Bearer ${token}`;
+      headers["x-elevate-client"] = "dashboard";
+    } catch (error) {
+      console.warn("[profile] auth header warning:", error);
+    }
+    return headers;
+  }
+
   async function loadProfile() {
     if (!currentUser?.id) {
       throw new Error("Missing authenticated user id.");
@@ -369,9 +383,7 @@
       `/api/profile?id=${encodeURIComponent(currentUser.id)}`,
       {
         method: "GET",
-        headers: {
-          Accept: "application/json"
-        }
+        headers: await buildAuthHeaders()
       }
     );
 
@@ -420,10 +432,7 @@
     try {
       const response = await fetch("/api/profile", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Accept: "application/json"
-        },
+        headers: await buildAuthHeaders({ "Content-Type": "application/json" }),
         body: JSON.stringify(payload)
       });
 
