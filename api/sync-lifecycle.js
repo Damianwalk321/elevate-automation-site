@@ -1,4 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
+import { awardLifecycleCredits } from "./_shared/credits.js";
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -427,13 +428,27 @@ export default async function handler(req, res) {
       await syncSubscriptionSnapshot(supabase, resolved, payload);
     }
 
+    const creditResult = await awardLifecycleCredits(supabase, {
+      userId: resolved.user_id,
+      email: resolved.email,
+      syncedListings: synced,
+      totalMessages: payload.total_messages,
+      postsToday: payload.posts_today || payload.posts_used_today
+    });
+
     return json(res, 200, {
       ok: true,
       user_id: resolved.user_id,
       email: resolved.email,
       synced_listings: synced,
       stale_marked: staleResult.stale_marked,
-      posting_usage_synced: shouldSyncPostingUsage
+      posting_usage_synced: shouldSyncPostingUsage,
+      credits: {
+        awarded_total: Number(creditResult?.awarded_total || 0),
+        balance: Number(creditResult?.ledger?.balance || 0),
+        lifetime_earned: Number(creditResult?.ledger?.lifetime_earned || 0),
+        schema_ready: Boolean(creditResult?.schema_ready)
+      }
     });
   } catch (error) {
     console.error("sync-lifecycle fatal:", error);
