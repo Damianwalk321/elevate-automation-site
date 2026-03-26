@@ -42,6 +42,113 @@ let dashboardListings = [];
 let filteredListings = [];
 let listingQuickFilter = "all";
 
+let activeActionModal = null;
+
+function escapeHtml(value) {
+  return String(value || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/\"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+function formatActionModalContent(content) {
+  const normalized = cleanText(content);
+  if (!normalized) return "";
+  return escapeHtml(normalized).replace(/\n/g, "<br>");
+}
+
+function closeActionModal() {
+  const modal = document.getElementById("actionModal");
+  if (!modal) return;
+  modal.classList.remove("is-open");
+  modal.setAttribute("aria-hidden", "true");
+  activeActionModal = null;
+}
+
+async function copyActionModalContent() {
+  if (!activeActionModal?.copyText) return;
+  try {
+    await navigator.clipboard.writeText(activeActionModal.copyText);
+    if (activeActionModal.statusTarget) {
+      setStatus(activeActionModal.statusTarget, activeActionModal.copySuccessMessage || "Copied.");
+    } else {
+      setBootStatus(activeActionModal.copySuccessMessage || "Copied.");
+    }
+  } catch (error) {
+    console.error("copyActionModalContent error:", error);
+    if (activeActionModal.statusTarget) {
+      setStatus(activeActionModal.statusTarget, activeActionModal.copyErrorMessage || "Could not copy.");
+    }
+  }
+}
+
+function openActionModal(config) {
+  const modal = document.getElementById("actionModal");
+  const titleEl = document.getElementById("actionModalTitle");
+  const subtitleEl = document.getElementById("actionModalSubtitle");
+  const contentEl = document.getElementById("actionModalContent");
+  const copyBtn = document.getElementById("actionModalCopyBtn");
+  const secondaryBtn = document.getElementById("actionModalSecondaryBtn");
+
+  if (!modal || !titleEl || !subtitleEl || !contentEl || !copyBtn || !secondaryBtn) return;
+
+  activeActionModal = {
+    title: config.title || "Action",
+    subtitle: config.subtitle || "",
+    copyText: cleanText(config.copyText || config.content || ""),
+    copySuccessMessage: config.copySuccessMessage || "Copied.",
+    copyErrorMessage: config.copyErrorMessage || "Could not copy.",
+    statusTarget: config.statusTarget || "",
+    secondaryAction: config.secondaryAction || null
+  };
+
+  titleEl.textContent = activeActionModal.title;
+  subtitleEl.textContent = activeActionModal.subtitle || "";
+  contentEl.innerHTML = formatActionModalContent(config.content || "");
+  copyBtn.textContent = config.copyButtonLabel || "Copy";
+
+  if (activeActionModal.secondaryAction && activeActionModal.secondaryAction.label) {
+    secondaryBtn.style.display = "";
+    secondaryBtn.textContent = activeActionModal.secondaryAction.label;
+  } else {
+    secondaryBtn.style.display = "none";
+    secondaryBtn.textContent = "";
+  }
+
+  modal.classList.add("is-open");
+  modal.setAttribute("aria-hidden", "false");
+}
+
+function bindActionModal() {
+  const modal = document.getElementById("actionModal");
+  const closeBtn = document.getElementById("actionModalCloseBtn");
+  const doneBtn = document.getElementById("actionModalDoneBtn");
+  const copyBtn = document.getElementById("actionModalCopyBtn");
+  const secondaryBtn = document.getElementById("actionModalSecondaryBtn");
+
+  if (closeBtn) closeBtn.addEventListener("click", closeActionModal);
+  if (doneBtn) doneBtn.addEventListener("click", closeActionModal);
+  if (copyBtn) copyBtn.addEventListener("click", copyActionModalContent);
+  if (secondaryBtn) {
+    secondaryBtn.addEventListener("click", () => {
+      if (activeActionModal?.secondaryAction?.handler) {
+        activeActionModal.secondaryAction.handler();
+      }
+    });
+  }
+  if (modal) {
+    modal.addEventListener("click", (event) => {
+      if (event.target === modal) closeActionModal();
+    });
+  }
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") closeActionModal();
+  });
+}
+
+
 document.addEventListener("DOMContentLoaded", async () => {
   try {
     setBootStatus("Booting dashboard...");
@@ -64,6 +171,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
 
     bindDashboardUI();
+    bindActionModal();
 
     pushBootStage("Session", "Checking login session...");
     const {
@@ -284,15 +392,25 @@ function bindDashboardUI() {
 
   const copySetupStepsBtn = document.getElementById("copySetupStepsBtn");
   if (copySetupStepsBtn) {
-    copySetupStepsBtn.addEventListener("click", async () => {
+    copySetupStepsBtn.addEventListener("click", () => {
       const setupText = buildSetupStepsText();
-      try {
-        await navigator.clipboard.writeText(setupText);
-        setStatus("extensionActionStatus", "Setup steps copied.");
-      } catch (error) {
-        console.error("Clipboard error:", error);
-        setStatus("extensionActionStatus", "Could not copy setup steps.");
-      }
+      openActionModal({
+        title: "Extension Setup Steps",
+        subtitle: "Read the steps here, then copy them only if you need to paste them elsewhere.",
+        content: setupText,
+        copyText: setupText,
+        copyButtonLabel: "Copy Steps",
+        copySuccessMessage: "Setup steps copied.",
+        copyErrorMessage: "Could not copy setup steps.",
+        statusTarget: "extensionActionStatus",
+        secondaryAction: {
+          label: "Open Profile Setup",
+          handler: () => {
+            closeActionModal();
+            showSection("profile");
+          }
+        }
+      });
     });
   }
   const copyReferralCodeBtn = document.getElementById("copyReferralCodeBtn");
@@ -337,47 +455,79 @@ function bindDashboardUI() {
   function buildAffiliateManagerPitch() {
     const code = getAffiliateCode() || "[YOUR CODE]";
     const link = getAffiliateLink() || "[YOUR LINK]";
-    return `Quick question — do you have sales staff consistently posting inventory on Marketplace right now? I’m using Elevate Automation to help sales teams post faster, stay more consistent, and track listing performance. If you want founder access for your team, use my code ${code} or this link: ${link}`;
+    return `Quick question â do you have sales staff consistently posting inventory on Marketplace right now? Iâm using Elevate Automation to help sales teams post faster, stay more consistent, and track listing performance. If you want founder access for your team, use my code ${code} or this link: ${link}`;
   }
   function buildAffiliateSalesPitch() {
     const code = getAffiliateCode() || "[YOUR CODE]";
     const link = getAffiliateLink() || "[YOUR LINK]";
-    return `I’ve got access to Elevate Automation. It helps salespeople scan dealer inventory, post faster, and keep listings more consistent. If you want founder access, use my code ${code} or this link: ${link}`;
+    return `Iâve got access to Elevate Automation. It helps salespeople scan dealer inventory, post faster, and keep listings more consistent. If you want founder access, use my code ${code} or this link: ${link}`;
   }
   function buildAffiliateFollowupPitch() {
     const code = getAffiliateCode() || "[YOUR CODE]";
-    return `Following up — if you still want founder access to Elevate Automation, I can send you the direct signup link. Use my code ${code} when you sign up and I’ll point you in the right direction.`;
+    return `Following up â if you still want founder access to Elevate Automation, I can send you the direct signup link. Use my code ${code} when you sign up and Iâll point you in the right direction.`;
   }
   function buildAffiliateStoryCTA() {
     const link = getAffiliateLink() || "[YOUR LINK]";
-    return `Posting inventory faster = more consistency and more chances to win attention. I’m using Elevate Automation right now. Message me or use this link if you want founder access: ${link}`;
+    return `Posting inventory faster = more consistency and more chances to win attention. Iâm using Elevate Automation right now. Message me or use this link if you want founder access: ${link}`;
   }
 
   const copyManagerPitchBtn = document.getElementById("copyManagerPitchBtn");
   if (copyManagerPitchBtn) {
-    copyManagerPitchBtn.addEventListener("click", async () => {
-      await copyAffiliateText(buildAffiliateManagerPitch(), "Manager pitch copied.");
+    copyManagerPitchBtn.addEventListener("click", () => {
+      const text = buildAffiliateManagerPitch();
+      openActionModal({
+        title: "Manager Pitch",
+        subtitle: "Use this when reaching out to managers, owners, or dealership decision-makers.",
+        content: text,
+        copyText: text,
+        copyButtonLabel: "Copy Pitch",
+        copySuccessMessage: "Manager pitch copied."
+      });
     });
   }
 
   const copySalesPitchBtn = document.getElementById("copySalesPitchBtn");
   if (copySalesPitchBtn) {
-    copySalesPitchBtn.addEventListener("click", async () => {
-      await copyAffiliateText(buildAffiliateSalesPitch(), "Salesperson pitch copied.");
+    copySalesPitchBtn.addEventListener("click", () => {
+      const text = buildAffiliateSalesPitch();
+      openActionModal({
+        title: "Salesperson Pitch",
+        subtitle: "Use this when messaging individual salespeople or Marketplace posters.",
+        content: text,
+        copyText: text,
+        copyButtonLabel: "Copy Pitch",
+        copySuccessMessage: "Salesperson pitch copied."
+      });
     });
   }
 
   const copyFollowupPitchBtn = document.getElementById("copyFollowupPitchBtn");
   if (copyFollowupPitchBtn) {
-    copyFollowupPitchBtn.addEventListener("click", async () => {
-      await copyAffiliateText(buildAffiliateFollowupPitch(), "Follow-up script copied.");
+    copyFollowupPitchBtn.addEventListener("click", () => {
+      const text = buildAffiliateFollowupPitch();
+      openActionModal({
+        title: "Follow-Up Script",
+        subtitle: "Use this after someone shows interest but has not moved yet.",
+        content: text,
+        copyText: text,
+        copyButtonLabel: "Copy Script",
+        copySuccessMessage: "Follow-up script copied."
+      });
     });
   }
 
   const copyStoryCtaBtn = document.getElementById("copyStoryCtaBtn");
   if (copyStoryCtaBtn) {
-    copyStoryCtaBtn.addEventListener("click", async () => {
-      await copyAffiliateText(buildAffiliateStoryCTA(), "Story CTA copied.");
+    copyStoryCtaBtn.addEventListener("click", () => {
+      const text = buildAffiliateStoryCTA();
+      openActionModal({
+        title: "Story CTA",
+        subtitle: "Use this for stories, captions, or quick social promotion.",
+        content: text,
+        copyText: text,
+        copyButtonLabel: "Copy CTA",
+        copySuccessMessage: "Story CTA copied."
+      });
     });
   }
 
@@ -794,17 +944,8 @@ function mergeSummaryWithListings(summary, listings) {
     alerts: Array.isArray(summary.alerts) ? summary.alerts : [],
     scorecards: summary.scorecards || {},
     intelligence: summary.intelligence || {},
-    affiliate: summary.affiliate || {},
-    message_tracking: summary.message_tracking || {}
+    affiliate: summary.affiliate || {}
   };
-}
-
-function buildMessageConfidenceText(messageTracking = {}) {
-  const confidence = clean(messageTracking?.confidence || '').toLowerCase();
-  if (confidence === 'high') return '• direct';
-  if (confidence === 'medium') return '• hybrid';
-  if (confidence === 'estimated') return '• assisted';
-  return '';
 }
 
 function renderDashboardAnalytics() {
@@ -813,7 +954,6 @@ function renderDashboardAnalytics() {
   setTextByIdForAll("kpiActiveListings", String(numberOrZero(dashboardSummary?.active_listings)));
   setTextByIdForAll("kpiViews", String(numberOrZero(dashboardSummary?.total_views)));
   setTextByIdForAll("kpiMessages", String(numberOrZero(dashboardSummary?.total_messages)));
-  setTextByIdForAll("kpiMessagesConfidence", buildMessageConfidenceText(dashboardSummary?.message_tracking));
   setTextByIdForAll("kpiPostsRemaining", String(numberOrZero(currentNormalizedSession?.subscription?.posts_remaining ?? dashboardSummary?.account_snapshot?.posts_remaining)));
   setTextByIdForAll("kpiDailyLimit", String(numberOrZero(currentNormalizedSession?.subscription?.posting_limit ?? dashboardSummary?.account_snapshot?.posting_limit)));
 
@@ -950,7 +1090,7 @@ function renderListingsGrid(listings) {
           </div>
 
           <div class="listing-price">${formatCurrency(item.price)}</div>
-          <div class="status-line">${escapeHtml(item.health_label || 'Healthy')} • ${escapeHtml(item.recommended_action || 'Keep live')}</div>
+          <div class="status-line">${escapeHtml(item.health_label || 'Healthy')} â¢ ${escapeHtml(item.recommended_action || 'Keep live')}</div>
 
           <div class="listing-specs">
             <div class="spec-chip">
@@ -1027,13 +1167,13 @@ function renderAffiliateCenter() {
   setTextByIdForAll("affiliateConversionRate", `${numberOrZero(affiliate.conversion_rate)}%`);
   setTextByIdForAll("affiliateActiveReferralRate", `${numberOrZero(affiliate.active_referral_rate)}%`);
   setTextByIdForAll("affiliateTopSource", cleanText(affiliate.top_source || "Direct"));
-  setTextByIdForAll("affiliateLastReferralDate", formatDateTime(affiliate.last_referral_date) || "—");
+  setTextByIdForAll("affiliateLastReferralDate", formatDateTime(affiliate.last_referral_date) || "â");
 
   const recentWrap = document.getElementById('affiliateRecentReferrals');
   if (recentWrap) {
     const rows = Array.isArray(affiliate.recent_referrals) ? affiliate.recent_referrals : [];
     recentWrap.innerHTML = rows.length
-      ? rows.map((row) => `<div><strong>${escapeHtml(cleanText(row.name || row.email || 'Referral'))}</strong> • ${escapeHtml(cleanText(row.status || 'signed_up'))} • ${escapeHtml(cleanText(row.plan || 'Starter'))}<br><span style="color:var(--muted)">${escapeHtml(cleanText(row.email || ''))} • ${escapeHtml(cleanText(row.source || 'Direct'))} • ${formatCurrency(row.estimated_commission || 0)} est.</span></div>`).join('')
+      ? rows.map((row) => `<div><strong>${escapeHtml(cleanText(row.name || row.email || 'Referral'))}</strong> â¢ ${escapeHtml(cleanText(row.status || 'signed_up'))} â¢ ${escapeHtml(cleanText(row.plan || 'Starter'))}<br><span style="color:var(--muted)">${escapeHtml(cleanText(row.email || ''))} â¢ ${escapeHtml(cleanText(row.source || 'Direct'))} â¢ ${formatCurrency(row.estimated_commission || 0)} est.</span></div>`).join('')
       : '<div>No referrals tracked yet.</div>';
   }
 
@@ -1041,7 +1181,7 @@ function renderAffiliateCenter() {
   if (actionsWrap) {
     const actions = Array.isArray(affiliate.recommended_actions) ? affiliate.recommended_actions : [];
     actionsWrap.innerHTML = actions.length
-      ? actions.map((item) => `<div>• ${escapeHtml(cleanText(item))}</div>`).join('')
+      ? actions.map((item) => `<div>â¢ ${escapeHtml(cleanText(item))}</div>`).join('')
       : '<div>No actions yet.</div>';
   }
 
@@ -1051,7 +1191,7 @@ function renderAffiliateCenter() {
     notes.push(`Attribution code: ${escapeHtml(referralCode)}`);
     notes.push(`Top source: ${escapeHtml(cleanText(affiliate.top_source || 'Direct'))}`);
     notes.push(`Conversion rate reflects paying referrals / signed-up referrals.`);
-    notesWrap.innerHTML = notes.map((item) => `<div>• ${item}</div>`).join('');
+    notesWrap.innerHTML = notes.map((item) => `<div>â¢ ${item}</div>`).join('');
   }
 }
 
@@ -1077,12 +1217,12 @@ function renderPrioritiesPanels() {
     const segEl = document.getElementById('managerTopSegments');
     if (segEl) {
       const segs = Array.isArray(dashboardSummary?.segment_performance) ? dashboardSummary.segment_performance : [];
-      segEl.innerHTML = segs.length ? segs.map((seg) => `<div><strong>${escapeHtml(seg.key || 'Segment')}:</strong> ${numberOrZero(seg.listings)} listings • ${numberOrZero(seg.views)} views • ${numberOrZero(seg.messages)} messages</div>`).join('') : '<div>No segment data yet.</div>';
+      segEl.innerHTML = segs.length ? segs.map((seg) => `<div><strong>${escapeHtml(seg.key || 'Segment')}:</strong> ${numberOrZero(seg.listings)} listings â¢ ${numberOrZero(seg.views)} views â¢ ${numberOrZero(seg.messages)} messages</div>`).join('') : '<div>No segment data yet.</div>';
     }
     const recEl = document.getElementById('managerRecommendations');
     if (recEl) {
       const recs = Array.isArray(dashboardSummary?.manager_recommendations) ? dashboardSummary.manager_recommendations : [];
-      recEl.innerHTML = recs.length ? recs.map((item) => `<div>• ${escapeHtml(item)}</div>`).join('') : '<div>No recommendations yet.</div>';
+      recEl.innerHTML = recs.length ? recs.map((item) => `<div>â¢ ${escapeHtml(item)}</div>`).join('') : '<div>No recommendations yet.</div>';
     }
   }
 }
@@ -1117,13 +1257,13 @@ function renderIntelligencePanels() {
     const top = Array.isArray(intelligence.top_segments) ? intelligence.top_segments.slice(0, 4) : [];
     const weak = Array.isArray(intelligence.weak_segments) ? intelligence.weak_segments.slice(0, 3) : [];
     const blocks = [];
-    if (top.length) blocks.push(`<div><strong>Top Segments</strong></div>${top.map((seg) => `<div>${escapeHtml(seg.key || 'Segment')} • ${numberOrZero(seg.listings)} listings • ${numberOrZero(seg.messages)} messages</div>`).join('')}`);
-    if (weak.length) blocks.push(`<div style="margin-top:10px;"><strong>Watch Segments</strong></div>${weak.map((seg) => `<div>${escapeHtml(seg.key || 'Segment')} • weak ${numberOrZero(seg.weak)} • conv ${numberOrZero(seg.conversion_rate)}%</div>`).join('')}`);
+    if (top.length) blocks.push(`<div><strong>Top Segments</strong></div>${top.map((seg) => `<div>${escapeHtml(seg.key || 'Segment')} â¢ ${numberOrZero(seg.listings)} listings â¢ ${numberOrZero(seg.messages)} messages</div>`).join('')}`);
+    if (weak.length) blocks.push(`<div style="margin-top:10px;"><strong>Watch Segments</strong></div>${weak.map((seg) => `<div>${escapeHtml(seg.key || 'Segment')} â¢ weak ${numberOrZero(seg.weak)} â¢ conv ${numberOrZero(seg.conversion_rate)}%</div>`).join('')}`);
     intelWrap.innerHTML = blocks.length ? blocks.join('') : '<div>Intelligence is still building as more listing data comes in.</div>';
   }
   if (oppWrap) {
     const opps = Array.isArray(intelligence.opportunities) ? intelligence.opportunities.slice(0, 5) : [];
-    oppWrap.innerHTML = opps.length ? opps.map((seg) => `<div><strong>${escapeHtml(seg.key || 'Segment')}</strong> • ${numberOrZero(seg.views)} views • ${numberOrZero(seg.messages)} messages • ${numberOrZero(seg.conversion_rate)}% conversion</div>`).join('') : '<div>No opportunity clusters detected yet.</div>';
+    oppWrap.innerHTML = opps.length ? opps.map((seg) => `<div><strong>${escapeHtml(seg.key || 'Segment')}</strong> â¢ ${numberOrZero(seg.views)} views â¢ ${numberOrZero(seg.messages)} messages â¢ ${numberOrZero(seg.conversion_rate)}% conversion</div>`).join('') : '<div>No opportunity clusters detected yet.</div>';
   }
 }
 
@@ -1162,11 +1302,11 @@ function renderTopListings(listings) {
         </div>
         <div class="top-info">
           <div class="top-title">${escapeHtml(item.title)}</div>
-          <div class="top-sub">${escapeHtml(formatCurrency(item.price))} • ${escapeHtml(formatMileage(item.mileage))}</div>
+          <div class="top-sub">${escapeHtml(formatCurrency(item.price))} â¢ ${escapeHtml(formatMileage(item.mileage))}</div>
         </div>
         <div class="top-metrics">
-          <div>👁 ${numberOrZero(item.views_count)}</div>
-          <div>💬 ${numberOrZero(item.messages_count)}</div>
+          <div>ð ${numberOrZero(item.views_count)}</div>
+          <div>ð¬ ${numberOrZero(item.messages_count)}</div>
         </div>
       </div>
     `;
@@ -1192,7 +1332,7 @@ function renderRecentActivity(listings) {
         <div>
           <div class="activity-item-title">${escapeHtml(item.title)}</div>
           <div class="activity-item-sub">
-            ${escapeHtml(item.lifecycle_status || item.status || "posted")} • ${escapeHtml(item.stock_number || item.vin || "No stock/VIN")} • ${escapeHtml(formatCurrency(item.price))}
+            ${escapeHtml(item.lifecycle_status || item.status || "posted")} â¢ ${escapeHtml(item.stock_number || item.vin || "No stock/VIN")} â¢ ${escapeHtml(formatCurrency(item.price))}
           </div>
         </div>
         <div class="activity-item-time">${escapeHtml(formatRelativeOrDate(item.posted_at))}</div>
@@ -1546,7 +1686,7 @@ function populateComplianceSummary(profile) {
     profile?.dealer_email || null
   ].filter(Boolean);
 
-  setTextByIdForAll("complianceDealerContactDisplay", contactBits.length ? contactBits.join(" • ") : "Not set");
+  setTextByIdForAll("complianceDealerContactDisplay", contactBits.length ? contactBits.join(" â¢ ") : "Not set");
 }
 
 async function loadAccountData(user, forceFresh = false) {
@@ -1944,7 +2084,7 @@ function renderSetupSnapshot() {
     setup.compliance_mode_present ? null : "compliance mode missing"
   ].filter(Boolean);
 
-  setStatus("snapshotSetupSummary", summaryBits.length ? `Setup gaps: ${summaryBits.join(" • ")}` : "Account setup looks complete for beta use.");
+  setStatus("snapshotSetupSummary", summaryBits.length ? `Setup gaps: ${summaryBits.join(" â¢ ")}` : "Account setup looks complete for beta use.");
 }
 
 function renderAccessState(session) {
@@ -2054,13 +2194,12 @@ function renderExtensionControl(session, profile) {
   const postingUsageFound = Boolean(dashboardSummary?.ingest_debug?.posting_usage_row_found);
   const postingUsageUpdatedAt = cleanText(dashboardSummary?.ingest_debug?.posting_usage_updated_at);
   const syncStatusText = postingUsageFound
-    ? `Backend sync live${postingUsageUpdatedAt ? ` • ${new Date(postingUsageUpdatedAt).toLocaleString()}` : ""}`
+    ? `Backend sync live${postingUsageUpdatedAt ? ` â¢ ${new Date(postingUsageUpdatedAt).toLocaleString()}` : ""}`
     : "No committed post sync yet";
   setTextByIdForAll("extensionSyncStatus", syncStatusText);
   setTextByIdForAll("extensionCommittedRows", String(numberOrZero(dashboardSummary?.ingest_debug?.listing_rows_found)));
   setTextByIdForAll("extensionViewsTracked", String(numberOrZero(dashboardSummary?.total_views)));
   setTextByIdForAll("extensionMessagesTracked", String(numberOrZero(dashboardSummary?.total_messages)));
-  setTextByIdForAll("extensionMessagesConfidence", buildMessageConfidenceText(dashboardSummary?.message_tracking));
   setTextByIdForAll("extensionReviewQueue", String(numberOrZero(dashboardSummary?.review_queue_count)));
   setTextByIdForAll("extensionStaleListings", String(numberOrZero(dashboardSummary?.stale_listings)));
 
@@ -2201,285 +2340,32 @@ async function markListingSold(listingId) {
 }
 
 function copyVehicleSummary(listingId) {
-  const row = dashboardListings.find((item) => item.id === listingId);
-  if (!row) return;
+  const item = dashboardListings.find((entry) => entry.id === listingId);
+  if (!item) {
+    setStatus("listingGridStatus", "Could not find listing summary.");
+    return;
+  }
 
-  const text = [
-    row.title,
-    `Price: ${formatCurrency(row.price)}`,
-    `Mileage: ${formatMileage(row.mileage)}`,
-    `VIN: ${row.vin || "Not set"}`,
-    `Stock: ${row.stock_number || "Not set"}`,
-    `Posted: ${formatShortDate(row.posted_at)}`,
-    `Lifecycle: ${row.lifecycle_status || row.status || "posted"}`
-  ].join("\n");
+  const summary = [
+    item.title || "Untitled Listing",
+    item.price ? `Price: ${formatMoney(item.price)}` : "",
+    item.location ? `Location: ${item.location}` : "",
+    item.stock_number ? `Stock: ${item.stock_number}` : "",
+    item.vin ? `VIN: ${item.vin}` : "",
+    item.recommended_action ? `Recommended Action: ${item.recommended_action}` : ""
+  ].filter(Boolean).join("
+");
 
-  navigator.clipboard.writeText(text)
-    .then(() => setStatus("listingGridStatus", "Vehicle summary copied."))
-    .catch(() => setStatus("listingGridStatus", "Could not copy vehicle summary."));
-}
-
-function getFieldValue(id) {
-  const el = document.getElementById(id);
-  if (!el) return "";
-  return (el.value || "").trim();
-}
-
-function setFieldValue(id, value) {
-  const el = document.getElementById(id);
-  if (!el) return;
-  el.value = value || "";
-}
-
-function setStatus(id, text) {
-  document.querySelectorAll(`#${id}`).forEach((el) => {
-    el.textContent = text || "";
+  openActionModal({
+    title: "Vehicle Summary",
+    subtitle: "Review the summary here, then copy it only if you need to paste it somewhere else.",
+    content: summary,
+    copyText: summary,
+    copyButtonLabel: "Copy Summary",
+    copySuccessMessage: "Vehicle summary copied.",
+    statusTarget: "listingGridStatus"
   });
 }
-
-function pushBootStage(stage, detail) {
-  const line = `${stage}: ${detail}`;
-  bootStages.push(line);
-  bootStages = bootStages.slice(-5);
-  setBootStatus(bootStages.join("  |  "));
-}
-
-async function createCheckoutSessionFromContext(checkoutContext = {}) {
-  const response = await fetch("/api/create-checkout-session", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify({
-      email: currentUser?.email || "",
-      userId: currentUser?.id || "",
-      planType: checkoutContext.planType || "founder_beta",
-      accessType: checkoutContext.accessType || "founder",
-      userType: checkoutContext.userType || "founder"
-    })
-  });
-
-  const rawText = await response.text();
-  let data;
-  try {
-    data = rawText ? JSON.parse(rawText) : {};
-  } catch (error) {
-    console.error("[checkout] Non-JSON response:", rawText);
-    throw new Error("Checkout server error (non-JSON response)");
-  }
-
-  if (!response.ok) {
-    throw new Error(data.error || "Could not start checkout.");
-  }
-
-  return data;
-}
-
-function triggerFileDownload(url) {
-  const target = cleanText(url);
-  if (!target) return;
-
-  const link = document.createElement("a");
-  link.href = target;
-  link.rel = "noopener";
-
-  if (/^https?:\/\//i.test(target)) {
-    link.target = "_blank";
-  } else {
-    link.setAttribute("download", "");
-  }
-
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
-}
-
-async function resolveExtensionDownloadUrl() {
-  try {
-    const response = await fetch(EXTENSION_DOWNLOAD_URL, { method: "HEAD", cache: "no-store" });
-    if (response.ok) return EXTENSION_DOWNLOAD_URL;
-  } catch (error) {
-    console.warn("resolveExtensionDownloadUrl fallback:", error);
-  }
-  return EXTENSION_FALLBACK_URL;
-}
-
-function setBootStatus(text) {
-  const el = document.getElementById("bootStatus");
-  if (el) el.textContent = text || "";
-}
-
-function setTextForAll(selector, text) {
-  document.querySelectorAll(selector).forEach((el) => {
-    el.textContent = text || "";
-  });
-}
-
-function setTextByIdForAll(id, text) {
-  document.querySelectorAll(`#${id}`).forEach((el) => {
-    el.textContent = text || "";
-  });
-}
-
-function normalizeUrlInput(value) {
-  const raw = String(value || "").trim();
-  if (!raw) return "";
-  if (raw.startsWith("http://") || raw.startsWith("https://")) return raw;
-  return `https://${raw}`;
-}
-
-function formatCurrency(value) {
-  const n = numberOrZero(value);
-  if (!n) return "$0";
-  try {
-    return new Intl.NumberFormat("en-CA", {
-      style: "currency",
-      currency: "CAD",
-      maximumFractionDigits: 0
-    }).format(n);
-  } catch {
-    return `$${n.toLocaleString()}`;
-  }
-}
-
-function formatMileage(value) {
-  const n = numberOrZero(value);
-  if (!n) return "Not set";
-  return `${n.toLocaleString()} km`;
-}
-
-function buildVehicleTitle(item) {
-  return [item.year || "", item.make || "", item.model || "", item.trim || ""]
-    .filter(Boolean)
-    .join(" ")
-    .trim();
-}
-
-function buildListingSubtitle(item) {
-  const parts = [];
-  if (item.stock_number) parts.push(`Stock ${item.stock_number}`);
-  if (item.vin) parts.push(`VIN ${item.vin}`);
-  if (item.body_style) parts.push(item.body_style);
-  if (item.lifecycle_status) parts.push(item.lifecycle_status);
-  return parts.join(" • ") || "Vehicle details";
-}
-
-function renderBadgeHtml(status, lifecycleStatus = "") {
-  const normalized = clean(status || "posted").toLowerCase();
-  const lifecycle = clean(lifecycleStatus || "").toLowerCase();
-
-  if (lifecycle === "stale") {
-    return `<span class="badge warn">Stale</span>`;
-  }
-  if (lifecycle === "review_delete") {
-    return `<span class="badge warn">Review Delete</span>`;
-  }
-  if (lifecycle === "review_price_update") {
-    return `<span class="badge warn">Review Price</span>`;
-  }
-  if (lifecycle === "review_new") {
-    return `<span class="badge active">Review New</span>`;
-  }
-
-  let badgeClass = "warn";
-  let badgeText = normalized || "posted";
-
-  if (normalized === "active" || normalized === "posted") {
-    badgeClass = "active";
-    badgeText = normalized === "posted" ? "Posted" : "Active";
-  } else if (normalized === "sold") {
-    badgeClass = "sold";
-    badgeText = "Sold";
-  } else if (normalized === "inactive" || normalized === "failed" || normalized === "deleted") {
-    badgeClass = "inactive";
-  }
-
-  return `<span class="badge ${badgeClass}">${escapeHtml(badgeText)}</span>`;
-}
-
-function formatShortDate(value) {
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return "—";
-  return d.toLocaleDateString(undefined, {
-    month: "short",
-    day: "numeric"
-  });
-}
-
-function formatRelativeOrDate(value) {
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return "—";
-
-  const diffMs = Date.now() - d.getTime();
-  const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
-
-  if (diffHours < 1) return "Just now";
-  if (diffHours < 24) return `${diffHours}h ago`;
-
-  const diffDays = Math.floor(diffHours / 24);
-  if (diffDays < 7) return `${diffDays}d ago`;
-
-  return formatShortDate(value);
-}
-
-function toDateKey(value) {
-  const d = value instanceof Date ? value : new Date(value);
-  if (Number.isNaN(d.getTime())) return "";
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-}
-
-function getTimestamp(value) {
-  const d = new Date(value);
-  return Number.isNaN(d.getTime()) ? 0 : d.getTime();
-}
-
-function numberOrZero(value) {
-  const n = Number(value);
-  return Number.isFinite(n) ? n : 0;
-}
-
-function placeholderVehicleImage(label) {
-  const text = encodeURIComponent(clean(label || "Vehicle"));
-  return `https://placehold.co/800x500/111111/d4af37?text=${text}`;
-}
-
-function escapeHtml(str) {
-  return String(str || "")
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#039;");
-}
-
-function escapeJs(str) {
-  return String(str || "")
-    .replaceAll("\\", "\\\\")
-    .replaceAll("'", "\\'")
-    .replaceAll('"', '\\"');
-}
-
-function clean(value) {
-  return String(value || "").replace(/\s+/g, " ").trim();
-}
-
-function debounce(fn, wait = 150) {
-  let timeout = null;
-  return (...args) => {
-    clearTimeout(timeout);
-    timeout = setTimeout(() => fn(...args), wait);
-  };
-}
-
-function cryptoRandomFallback() {
-  try {
-    return crypto.randomUUID();
-  } catch {
-    return `id_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-  }
-}
-
-window.markListingSold = markListingSold;
 window.copyVehicleSummary = copyVehicleSummary;
 
 window.trackListingView = trackListingView;
