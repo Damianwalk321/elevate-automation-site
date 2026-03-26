@@ -36,7 +36,6 @@ function snoozeActionItem(listingId) {
   const ids = new Set(getSnoozedActionIds());
   ids.add(String(listingId || ""));
   setSnoozedActionIds(Array.from(ids));
-  renderPhaseOneSurface();
   renderPrioritiesPanels();
 }
 async function executeActionCenterItem(item) {
@@ -94,10 +93,32 @@ let currentProfile = null;
 let currentAccountData = null;
 let currentNormalizedSession = null;
 let dashboardSummary = null;
+
+let currentReadCopyText = "";
+function openReadCopyModal({ title = "Read in Dashboard", subtitle = "Read this in the dashboard first, then copy only if needed.", eyebrow = "Dashboard Script", body = "" } = {}) {
+  const modal = document.getElementById("readCopyModal");
+  if (!modal) return;
+  currentReadCopyText = String(body || "");
+  const titleEl = document.getElementById("readCopyModalTitle");
+  const subtitleEl = document.getElementById("readCopyModalSubtitle");
+  const eyebrowEl = document.getElementById("readCopyModalEyebrow");
+  const bodyEl = document.getElementById("readCopyModalBody");
+  if (titleEl) titleEl.textContent = title;
+  if (subtitleEl) subtitleEl.textContent = subtitle;
+  if (eyebrowEl) eyebrowEl.textContent = eyebrow;
+  if (bodyEl) bodyEl.textContent = currentReadCopyText;
+  modal.classList.add("open");
+  modal.setAttribute("aria-hidden", "false");
+}
+function closeReadCopyModal() {
+  const modal = document.getElementById("readCopyModal");
+  if (!modal) return;
+  modal.classList.remove("open");
+  modal.setAttribute("aria-hidden", "true");
+}
 let dashboardListings = [];
 let filteredListings = [];
 let listingQuickFilter = "all";
-let dashboardReadModalState = { title: "", subtitle: "", body: "", copyLabel: "Copy Text" };
 
 document.addEventListener("DOMContentLoaded", async () => {
   try {
@@ -169,6 +190,29 @@ function bindDashboardUI() {
       showSection(sectionId);
     });
   });
+
+
+const closeReadCopyModalBtn = document.getElementById("closeReadCopyModalBtn");
+if (closeReadCopyModalBtn) closeReadCopyModalBtn.addEventListener("click", closeReadCopyModal);
+const readCopyModal = document.getElementById("readCopyModal");
+if (readCopyModal) {
+  readCopyModal.addEventListener("click", (event) => {
+    if (event.target === readCopyModal) closeReadCopyModal();
+  });
+}
+const copyReadCopyModalBtn = document.getElementById("copyReadCopyModalBtn");
+if (copyReadCopyModalBtn) {
+  copyReadCopyModalBtn.addEventListener("click", async () => {
+    if (!currentReadCopyText) return;
+    try {
+      await navigator.clipboard.writeText(currentReadCopyText);
+      setBootStatus("Text copied.");
+    } catch (error) {
+      console.error("read copy modal clipboard error:", error);
+      setBootStatus("Could not copy text.");
+    }
+  });
+}
 
   const saveProfileBtn = document.getElementById("saveProfileBtn");
   if (saveProfileBtn) {
@@ -244,19 +288,19 @@ function bindDashboardUI() {
     });
   }
 
-  const copySetupStepsBtn = document.getElementById("copySetupStepsBtn");
-  if (copySetupStepsBtn) {
-    copySetupStepsBtn.addEventListener("click", () => {
-      openDashboardReadModal({
-        eyebrow: "Extension setup",
-        title: "Setup Steps",
-        subtitle: "Read the setup sequence in the dashboard. Copy only if you want to send it.",
-        body: buildSetupStepsText(),
-        copyLabel: "Copy Setup Steps"
-      });
-      setStatus("extensionActionStatus", "Setup steps opened.");
+
+const copySetupStepsBtn = document.getElementById("copySetupStepsBtn");
+if (copySetupStepsBtn) {
+  copySetupStepsBtn.addEventListener("click", () => {
+    openReadCopyModal({
+      title: "Setup Steps",
+      subtitle: "Read the setup flow here, then copy only if you need to send it elsewhere.",
+      eyebrow: "Tools",
+      body: buildSetupStepsText()
     });
-  }
+    setStatus("extensionActionStatus", "Setup steps opened.");
+  });
+}
   const copyReferralCodeBtn = document.getElementById("copyReferralCodeBtn");
   if (copyReferralCodeBtn) {
     copyReferralCodeBtn.addEventListener("click", async () => {
@@ -295,113 +339,34 @@ function bindDashboardUI() {
     });
   }
 
-  const copyAffiliateDMBtn = document.getElementById("copyAffiliateDMBtn");
-  if (copyAffiliateDMBtn) {
-    copyAffiliateDMBtn.addEventListener("click", () => {
-      const growth = dashboardSummary?.growth_actions || {};
-      openDashboardReadModal({
-        eyebrow: "Affiliate outreach",
-        title: "DM Script",
-        subtitle: "Read the DM in-dashboard, then copy if you want to send it.",
-        body: growth.invite_teammate || `I have early access to Elevate Automation. It helps salespeople post inventory faster, stay consistent, and track performance. If you want founder access, use my code ${getAffiliateCode() || "[YOUR CODE]"}.`,
-        copyLabel: "Copy DM Script"
-      });
-    });
-  }
 
-  const copyAffiliatePitchBtn = document.getElementById("copyAffiliatePitchBtn");
-  if (copyAffiliatePitchBtn) {
-    copyAffiliatePitchBtn.addEventListener("click", () => {
-      const growth = dashboardSummary?.growth_actions || {};
-      openDashboardReadModal({
-        eyebrow: "Affiliate pitch",
-        title: "Short Pitch",
-        subtitle: "Keep this readable in-dashboard. Copy only when needed.",
-        body: growth.affiliate_pitch_short || `I’m a founding partner with Elevate Automation. It helps salespeople post inventory faster and manage listing performance more consistently. Use my code ${getAffiliateCode() || "[YOUR CODE]"} if you want founder access.`,
-        copyLabel: "Copy Short Pitch"
-      });
-    });
-  }
+const copyAffiliateDMBtn = document.getElementById("copyAffiliateDMBtn");
+if (copyAffiliateDMBtn) {
+  copyAffiliateDMBtn.addEventListener("click", () => {
+    const code = getAffiliateCode() || "[YOUR CODE]";
+    const dm = `I have early access to Elevate Automation. It helps salespeople post inventory faster, stay consistent, and track performance. If you want founder access, use my code ${code}.`;
+    openReadCopyModal({ title: "Affiliate DM Script", subtitle: "Read the message first, then copy from the modal only if you need it.", eyebrow: "Affiliate Center", body: dm });
+  });
+}
 
-  const copyAffiliatePostBtn = document.getElementById("copyAffiliatePostBtn");
-  if (copyAffiliatePostBtn) {
-    copyAffiliatePostBtn.addEventListener("click", () => {
-      const growth = dashboardSummary?.growth_actions || {};
-      openDashboardReadModal({
-        eyebrow: "Affiliate post",
-        title: "Story / Post Copy",
-        subtitle: "Read the post here first. Copy only if you want to publish it.",
-        body: growth.dealer_invite_pitch || `I’m a founding partner with Elevate Automation. If you post inventory consistently and want a faster way to build Marketplace presence, message me or use this link: ${getAffiliateLink() || "[YOUR LINK]"}`,
-        copyLabel: "Copy Story / Post"
-      });
-    });
-  }
+const copyAffiliatePitchBtn = document.getElementById("copyAffiliatePitchBtn");
+if (copyAffiliatePitchBtn) {
+  copyAffiliatePitchBtn.addEventListener("click", () => {
+    const code = getAffiliateCode() || "[YOUR CODE]";
+    const pitch = `I’m a founding partner with Elevate Automation. It helps salespeople post inventory faster and manage listing performance more consistently. Use my code ${code} if you want founder access.`;
+    openReadCopyModal({ title: "Affiliate Short Pitch", subtitle: "Read this in-dashboard first so the user does not need Notes just to understand it.", eyebrow: "Affiliate Center", body: pitch });
+  });
+}
 
+const copyAffiliatePostBtn = document.getElementById("copyAffiliatePostBtn");
+if (copyAffiliatePostBtn) {
+  copyAffiliatePostBtn.addEventListener("click", () => {
+    const link = getAffiliateLink() || "[YOUR LINK]";
+    const post = `I’m a founding partner with Elevate Automation. If you post inventory consistently and want a faster way to build Marketplace presence, message me or use this link: ${link}`;
+    openReadCopyModal({ title: "Affiliate Story / Post", subtitle: "Read this in-dashboard first, then copy only if you want to publish it elsewhere.", eyebrow: "Affiliate Center", body: post });
+  });
+}
 
-  const viewTeammateInviteBtn = document.getElementById("viewTeammateInviteBtn");
-  if (viewTeammateInviteBtn) {
-    viewTeammateInviteBtn.addEventListener("click", () => {
-      const growth = dashboardSummary?.growth_actions || {};
-      openDashboardReadModal({
-        eyebrow: "Growth tools",
-        title: "Teammate Invite",
-        subtitle: "Read the invite in-dashboard, then copy only if needed.",
-        body: growth.invite_teammate || "Invite copy will appear here once dashboard data loads.",
-        copyLabel: "Copy Teammate Invite"
-      });
-    });
-  }
-
-  const viewDealerInviteBtn = document.getElementById("viewDealerInviteBtn");
-  if (viewDealerInviteBtn) {
-    viewDealerInviteBtn.addEventListener("click", () => {
-      const growth = dashboardSummary?.growth_actions || {};
-      openDashboardReadModal({
-        eyebrow: "Growth tools",
-        title: "Dealer Invite",
-        subtitle: "Use this when talking to managers or ownership.",
-        body: growth.invite_manager || growth.dealer_invite_pitch || "Dealer invite copy will appear here once dashboard data loads.",
-        copyLabel: "Copy Dealer Invite"
-      });
-    });
-  }
-
-  const viewAffiliatePitchTopBtn = document.getElementById("viewAffiliatePitchTopBtn");
-  if (viewAffiliatePitchTopBtn) {
-    viewAffiliatePitchTopBtn.addEventListener("click", () => {
-      const growth = dashboardSummary?.growth_actions || {};
-      openDashboardReadModal({
-        eyebrow: "Growth tools",
-        title: "Affiliate Pitch",
-        subtitle: "Use this for short explanation and referral conversations.",
-        body: growth.affiliate_pitch_operator || growth.affiliate_pitch_short || "Affiliate pitch will appear here once dashboard data loads.",
-        copyLabel: "Copy Affiliate Pitch"
-      });
-    });
-  }
-
-  const dashboardReadModal = document.getElementById("dashboardReadModal");
-  const dashboardReadModalCloseTop = document.getElementById("dashboardReadModalCloseTop");
-  const dashboardReadModalCloseBtn = document.getElementById("dashboardReadModalCloseBtn");
-  const dashboardReadModalCopyBtn = document.getElementById("dashboardReadModalCopyBtn");
-  if (dashboardReadModal) {
-    dashboardReadModal.addEventListener("click", (event) => {
-      if (event.target === dashboardReadModal) closeDashboardReadModal();
-    });
-  }
-  if (dashboardReadModalCloseTop) dashboardReadModalCloseTop.addEventListener("click", closeDashboardReadModal);
-  if (dashboardReadModalCloseBtn) dashboardReadModalCloseBtn.addEventListener("click", closeDashboardReadModal);
-  if (dashboardReadModalCopyBtn) {
-    dashboardReadModalCopyBtn.addEventListener("click", async () => {
-      try {
-        await navigator.clipboard.writeText(dashboardReadModalState.body || "");
-        setBootStatus(`${dashboardReadModalState.copyLabel || "Text"} copied.`);
-      } catch (error) {
-        console.error("dashboardReadModal copy error:", error);
-        setBootStatus("Could not copy text.");
-      }
-    });
-  }
 
   const openBillingPortalBtn = document.getElementById("openBillingPortalBtn");
   if (openBillingPortalBtn) {
@@ -799,13 +764,7 @@ function mergeSummaryWithListings(summary, listings) {
     alerts: Array.isArray(summary.alerts) ? summary.alerts : [],
     scorecards: summary.scorecards || {},
     intelligence: summary.intelligence || {},
-    affiliate: summary.affiliate || {},
-    activation: summary.activation || {},
-    first_win: summary.first_win || {},
-    roi_snapshot: summary.roi_snapshot || {},
-    growth_actions: summary.growth_actions || {},
-    setup_blockers: Array.isArray(summary.setup_blockers) ? summary.setup_blockers : [],
-    setup_recommendations: Array.isArray(summary.setup_recommendations) ? summary.setup_recommendations : []
+    affiliate: summary.affiliate || {}
   };
 }
 
@@ -834,7 +793,59 @@ function renderDashboardAnalytics() {
   renderAffiliateCenter();
   renderTopListings(dashboardListings);
   renderRecentActivity(dashboardListings);
+  renderAnalyticsHub();
   drawActivityChart(buildChartSeries());
+}
+
+
+function renderAnalyticsHub() {
+  const roi = dashboardSummary?.roi_snapshot || {};
+  const postsToday = numberOrZero(dashboardSummary?.posts_today);
+  const postingLimit = numberOrZero(currentNormalizedSession?.subscription?.posting_limit ?? dashboardSummary?.account_snapshot?.posting_limit);
+  const reviewQueue = numberOrZero(dashboardSummary?.review_queue_count);
+  const staleListings = numberOrZero(dashboardSummary?.stale_listings);
+  const weakListings = numberOrZero(dashboardSummary?.weak_listings);
+  const messages = numberOrZero(dashboardSummary?.total_messages);
+  const views = numberOrZero(dashboardSummary?.total_views);
+  const weekMinutes = numberOrZero(roi.estimated_minutes_saved_week || postsToday * 18);
+  const dayMinutes = numberOrZero(roi.estimated_minutes_saved_today || postsToday * 18);
+  const estimatedValue = Number(roi.estimated_value_saved || (((dayMinutes / 60) * 30).toFixed(2)) || 0);
+  const efficiency = postingLimit > 0 ? Math.min(100, Math.round((postsToday / postingLimit) * 100)) : 0;
+
+  setTextByIdForAll("analyticsTimeSavedToday", `${dayMinutes} min`);
+  setTextByIdForAll("analyticsTimeSavedWeek", `${weekMinutes} min`);
+  setTextByIdForAll("analyticsEstimatedValue", formatCurrency(estimatedValue));
+  setTextByIdForAll("analyticsEfficiencyScore", `${efficiency}%`);
+
+  const systemHealth = document.getElementById("analyticsSystemHealth");
+  if (systemHealth) {
+    systemHealth.innerHTML = [
+      `<div><strong>Review Queue:</strong> ${reviewQueue}</div>`,
+      `<div><strong>Stale Listings:</strong> ${staleListings}</div>`,
+      `<div><strong>Weak Listings:</strong> ${weakListings}</div>`,
+      `<div><strong>Lifecycle Updated:</strong> ${escapeHtml(cleanText(dashboardSummary?.lifecycle_updated_at || dashboardSummary?.account_snapshot?.current_period_end || '—'))}</div>`
+    ].join("");
+  }
+
+  const growthSignals = document.getElementById("analyticsGrowthSignals");
+  if (growthSignals) {
+    growthSignals.innerHTML = [
+      `<div><strong>Posts Today:</strong> ${postsToday}</div>`,
+      `<div><strong>Views:</strong> ${views}</div>`,
+      `<div><strong>Messages:</strong> ${messages}</div>`,
+      `<div><strong>Top Listing:</strong> ${escapeHtml(cleanText(dashboardSummary?.top_listing_title || 'None yet'))}</div>`
+    ].join("");
+  }
+
+  const oppSignals = document.getElementById("analyticsOpportunitySignals");
+  if (oppSignals) {
+    oppSignals.innerHTML = [
+      `<div><strong>Posts Remaining:</strong> ${numberOrZero(currentNormalizedSession?.subscription?.posts_remaining ?? dashboardSummary?.account_snapshot?.posts_remaining)}</div>`,
+      `<div><strong>Queued Vehicles:</strong> ${numberOrZero(dashboardSummary?.queue_count)}</div>`,
+      `<div><strong>Messages Ready For Follow-Up:</strong> ${messages}</div>`,
+      `<div><strong>Promote / Review Opportunities:</strong> ${numberOrZero(dashboardSummary?.needs_action_count)}</div>`
+    ].join("");
+  }
 }
 
 function applyListingFiltersAndRender() {
@@ -1004,88 +1015,6 @@ function renderListingsGrid(listings) {
   setStatus("listingGridStatus", `${listings.length} listing${listings.length === 1 ? "" : "s"} loaded.`);
 }
 
-
-
-function renderPhaseOneSurface() {
-  const activation = dashboardSummary?.activation || {};
-  const firstWin = dashboardSummary?.first_win || {};
-  const roi = dashboardSummary?.roi_snapshot || {};
-  const growth = dashboardSummary?.growth_actions || {};
-  const blockers = Array.isArray(activation.blocked_by) ? activation.blocked_by : [];
-  const nextActions = Array.isArray(activation.next_best_actions) ? activation.next_best_actions : (dashboardSummary?.setup_recommendations || []);
-
-  setTextByIdForAll("activationPercent", `${numberOrZero(activation.percent)}%`);
-  setTextByIdForAll("activationSummary", `${numberOrZero(activation.completed_steps)} of ${numberOrZero(activation.total_steps)} core activation steps completed.`);
-  const progressBar = document.getElementById("activationProgressBar");
-  if (progressBar) progressBar.style.width = `${numberOrZero(activation.percent)}%`;
-
-  const blockersWrap = document.getElementById("activationBlockers");
-  if (blockersWrap) {
-    const lines = blockers.length ? blockers.slice(0, 3) : ["Activation looks healthy. Keep stacking daily usage."];
-    blockersWrap.innerHTML = lines.map((line) => `<div>${escapeHtml(line)}</div>`).join("");
-  }
-
-  setTextByIdForAll("firstWinStatus", firstWin.has_first_post ? "Unlocked" : "Not Yet");
-  setTextByIdForAll("firstWinSummary", clean(firstWin.milestone_text || "Complete your first post to unlock momentum."));
-  const firstWinWrap = document.getElementById("firstWinChecklist");
-  if (firstWinWrap) {
-    const milestones = [
-      `${firstWin.has_first_post ? "✅" : "•"} First vehicle posted`,
-      `${firstWin.has_first_sync ? "✅" : "•"} First listing synced`,
-      `${firstWin.has_first_message ? "✅" : "•"} First message tracked`
-    ];
-    firstWinWrap.innerHTML = milestones.map((line) => `<div>${escapeHtml(line)}</div>`).join("");
-  }
-
-  setTextByIdForAll("roiMinutesToday", `${numberOrZero(roi.estimated_minutes_saved_today)} min`);
-  setTextByIdForAll("roiSummary", `Estimated ${numberOrZero(roi.estimated_minutes_saved_week)} minutes saved this week.`);
-  const roiWrap = document.getElementById("roiMiniStats");
-  if (roiWrap) {
-    const lines = [
-      `${numberOrZero(roi.estimated_manual_posts_avoided)} manual posts avoided this week`,
-      `${formatCurrency(roi.estimated_value_saved || 0)} estimated weekly operator value`,
-      `${numberOrZero(roi.total_messages)} tracked buyer message${numberOrZero(roi.total_messages) === 1 ? "" : "s"}`
-    ];
-    roiWrap.innerHTML = lines.map((line) => `<div>${escapeHtml(line)}</div>`).join("");
-  }
-
-  const nextWrap = document.getElementById("nextBestActions");
-  if (nextWrap) {
-    const actionLines = nextActions.length ? nextActions : ["No major blockers right now. Keep using the queue and action center."];
-    nextWrap.innerHTML = actionLines.slice(0, 4).map((line) => `<div>${escapeHtml(line)}</div>`).join("");
-  }
-
-  const growthQuickNote = document.getElementById("growthQuickNote");
-  if (growthQuickNote) {
-    growthQuickNote.textContent = clean(growth.affiliate_pitch_short || "Growth copy loads here after dashboard data finishes syncing.");
-  }
-}
-
-function openDashboardReadModal({ eyebrow = "Read in dashboard", title = "Dashboard Copy", subtitle = "Read here first. Copy only when needed.", body = "", copyLabel = "Copy Text" } = {}) {
-  dashboardReadModalState = { title, subtitle, body, copyLabel };
-  const overlay = document.getElementById("dashboardReadModal");
-  const eyebrowEl = document.getElementById("dashboardReadModalEyebrow");
-  const titleEl = document.getElementById("dashboardReadModalTitle");
-  const subtitleEl = document.getElementById("dashboardReadModalSubtitle");
-  const bodyEl = document.getElementById("dashboardReadModalBody");
-  const copyBtn = document.getElementById("dashboardReadModalCopyBtn");
-  if (eyebrowEl) eyebrowEl.textContent = eyebrow;
-  if (titleEl) titleEl.textContent = title;
-  if (subtitleEl) subtitleEl.textContent = subtitle;
-  if (bodyEl) bodyEl.textContent = body || "";
-  if (copyBtn) copyBtn.textContent = copyLabel || "Copy Text";
-  if (overlay) {
-    overlay.classList.add("open");
-    overlay.setAttribute("aria-hidden", "false");
-  }
-}
-
-function closeDashboardReadModal() {
-  const overlay = document.getElementById("dashboardReadModal");
-  if (!overlay) return;
-  overlay.classList.remove("open");
-  overlay.setAttribute("aria-hidden", "true");
-}
 
 function renderAffiliateCenter() {
   const affiliate = dashboardSummary?.affiliate || {};
@@ -1433,11 +1362,11 @@ function showSection(sectionId) {
   const titleMap = {
     overview: "Founder Beta Dashboard",
     profile: "Profile & Dealer Setup",
-    extension: "Extension Control",
+    extension: "Tools",
     compliance: "Compliance",
     affiliate: "Affiliate Center",
     billing: "Billing & Access",
-    tools: "Tools & Modules"
+    tools: "Analytics"
   };
 
   const pageTitle = document.getElementById("dashboardPageTitle");
