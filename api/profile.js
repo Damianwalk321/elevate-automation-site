@@ -28,10 +28,26 @@ function buildCompletion(data = {}) {
     listing_location: Boolean(clean(data.listing_location))
   };
   const total = Object.keys(checks).length;
-  const complete = Object.values(checks).filter(Boolean).length;
+  const completedFields = Object.entries(checks).filter(([, value]) => Boolean(value)).map(([key]) => key);
+  const missingFields = Object.entries(checks).filter(([, value]) => !value).map(([key]) => key);
+  const blockers = missingFields.map((key) => {
+    if (key === "full_name") return "Add your salesperson name.";
+    if (key === "dealership") return "Add your dealership or company name.";
+    if (key === "province") return "Select your province.";
+    if (key === "compliance_mode") return "Choose your compliance mode.";
+    if (key === "inventory_url") return "Save your inventory URL.";
+    if (key === "listing_location") return "Set your default listing location.";
+    return `Complete ${key}.`;
+  });
+  const recommendedNextStep = blockers[0] || "Profile is ready.";
   return {
-    ready: complete === total,
-    score: total ? complete / total : 0,
+    ready: completedFields.length === total,
+    score: total ? completedFields.length / total : 0,
+    percent: total ? Math.round((completedFields.length / total) * 100) : 0,
+    completed_fields: completedFields,
+    missing_fields: missingFields,
+    blockers,
+    recommended_next_step: recommendedNextStep,
     checks
   };
 }
