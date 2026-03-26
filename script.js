@@ -102,6 +102,19 @@ async function getLoggedInUserEmail() {
   }
 }
 
+
+async function getAuthAccessTokenForCheckout() {
+  try {
+    if (window.supabaseClient?.auth?.getSession) {
+      const { data } = await window.supabaseClient.auth.getSession();
+      return data?.session?.access_token || "";
+    }
+  } catch (error) {
+    console.error("Could not read checkout auth token:", error);
+  }
+  return "";
+}
+
 async function startCheckout(planType, userType, accessType) {
   try {
     const email = await getLoggedInUserEmail();
@@ -118,10 +131,13 @@ async function startCheckout(planType, userType, accessType) {
 
   const lockedReferral = getStoredReferralData();
 
+    const token = await getAuthAccessTokenForCheckout();
     const response = await fetch("/api/create-checkout-session", {
       method: "POST",
       headers: {
-        "Content-Type": "application/json"
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        ...(token ? { "x-elevate-client": "dashboard" } : {})
       },
       body: JSON.stringify({
         email,
