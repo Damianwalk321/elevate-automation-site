@@ -1019,6 +1019,21 @@
           </div>
         </div>
 
+
+        <div class="card upgrade-card" style="margin-bottom:20px;">
+          <div class="section-head">
+            <div>
+              <div class="module-group-label">Upgrade Trigger</div>
+              <h2 style="margin-top:6px;">Leverage Upgrade</h2>
+              <div class="subtext">Upgrade prompts appear when the product detects real traction or friction.</div>
+            </div>
+            <button id="overviewUpgradeBtn" class="action-btn" type="button">View Upgrade Path</button>
+          </div>
+          <div id="overviewUpgradePanel" class="upgrade-copy">
+            <div>Loading upgrade guidance...</div>
+          </div>
+        </div>
+
         <div class="grid-4">
           <div class="card kpi-card">
             <div class="stat-label">Active Listings</div>
@@ -1303,6 +1318,18 @@
   </div>
 
   
+  <div class="card upgrade-card" style="margin-top:20px; margin-bottom:20px;">
+    <div class="section-head">
+      <div>
+        <div class="module-group-label">Premium Access</div>
+        <h2 style="margin-top:6px;">Tool Unlock Path</h2>
+        <div class="subtext">See what is included now, what opens with Pro, and why it matters.</div>
+      </div>
+      <button id="toolsUpgradeBtn" class="action-btn" type="button">Compare Access</button>
+    </div>
+    <div id="toolsUpgradePanel" class="upgrade-copy"><div>Loading premium tool access...</div></div>
+  </div>
+
   <div class="card" style="margin-top:20px;">
     <div class="module-toolbar">
       <div>
@@ -1327,6 +1354,7 @@
             <option value="live">Live Now</option>
             <option value="beta">Founder Beta</option>
             <option value="planned">Coming Soon</option>
+            <option value="pro">Pro</option>
             <option value="locked">Locked</option>
           </select>
         </div>
@@ -1336,6 +1364,7 @@
       <span class="tool-status live">Live Now</span>
       <span class="tool-status beta">Founder Beta</span>
       <span class="tool-status planned">Coming Soon</span>
+      <span class="tool-status pro">Pro</span>
       <span class="tool-status locked">Locked</span>
     </div>
     <div class="tools-grid" id="toolsModuleGrid">
@@ -1343,14 +1372,14 @@
       <div class="tool-tile" data-module-group="core" data-module-state="live"><h3>Dealer Scanner Routing</h3><p>Dealer website, inventory URL, and scanner type stored per account.</p><div class="tool-status live">Live Now</div></div>
       <div class="tool-tile" data-module-group="core" data-module-state="live"><h3>Compliance Engine</h3><p>AB / BC output blocks powered by saved profile data.</p><div class="tool-status live">Live Now</div></div>
       <div class="tool-tile" data-module-group="core" data-module-state="beta"><h3>Posting Limits</h3><p>Daily plan enforcement, account truth, and register-post state moving toward hard lock reliability.</p><div class="tool-status beta">Founder Beta</div></div>
-      <div class="tool-tile" data-module-group="pipeline" data-module-state="planned"><h3>CRM</h3><p>Lead memory, pipeline tracking, and follow-up visibility for reps and managers.</p><div class="tool-status planned">Coming Soon</div></div>
-      <div class="tool-tile" data-module-group="pipeline" data-module-state="planned"><h3>Automation</h3><p>Workflow triggers for reminders, stale listing actions, and follow-up execution.</p><div class="tool-status planned">Coming Soon</div></div>
-      <div class="tool-tile" data-module-group="pipeline" data-module-state="planned"><h3>Mass SMS</h3><p>Outbound campaign engine for inventory, appointments, and reactivation.</p><div class="tool-status planned">Coming Soon</div></div>
-      <div class="tool-tile" data-module-group="pipeline" data-module-state="planned"><h3>Scheduler</h3><p>Booking, cadence, and timed action control inside one operator flow.</p><div class="tool-status planned">Coming Soon</div></div>
+      <div class="tool-tile" data-module-group="pipeline" data-module-state="pro" data-required-plan="pro"><h3>CRM</h3><p>Lead memory, pipeline tracking, and follow-up visibility for reps and managers.</p><div class="tool-status planned">Coming Soon</div></div>
+      <div class="tool-tile" data-module-group="pipeline" data-module-state="pro" data-required-plan="pro"><h3>Automation</h3><p>Workflow triggers for reminders, stale listing actions, and follow-up execution.</p><div class="tool-status planned">Coming Soon</div></div>
+      <div class="tool-tile" data-module-group="pipeline" data-module-state="pro" data-required-plan="pro"><h3>Mass SMS</h3><p>Outbound campaign engine for inventory, appointments, and reactivation.</p><div class="tool-status planned">Coming Soon</div></div>
+      <div class="tool-tile" data-module-group="pipeline" data-module-state="pro" data-required-plan="pro"><h3>Scheduler</h3><p>Booking, cadence, and timed action control inside one operator flow.</p><div class="tool-status pro">Pro</div></div>
       <div class="tool-tile" data-module-group="growth" data-module-state="live"><h3>Analytics</h3><p>Time saved, efficiency, traction, and revenue-facing opportunity signals.</p><div class="tool-status live">Live Now</div></div>
       <div class="tool-tile" data-module-group="growth" data-module-state="live"><h3>Affiliate Center</h3><p>Referral economics, scripts, payout visibility, and partner growth tools.</p><div class="tool-status live">Live Now</div></div>
       <div class="tool-tile" data-module-group="growth" data-module-state="beta"><h3>AI Content</h3><p>Caption, title, and listing improvement support for faster execution.</p><div class="tool-status beta">Founder Beta</div></div>
-      <div class="tool-tile" data-module-group="growth" data-module-state="locked"><h3>Market Intelligence</h3><p>VIN-level learning, pricing feedback, and priority recommendations.</p><div class="tool-status locked">Locked</div></div>
+      <div class="tool-tile" data-module-group="growth" data-module-state="pro" data-required-plan="pro"><h3>Market Intelligence</h3><p>VIN-level learning, pricing feedback, and priority recommendations.</p><div class="tool-status pro">Pro</div></div>
     </div>
     <div class="card" style="margin-top:20px;">
       <div class="section-head">
@@ -1495,6 +1524,18 @@
     <div class="card"><div class="stat-label">Estimated Weekly Value</div><div class="stat-value" id="analyticsEstimatedValue">$0</div><div class="stat-sub">Founder-stage ROI estimate from time saved</div></div>
     <div class="card"><div class="stat-label">Execution Efficiency</div><div class="stat-value" id="analyticsEfficiencyScore">0%</div><div class="stat-sub">Posts used vs available capacity</div></div>
   </div>
+  <div class="card upgrade-card" style="margin-bottom:20px;">
+    <div class="section-head">
+      <div>
+        <div class="module-group-label">Premium Analytics</div>
+        <h2 style="margin-top:6px;">Upgrade Triggers & Premium Insights</h2>
+        <div class="subtext">A cleaner bridge from basic visibility into deeper revenue guidance.</div>
+      </div>
+      <button id="analyticsUpgradeBtn" class="action-btn" type="button">See Premium Preview</button>
+    </div>
+    <div id="analyticsUpgradePanel" class="upgrade-copy"><div>Loading analytics upgrade guidance...</div></div>
+  </div>
+
   <div class="analytics-shell">
     <div class="card">
       <div class="graph-wrap">
