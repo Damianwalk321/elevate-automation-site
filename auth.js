@@ -1,4 +1,3 @@
-
 import { createClient } from "@supabase/supabase-js";
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
@@ -6,6 +5,10 @@ const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY || process.env.NEXT_PUBL
 
 function clean(value) {
   return String(value || "").trim();
+}
+
+export function isDashboardClient(req) {
+  return clean(req?.headers?.["x-elevate-client"] || req?.headers?.["X-ELEVATE-CLIENT"] || "").toLowerCase() === "dashboard";
 }
 
 export async function getVerifiedRequestUser(req) {
@@ -24,6 +27,16 @@ export async function getVerifiedRequestUser(req) {
   } catch {
     return null;
   }
+}
+
+export async function requireVerifiedDashboardUser(req, res) {
+  const verifiedUser = await getVerifiedRequestUser(req);
+  if (isDashboardClient(req) && !verifiedUser) {
+    res.status(401).setHeader("Content-Type", "application/json");
+    res.send(JSON.stringify({ error: "Unauthorized", requires_auth: true }));
+    return null;
+  }
+  return verifiedUser;
 }
 
 export function getTrustedIdentity({ verifiedUser = null, body = {}, query = {} } = {}) {
