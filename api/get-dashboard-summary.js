@@ -1,3 +1,4 @@
+
 import { createClient } from "@supabase/supabase-js";
 
 const supabase = createClient(
@@ -73,69 +74,6 @@ function monthKey(value = new Date()) {
   const { year, month } = zonedParts(value);
   return `${year}-${month}`;
 }
-
-function parseTs(value) {
-  const ts = value ? new Date(value).getTime() : 0;
-  return Number.isFinite(ts) ? ts : 0;
-}
-function daysBetweenNow(value) {
-  const ts = parseTs(value);
-  if (!ts) return 9999;
-  return Math.max(0, Math.floor((Date.now() - ts) / 86400000));
-}
-function resolveLifecycleState(row = {}) {
-  const rawStatus = normalizeStatus(row.status);
-  const rawLifecycle = normalizeLifecycleStatus(row.lifecycle_status, row.review_bucket);
-  const rawBucket = normalizeReviewBucket(row.review_bucket);
-  const lastSeenAt = row.last_seen_at || row.updated_at || row.posted_at || null;
-  const daysSinceSeen = daysBetweenNow(lastSeenAt);
-  const soldLike = rawStatus === 'sold';
-  const terminalLike = ['deleted', 'inactive', 'failed'].includes(rawStatus);
-  const reviewDeleteLike = rawLifecycle === 'review_delete' || rawBucket === 'removedvehicles';
-  const explicitStale = rawStatus === 'stale' || rawLifecycle === 'stale';
-  const staleByTime = !soldLike && !terminalLike && !reviewDeleteLike && daysSinceSeen >= 2;
-
-  let resolvedStatus = rawStatus || 'active';
-  let resolvedLifecycle = rawLifecycle || 'active';
-  let resolvedBucket = rawBucket;
-
-  if (soldLike) {
-    resolvedStatus = 'sold';
-    resolvedLifecycle = 'sold';
-    resolvedBucket = '';
-  } else if (terminalLike) {
-    resolvedStatus = rawStatus;
-    resolvedLifecycle = rawStatus;
-    resolvedBucket = '';
-  } else if (reviewDeleteLike) {
-    resolvedStatus = 'stale';
-    resolvedLifecycle = 'review_delete';
-    resolvedBucket = 'removedvehicles';
-  } else if (explicitStale || staleByTime) {
-    resolvedStatus = 'stale';
-    resolvedLifecycle = 'stale';
-    resolvedBucket = resolvedBucket === 'removedvehicles' ? '' : resolvedBucket;
-  } else {
-    resolvedStatus = 'active';
-    if (['review_price_update', 'review_new'].includes(resolvedLifecycle)) {
-      # keep review lifecycle while live
-    } else {
-      resolvedLifecycle = 'active';
-    }
-    if (!['pricechanges', 'newvehicles'].includes(resolvedBucket)) resolvedBucket = '';
-  }
-
-  return {
-    status: resolvedStatus,
-    lifecycle_status: resolvedLifecycle,
-    review_bucket: resolvedBucket,
-    days_since_seen: daysSinceSeen,
-    sold_like: soldLike,
-    review_delete_like: resolvedLifecycle === 'review_delete' || resolvedBucket === 'removedvehicles',
-    stale_like: resolvedStatus === 'stale' || resolvedLifecycle === 'stale' || resolvedLifecycle === 'review_delete' || resolvedBucket === 'removedvehicles',
-    active_like: resolvedStatus === 'active'
-  };
-}
 function hasTestingLimitOverride(email) {
   return FORCE_25_EMAILS.has(normalizeEmail(email));
 }
@@ -156,30 +94,34 @@ function toPriceBand(price) {
   const n = safeNumber(price, 0);
   if (!n) return "Unknown";
   if (n < 15000) return "Under $15k";
-  if (n < 25000) return "$15kâ$25k";
-  if (n < 40000) return "$25kâ$40k";
+  if (n < 25000) return "$15k–$25k";
+  if (n < 40000) return "$25k–$40k";
   return "$40k+";
 }
-
 function buildListingIntelligence(row = {}) {
-  const lifecycle = resolveLifecycleState(row);
   const postedValue = row.posted_at || row.created_at || row.updated_at || null;
   const postedTs = postedValue ? new Date(postedValue).getTime() : 0;
   const ageDays = postedTs > 0 ? Math.max(0, Math.floor((Date.now() - postedTs) / 86400000)) : 0;
   const views = safeNumber(row.views_count, 0);
   const messages = safeNumber(row.messages_count, 0);
-  const highViewsNoMessages = lifecycle.active_like && views >= 20 && messages === 0;
-  const promoteNow = lifecycle.active_like && views >= 20 && messages >= 1;
-  const lowPerformance = lifecycle.active_like && ageDays >= 7 && views < 5 && messages === 0;
-  const weak = lifecycle.stale_like || lowPerformance;
-  const needsAction = lifecycle.stale_like || lowPerformance || highViewsNoMessages || lifecycle.lifecycle_status === 'review_price_update' || lifecycle.review_bucket === 'pricechanges';
-  const repostToday = lifecycle.active_like && ageDays >= 3 && views === 0;
+  const status = normalizeStatus(row.status);
+  const lifecycle = normalizeLifecycleStatus(row.lifecycle_status, row.review_bucket);
+  const reviewBucket = normalizeReviewBucket(row.review_bucket);
+  const staleLike = status === 'stale' || lifecycle === 'stale' || lifecycle === 'review_delete' || reviewBucket === 'removedvehicles';
+  const likelySold = lifecycle === 'review_delete' || reviewBucket === 'removedvehicles';
+  const activeLike = !['sold', 'deleted', 'inactive'].includes(status) && lifecycle !== 'review_delete';
+  const highViewsNoMessages = activeLike && views >= 20 && messages === 0;
+  const promoteNow = activeLike && views >= 20 && messages >= 1;
+  const lowPerformance = activeLike && ageDays >= 7 && views < 5 && messages === 0;
+  const weak = staleLike || lowPerformance;
+  const needsAction = staleLike || lowPerformance || highViewsNoMessages || lifecycle === 'review_price_update' || reviewBucket === 'pricechanges';
+  const repostToday = activeLike && ageDays >= 3 && views === 0;
 
   let healthScore = 100;
   healthScore -= Math.min(ageDays * 2, 30);
   healthScore += Math.min(messages * 16, 40);
   healthScore += Math.min(views, 20);
-  if (lifecycle.stale_like) healthScore -= 35;
+  if (staleLike) healthScore -= 35;
   if (lowPerformance) healthScore -= 20;
   if (highViewsNoMessages) healthScore -= 12;
   healthScore = Math.max(0, Math.min(100, Math.round(healthScore)));
@@ -190,9 +132,9 @@ function buildListingIntelligence(row = {}) {
   else if (weak) healthLabel = 'Weak';
 
   let recommendedAction = 'Keep live';
-  if (lifecycle.review_delete_like) recommendedAction = 'Check if sold or stale';
-  else if (lifecycle.lifecycle_status === 'review_price_update' || lifecycle.review_bucket === 'pricechanges' || highViewsNoMessages) recommendedAction = 'Review price';
-  else if (lifecycle.lifecycle_status === 'review_new' || lifecycle.review_bucket === 'newvehicles') recommendedAction = 'Review new listing';
+  if (likelySold) recommendedAction = 'Check if sold or stale';
+  else if (lifecycle === 'review_price_update' || reviewBucket === 'pricechanges' || highViewsNoMessages) recommendedAction = 'Review price';
+  else if (lifecycle === 'review_new' || reviewBucket === 'newvehicles') recommendedAction = 'Review new listing';
   else if (repostToday) recommendedAction = 'Repost today';
   else if (lowPerformance) recommendedAction = 'Refresh title/photos';
   else if (promoteNow) recommendedAction = 'Promote now';
@@ -235,8 +177,7 @@ function buildListingIntelligence(row = {}) {
 
   return {
     age_days: ageDays,
-    days_since_seen: lifecycle.days_since_seen,
-    likely_sold: lifecycle.review_delete_like,
+    likely_sold: likelySold,
     promote_now: promoteNow,
     low_performance: lowPerformance,
     repost_today: repostToday,
@@ -250,17 +191,10 @@ function buildListingIntelligence(row = {}) {
     pricing_insight: pricingInsight,
     content_score: contentScore,
     content_feedback: contentFeedback,
-    popularity_score: messages * 1000 + views * 10 + (postedTs / 100000000),
-    resolved_status: lifecycle.status,
-    resolved_lifecycle_status: lifecycle.lifecycle_status,
-    resolved_review_bucket: lifecycle.review_bucket,
-    stale_like: lifecycle.stale_like,
-    active_like: lifecycle.active_like,
-    review_delete_like: lifecycle.review_delete_like
+    popularity_score: messages * 1000 + views * 10 + (postedTs / 100000000)
   };
 }
 function normalizeListingRow(row = {}, source = 'user_listings') {
-  const resolvedLifecycle = resolveLifecycleState(row);
   const normalized = {
     ...row,
     id: clean(row.id || ''),
@@ -276,9 +210,6 @@ function normalizeListingRow(row = {}, source = 'user_listings') {
     messages_count: safeNumber(row.messages_count, 0),
     price: safeNumber(row.price, 0),
     mileage: safeNumber(row.mileage || row.kilometers || row.km, 0),
-    status: resolvedLifecycle.status,
-    lifecycle_status: resolvedLifecycle.lifecycle_status,
-    review_bucket: resolvedLifecycle.review_bucket,
     body_style: clean(row.body_style || ''),
     make: clean(row.make || ''),
     model: clean(row.model || ''),
@@ -392,9 +323,8 @@ function estimatePlanMonthlyRevenue(planValue) {
   if (plan === 'pro' || (!plan.includes('founder') && plan.includes('pro'))) return 79;
   return 39;
 }
-async function getAffiliateSummary({ referralCode, referralSource, email }) {
+async function getAffiliateSummary({ referralCode, email }) {
   const code = clean(referralCode || '');
-  const ownerSource = clean(referralSource || '');
   const ownerEmail = normalizeEmail(email || '');
   const base = {
     referral_code: code,
@@ -434,7 +364,6 @@ async function getAffiliateSummary({ referralCode, referralSource, email }) {
   let churned = 0;
   let estimatedMrr = 0;
   const recent = [];
-  const sourceCounts = new Map();
 
   for (const row of rows) {
     const snapshot = row?.account_snapshot && typeof row.account_snapshot === 'object' ? row.account_snapshot : {};
@@ -448,16 +377,13 @@ async function getAffiliateSummary({ referralCode, referralSource, email }) {
     } else {
       churned += 1;
     }
-    const source = clean(snapshot.referral_source || row?.referral_source || ownerSource || 'link');
-    sourceCounts.set(source, (sourceCounts.get(source) || 0) + 1);
     recent.push({
       name: clean(snapshot.full_name || row?.email || '').split('@')[0],
       email: normalizeEmail(row?.email || ''),
       plan,
       status: isActive ? 'paying' : 'signed_up',
       created_at: row?.created_at || '',
-      estimated_commission: Math.round(estimatedCommission * 100) / 100,
-      source
+      estimated_commission: Math.round(estimatedCommission * 100) / 100
     });
   }
 
@@ -482,6 +408,72 @@ async function getAffiliateSummary({ referralCode, referralSource, email }) {
     recommended_actions: recommended.length ? recommended : base.recommended_actions
   };
 }
+
+function pickActionType(row = {}) {
+  const lifecycle = normalizeLifecycleStatus(row.lifecycle_status, row.review_bucket);
+  if (row.promote_now) return "promote_now";
+  if (row.needs_action && (row.pricing_insight || "").toLowerCase().includes("price")) return "needs_price_review";
+  if (lifecycle === "review_delete" || normalizeReviewBucket(row.review_bucket) === "removedvehicles") return "dismissed";
+  if (lifecycle === "review_price_update" || normalizeReviewBucket(row.review_bucket) === "pricechanges") return "needs_price_review";
+  if (row.weak || row.low_performance || row.repost_today) return "relisted";
+  return "approved";
+}
+function buildActionCenterDetails(rows = []) {
+  const normalizeUrl = (value) => {
+    const raw = clean(value);
+    if (!raw) return "";
+    try {
+      const url = new URL(raw);
+      ["fbclid","ref","utm_source","utm_medium","utm_campaign","utm_term","utm_content"].forEach((key) => url.searchParams.delete(key));
+      return url.toString();
+    } catch { return raw; }
+  };
+  const unique = new Map();
+  rows.forEach((row) => {
+    const key =
+      clean(row.marketplace_listing_id || row.listing_id || row.vin || row.stock_number) ||
+      normalizeUrl(row.source_url) ||
+      clean(row.id);
+    if (!key) return;
+    const current = unique.get(key);
+    if (!current || safeNumber(row.popularity_score) > safeNumber(current.popularity_score) || safeNumber(row.updated_at) > safeNumber(current.updated_at)) {
+      unique.set(key, row);
+    }
+  });
+  const list = Array.from(unique.values()).map((row) => {
+    const lifecycle = normalizeLifecycleStatus(row.lifecycle_status, row.review_bucket);
+    const reason = row.recommended_action || (
+      row.promote_now ? "High traction with upside." :
+      row.weak ? "Low traction or stale risk detected." :
+      lifecycle === "review_delete" ? "Listing missing from latest scan." :
+      lifecycle === "review_price_update" ? "Price movement needs review." :
+      lifecycle === "review_new" ? "New listing needs validation." :
+      row.repost_today ? "Listing should be reposted today." :
+      row.likely_sold ? "This unit may already be sold." :
+      "Needs operator review."
+    );
+    return {
+      id: row.id,
+      title: clean(row.title || "Listing"),
+      subtitle: clean([row.make, row.model, row.stock_number || row.vin].filter(Boolean).join(" • ")),
+      status: normalizeStatus(row.status),
+      lifecycle_status: lifecycle,
+      views_count: safeNumber(row.views_count),
+      messages_count: safeNumber(row.messages_count),
+      price: safeNumber(row.price),
+      recommended_action: clean(row.recommended_action || "Review now"),
+      reason,
+      source_url: row.source_url || "",
+      action_type: pickActionType(row),
+      priority: row.promote_now ? "opportunity" : ((row.weak || row.needs_action || lifecycle.startsWith("review")) ? "attention" : "today")
+    };
+  });
+  const needs_attention = list.filter((item) => ["review_delete","review_price_update","review_new"].includes(item.lifecycle_status) || ["stale","weak"].includes(item.status) || /review|refresh|stale|missing|price/i.test(item.reason)).slice(0, 6);
+  const opportunities = list.filter((item) => item.action_type === "promote_now" || /promote|strong|opportunity/i.test(item.reason) || (item.views_count >= 20 && item.messages_count === 0)).slice(0, 6);
+  const today = list.filter((item) => item.priority === "today" || item.action_type === "relisted").slice(0, 6);
+  return { today, needs_attention, opportunities };
+}
+
 function buildSetupStatus(user, profileRow) {
   const inventoryUrl = clean(profileRow?.inventory_url || '');
   const salespersonName = clean(profileRow?.full_name || `${clean(user?.first_name)} ${clean(user?.last_name)}`.trim());
@@ -496,7 +488,6 @@ function buildSetupStatus(user, profileRow) {
   const completion = Object.values(checks).filter(Boolean).length;
   return { profile_complete: completion === 4, profile_completion_score: completion / 4, inventory_url: inventoryUrl, salesperson_name: salespersonName, dealership_name: dealershipName, compliance_mode: complianceMode, ...checks };
 }
-
 function buildComputedSummary(rows = []) {
   const today = dayKey();
   const month = monthKey();
@@ -519,21 +510,22 @@ function buildComputedSummary(rows = []) {
   for (const row of rows) {
     const rowDay = dayKey(row.posted_at || row.created_at || row.updated_at || Date.now());
     const rowMonth = monthKey(row.posted_at || row.created_at || row.updated_at || Date.now());
-    const lifecycle = resolveLifecycleState(row);
-    const bucket = lifecycle.review_bucket;
+    const status = normalizeStatus(row.status);
+    const lifecycle = normalizeLifecycleStatus(row.lifecycle_status, row.review_bucket);
+    const bucket = normalizeReviewBucket(row.review_bucket);
     if (rowDay === today) summary.posts_today += 1;
     if (rowMonth === month) summary.posts_this_month += 1;
-    if (lifecycle.active_like) summary.active_listings += 1;
+    if (!['sold', 'deleted', 'inactive', 'stale'].includes(status) && lifecycle !== 'review_delete') summary.active_listings += 1;
     summary.total_views += safeNumber(row.views_count, 0);
     summary.total_messages += safeNumber(row.messages_count, 0);
-    if (lifecycle.stale_like) summary.stale_listings += 1;
-    if (lifecycle.review_delete_like) summary.review_delete_count += 1;
-    if (lifecycle.lifecycle_status === 'review_price_update' || bucket === 'pricechanges') summary.review_price_change_count += 1;
-    if (lifecycle.lifecycle_status === 'review_new' || bucket === 'newvehicles') summary.review_new_count += 1;
+    if (status === 'stale' || lifecycle === 'stale' || lifecycle === 'review_delete' || bucket === 'removedvehicles') summary.stale_listings += 1;
+    if (lifecycle === 'review_delete' || bucket === 'removedvehicles') summary.review_delete_count += 1;
+    if (lifecycle === 'review_price_update' || bucket === 'pricechanges') summary.review_price_change_count += 1;
+    if (lifecycle === 'review_new' || bucket === 'newvehicles') summary.review_new_count += 1;
     if (row.weak) summary.weak_listings += 1;
     if (row.needs_action) summary.needs_action_count += 1;
     if (row.repost_today) summary.action_center.repost_today += 1;
-    if (['review_delete', 'review_price_update', 'review_new'].includes(lifecycle.lifecycle_status) || ['removedvehicles', 'pricechanges', 'newvehicles'].includes(bucket)) summary.action_center.review_today += 1;
+    if (['review_delete', 'review_price_update', 'review_new'].includes(lifecycle) || ['removedvehicles', 'pricechanges', 'newvehicles'].includes(bucket)) summary.action_center.review_today += 1;
     if (row.promote_now) summary.action_center.promote_today += 1;
     if (row.likely_sold) summary.action_center.likely_sold += 1;
     if (row.low_performance) summary.action_center.low_performance += 1;
@@ -618,7 +610,7 @@ function buildManagerRecommendations(summary, segmentIntel) {
   if (summary.action_center.repost_today > 0) recommendations.push(`Repost ${summary.action_center.repost_today} low-visibility listing${summary.action_center.repost_today === 1 ? '' : 's'} today.`);
   if (summary.weak_listings > 0) recommendations.push(`Refresh content or pricing on ${summary.weak_listings} weak listing${summary.weak_listings === 1 ? '' : 's'}.`);
   const weakSeg = segmentIntel.weak_segments?.[0];
-  if (weakSeg) recommendations.push(`Watch ${weakSeg.key} (${weakSeg.group.replace('_',' ')}) â this segment has the highest weak-listing concentration.`);
+  if (weakSeg) recommendations.push(`Watch ${weakSeg.key} (${weakSeg.group.replace('_',' ')}) — this segment has the highest weak-listing concentration.`);
   return recommendations.length ? recommendations : ['Portfolio looks healthy today. Keep strong listings live and monitor momentum.'];
 }
 export default async function handler(req, res) {
@@ -665,6 +657,7 @@ export default async function handler(req, res) {
       weak_listings: computed.weak_listings,
       needs_action: computed.needs_action_count
     };
+    const actionCenterDetails = buildActionCenterDetails(rows);
     const recentListings = rows.slice(0, 12).map((row) => ({
       id: row.id,
       title: row.title,
@@ -717,6 +710,7 @@ export default async function handler(req, res) {
         weak_listings: computed.weak_listings,
         needs_action_count: computed.needs_action_count,
         action_center: computed.action_center,
+        action_center_details: actionCenterDetails,
         queue_count: safeNumber(snapshot.queue_count, 0),
         lifecycle_updated_at: clean(snapshot.lifecycle_updated_at || ''),
         top_listing_title: clean(computed.top_listing_title || 'None yet'),
