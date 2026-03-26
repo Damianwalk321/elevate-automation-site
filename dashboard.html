@@ -873,17 +873,6 @@
   .modal-copy{white-space:pre-wrap;line-height:1.65;background:var(--panel-2);border:1px solid var(--line);border-radius:16px;padding:16px;max-height:52vh;overflow:auto}
   .module-toolbar{display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:16px}
   .module-group-label{font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--accent)}
-
-    .operator-strip { display:grid; grid-template-columns: repeat(5, minmax(0,1fr)); gap:18px; margin-bottom:20px; }
-    .operator-metric { display:flex; flex-direction:column; gap:8px; }
-    .operator-metric .stat-value { font-size:28px; }
-    .operator-actions { display:flex; flex-wrap:wrap; gap:8px; margin-top:14px; }
-    .micro-list { display:flex; flex-direction:column; gap:10px; }
-    .micro-item { padding:10px 12px; border:1px solid var(--line); border-radius:12px; background:var(--panel-2); }
-    .micro-item strong { display:block; margin-bottom:4px; }
-    .tiny-kpi { font-size:12px; color:var(--gold); text-transform:uppercase; letter-spacing:1px; }
-    .muted-strong { color: var(--gold-soft); }
-
 </style>
 </head>
 <body>
@@ -926,166 +915,106 @@
       </div>
 
       <!-- OVERVIEW -->
-      <section id="overview" class="dashboard-section">
-        <div class="card" style="margin-bottom:20px;">
-          <div class="section-head">
-            <h2>Today</h2>
-            <div class="subtext">Immediate operating view. Keep overview tight, act here first, then drop into analytics or tools.</div>
-          </div>
-          <div class="operator-strip">
-            <div class="operator-metric">
-              <div class="tiny-kpi">Posts Remaining</div>
-              <div id="todayPostsRemaining" class="stat-value">0</div>
-              <div class="stat-sub">Live daily posting capacity</div>
-            </div>
-            <div class="operator-metric">
-              <div class="tiny-kpi">Queued</div>
-              <div id="todayQueuedVehicles" class="stat-value">0</div>
-              <div class="stat-sub">Vehicles ready for Marketplace</div>
-            </div>
-            <div class="operator-metric">
-              <div class="tiny-kpi">Review Queue</div>
-              <div id="todayReviewQueue" class="stat-value">0</div>
-              <div class="stat-sub">Listings needing operator review</div>
-            </div>
-            <div class="operator-metric">
-              <div class="tiny-kpi">Stale Risk</div>
-              <div id="todayStaleListings" class="stat-value">0</div>
-              <div class="stat-sub">Listings likely needing refresh</div>
-            </div>
-            <div class="operator-metric">
-              <div class="tiny-kpi">Time Saved</div>
-              <div id="todayTimeSaved" class="stat-value">0 min</div>
-              <div class="stat-sub">Estimated operator time reclaimed today</div>
-            </div>
-          </div>
-          <div class="grid-3" style="margin-bottom:0;">
-            <div class="micro-list">
-              <div class="micro-item">
-                <strong>Activation</strong>
-                <div id="activationSummaryText" class="subtext">Loading activation status...</div>
-              </div>
-              <div class="micro-item">
-                <strong>First Win</strong>
-                <div id="firstWinSummaryText" class="subtext">Checking first-win progress...</div>
-              </div>
-            </div>
-            <div class="micro-item">
-              <strong>Next Best Actions</strong>
-              <div id="overviewNextActions" class="subtext">Loading next actions...</div>
-              <div class="operator-actions">
-                <button id="overviewOpenToolsBtn" class="action-btn" type="button">Open Tools</button>
-                <button id="overviewOpenAnalyticsBtn" class="action-btn" type="button">Open Analytics</button>
-                <button id="overviewOpenListingsBtn" class="action-btn" type="button">Review Listings</button>
-              </div>
-            </div>
-            <div class="micro-item">
-              <strong>Setup Blockers</strong>
-              <div id="overviewSetupBlockers" class="subtext">Checking setup blockers...</div>
-            </div>
-          </div>
-        </div>
-
-        <div class="grid-3">
-          <div class="card">
-            <div class="stat-label">Access Status</div>
-            <div id="accessBadge" class="badge">Loading...</div>
-            <div id="accountStatus" class="status-line"></div>
-          </div>
-
-          <div class="card">
-            <div class="stat-label">Current Plan</div>
-            <div id="planName" class="stat-value">Loading...</div>
-            <div class="stat-sub">Plan, access state, and live posting capacity.</div>
-          </div>
-
-          <div class="card">
-            <div class="stat-label">Subscription Status</div>
-            <div id="subscriptionStatus" class="stat-value" style="font-size:22px;">Loading...</div>
-            <div class="stat-sub">Live billing and entitlement state.</div>
-          </div>
-        </div>
-
-        <div class="grid-5">
-          <div class="card kpi-card">
-            <div class="stat-label">Posts Today</div>
-            <div id="kpiPostsToday" class="stat-value">0</div>
-            <div class="stat-sub">Committed or inferred today</div>
-          </div>
-
-          <div class="card kpi-card">
+      
+<section id="overview" class="dashboard-section">
+        <div class="operator-strip">
+          <div class="mini-stat">
             <div class="stat-label">Posts Remaining</div>
             <div id="kpiPostsRemaining" class="stat-value">0</div>
-            <div class="stat-sub">Remaining daily capacity</div>
+            <div class="stat-sub">Live daily capacity left</div>
           </div>
-
-          <div class="card kpi-card">
-            <div class="stat-label">Daily Limit</div>
-            <div id="kpiDailyLimit" class="stat-value">0</div>
-            <div class="stat-sub">Plan posting cap</div>
-          </div>
-
-          <div class="card kpi-card">
-            <div class="stat-label">Active Listings</div>
-            <div id="kpiActiveListings" class="stat-value">0</div>
-            <div class="stat-sub">Listings on file</div>
-          </div>
-
-          <div class="card kpi-card">
-            <div class="stat-label">Views</div>
-            <div id="kpiViews" class="stat-value">0</div>
-            <div class="stat-sub">Tracked traction</div>
-          </div>
-
-          <div class="card kpi-card">
-            <div class="stat-label">Messages</div>
-            <div id="kpiMessages" class="stat-value">0</div>
-            <div class="stat-sub">Buyer conversations</div>
-          </div>
-
-          <div class="card kpi-card">
+          <div class="mini-stat">
             <div class="stat-label">Queued Vehicles</div>
             <div id="kpiQueuedVehicles" class="stat-value">0</div>
-            <div class="stat-sub">Ready to post</div>
+            <div class="stat-sub">Ready to post now</div>
+          </div>
+          <div class="mini-stat">
+            <div class="stat-label">Review Queue</div>
+            <div id="kpiReviewQueue" class="stat-value">0</div>
+            <div class="stat-sub">Listings needing validation</div>
+          </div>
+          <div class="mini-stat">
+            <div class="stat-label">Needs Action</div>
+            <div id="kpiNeedsAction" class="stat-value">0</div>
+            <div class="stat-sub">Listings needing intervention</div>
+          </div>
+          <div class="mini-stat">
+            <div class="stat-label">Time Saved Today</div>
+            <div id="overviewTimeSavedToday" class="stat-value">0 min</div>
+            <div class="stat-sub">Estimated operator time reclaimed</div>
+          </div>
+        </div>
+
+        <div class="overview-hero">
+          <div class="card">
+            <div class="section-head">
+              <div>
+                <h2>Today Operator Panel</h2>
+                <div class="subtext">The cleanest view of what matters right now.</div>
+              </div>
+              <div class="overview-chip-row">
+                <div class="overview-chip" id="overviewPlanChip">Founder Beta</div>
+                <div class="overview-chip" id="overviewAccessChip">Active Access</div>
+              </div>
+            </div>
+            <div class="overview-action-list" id="overviewActionList">
+              <div class="overview-action-item">Loading next best actions...</div>
+            </div>
+            <div class="action-grid" style="margin-top:16px;">
+              <button class="action-btn" type="button" onclick="showSection('extension')">Open Tools</button>
+              <button class="action-btn" type="button" onclick="showSection('tools')">Open Analytics</button>
+              <button class="action-btn" type="button" onclick="document.getElementById('listingSearchInput')?.focus()">Review Listings</button>
+              <button class="action-btn" type="button" onclick="showSection('profile')">Finish Setup</button>
+            </div>
+            <div id="overviewBlockers" class="status-line" style="margin-top:14px;">Loading blockers...</div>
+          </div>
+
+          <div class="card">
+            <div class="section-head">
+              <div>
+                <h2>Access & Plan</h2>
+                <div class="subtext">Canonical account truth used across dashboard and extension.</div>
+              </div>
+            </div>
+            <div class="list-block">
+              <div><strong>Access:</strong> <span id="accessBadge" class="badge">Loading...</span></div>
+              <div><strong>Current Plan:</strong> <span id="planName">Loading...</span></div>
+              <div><strong>Subscription Status:</strong> <span id="subscriptionStatus">Loading...</span></div>
+              <div><strong>Daily Limit:</strong> <span id="kpiDailyLimit">0</span></div>
+              <div><strong>Posts Used Today:</strong> <span id="kpiPostsToday">0</span></div>
+              <div><strong>Billing Source:</strong> <span id="snapshotBillingSource">Loading...</span></div>
+              <div><strong>Current Period End:</strong> <span id="snapshotCurrentPeriodEnd">Loading...</span></div>
+            </div>
+            <div id="accountStatus" class="status-line"></div>
           </div>
         </div>
 
         <div class="grid-4">
           <div class="card kpi-card">
-            <div class="stat-label">Review Queue</div>
-            <div id="kpiReviewQueue" class="stat-value">0</div>
-            <div class="stat-sub">Needs attention</div>
+            <div class="stat-label">Active Listings</div>
+            <div id="kpiActiveListings" class="stat-value">0</div>
+            <div class="stat-sub">Listings on file</div>
           </div>
           <div class="card kpi-card">
-            <div class="stat-label">Stale Listings</div>
-            <div id="kpiStaleListings" class="stat-value">0</div>
-            <div class="stat-sub">Potential refresh or delete</div>
+            <div class="stat-label">Views</div>
+            <div id="kpiViews" class="stat-value">0</div>
+            <div class="stat-sub">Tracked traction</div>
           </div>
           <div class="card kpi-card">
-            <div class="stat-label">Price Changes</div>
-            <div id="kpiPriceChanges" class="stat-value">0</div>
-            <div class="stat-sub">Detected pricing movement</div>
-          </div>
-          <div class="card kpi-card">
-            <div class="stat-label">Review New</div>
-            <div id="kpiReviewNew" class="stat-value">0</div>
-            <div class="stat-sub">New units to validate</div>
+            <div class="stat-label">Messages</div>
+            <div id="kpiMessages" class="stat-value">0</div>
+            <div class="stat-sub">Buyer conversations</div>
           </div>
           <div class="card kpi-card">
             <div class="stat-label">Weak Listings</div>
             <div id="kpiWeakListings" class="stat-value">0</div>
-            <div class="stat-sub">Low traction or stale risk</div>
-          </div>
-          <div class="card kpi-card">
-            <div class="stat-label">Needs Action</div>
-            <div id="kpiNeedsAction" class="stat-value">0</div>
-            <div class="stat-sub">Listings needing intervention</div>
+            <div class="stat-sub">Listings at risk</div>
           </div>
         </div>
 
         <div class="card">
           <div class="section-head">
-            <h2>Recent Listings</h2><div class="subtext">Live listing control surface. Heavy trend analysis now lives in Analytics.</div>
+            <h2>Recent Listings</h2>
             <div class="toolbar" style="gap:12px; flex-wrap:wrap;">
               <div id="listingQuickFilters" style="display:flex; gap:8px; flex-wrap:wrap;">
                 <button class="action-btn active" type="button" data-filter="all">All</button>
@@ -1118,17 +1047,13 @@
 
         <div class="grid-2">
           <div class="card">
-            <h2>Account Snapshot</h2><div class="subtext">Canonical access, referral, and entitlement details.</div>
+            <h2>Account Snapshot</h2>
             <div class="list-block">
               <div><strong>Email:</strong> <span class="user-email">Loading...</span></div>
               <div><strong>Referral Code:</strong> <span id="referralCode">Loading...</span></div>
               <div><strong>Software License Key:</strong> <span id="licenseKeyDisplay">Loading...</span></div>
               <div><strong>User ID:</strong> <span class="user-id">Loading...</span></div>
-              <div><strong>Daily Posting Limit:</strong> <span id="snapshotPostingLimit">Loading...</span></div>
-              <div><strong>Posts Used Today:</strong> <span id="snapshotPostsUsed">Loading...</span></div>
               <div><strong>Posts Remaining Today:</strong> <span id="snapshotPostsRemaining">Loading...</span></div>
-              <div><strong>Billing Source:</strong> <span id="snapshotBillingSource">Loading...</span></div>
-              <div><strong>Current Period End:</strong> <span id="snapshotCurrentPeriodEnd">Loading...</span></div>
               <div><strong>Profile Complete:</strong> <span id="snapshotProfileComplete">Loading...</span></div>
               <div><strong>Queued Vehicles:</strong> <span id="snapshotQueuedVehicles">0</span></div>
               <div><strong>Sync Updated:</strong> <span id="snapshotLifecycleUpdatedAt">—</span></div>
@@ -1136,15 +1061,6 @@
             <div id="snapshotSetupSummary" class="status-line"></div>
           </div>
 
-          <div class="card">
-            <h2>Recent Activity</h2>
-            <div id="recentActivityFeed" class="activity-feed">
-              <div class="listing-empty">No activity yet.</div>
-            </div>
-          </div>
-        </div>
-
-        <div class="grid-2">
           <div class="card">
             <h2>Setup Progress</h2>
             <div class="setup-grid">
@@ -1174,21 +1090,11 @@
               </div>
             </div>
           </div>
-
-          <div class="card">
-            <h2>Launch Priorities</h2>
-            <div class="list-block">
-              <div>• Extension account-linked unlock</div>
-              <div>• Dealer routing + scanner sync</div>
-              <div>• Queue → post registration flow</div>
-              <div>• AB / BC compliance output</div>
-              <div>• Posting memory + dashboard visibility</div>
-            </div>
-          </div>
         </div>
       </section>
 
       <!-- PROFILE -->
+<!-- PROFILE -->
       <section id="profile" class="dashboard-section">
         <div class="card">
           <h2>Profile & Dealer Setup</h2>
@@ -1366,36 +1272,55 @@
     </div>
   </div>
 
+  
   <div class="card" style="margin-top:20px;">
     <div class="module-toolbar">
       <div>
         <div class="module-group-label">Tools & Modules</div>
         <h2 style="margin-top:6px;">Platform Stack</h2>
-        <div class="subtext">Filter live, pipeline, and growth modules without cluttering the overview.</div>
+        <div class="subtext">Filter the live stack, beta modules, and planned systems without cluttering overview.</div>
       </div>
-      <div>
-        <label for="toolModuleFilter" class="subtext">Module Group</label><br/>
-        <select id="toolModuleFilter">
-          <option value="all">All Modules</option>
-          <option value="core">Core Tools</option>
-          <option value="pipeline">Pipeline & Follow-Up</option>
-          <option value="growth">Growth & Analytics</option>
-        </select>
+      <div class="tool-state-filter-row">
+        <div>
+          <label for="toolModuleFilter" class="subtext">Module Group</label><br/>
+          <select id="toolModuleFilter">
+            <option value="all">All Modules</option>
+            <option value="core">Core Tools</option>
+            <option value="pipeline">Pipeline & Follow-Up</option>
+            <option value="growth">Growth & Analytics</option>
+          </select>
+        </div>
+        <div>
+          <label for="toolStateFilter" class="subtext">State</label><br/>
+          <select id="toolStateFilter">
+            <option value="all">All States</option>
+            <option value="live">Live Now</option>
+            <option value="beta">Founder Beta</option>
+            <option value="planned">Coming Soon</option>
+            <option value="locked">Locked</option>
+          </select>
+        </div>
       </div>
     </div>
+    <div class="tool-state-legend" style="margin-bottom:16px;">
+      <span class="tool-status live">Live Now</span>
+      <span class="tool-status beta">Founder Beta</span>
+      <span class="tool-status planned">Coming Soon</span>
+      <span class="tool-status locked">Locked</span>
+    </div>
     <div class="tools-grid" id="toolsModuleGrid">
-      <div class="tool-tile" data-module-group="core"><h3>Vehicle Poster</h3><p>Inventory scan, queue build, Marketplace fill, and posting engine.</p><div class="tool-status">Live Beta Core</div></div>
-      <div class="tool-tile" data-module-group="core"><h3>Dealer Scanner Routing</h3><p>Dealer website, inventory URL, and scanner type stored per account.</p><div class="tool-status">Live</div></div>
-      <div class="tool-tile" data-module-group="core"><h3>Compliance Engine</h3><p>AB / BC output blocks powered by saved profile data.</p><div class="tool-status">Live</div></div>
-      <div class="tool-tile" data-module-group="core"><h3>Posting Limits</h3><p>Daily plan enforcement and post registration through backend APIs.</p><div class="tool-status">Live</div></div>
-      <div class="tool-tile" data-module-group="pipeline"><h3>CRM</h3><p>Lead memory, pipeline tracking, and follow-up visibility for reps and managers.</p><div class="tool-status">Planned</div></div>
-      <div class="tool-tile" data-module-group="pipeline"><h3>Automation</h3><p>Workflow triggers for reminders, stale listing actions, and follow-up execution.</p><div class="tool-status">Planned</div></div>
-      <div class="tool-tile" data-module-group="pipeline"><h3>Mass SMS</h3><p>Outbound campaign engine for inventory, appointments, and reactivation.</p><div class="tool-status">Planned</div></div>
-      <div class="tool-tile" data-module-group="pipeline"><h3>Scheduler</h3><p>Booking, cadence, and timed action control inside one operator flow.</p><div class="tool-status">Planned</div></div>
-      <div class="tool-tile" data-module-group="growth"><h3>Analytics</h3><p>Time saved, efficiency, traction, and revenue-facing opportunity signals.</p><div class="tool-status">Rolling In</div></div>
-      <div class="tool-tile" data-module-group="growth"><h3>Affiliate Center</h3><p>Referral economics, scripts, payout visibility, and partner growth tools.</p><div class="tool-status">Live</div></div>
-      <div class="tool-tile" data-module-group="growth"><h3>AI Content</h3><p>Caption, title, and listing improvement support for faster execution.</p><div class="tool-status">Planned</div></div>
-      <div class="tool-tile" data-module-group="growth"><h3>Market Intelligence</h3><p>VIN-level learning, pricing feedback, and priority recommendations.</p><div class="tool-status">Planned</div></div>
+      <div class="tool-tile" data-module-group="core" data-module-state="live"><h3>Vehicle Poster</h3><p>Inventory scan, queue build, Marketplace fill, and posting engine.</p><div class="tool-status live">Live Now</div></div>
+      <div class="tool-tile" data-module-group="core" data-module-state="live"><h3>Dealer Scanner Routing</h3><p>Dealer website, inventory URL, and scanner type stored per account.</p><div class="tool-status live">Live Now</div></div>
+      <div class="tool-tile" data-module-group="core" data-module-state="live"><h3>Compliance Engine</h3><p>AB / BC output blocks powered by saved profile data.</p><div class="tool-status live">Live Now</div></div>
+      <div class="tool-tile" data-module-group="core" data-module-state="beta"><h3>Posting Limits</h3><p>Daily plan enforcement, account truth, and register-post state moving toward hard lock reliability.</p><div class="tool-status beta">Founder Beta</div></div>
+      <div class="tool-tile" data-module-group="pipeline" data-module-state="planned"><h3>CRM</h3><p>Lead memory, pipeline tracking, and follow-up visibility for reps and managers.</p><div class="tool-status planned">Coming Soon</div></div>
+      <div class="tool-tile" data-module-group="pipeline" data-module-state="planned"><h3>Automation</h3><p>Workflow triggers for reminders, stale listing actions, and follow-up execution.</p><div class="tool-status planned">Coming Soon</div></div>
+      <div class="tool-tile" data-module-group="pipeline" data-module-state="planned"><h3>Mass SMS</h3><p>Outbound campaign engine for inventory, appointments, and reactivation.</p><div class="tool-status planned">Coming Soon</div></div>
+      <div class="tool-tile" data-module-group="pipeline" data-module-state="planned"><h3>Scheduler</h3><p>Booking, cadence, and timed action control inside one operator flow.</p><div class="tool-status planned">Coming Soon</div></div>
+      <div class="tool-tile" data-module-group="growth" data-module-state="live"><h3>Analytics</h3><p>Time saved, efficiency, traction, and revenue-facing opportunity signals.</p><div class="tool-status live">Live Now</div></div>
+      <div class="tool-tile" data-module-group="growth" data-module-state="live"><h3>Affiliate Center</h3><p>Referral economics, scripts, payout visibility, and partner growth tools.</p><div class="tool-status live">Live Now</div></div>
+      <div class="tool-tile" data-module-group="growth" data-module-state="beta"><h3>AI Content</h3><p>Caption, title, and listing improvement support for faster execution.</p><div class="tool-status beta">Founder Beta</div></div>
+      <div class="tool-tile" data-module-group="growth" data-module-state="locked"><h3>Market Intelligence</h3><p>VIN-level learning, pricing feedback, and priority recommendations.</p><div class="tool-status locked">Locked</div></div>
     </div>
   </div>
 </section>
