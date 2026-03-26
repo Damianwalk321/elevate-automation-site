@@ -95,6 +95,8 @@ let currentNormalizedSession = null;
 let dashboardSummary = null;
 
 let currentReadCopyText = "";
+let selectedToolModule = null;
+let currentListingDetail = null;
 
 async function getAuthAccessToken() {
   try {
@@ -243,6 +245,30 @@ if (copyReadCopyModalBtn) {
     }
   });
 }
+
+const closeListingDetailModalBtn = document.getElementById('closeListingDetailModalBtn');
+if (closeListingDetailModalBtn) closeListingDetailModalBtn.addEventListener('click', closeListingDetailModal);
+const listingDetailModal = document.getElementById('listingDetailModal');
+if (listingDetailModal) {
+  listingDetailModal.addEventListener('click', (event) => {
+    if (event.target === listingDetailModal) closeListingDetailModal();
+  });
+}
+const toolModuleFilter = document.getElementById('toolModuleFilter');
+if (toolModuleFilter) toolModuleFilter.addEventListener('change', applyToolModuleFilters);
+const toolStateFilter = document.getElementById('toolStateFilter');
+if (toolStateFilter) toolStateFilter.addEventListener('change', applyToolModuleFilters);
+document.querySelectorAll('.tool-tile').forEach((tile) => {
+  tile.addEventListener('click', () => {
+    selectedToolModule = {
+      title: cleanText(tile.querySelector('h3')?.textContent || 'Module'),
+      description: cleanText(tile.querySelector('p')?.textContent || ''),
+      group: cleanText(tile.getAttribute('data-module-group') || ''),
+      state: cleanText(tile.getAttribute('data-module-state') || '')
+    };
+    renderToolModuleDetail();
+  });
+});
 
   const saveProfileBtn = document.getElementById("saveProfileBtn");
   if (saveProfileBtn) {
@@ -794,8 +820,115 @@ function mergeSummaryWithListings(summary, listings) {
     alerts: Array.isArray(summary.alerts) ? summary.alerts : [],
     scorecards: summary.scorecards || {},
     intelligence: summary.intelligence || {},
-    affiliate: summary.affiliate || {}
+    affiliate: summary.affiliate || {},
+    activation: summary.activation || {},
+    first_win: summary.first_win || {},
+    growth_actions: summary.growth_actions || {},
+    setup_blockers: Array.isArray(summary.setup_blockers) ? summary.setup_blockers : [],
+    setup_recommendations: Array.isArray(summary.setup_recommendations) ? summary.setup_recommendations : [],
+    revenue_intelligence: summary.revenue_intelligence || {},
+    listing_action_summary: summary.listing_action_summary || {},
+    opportunity_signals: Array.isArray(summary.opportunity_signals) ? summary.opportunity_signals : [],
+    roi_snapshot: summary.roi_snapshot || {}
   };
+}
+
+
+function applyToolModuleFilters() {
+  const group = cleanText(document.getElementById('toolModuleFilter')?.value || 'all').toLowerCase();
+  const state = cleanText(document.getElementById('toolStateFilter')?.value || 'all').toLowerCase();
+  document.querySelectorAll('.tool-tile').forEach((tile) => {
+    const matchesGroup = group === 'all' || cleanText(tile.getAttribute('data-module-group')).toLowerCase() === group;
+    const matchesState = state === 'all' || cleanText(tile.getAttribute('data-module-state')).toLowerCase() === state;
+    tile.style.display = matchesGroup && matchesState ? '' : 'none';
+  });
+}
+
+function renderToolModuleDetail() {
+  const panel = document.getElementById('toolModuleDetailPanel');
+  if (!panel) return;
+  const module = selectedToolModule || {
+    title: 'Vehicle Poster',
+    description: 'Inventory scan, queue build, Marketplace fill, and posting engine.',
+    group: 'core',
+    state: 'live'
+  };
+  const stateLabel = module.state === 'live' ? 'Live Now' : module.state === 'beta' ? 'Founder Beta' : module.state === 'planned' ? 'Coming Soon' : 'Locked';
+  const why = module.group === 'core'
+    ? 'This is directly tied to day-one execution and the operator flow.'
+    : module.group === 'pipeline'
+    ? 'This expands the platform into follow-up, lead handling, and repeatable workflows.'
+    : 'This creates retention through insight, growth loops, and portfolio visibility.';
+  panel.innerHTML = `<div><strong>${escapeHtml(module.title)}</strong> <span class="tool-status ${escapeHtml(module.state)}">${escapeHtml(stateLabel)}</span></div><div>${escapeHtml(module.description)}</div><div><strong>Why it matters:</strong> ${escapeHtml(why)}</div><div><strong>When to use:</strong> ${escapeHtml(module.state === 'live' ? 'Use it now inside your current operating flow.' : module.state === 'beta' ? 'Use selectively while it continues to harden.' : module.state === 'planned' ? 'This is part of the near-term expansion roadmap.' : 'This remains reserved until supporting layers are complete.')}</div>`;
+}
+
+function openListingDetailModal(listingId) {
+  const item = dashboardListings.find((row) => String(row.id) === String(listingId));
+  if (!item) return;
+  currentListingDetail = item;
+  const modal = document.getElementById('listingDetailModal');
+  const title = document.getElementById('listingDetailTitle');
+  const subtitle = document.getElementById('listingDetailSubtitle');
+  const body = document.getElementById('listingDetailBody');
+  if (!modal || !title || !subtitle || !body) return;
+  title.textContent = buildVehicleTitle(item);
+  subtitle.textContent = `${item.action_bucket_label || 'Low Priority'} • ${item.health_label || 'Healthy'} • ${item.recommended_action || 'Keep live'}`;
+  body.innerHTML = `
+    <div><strong>Health Score:</strong> ${numberOrZero(item.health_score)} • <strong>Predicted:</strong> ${numberOrZero(item.predicted_score)} (${escapeHtml(item.predicted_label || 'Uncertain')})</div>
+    <div><strong>Opportunity Score:</strong> ${numberOrZero(item.opportunity_score)} • <strong>Bucket:</strong> ${escapeHtml(item.action_bucket_label || 'Low Priority')}</div>
+    <div><strong>Post Priority:</strong> ${numberOrZero(item.post_priority)} • <strong>Refresh Priority:</strong> ${numberOrZero(item.refresh_priority)} • <strong>Price Review:</strong> ${numberOrZero(item.price_review_priority)}</div>
+    <div><strong>Views:</strong> ${numberOrZero(item.views_count)} • <strong>Messages:</strong> ${numberOrZero(item.messages_count)} • <strong>Age:</strong> ${numberOrZero(item.age_days)} day(s)</div>
+    <div><strong>Pricing Insight:</strong> ${escapeHtml(item.pricing_insight || 'Pricing signal still developing.')}</div>
+    <div><strong>Content Feedback:</strong> ${escapeHtml(item.content_feedback || 'Listing structure looks strong.')}</div>
+    <div><strong>Compliance:</strong> ${escapeHtml(currentProfile?.compliance_mode || currentNormalizedSession?.compliance?.mode || 'Profile not finished')}</div>
+    <div><strong>Last Sync:</strong> ${escapeHtml(formatRelativeOrDate(item.updated_at || item.posted_at || ''))}</div>`;
+  const primary = document.getElementById('listingDetailPrimaryBtn');
+  const secondary = document.getElementById('listingDetailSecondaryBtn');
+  if (primary) {
+    primary.textContent = item.source_url ? 'Open Source' : 'Log View';
+    primary.onclick = () => item.source_url ? openListingSource(item.id, item.source_url) : trackListingView(item.id);
+  }
+  if (secondary) {
+    secondary.textContent = 'Copy Summary';
+    secondary.onclick = () => copyVehicleSummary(item.id);
+  }
+  modal.classList.add('is-open');
+  modal.setAttribute('aria-hidden', 'false');
+}
+
+function closeListingDetailModal() {
+  const modal = document.getElementById('listingDetailModal');
+  if (!modal) return;
+  modal.classList.remove('is-open');
+  modal.setAttribute('aria-hidden', 'true');
+  currentListingDetail = null;
+}
+
+function renderRevenueActionPanels() {
+  const summary = dashboardSummary || {};
+  const listingActionSummary = summary.listing_action_summary || {};
+  setTextByIdForAll('actionBucketDoNow', String(numberOrZero(listingActionSummary.do_now)));
+  setTextByIdForAll('actionBucketDoToday', String(numberOrZero(listingActionSummary.do_today)));
+  setTextByIdForAll('actionBucketWatch', String(numberOrZero(listingActionSummary.watch)));
+  setTextByIdForAll('actionBucketLow', String(numberOrZero(listingActionSummary.low_priority)));
+  const actionSummary = document.getElementById('actionBucketSummary');
+  if (actionSummary) {
+    const next = (summary.activation?.next_best_actions || [])[0] || 'No urgent action detected right now.';
+    actionSummary.textContent = next;
+  }
+  const revenuePanel = document.getElementById('revenueIntelligencePanel');
+  if (revenuePanel) {
+    const revenue = summary.revenue_intelligence || {};
+    const signals = Array.isArray(summary.opportunity_signals) ? summary.opportunity_signals : [];
+    revenuePanel.innerHTML = `
+      <div><strong>Time Saved Today:</strong> ${numberOrZero(revenue.time_saved_today_minutes)} min</div>
+      <div><strong>Time Saved This Week:</strong> ${numberOrZero(revenue.time_saved_week_minutes)} min</div>
+      <div><strong>Refresh Candidates:</strong> ${numberOrZero(revenue.refresh_candidates)}</div>
+      <div><strong>Price Review Candidates:</strong> ${numberOrZero(revenue.price_review_candidates)}</div>
+      <div><strong>Missed Opportunity Estimate:</strong> ${numberOrZero(revenue.missed_opportunity_estimate)}</div>
+      <div style="margin-top:10px;"><strong>Signals:</strong></div>
+      ${signals.length ? signals.map((item) => `<div>• ${escapeHtml(cleanText(item))}</div>`).join('') : '<div>No major opportunity signals yet.</div>'}`;
+  }
 }
 
 function renderDashboardAnalytics() {
@@ -1009,7 +1142,7 @@ function renderListingsGrid(listings) {
             </div>
           </div>
 
-          <div class="listing-note" style="margin:0 0 12px;color:var(--muted);font-size:12px;"><strong>Recommended:</strong> ${escapeHtml(item.recommended_action || 'Keep live')}<br/><strong>Pricing:</strong> ${escapeHtml(item.pricing_insight || 'Pricing signal still developing.')}<br/><strong>Content:</strong> ${escapeHtml(item.content_feedback || 'Listing structure looks strong.')}</div>
+          <div class="listing-note" style="margin:0 0 12px;color:var(--muted);font-size:12px;"><strong>Bucket:</strong> ${escapeHtml(item.action_bucket_label || 'Low Priority')} • <strong>Opportunity:</strong> ${numberOrZero(item.opportunity_score)}<br/><strong>Recommended:</strong> ${escapeHtml(item.recommended_action || 'Keep live')}<br/><strong>Pricing:</strong> ${escapeHtml(item.pricing_insight || 'Pricing signal still developing.')}<br/><strong>Content:</strong> ${escapeHtml(item.content_feedback || 'Listing structure looks strong.')}</div>
 
           <div class="listing-metrics">
             <div class="metric-pill">
@@ -1027,6 +1160,7 @@ function renderListingsGrid(listings) {
           </div>
 
           <div class="listing-actions">
+            <button class="action-btn" type="button" onclick="openListingDetailModal('${escapeJs(item.id)}')">Inspect</button>
             <button class="action-btn" type="button" onclick="markListingAction('${escapeJs(item.id)}','approved')">Approve</button>
             <button class="action-btn" type="button" onclick="markListingSold('${escapeJs(item.id)}')">Mark Sold</button>
             <button class="action-btn" type="button" onclick="trackListingView('${escapeJs(item.id)}')">Log View</button>
@@ -2462,3 +2596,6 @@ window.trackListingMessage = trackListingMessage;
 window.openListingSource = openListingSource;
 
 window.markListingAction = markListingAction;
+
+window.openListingDetailModal = openListingDetailModal;
+window.showSection = showSection;
