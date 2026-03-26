@@ -2,6 +2,7 @@
 import { createClient } from "@supabase/supabase-js";
 import { normalizePlanLabel, inferPostingLimitFromPlan, normalizeStatusValue, hasTestingLimitOverride } from "./_shared/account-access.js";
 import { getVerifiedRequestUser } from "./_shared/auth.js";
+import { awardPostCredits } from "./_shared/credits.js";
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -517,11 +518,21 @@ export default async function handler(req, res) {
       usageResult = await upsertPostingUsage(supabase, resolved);
     }
 
+    const effectivePostsUsedToday = duplicate ? currentPostsUsed : (usageResult?.posts_used || currentPostsUsed || 0);
+
     const snapshotResult = await syncSubscriptionSnapshot(
       supabase,
       resolved,
-      duplicate ? currentPostsUsed : (usageResult?.posts_used || currentPostsUsed || 0)
+      effectivePostsUsedToday
     );
+
+    const creditResult = await awardPostCredits(supabase, {
+      userId: resolved.user_id,
+      email: resolved.email,
+      listingId: rowForUpsert.id,
+      duplicate,
+      postsUsedToday: effectivePostsUsedToday
+    });
 
     return json(res, 200, {
       ok: true,
@@ -529,14 +540,29 @@ export default async function handler(req, res) {
       user_id: resolved.user_id,
       email: resolved.email,
       listing_id: rowForUpsert.id,
-      posts_used_today: duplicate ? currentPostsUsed : (usageResult?.posts_used || currentPostsUsed || 0),
+      posts_used_today: effectivePostsUsedToday,
       posting_usage_updated_at: nowIso(),
       posting_state: snapshotResult?.snapshot || null,
+      credits: {
+        awarded_total: creditResult?.awarded_total || 0,
+        balance: Number(creditResult?.ledger?.balance || 0),
+        lifetime_earned: Number(creditResult?.ledger?.lifetime_earned || 0),
+        schema_ready: Boolean(creditResult?.schema_ready),
+        events: Array.isArray(creditResult?.outcomes)
+          ? creditResult.outcomes
+              .filter((item) => Number(item?.amount_awarded || 0) > 0)
+              .map((item) => ({
+                type: item?.event?.type || '',
+                amount: Number(item?.amount_awarded || 0)
+              }))
+          : []
+      },
       debug: {
         duplicate,
         usage_incremented: !duplicate,
         resolved_user_id: resolved.user_id,
-        resolved_email: resolved.email
+        resolved_email: resolved.email,
+        credits_awarded: Number(creditResult?.awarded_total || 0)
       }
     });
   } catch (error) {
