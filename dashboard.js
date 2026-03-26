@@ -117,7 +117,12 @@ async function buildAuthHeaders(extraHeaders = {}) {
 
 async function apiFetch(url, options = {}) {
   const headers = await buildAuthHeaders(options.headers || {});
-  return fetch(url, { ...options, headers });
+  const response = await fetch(url, { ...options, headers });
+  if (response.status === 401) {
+    setBootStatus("Session expired. Redirecting to login...");
+    setTimeout(() => redirectToLogin(), 500);
+  }
+  return response;
 }
 
 function openReadCopyModal({ title = "Read in Dashboard", subtitle = "Read this in the dashboard first, then copy only if needed.", eyebrow = "Dashboard Script", body = "" } = {}) {
