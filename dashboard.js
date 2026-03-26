@@ -1113,8 +1113,11 @@ function renderDashboardAnalytics() {
 function renderOverviewOperatorPanel() {
   const roi = dashboardSummary?.roi_snapshot || {};
   const accountSnapshot = dashboardSummary?.account_snapshot || {};
+  const setup = dashboardSummary?.setup_status || {};
+  const credits = dashboardSummary?.credits || {};
   const queues = dashboardSummary?.daily_ops_queues || dashboardSummary?.action_center || {};
   const details = dashboardSummary?.action_center_details || {};
+
   const timeSavedToday = numberOrZero(roi.estimated_minutes_saved_today || (numberOrZero(dashboardSummary?.posts_today) * 18));
   const postsToday = numberOrZero(dashboardSummary?.posts_today);
   const postingLimit = numberOrZero(
@@ -1130,26 +1133,60 @@ function renderOverviewOperatorPanel() {
       (postingLimit > 0 ? postingLimit - postsToday : 0)
     )
   );
+  const readyQueue = numberOrZero(dashboardSummary?.queue_count);
   const reviewQueue = numberOrZero(dashboardSummary?.review_queue_count);
   const staleListings = numberOrZero(dashboardSummary?.stale_listings);
   const weakListings = numberOrZero(dashboardSummary?.weak_listings);
   const needsAction = numberOrZero(dashboardSummary?.needs_action_count);
+  const revenueAttention = reviewQueue + staleListings + weakListings + needsAction;
   const planName = cleanText(
     currentNormalizedSession?.subscription?.plan_name ||
+    currentNormalizedSession?.subscription?.plan ||
     accountSnapshot?.plan_name ||
     dashboardSummary?.plan_name ||
     'Founder Beta'
   );
   const accessActive = Boolean(
     currentNormalizedSession?.access?.has_access ??
+    currentNormalizedSession?.subscription?.active ??
     accountSnapshot?.access_active ??
     dashboardSummary?.has_access ??
     true
   );
 
+  const setupChecks = [
+    { label: 'Dealer website', ready: Boolean(setup.dealer_website_present || currentProfile?.dealer_website || currentNormalizedSession?.dealership?.website) },
+    { label: 'Inventory URL', ready: Boolean(setup.inventory_url_present || currentProfile?.inventory_url || currentNormalizedSession?.dealership?.inventory_url) },
+    { label: 'Scanner type', ready: Boolean(setup.scanner_type_present || currentProfile?.scanner_type || currentNormalizedSession?.scanner_config?.scanner_type || currentNormalizedSession?.dealership?.scanner_type) },
+    { label: 'Listing location', ready: Boolean(setup.listing_location_present || currentProfile?.listing_location || currentNormalizedSession?.profile?.listing_location) },
+    { label: 'Compliance mode', ready: Boolean(setup.compliance_mode_present || currentProfile?.compliance_mode || currentProfile?.province || currentNormalizedSession?.profile?.compliance_mode || currentNormalizedSession?.dealership?.province) },
+    { label: 'Access active', ready: accessActive }
+  ];
+  const setupReadyCount = setupChecks.filter((item) => item.ready).length;
+  const setupPercent = Math.round((setupReadyCount / setupChecks.length) * 100);
+  const setupGaps = Array.isArray(setup.setup_gaps) ? setup.setup_gaps.filter(Boolean) : [];
+
   setTextByIdForAll('overviewTimeSavedToday', `${timeSavedToday} min`);
   setTextByIdForAll('overviewPlanChip', planName || 'Founder Beta');
   setTextByIdForAll('overviewAccessChip', accessActive ? 'Active Access' : 'Access Needs Attention');
+  setTextByIdForAll('commandSetupChip', `Setup ${setupPercent}%`);
+  setTextByIdForAll('commandPostsUsed', `${postsToday} / ${postingLimit || 0}`);
+  setTextByIdForAll('commandReadyQueue', String(readyQueue));
+  setTextByIdForAll('commandRevenueAttention', String(revenueAttention));
+  setTextByIdForAll('commandCreditsBalance', String(numberOrZero(credits.balance)));
+  setTextByIdForAll('commandCreditsEarned', String(numberOrZero(credits.lifetime_earned)));
+  setTextByIdForAll('commandSetupProgress', `${setupPercent}%`);
+
+  const commandCenterSubtext = document.getElementById('commandCenterSubtext');
+  if (commandCenterSubtext) {
+    const opener = accessActive
+      ? `You have ${postsRemaining} post${postsRemaining === 1 ? '' : 's'} left today with ${readyQueue} vehicle${readyQueue === 1 ? '' : 's'} in queue.`
+      : 'Access needs attention before clean extension usage and posting.';
+    const closer = revenueAttention > 0
+      ? `${revenueAttention} listing${revenueAttention === 1 ? '' : 's'} currently need attention or promotion.`
+      : 'No urgent listing pressure right now—focus on output and setup completeness.';
+    commandCenterSubtext.textContent = `${opener} ${closer}`;
+  }
 
   const overviewActionList = document.getElementById('overviewActionList');
   if (overviewActionList) {
@@ -1192,19 +1229,53 @@ function renderOverviewOperatorPanel() {
   if (staleListings > 0) blockers.push(`${staleListings} stale listing${staleListings === 1 ? '' : 's'} need refresh.`);
   if (weakListings > 0) blockers.push(`${weakListings} weak listing${weakListings === 1 ? '' : 's'} need stronger copy or media.`);
   if (postsRemaining <= 0 && postingLimit > 0) blockers.push('Daily posting limit reached.');
+  if (setupGaps.length) blockers.push(`Setup gaps: ${setupGaps.slice(0, 3).join(', ')}${setupGaps.length > 3 ? '...' : ''}`);
 
   const blockersEl = document.getElementById('overviewBlockers');
   if (blockersEl) {
     const summaryBits = [
       `<strong>Posts:</strong> ${postsToday}/${postingLimit || 0}`,
       `<strong>Remaining:</strong> ${postsRemaining}`,
-      `<strong>Ready Queue:</strong> ${numberOrZero(dashboardSummary?.queue_count)}`,
-      `<strong>Opportunities:</strong> ${numberOrZero(queues.promote_today ?? needsAction)}`
+      `<strong>Ready Queue:</strong> ${readyQueue}`,
+      `<strong>Time Saved:</strong> ${timeSavedToday} min`
     ];
     const blockerCopy = blockers.length
       ? blockers.map((item) => `• ${escapeHtml(item)}`).join(' ')
       : '• No major blockers right now. Stay in flow and keep the queue moving.';
     blockersEl.innerHTML = `${summaryBits.join(' &nbsp;•&nbsp; ')}<br>${blockerCopy}`;
+  }
+
+  const setupFill = document.getElementById('commandSetupFill');
+  if (setupFill) {
+    setupFill.style.width = `${setupPercent}%`;
+  }
+
+  const setupSummary = document.getElementById('commandSetupSummary');
+  if (setupSummary) {
+    setupSummary.textContent = setupGaps.length
+      ? `Still missing: ${setupGaps.slice(0, 3).join(' • ')}${setupGaps.length > 3 ? '…' : ''}`
+      : 'Setup is in strong shape for beta usage and compliance flow.';
+  }
+
+  const setupChecklist = document.getElementById('commandSetupChecklist');
+  if (setupChecklist) {
+    setupChecklist.innerHTML = setupChecks.slice(0, 4).map((item) => `
+      <div class="setup-check ${item.ready ? 'good' : 'warn'}">
+        <span>${escapeHtml(item.label)}</span>
+        <strong>${item.ready ? 'Ready' : 'Needs Setup'}</strong>
+      </div>
+    `).join('');
+  }
+
+  const recentEvents = Array.isArray(credits.recent_events) ? credits.recent_events : [];
+  const latestEvent = recentEvents[0] || null;
+  setTextByIdForAll('commandCreditsLatest', latestEvent ? `+${numberOrZero(latestEvent.amount)}` : '—');
+
+  const creditPreview = document.getElementById('overviewCreditPreview');
+  if (creditPreview) {
+    creditPreview.innerHTML = latestEvent
+      ? `<strong>${escapeHtml(cleanText(latestEvent.label || latestEvent.type || 'Credit event'))}</strong><br><span style="color:var(--muted);">${escapeHtml(formatRelativeOrDate(latestEvent.created_at || ''))}</span>`
+      : 'No credit activity yet. Post inventory and activate referral loops to start building balance.';
   }
 }
 
