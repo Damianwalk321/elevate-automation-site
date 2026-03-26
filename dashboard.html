@@ -918,18 +918,250 @@
     }
 
 
+    .command-center-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1.85fr) minmax(320px, 0.95fr);
+      gap: 18px;
+      margin-bottom: 22px;
+      align-items: stretch;
+    }
+
+    .command-primary {
+      padding: 30px;
+      background:
+        radial-gradient(circle at top right, rgba(212,175,55,0.12), transparent 28%),
+        linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0)),
+        var(--panel);
+    }
+
+    .command-side-stack {
+      display: grid;
+      gap: 18px;
+      align-content: start;
+    }
+
+    .command-side-card {
+      min-height: 0;
+    }
+
+    .command-panel-eyebrow {
+      color: var(--gold);
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 1.4px;
+      text-transform: uppercase;
+      margin-bottom: 10px;
+    }
+
+    .command-title-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 18px;
+      margin-bottom: 18px;
+    }
+
+    .command-title-row h2 {
+      font-size: 34px;
+      line-height: 1.05;
+      margin-bottom: 8px;
+      max-width: 760px;
+    }
+
+    .command-metric-pills {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+
+    .command-meta-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 14px;
+      margin-bottom: 16px;
+    }
+
+    .command-meta-card {
+      background: rgba(255,255,255,0.03);
+      border: 1px solid rgba(212,175,55,0.12);
+      border-radius: 16px;
+      padding: 16px;
+    }
+
+    .command-meta-value {
+      font-size: 28px;
+      font-weight: 700;
+      line-height: 1.05;
+      margin: 8px 0 6px;
+    }
+
+    .command-primary .overview-action-list {
+      margin-top: 10px;
+      margin-bottom: 14px;
+    }
+
+    .command-primary .overview-action-item {
+      display: flex;
+      justify-content: space-between;
+      gap: 16px;
+      align-items: center;
+      padding: 16px 18px;
+      border-radius: 16px;
+      background: rgba(255,255,255,0.03);
+      border: 1px solid rgba(255,255,255,0.05);
+    }
+
+    .command-primary .overview-action-item .title {
+      font-weight: 700;
+      margin-bottom: 6px;
+    }
+
+    .command-primary .overview-action-item .sub {
+      color: var(--muted);
+      line-height: 1.55;
+      font-size: 14px;
+    }
+
+    .mini-btn {
+      appearance: none;
+      border: 1px solid rgba(212,175,55,0.22);
+      background: rgba(212,175,55,0.1);
+      color: var(--gold-soft);
+      border-radius: 999px;
+      padding: 10px 14px;
+      font-weight: 700;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+
+    .command-side-card .section-head {
+      margin-bottom: 12px;
+    }
+
+    .spotlight-balance-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+      gap: 18px;
+      margin-bottom: 14px;
+    }
+
+    .spotlight-balance {
+      font-size: 44px;
+      line-height: 1;
+      font-weight: 800;
+      color: var(--gold-soft);
+      margin-bottom: 6px;
+    }
+
+    .spotlight-stat-stack {
+      display: grid;
+      gap: 8px;
+      text-align: right;
+      font-size: 14px;
+      color: var(--muted);
+    }
+
+    .spotlight-stat-stack strong {
+      color: var(--text);
+      font-size: 18px;
+      margin-right: 6px;
+    }
+
+    .credits-activity-preview {
+      min-height: 76px;
+      padding: 14px 16px;
+      border-radius: 14px;
+      background: rgba(255,255,255,0.03);
+      border: 1px solid rgba(255,255,255,0.05);
+      color: var(--text);
+      line-height: 1.55;
+      margin-bottom: 14px;
+    }
+
+    .setup-progress-bar {
+      height: 12px;
+      border-radius: 999px;
+      background: rgba(255,255,255,0.06);
+      overflow: hidden;
+      margin: 6px 0 12px;
+      border: 1px solid rgba(212,175,55,0.12);
+    }
+
+    .setup-progress-fill {
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, rgba(212,175,55,0.4), rgba(212,175,55,0.95));
+      transition: width 160ms ease;
+    }
+
+    .setup-progress-meta {
+      display: grid;
+      gap: 4px;
+      margin-bottom: 14px;
+    }
+
+    .setup-progress-meta strong {
+      font-size: 24px;
+      line-height: 1;
+    }
+
+    .setup-checklist {
+      display: grid;
+      gap: 10px;
+      margin-bottom: 16px;
+    }
+
+    .setup-check {
+      display: flex;
+      justify-content: space-between;
+      gap: 14px;
+      align-items: center;
+      padding: 12px 14px;
+      border-radius: 14px;
+      background: rgba(255,255,255,0.03);
+      border: 1px solid rgba(255,255,255,0.05);
+      font-size: 14px;
+    }
+
+    .setup-check strong {
+      font-size: 13px;
+      letter-spacing: 0.4px;
+      text-transform: uppercase;
+    }
+
+    .setup-check.good strong {
+      color: var(--success);
+    }
+
+    .setup-check.warn strong {
+      color: var(--gold-soft);
+    }
+
+
     @media (max-width: 1480px) {
+      .command-center-grid {
+        grid-template-columns: 1fr;
+      }
+
       .operator-strip { grid-template-columns: repeat(3, minmax(0, 1fr)); }
     }
 
     @media (max-width: 1100px) {
       .operator-strip { grid-template-columns: repeat(2, minmax(0, 1fr)); }
       .overview-panel-head,
-      .overview-chip-row {
+      .overview-chip-row,
+      .command-metric-pills {
         justify-content: flex-start;
       }
-      .overview-panel-head {
+      .overview-panel-head,
+      .command-title-row {
         flex-direction: column;
+      }
+
+      .command-meta-grid {
+        grid-template-columns: 1fr;
       }
     }
 
@@ -937,6 +1169,15 @@
       .operator-strip,
       .overview-action-grid {
         grid-template-columns: 1fr;
+      }
+
+      .spotlight-balance-row {
+        flex-direction: column;
+        align-items: flex-start;
+      }
+
+      .spotlight-stat-stack {
+        text-align: left;
       }
 
       .main {
@@ -1066,6 +1307,100 @@
       <!-- OVERVIEW -->
       
 <section id="overview" class="dashboard-section">
+        <div class="command-center-grid">
+          <div class="card command-primary">
+            <div class="command-panel-eyebrow">Command Center</div>
+            <div class="command-title-row">
+              <div>
+                <h2>Operate the highest-leverage moves first.</h2>
+                <div id="commandCenterSubtext" class="subtext">Loading operator priorities...</div>
+              </div>
+              <div class="command-metric-pills">
+                <div class="overview-chip" id="overviewPlanChip">Founder Beta</div>
+                <div class="overview-chip" id="overviewAccessChip">Active Access</div>
+                <div class="overview-chip" id="commandSetupChip">Setup 0%</div>
+              </div>
+            </div>
+
+            <div class="command-meta-grid">
+              <div class="command-meta-card">
+                <div class="stat-label">Posts Used Today</div>
+                <div id="commandPostsUsed" class="command-meta-value">0 / 0</div>
+                <div class="stat-sub">Current output against daily capacity</div>
+              </div>
+              <div class="command-meta-card">
+                <div class="stat-label">Ready Queue</div>
+                <div id="commandReadyQueue" class="command-meta-value">0</div>
+                <div class="stat-sub">Vehicles available to move now</div>
+              </div>
+              <div class="command-meta-card">
+                <div class="stat-label">Revenue Attention</div>
+                <div id="commandRevenueAttention" class="command-meta-value">0</div>
+                <div class="stat-sub">Listings that need intervention or promotion</div>
+              </div>
+            </div>
+
+            <div class="overview-action-list" id="overviewActionList">
+              <div class="overview-action-item">Loading next best actions...</div>
+            </div>
+
+            <div id="overviewBlockers" class="status-line" style="margin-top:0; margin-bottom:16px;">Loading blockers...</div>
+
+            <div class="overview-action-grid">
+              <button class="action-btn" type="button" onclick="showSection('extension')">Open Tools</button>
+              <button class="action-btn" type="button" onclick="showSection('tools')">Open Analytics</button>
+              <button class="action-btn" type="button" onclick="document.getElementById('listingSearchInput')?.focus()">Review Listings</button>
+              <button class="action-btn" type="button" onclick="showSection('profile')">Finish Setup</button>
+            </div>
+          </div>
+
+          <div class="command-side-stack">
+            <div class="card command-side-card">
+              <div class="section-head">
+                <div>
+                  <h2>Credits & Leverage</h2>
+                  <div class="subtext">Reward balance, output unlocks, and the latest economy signal.</div>
+                </div>
+              </div>
+              <div class="spotlight-balance-row">
+                <div>
+                  <div id="commandCreditsBalance" class="spotlight-balance">0</div>
+                  <div class="subtext">Available credits</div>
+                </div>
+                <div class="spotlight-stat-stack">
+                  <div><strong id="commandCreditsEarned">0</strong>lifetime earned</div>
+                  <div><strong id="commandCreditsLatest">—</strong>latest event</div>
+                </div>
+              </div>
+              <div id="overviewCreditPreview" class="credits-activity-preview">No credit activity yet.</div>
+              <div class="overview-action-grid">
+                <button class="action-btn" type="button" onclick="showSection('tools')">Use Credits</button>
+                <button class="action-btn" type="button" onclick="openPremiumPreviewModal('overview')">See Upgrade Levers</button>
+              </div>
+            </div>
+
+            <div class="card command-side-card">
+              <div class="section-head">
+                <div>
+                  <h2>Setup & Access Readiness</h2>
+                  <div class="subtext">Close the setup gaps that block cleaner posting and compliance.</div>
+                </div>
+              </div>
+              <div class="setup-progress-bar">
+                <div id="commandSetupFill" class="setup-progress-fill"></div>
+              </div>
+              <div class="setup-progress-meta">
+                <strong id="commandSetupProgress">0%</strong>
+                <div id="commandSetupSummary" class="subtext">Loading setup readiness...</div>
+              </div>
+              <div id="commandSetupChecklist" class="setup-checklist">
+                <div class="setup-check warn"><span>Loading readiness checks...</span><strong>Pending</strong></div>
+              </div>
+              <button class="action-btn" type="button" onclick="showSection('profile')">Complete Setup</button>
+            </div>
+          </div>
+        </div>
+
         <div class="operator-strip">
           <div class="mini-stat">
             <div class="stat-label">Posts Remaining</div>
@@ -1098,54 +1433,7 @@
             <div class="stat-sub">Current reward balance</div>
           </div>
         </div>
-
-        <div class="overview-hero">
-          <div class="card">
-            <div class="overview-panel-head">
-              <div>
-                <h2>Today Operator Panel</h2>
-                <div class="subtext">The cleanest view of what matters right now.</div>
-              </div>
-              <div class="overview-chip-row">
-                <div class="overview-chip" id="overviewPlanChip">Founder Beta</div>
-                <div class="overview-chip" id="overviewAccessChip">Active Access</div>
-              </div>
-            </div>
-            <div class="overview-action-list" id="overviewActionList">
-              <div class="overview-action-item">Loading next best actions...</div>
-            </div>
-            <div class="action-grid" style="margin-top:16px;">
-              <button class="action-btn" type="button" onclick="showSection('extension')">Open Tools</button>
-              <button class="action-btn" type="button" onclick="showSection('tools')">Open Analytics</button>
-              <button class="action-btn" type="button" onclick="document.getElementById('listingSearchInput')?.focus()">Review Listings</button>
-              <button class="action-btn" type="button" onclick="showSection('profile')">Finish Setup</button>
-            </div>
-            <div id="overviewBlockers" class="status-line" style="margin-top:14px;">Loading blockers...</div>
-          </div>
-
-          <div class="card">
-            <div class="section-head">
-              <div>
-                <h2>Access & Plan</h2>
-                <div class="subtext">Canonical account truth used across dashboard and extension.</div>
-              </div>
-            </div>
-            <div class="list-block">
-              <div><strong>Access:</strong> <span id="accessBadge" class="badge">Loading...</span></div>
-              <div><strong>Current Plan:</strong> <span id="planName">Loading...</span></div>
-              <div><strong>Subscription Status:</strong> <span id="subscriptionStatus">Loading...</span></div>
-              <div><strong>Daily Limit:</strong> <span id="kpiDailyLimit">0</span></div>
-              <div><strong>Posts Used Today:</strong> <span id="kpiPostsToday">0</span></div>
-              <div><strong>Credits Balance:</strong> <span id="kpiCreditsBalance">0</span></div>
-              <div><strong>Lifetime Credits Earned:</strong> <span id="kpiCreditsEarned">0</span></div>
-              <div><strong>Billing Source:</strong> <span id="snapshotBillingSource">Loading...</span></div>
-              <div><strong>Current Period End:</strong> <span id="snapshotCurrentPeriodEnd">Loading...</span></div>
-            </div>
-            <div id="accountStatus" class="status-line"></div>
-          </div>
-        </div>
-
-        <div class="grid-2" style="margin-bottom:20px;">
+<div class="grid-2" style="margin-bottom:20px;">
           <div class="card">
             <div class="section-head">
               <div>
