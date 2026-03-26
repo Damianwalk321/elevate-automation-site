@@ -1,31 +1,17 @@
 import { createClient } from "@supabase/supabase-js";
-import { getVerifiedRequestUser, getTrustedIdentity } from "./_shared/auth.js";
+import { getVerifiedRequestUser } from "./_shared/auth.js";
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-if (!SUPABASE_URL) throw new Error("Missing env: SUPABASE_URL");
-if (!SUPABASE_SERVICE_ROLE_KEY) throw new Error("Missing env: SUPABASE_SERVICE_ROLE_KEY");
-
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
-function clean(value) {
-  return String(value || "").trim();
-}
-
-function normalizeEmail(value) {
-  return clean(value).toLowerCase();
-}
-
-function normalizeReferralSource(value) {
-  const normalized = clean(value).toLowerCase();
-  return normalized || "direct";
-}
+function clean(value) { return String(value || "").trim(); }
+function normalizeEmail(value) { return clean(value).toLowerCase(); }
+function normalizeReferralSource(value) { return clean(value).toLowerCase() || "direct"; }
 
 async function safeUsersUpdateByIdOrEmail(basePayload, referralPayload, id, email) {
   const payloadWithReferral = { ...basePayload, ...referralPayload };
   const payloadBaseOnly = { ...basePayload };
-
   const tryUpdate = async (payload) => {
     if (id) {
       const { error } = await supabase.from("users").update(payload).eq("id", id);
@@ -39,44 +25,29 @@ async function safeUsersUpdateByIdOrEmail(basePayload, referralPayload, id, emai
     }
     return null;
   };
-
   let error = await tryUpdate(payloadWithReferral);
-  if (error && /column/i.test(error.message || "")) {
-    error = await tryUpdate(payloadBaseOnly);
-  }
+  if (error && /column/i.test(error.message || "")) error = await tryUpdate(payloadBaseOnly);
   return error;
 }
 
 export default async function handler(req, res) {
-  if (req.method !== "POST") {
-    return res.status(405).json({ error: "Method not allowed" });
-  }
+  if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
 
   try {
-    const body = typeof req.body === "string" ? JSON.parse(req.body || "{}") : (req.body || {});
     const verifiedUser = await getVerifiedRequestUser(req);
-    const identity = getTrustedIdentity({ verifiedUser, body });
-    const id = clean(identity.id || body.id || body.auth_user_id);
-    const email = normalizeEmail(identity.email || body.email);
-    const fullName = clean(body.full_name || body.fullName || "");
+    if (!verifiedUser?.id || !verifiedUser?.email) {
+      return res.status(401).json({ ok: false, error: "Unauthorized" });
+    }
+
+    const body = typeof req.body === "string" ? JSON.parse(req.body || "{}") : (req.body || {});
+    const id = clean(verifiedUser.id);
+    const email = normalizeEmail(verifiedUser.email);
+    const fullName = clean(body.full_name || body.fullName || verifiedUser.user_metadata?.full_name || "");
     const referralCode = clean(body.referral_code || body.referralCode || "");
     const referralSource = normalizeReferralSource(body.referral_source || body.referralSource || "");
     const nowIso = new Date().toISOString();
 
-    if (!id || !email) {
-      return res.status(200).json({
-        ok: false,
-        skipped: true,
-        reason: "Missing id or email"
-      });
-    }
-
-    const { data: existingUser } = await supabase
-      .from("users")
-      .select("*")
-      .eq("id", id)
-      .maybeSingle();
-
+    const { data: existingUser } = await supabase.from("users").select("*").eq("id", id).maybeSingle();
     const lockedReferralCode = clean(existingUser?.referral_code || "");
     const lockedReferralSource = clean(existingUser?.referral_source || "");
     const referralPayload = {
@@ -85,145 +56,33 @@ export default async function handler(req, res) {
     };
 
     if (existingUser) {
-      const updateError = await safeUsersUpdateByIdOrEmail(
-        {
-          email,
-          full_name: fullName || existingUser.full_name || null,
-          updated_at: nowIso
-        },
-        referralPayload,
-        id,
-        email
-      );
-
+      const updateError = await safeUsersUpdateByIdOrEmail({ email, full_name: fullName || existingUser.full_name || null, updated_at: nowIso }, referralPayload, id, email);
       if (updateError) {
         console.error("sync-user users update error:", updateError);
-        return res.status(200).json({
-          ok: false,
-          skipped: true,
-          reason: "Users update failed",
-          detail: updateError.message
-        });
+        return res.status(200).json({ ok: false, skipped: true, reason: "Users update failed", detail: updateError.message });
       }
     } else {
       let insertError = null;
-      const withReferral = {
-        id,
-        email,
-        full_name: fullName || null,
-        updated_at: nowIso,
-        ...referralPayload
-      };
-      const withoutReferral = {
-        id,
-        email,
-        full_name: fullName || null,
-        updated_at: nowIso
-      };
-
-      ({ error: insertError } = await supabase
-        .from("users")
-        .upsert(withReferral, { onConflict: "id" }));
-
+      const withReferral = { id, email, full_name: fullName || null, updated_at: nowIso, ...referralPayload };
+      const withoutReferral = { id, email, full_name: fullName || null, updated_at: nowIso };
+      ({ error: insertError } = await supabase.from("users").upsert(withReferral, { onConflict: "id" }));
       if (insertError && /column/i.test(insertError.message || "")) {
-        ({ error: insertError } = await supabase
-          .from("users")
-          .upsert(withoutReferral, { onConflict: "id" }));
+        ({ error: insertError } = await supabase.from("users").upsert(withoutReferral, { onConflict: "id" }));
       }
-
       if (insertError) {
         console.error("sync-user users upsert error:", insertError);
-        return res.status(200).json({
-          ok: false,
-          skipped: true,
-          reason: "Users upsert failed",
-          detail: insertError.message
-        });
+        return res.status(200).json({ ok: false, skipped: true, reason: "Users upsert failed", detail: insertError.message });
       }
     }
 
-    const { data: existingProfile, error: profileLookupError } = await supabase
-      .from("profiles")
-      .select("id,email,full_name")
-      .eq("id", id)
-      .maybeSingle();
-
-    if (profileLookupError) {
-      console.error("sync-user profile lookup error:", profileLookupError);
-      return res.status(200).json({
-        ok: false,
-        skipped: true,
-        reason: "Profile lookup failed",
-        detail: profileLookupError.message
-      });
-    }
-
+    const { data: existingProfile } = await supabase.from("profiles").select("id,email,full_name,updated_at").eq("id", id).maybeSingle();
     if (!existingProfile) {
-      const { error: profileInsertError } = await supabase
-        .from("profiles")
-        .insert({
-          id,
-          email,
-          full_name: fullName || null,
-          created_at: nowIso,
-          updated_at: nowIso
-        });
-
-      if (profileInsertError) {
-        console.error("sync-user profile insert error:", profileInsertError);
-        return res.status(200).json({
-          ok: false,
-          skipped: true,
-          reason: "Profile insert failed",
-          detail: profileInsertError.message
-        });
-      }
-    } else {
-      const profileUpdatePayload = { updated_at: nowIso };
-      if (!existingProfile.email) profileUpdatePayload.email = email;
-      if (fullName && !existingProfile.full_name) profileUpdatePayload.full_name = fullName;
-
-      if (Object.keys(profileUpdatePayload).length > 1) {
-        const { error: profileUpdateError } = await supabase
-          .from("profiles")
-          .update(profileUpdatePayload)
-          .eq("id", id);
-
-        if (profileUpdateError) {
-          console.error("sync-user profile update error:", profileUpdateError);
-          return res.status(200).json({
-            ok: false,
-            skipped: true,
-            reason: "Profile update failed",
-            detail: profileUpdateError.message
-          });
-        }
-      }
+      await supabase.from("profiles").upsert({ id, email, full_name: fullName || null, updated_at: nowIso }, { onConflict: "id" });
     }
 
-    const { error: subscriptionUpsertError } = await supabase
-      .from("subscriptions")
-      .upsert(
-        {
-          user_id: id,
-          email,
-          updated_at: nowIso
-        },
-        { onConflict: "email" }
-      );
-
-    if (subscriptionUpsertError) {
-      console.error("sync-user subscriptions upsert warning:", subscriptionUpsertError.message);
-    }
-
-    return res.status(200).json({ ok: true, id, email, full_name: fullName, verified_request: Boolean(verifiedUser?.id) });
+    return res.status(200).json({ ok: true, id, email });
   } catch (error) {
-    console.error("sync-user fatal error:", error);
-    return res.status(200).json({
-      ok: false,
-      skipped: true,
-      reason: "Unexpected sync-user error",
-      detail: error.message || "Unknown error"
-    });
+    console.error("sync-user fatal:", error);
+    return res.status(500).json({ ok: false, error: error.message || "Unexpected sync-user error" });
   }
 }
