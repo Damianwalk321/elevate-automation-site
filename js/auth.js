@@ -18,19 +18,6 @@
   }
 
 
-
-
-  async function getAccessToken() {
-    try {
-      const supabase = getSupabaseClient();
-      const sessionResult = await withTimeout(supabase.auth.getSession(), 8000, "Get session for token");
-      return sessionResult?.data?.session?.access_token || "";
-    } catch (error) {
-      console.warn("Could not read access token:", error);
-      return "";
-    }
-  }
-
   function getStoredReferralData() {
     try {
       return {
@@ -43,6 +30,17 @@
     }
   }
 
+  async function getAccessToken() {
+    try {
+      const supabase = getSupabaseClient();
+      const { data } = await supabase.auth.getSession();
+      return data?.session?.access_token || "";
+    } catch (error) {
+      console.error("Could not read access token:", error);
+      return "";
+    }
+  }
+
   async function syncUserToAppTable(user, referral = null) {
     if (!user || !user.id || !user.email) return;
 
@@ -52,7 +50,8 @@
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          ...(token ? { "Authorization": `Bearer ${token}` } : {})
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          "x-elevate-client": "dashboard"
         },
         body: JSON.stringify({
           id: user.id,
