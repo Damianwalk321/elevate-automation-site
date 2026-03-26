@@ -2,7 +2,7 @@
 
 import { createClient } from "@supabase/supabase-js";
 import { resolveAccountAccess } from "./_shared/account-access.js";
-import { getVerifiedRequestUser, getTrustedIdentity } from "./_shared/auth.js";
+import { getVerifiedRequestUser } from "./_shared/auth.js";
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
