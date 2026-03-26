@@ -1,5 +1,6 @@
 
 import { createClient } from "@supabase/supabase-js";
+import { normalizePlanLabel, inferPostingLimitFromPlan, normalizeStatusValue, hasTestingLimitOverride } from "./_shared/account-access.js";
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -56,48 +57,25 @@ function monthKey() {
 
 const TEST_LIMIT_25_EMAILS = new Set(['damian044@icloud.com']);
 
-function hasTestingLimitOverride(email) {
-  return TEST_LIMIT_25_EMAILS.has(lower(email));
-}
 
 function normalizePlan(planValue) {
-  const plan = lower(planValue);
-  if (!plan || plan === "no plan") return "founder beta";
-  if (plan.includes("founder") && plan.includes("pro")) return "founder pro";
-  if (plan.includes("founder") && plan.includes("starter")) return "founder beta";
-  if (plan.includes("founder") || plan.includes("beta")) return "founder beta";
-  if (plan.includes("pro")) return "pro";
-  if (plan.includes("starter")) return "starter";
-  return plan || "founder beta";
+  return normalizePlanLabel(planValue).toLowerCase();
 }
 
 function formatPlanLabel(planValue) {
-  const plan = normalizePlan(planValue);
-  if (plan === "founder pro") return "Founder Pro";
-  if (plan === "founder starter") return "Founder Beta";
-  if (plan === "founder beta") return "Founder Beta";
-  if (plan === "pro") return "Pro";
-  return "Starter";
+  return normalizePlanLabel(planValue);
 }
 
 function inferPostingLimit(planValue) {
-  const plan = normalizePlan(planValue);
-  if (!plan) return 5;
-  if (plan.includes("founder") && plan.includes("pro")) return 25;
-  if (plan === "pro" || (!plan.includes("founder") && plan.includes("pro"))) return 25;
-  return 5;
+  return inferPostingLimitFromPlan(planValue);
 }
 
 function normalizeStatus(status, fallback = "inactive") {
-  const value = lower(status);
-  if (!value) return fallback;
-  if (["active", "trialing", "paid", "checkout_pending"].includes(value)) return "active";
-  if (["canceled", "cancelled", "unpaid", "past_due", "expired", "suspended", "inactive"].includes(value)) return "inactive";
-  return value;
+  return normalizeStatusValue(status, fallback);
 }
 
 function statusIsActive(status) {
-  return normalizeStatus(status) === "active";
+  return normalizeStatusValue(status) === "active";
 }
 
 async function resolveUserId(supabase, userId, email) {
