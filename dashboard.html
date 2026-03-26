@@ -943,6 +943,11 @@
             <div id="overviewTimeSavedToday" class="stat-value">0 min</div>
             <div class="stat-sub">Estimated operator time reclaimed</div>
           </div>
+          <div class="mini-stat">
+            <div class="stat-label">Elevate Credits</div>
+            <div id="kpiCreditsBalance" class="stat-value">0</div>
+            <div class="stat-sub">Current reward balance</div>
+          </div>
         </div>
 
         <div class="overview-hero">
@@ -982,6 +987,8 @@
               <div><strong>Subscription Status:</strong> <span id="subscriptionStatus">Loading...</span></div>
               <div><strong>Daily Limit:</strong> <span id="kpiDailyLimit">0</span></div>
               <div><strong>Posts Used Today:</strong> <span id="kpiPostsToday">0</span></div>
+              <div><strong>Credits Balance:</strong> <span id="kpiCreditsBalance">0</span></div>
+              <div><strong>Lifetime Credits Earned:</strong> <span id="kpiCreditsEarned">0</span></div>
               <div><strong>Billing Source:</strong> <span id="snapshotBillingSource">Loading...</span></div>
               <div><strong>Current Period End:</strong> <span id="snapshotCurrentPeriodEnd">Loading...</span></div>
             </div>
@@ -1518,11 +1525,15 @@
       
 <!-- ANALYTICS -->
 <section id="tools" class="dashboard-section">
-  <div class="grid-4">
+  <div class="grid-3" style="margin-bottom:20px;">
     <div class="card"><div class="stat-label">Time Saved Today</div><div class="stat-value" id="analyticsTimeSavedToday">0 min</div><div class="stat-sub">Estimated posting time reclaimed today</div></div>
     <div class="card"><div class="stat-label">Time Saved This Week</div><div class="stat-value" id="analyticsTimeSavedWeek">0 min</div><div class="stat-sub">Estimated operator time reclaimed this week</div></div>
     <div class="card"><div class="stat-label">Estimated Weekly Value</div><div class="stat-value" id="analyticsEstimatedValue">$0</div><div class="stat-sub">Founder-stage ROI estimate from time saved</div></div>
+  </div>
+  <div class="grid-3" style="margin-bottom:20px;">
     <div class="card"><div class="stat-label">Execution Efficiency</div><div class="stat-value" id="analyticsEfficiencyScore">0%</div><div class="stat-sub">Posts used vs available capacity</div></div>
+    <div class="card"><div class="stat-label">Credits Balance</div><div class="stat-value" id="analyticsCreditsBalance">0</div><div class="stat-sub">Current internal economy balance</div></div>
+    <div class="card"><div class="stat-label">Lifetime Credits Earned</div><div class="stat-value" id="analyticsCreditsEarned">0</div><div class="stat-sub">All-time platform rewards earned</div></div>
   </div>
   <div class="card upgrade-card" style="margin-bottom:20px;">
     <div class="section-head">
@@ -1570,7 +1581,7 @@
   <div class="grid-3">
     <div class="card"><div class="section-head"><h2>System Health</h2><div class="subtext">Data freshness and lifecycle visibility</div></div><div id="analyticsSystemHealth" class="list-block"><div>Loading system health...</div></div></div>
     <div class="card"><div class="section-head"><h2>Growth Signals</h2><div class="subtext">What is improving and where to lean in</div></div><div id="analyticsGrowthSignals" class="list-block"><div>Loading growth signals...</div></div></div>
-    <div class="card"><div class="section-head"><h2>Opportunity Signals</h2><div class="subtext">Where time saved can convert into revenue actions</div></div><div id="analyticsOpportunitySignals" class="list-block"><div>Loading opportunity signals...</div></div></div>
+    <div class="card"><div class="section-head"><h2>Credit Activity</h2><div class="subtext">Recent economy events tied to real product actions</div></div><div id="analyticsCreditActivity" class="list-block"><div>Loading credit activity...</div></div></div>
   </div>
 </section>
 
