@@ -873,6 +873,17 @@
   .modal-copy{white-space:pre-wrap;line-height:1.65;background:var(--panel-2);border:1px solid var(--line);border-radius:16px;padding:16px;max-height:52vh;overflow:auto}
   .module-toolbar{display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:16px}
   .module-group-label{font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--accent)}
+
+    .operator-strip { display:grid; grid-template-columns: repeat(5, minmax(0,1fr)); gap:18px; margin-bottom:20px; }
+    .operator-metric { display:flex; flex-direction:column; gap:8px; }
+    .operator-metric .stat-value { font-size:28px; }
+    .operator-actions { display:flex; flex-wrap:wrap; gap:8px; margin-top:14px; }
+    .micro-list { display:flex; flex-direction:column; gap:10px; }
+    .micro-item { padding:10px 12px; border:1px solid var(--line); border-radius:12px; background:var(--panel-2); }
+    .micro-item strong { display:block; margin-bottom:4px; }
+    .tiny-kpi { font-size:12px; color:var(--gold); text-transform:uppercase; letter-spacing:1px; }
+    .muted-strong { color: var(--gold-soft); }
+
 </style>
 </head>
 <body>
@@ -916,6 +927,65 @@
 
       <!-- OVERVIEW -->
       <section id="overview" class="dashboard-section">
+        <div class="card" style="margin-bottom:20px;">
+          <div class="section-head">
+            <h2>Today</h2>
+            <div class="subtext">Immediate operating view. Keep overview tight, act here first, then drop into analytics or tools.</div>
+          </div>
+          <div class="operator-strip">
+            <div class="operator-metric">
+              <div class="tiny-kpi">Posts Remaining</div>
+              <div id="todayPostsRemaining" class="stat-value">0</div>
+              <div class="stat-sub">Live daily posting capacity</div>
+            </div>
+            <div class="operator-metric">
+              <div class="tiny-kpi">Queued</div>
+              <div id="todayQueuedVehicles" class="stat-value">0</div>
+              <div class="stat-sub">Vehicles ready for Marketplace</div>
+            </div>
+            <div class="operator-metric">
+              <div class="tiny-kpi">Review Queue</div>
+              <div id="todayReviewQueue" class="stat-value">0</div>
+              <div class="stat-sub">Listings needing operator review</div>
+            </div>
+            <div class="operator-metric">
+              <div class="tiny-kpi">Stale Risk</div>
+              <div id="todayStaleListings" class="stat-value">0</div>
+              <div class="stat-sub">Listings likely needing refresh</div>
+            </div>
+            <div class="operator-metric">
+              <div class="tiny-kpi">Time Saved</div>
+              <div id="todayTimeSaved" class="stat-value">0 min</div>
+              <div class="stat-sub">Estimated operator time reclaimed today</div>
+            </div>
+          </div>
+          <div class="grid-3" style="margin-bottom:0;">
+            <div class="micro-list">
+              <div class="micro-item">
+                <strong>Activation</strong>
+                <div id="activationSummaryText" class="subtext">Loading activation status...</div>
+              </div>
+              <div class="micro-item">
+                <strong>First Win</strong>
+                <div id="firstWinSummaryText" class="subtext">Checking first-win progress...</div>
+              </div>
+            </div>
+            <div class="micro-item">
+              <strong>Next Best Actions</strong>
+              <div id="overviewNextActions" class="subtext">Loading next actions...</div>
+              <div class="operator-actions">
+                <button id="overviewOpenToolsBtn" class="action-btn" type="button">Open Tools</button>
+                <button id="overviewOpenAnalyticsBtn" class="action-btn" type="button">Open Analytics</button>
+                <button id="overviewOpenListingsBtn" class="action-btn" type="button">Review Listings</button>
+              </div>
+            </div>
+            <div class="micro-item">
+              <strong>Setup Blockers</strong>
+              <div id="overviewSetupBlockers" class="subtext">Checking setup blockers...</div>
+            </div>
+          </div>
+        </div>
+
         <div class="grid-3">
           <div class="card">
             <div class="stat-label">Access Status</div>
@@ -1015,7 +1085,7 @@
 
         <div class="card">
           <div class="section-head">
-            <h2>Recent Listings</h2>
+            <h2>Recent Listings</h2><div class="subtext">Live listing control surface. Heavy trend analysis now lives in Analytics.</div>
             <div class="toolbar" style="gap:12px; flex-wrap:wrap;">
               <div id="listingQuickFilters" style="display:flex; gap:8px; flex-wrap:wrap;">
                 <button class="action-btn active" type="button" data-filter="all">All</button>
@@ -1048,7 +1118,7 @@
 
         <div class="grid-2">
           <div class="card">
-            <h2>Account Snapshot</h2>
+            <h2>Account Snapshot</h2><div class="subtext">Canonical access, referral, and entitlement details.</div>
             <div class="list-block">
               <div><strong>Email:</strong> <span class="user-email">Loading...</span></div>
               <div><strong>Referral Code:</strong> <span id="referralCode">Loading...</span></div>
