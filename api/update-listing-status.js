@@ -1,4 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
+import { requireVerifiedDashboardUser, getTrustedIdentity } from "./_shared/auth.js";
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -80,13 +81,18 @@ export default async function handler(req, res) {
 
   try {
     const body = typeof req.body === "string" ? JSON.parse(req.body || "{}") : (req.body || {});
+    const verifiedUser = await requireVerifiedDashboardUser(req, res);
+    if (req.headers?.["x-elevate-client"] && !verifiedUser && String(req.headers["x-elevate-client"]).toLowerCase() === "dashboard") {
+      return;
+    }
+    const identity = getTrustedIdentity({ verifiedUser, body });
 
     const listingId = clean(body.listingId || body.listing_id || "");
     const listingIds = Array.isArray(body.listingIds || body.listing_ids)
       ? (body.listingIds || body.listing_ids).map((v) => clean(v)).filter(Boolean)
       : [];
-    const userId = clean(body.userId || body.user_id || "");
-    const email = normalizeEmail(body.email || "");
+    const userId = clean(identity.id || body.userId || body.user_id || "");
+    const email = normalizeEmail(identity.email || body.email || "");
     const nextStatus = allowedStatus(body.status);
     const nextLifecycleStatus = allowedLifecycleStatus(body.lifecycle_status || body.lifecycleStatus || body.review_status || "");
     const nextReviewBucket = normalizeReviewBucket(body.review_bucket || body.reviewBucket || "");
