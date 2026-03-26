@@ -188,10 +188,127 @@
       background: #2a1717;
     }
 
+
     .main {
       flex: 1;
       padding: 32px;
       overflow-x: hidden;
+    }
+
+    .main-inner {
+      width: min(100%, 1360px);
+      margin: 0 auto;
+    }
+
+    .dashboard-section {
+      display: none;
+      width: 100%;
+    }
+
+    .operator-strip {
+      display: grid;
+      grid-template-columns: repeat(6, minmax(0, 1fr));
+      gap: 18px;
+      margin-bottom: 22px;
+      align-items: stretch;
+    }
+
+    .mini-stat {
+      background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0));
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      padding: 20px;
+      min-height: 150px;
+      box-shadow: var(--shadow);
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .mini-stat::after {
+      content: "";
+      position: absolute;
+      width: 120px;
+      height: 120px;
+      right: -34px;
+      bottom: -34px;
+      border-radius: 999px;
+      background: radial-gradient(circle, rgba(212,175,55,0.18), rgba(212,175,55,0));
+      pointer-events: none;
+    }
+
+    .overview-hero {
+      margin-bottom: 22px;
+    }
+
+    .overview-hero .card {
+      padding: 28px;
+    }
+
+    .overview-panel-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 18px;
+      margin-bottom: 16px;
+    }
+
+    .overview-chip-row {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+
+    .overview-chip {
+      display: inline-flex;
+      align-items: center;
+      min-height: 38px;
+      padding: 0 14px;
+      border-radius: 999px;
+      background: rgba(212,175,55,0.12);
+      color: var(--gold-soft);
+      border: 1px solid rgba(212,175,55,0.22);
+      font-size: 13px;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+
+    .overview-action-list {
+      display: grid;
+      gap: 10px;
+      margin-bottom: 16px;
+    }
+
+    .overview-action-item {
+      background: #171717;
+      border: 1px solid rgba(255,255,255,0.06);
+      border-radius: 14px;
+      padding: 14px 16px;
+      color: #f4f4f4;
+      line-height: 1.5;
+    }
+
+    .overview-action-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+      margin-top: 16px;
+    }
+
+    .upgrade-card {
+      border-color: rgba(212,175,55,0.18);
+      background: linear-gradient(180deg, rgba(212,175,55,0.05), rgba(255,255,255,0.01));
+    }
+
+    .upgrade-copy {
+      display: grid;
+      gap: 10px;
+      font-size: 14px;
+      line-height: 1.6;
+      color: #e9e9e9;
     }
 
     .main-header {
@@ -800,6 +917,37 @@
       pointer-events: none;
     }
 
+
+    @media (max-width: 1480px) {
+      .operator-strip { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    }
+
+    @media (max-width: 1100px) {
+      .operator-strip { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .overview-panel-head,
+      .overview-chip-row {
+        justify-content: flex-start;
+      }
+      .overview-panel-head {
+        flex-direction: column;
+      }
+    }
+
+    @media (max-width: 760px) {
+      .operator-strip,
+      .overview-action-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .main {
+        padding: 18px;
+      }
+
+      .main-inner {
+        width: 100%;
+      }
+    }
+
     @media (max-width: 1280px) {
       .listing-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
       .grid-5 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
@@ -908,6 +1056,7 @@
     </aside>
 
     <main class="main">
+      <div class="main-inner">
       <div class="main-header">
         <div id="bootStatus"></div>
         <h1 id="dashboardPageTitle">Founder Beta Dashboard</h1>
@@ -952,7 +1101,7 @@
 
         <div class="overview-hero">
           <div class="card">
-            <div class="section-head">
+            <div class="overview-panel-head">
               <div>
                 <h2>Today Operator Panel</h2>
                 <div class="subtext">The cleanest view of what matters right now.</div>
@@ -1241,7 +1390,7 @@
             </div>
           </div>
 
-          <div class="action-grid">
+          <div class="overview-action-grid">
             <button id="saveProfileBtn" class="btn-primary" type="button">Save Profile</button>
             <a href="/profile.html" class="action-btn">Open Full Profile Module</a>
           </div>
@@ -1581,10 +1730,13 @@
   <div class="grid-3">
     <div class="card"><div class="section-head"><h2>System Health</h2><div class="subtext">Data freshness and lifecycle visibility</div></div><div id="analyticsSystemHealth" class="list-block"><div>Loading system health...</div></div></div>
     <div class="card"><div class="section-head"><h2>Growth Signals</h2><div class="subtext">What is improving and where to lean in</div></div><div id="analyticsGrowthSignals" class="list-block"><div>Loading growth signals...</div></div></div>
-    <div class="card"><div class="section-head"><h2>Credit Activity</h2><div class="subtext">Recent economy events tied to real product actions</div></div><div id="analyticsCreditActivity" class="list-block"><div>Loading credit activity...</div></div></div>
+    
+  <div class="card"><div class="section-head"><h2>Credit Actions</h2><div class="subtext">Use credits to unlock more output without leaving the dashboard.</div></div><div id="creditActionPanel" class="list-block"><div>Loading credit actions...</div></div><div id="creditActionStatus" class="subtext" style="margin-top:10px;">Extra post unlocks and future economy actions will appear here.</div></div>
+<div class="card"><div class="section-head"><h2>Credit Activity</h2><div class="subtext">Recent economy events tied to real product actions</div></div><div id="analyticsCreditActivity" class="list-block"><div>Loading credit activity...</div></div></div>
   </div>
 </section>
 
+      </div>
     </main>
   </div>
 
