@@ -95,6 +95,82 @@ let currentNormalizedSession = null;
 let dashboardSummary = null;
 
 let currentReadCopyText = "";
+
+async function getAuthAccessToken() {
+  try {
+    if (window.supabaseClient?.auth?.getSession) {
+      const result = await window.supabaseClient.auth.getSession();
+      return result?.data?.session?.access_token || "";
+    }
+  } catch (error) {
+    console.warn("getAuthAccessToken warning", error);
+  }
+  return "";
+}
+
+async function apiFetch(input, init = {}) {
+  const headers = new Headers(init.headers || {});
+  if (!headers.has("Content-Type") && init.body && !(init.body instanceof FormData)) {
+    headers.set("Content-Type", "application/json");
+  }
+  const token = await getAuthAccessToken();
+  if (token) headers.set("Authorization", `Bearer ${token}`);
+  return fetch(input, { ...init, headers });
+}
+
+function buildActivationView(summary = {}) {
+  const setup = summary?.setup_status || {};
+  const account = summary?.account_snapshot || {};
+  const checks = [
+    Boolean(account.active),
+    Boolean(setup.dealer_website),
+    Boolean(setup.inventory_url),
+    Boolean(setup.scanner_type),
+    Boolean(setup.listing_location),
+    Boolean(setup.compliance_mode),
+    Number(summary?.posts_today || 0) > 0
+  ];
+  const blockers = [];
+  if (!account.active) blockers.push("billing/access");
+  if (!setup.dealer_website) blockers.push("dealer website");
+  if (!setup.inventory_url) blockers.push("inventory URL");
+  if (!setup.scanner_type) blockers.push("scanner type");
+  if (!setup.listing_location) blockers.push("listing location");
+  if (!setup.compliance_mode) blockers.push("compliance mode");
+  if (!(Number(summary?.posts_today || 0) > 0)) blockers.push("first post");
+  const completed = checks.filter(Boolean).length;
+  return {
+    percent: Math.round((completed / checks.length) * 100),
+    blockers,
+    complete: completed === checks.length
+  };
+}
+
+function renderOverviewOperatorStrip() {
+  const roi = dashboardSummary?.roi_snapshot || {};
+  const activation = buildActivationView(dashboardSummary);
+  const actions = [];
+  if (numberOrZero(currentNormalizedSession?.subscription?.posts_remaining ?? dashboardSummary?.account_snapshot?.posts_remaining) > 0) actions.push("Post queued vehicles");
+  if (numberOrZero(dashboardSummary?.review_queue_count) > 0) actions.push("Clear review queue");
+  if (numberOrZero(dashboardSummary?.stale_listings) > 0) actions.push("Refresh stale listings");
+  if (!actions.length) actions.push("Open Analytics and review trend movement");
+
+  setTextByIdForAll("todayPostsRemaining", String(numberOrZero(currentNormalizedSession?.subscription?.posts_remaining ?? dashboardSummary?.account_snapshot?.posts_remaining)));
+  setTextByIdForAll("todayQueuedVehicles", String(numberOrZero(dashboardSummary?.queue_count)));
+  setTextByIdForAll("todayReviewQueue", String(numberOrZero(dashboardSummary?.review_queue_count)));
+  setTextByIdForAll("todayStaleListings", String(numberOrZero(dashboardSummary?.stale_listings)));
+  setTextByIdForAll("todayTimeSaved", `${numberOrZero(roi.estimated_minutes_saved_today || (dashboardSummary?.posts_today || 0) * 18)} min`);
+  setTextByIdForAll("activationSummaryText", activation.complete ? `System is activation-ready. ${activation.percent}% complete.` : `${activation.percent}% complete. Finish: ${activation.blockers.slice(0,3).join(", ") || "final setup"}.`);
+  setTextByIdForAll("firstWinSummaryText", numberOrZero(dashboardSummary?.posts_today) > 0 ? `First post already registered. ${numberOrZero(dashboardSummary?.posts_today)} posts tracked today.` : "No first post recorded yet. Use Tools to connect inventory and post the first live unit.");
+  setTextByIdForAll("overviewNextActions", actions.map((item, idx) => `${idx + 1}. ${item}`).join(" • "));
+  setTextByIdForAll("overviewSetupBlockers", activation.blockers.length ? activation.blockers.join(" • ") : "No major blockers detected.");
+}
+
+function openDashboardSection(sectionId) {
+  showSection(sectionId);
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
 function openReadCopyModal({ title = "Read in Dashboard", subtitle = "Read this in the dashboard first, then copy only if needed.", eyebrow = "Dashboard Script", body = "" } = {}) {
   const modal = document.getElementById("readCopyModal");
   if (!modal) return;
@@ -379,7 +455,7 @@ if (copyAffiliatePostBtn) {
 
         setStatus("accountStatusBilling", "Opening billing portal...");
 
-        const response = await fetch("/api/create-billing-portal-session", {
+        const response = await apiFetch("/api/create-billing-portal-session", {
           method: "POST",
           headers: {
             "Content-Type": "application/json"
@@ -514,7 +590,7 @@ async function fetchDashboardSummary(forceFresh = false) {
     if (currentUser.email) url.searchParams.set("email", currentUser.email);
     if (forceFresh) url.searchParams.set("_ts", String(Date.now()));
 
-    const response = await fetch(url.toString(), {
+    const response = await apiFetch(url.toString(), {
       method: "GET",
       cache: "no-store"
     });
@@ -539,7 +615,7 @@ async function fetchUserListings(forceFresh = false) {
     url.searchParams.set("limit", "250");
     if (forceFresh) url.searchParams.set("_ts", String(Date.now()));
 
-    const response = await fetch(url.toString(), {
+    const response = await apiFetch(url.toString(), {
       method: "GET",
       cache: "no-store"
     });
@@ -787,6 +863,7 @@ function renderDashboardAnalytics() {
   setTextByIdForAll("kpiWeakListings", String(numberOrZero(dashboardSummary?.weak_listings)));
   setTextByIdForAll("kpiNeedsAction", String(numberOrZero(dashboardSummary?.needs_action_count)));
 
+  renderOverviewOperatorStrip();
   renderPrioritiesPanels();
   renderScorecards();
   renderIntelligencePanels();
@@ -908,7 +985,7 @@ async function logListingUsage(action, listingId, metadata = {}) {
   try {
     const email = clean(window.currentUser?.email || window.currentUserEmail || "").toLowerCase();
     const userId = clean(window.currentUser?.id || window.currentUserId || "");
-    const response = await fetch("/api/log-usage", {
+    const response = await apiFetch("/api/log-usage", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ action, listing_id: listingId, listingId, email, user_id: userId, userId, metadata })
@@ -1127,7 +1204,7 @@ function renderIntelligencePanels() {
 
 async function markListingAction(listingId, status) {
   try {
-    await fetch('/api/update-listing-status', {
+    await apiFetch('/api/update-listing-status', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ listingId, status })
@@ -1452,7 +1529,7 @@ async function submitProfileSave(user) {
       scanner_type: getFieldValue("scanner_type")
     };
 
-    const response = await fetch("/api/profile", {
+    const response = await apiFetch("/api/profile", {
       method: "POST",
       headers: {
         "Content-Type": "application/json"
@@ -1566,7 +1643,7 @@ async function loadAccountData(user, forceFresh = false) {
         url.searchParams.set("_ts", String(Date.now()));
       }
 
-      const response = await fetch(url.toString(), {
+      const response = await apiFetch(url.toString(), {
         cache: "no-store"
       });
 
@@ -2131,7 +2208,7 @@ function buildSetupStepsText() {
 
 async function syncUserIfNeeded(user) {
   try {
-    await fetch("/api/sync-user", {
+    await apiFetch("/api/sync-user", {
       method: "POST",
       headers: {
         "Content-Type": "application/json"
@@ -2168,7 +2245,7 @@ async function markListingSold(listingId) {
 
     row.status = "sold";
 
-    const response = await fetch("/api/update-listing-status", {
+    const response = await apiFetch("/api/update-listing-status", {
       method: "POST",
       headers: {
         "Content-Type": "application/json"
