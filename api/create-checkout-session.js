@@ -1,5 +1,6 @@
 import Stripe from "stripe";
 import { createClient } from "@supabase/supabase-js";
+import { requireVerifiedDashboardUser, getTrustedIdentity } from "./_shared/auth.js";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 
@@ -283,8 +284,14 @@ export default async function handler(req, res) {
       return json(res, 400, { error: body.__parse_error });
     }
 
-    const email = normalizeEmail(body.email || "");
-    const userId = clean(body.userId || body.user_id || body.id || "");
+    const verifiedUser = await requireVerifiedDashboardUser(req, res);
+    if (req.headers?.["x-elevate-client"] && !verifiedUser && String(req.headers["x-elevate-client"]).toLowerCase() === "dashboard") {
+      return;
+    }
+    const identity = getTrustedIdentity({ verifiedUser, body });
+
+    const email = normalizeEmail(identity.email || body.email || "");
+    const userId = clean(identity.id || body.userId || body.user_id || body.id || "");
     const planType = clean(body.planType || "");
     const userType = clean(body.userType || "");
     const accessType = clean(body.accessType || "");
