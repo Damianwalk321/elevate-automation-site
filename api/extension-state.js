@@ -1,6 +1,7 @@
 
 
 import { createClient } from "@supabase/supabase-js";
+import { resolveAccountAccess } from "./_shared/account-access.js";
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -257,8 +258,6 @@ function buildSubscriptionPayload(
     )
   ) || 0;
 
-  const plan = normalizePlanLabel(rawPlan);
-  const status = normalizeStatusValue(rawStatus);
   const postsToday = Number(
     firstNonEmpty(
       postingUsageRow?.posts_today,
@@ -287,42 +286,48 @@ function buildSubscriptionPayload(
     normalizeBoolean(licenseRow?.active) ||
     normalizeBoolean(licenseRow?.access) ||
     normalizeBoolean(licenseKeyRow?.active) ||
-    normalizeBoolean(licenseKeyRow?.assigned) ||
-    isActiveStatus(rawStatus);
+    normalizeBoolean(licenseKeyRow?.assigned);
 
-  const explicitNegative = normalizeStatusValue(rawStatus) === "inactive";
-
+  const explicitNegative = ["canceled", "cancelled", "unpaid", "past_due", "expired", "suspended", "inactive"].includes(clean(rawStatus).toLowerCase());
   const hasProfileSetup = Boolean(
     legacyProfileRow?.dealer_website ||
       legacyProfileRow?.inventory_url ||
       legacyProfileRow?.dealership
   );
-
   const bridgeEligible = normalizeBoolean(subscriptionRow?.bridge_access) || normalizeBoolean(legacyProfileRow?.bridge_access);
   const bridgeActive = !explicitNegative && bridgeEligible && hasProfileSetup;
-  const active = explicitPositive || bridgeActive;
-  const postingLimitBase = configuredPostingLimit > 0 ? configuredPostingLimit : inferPostingLimitFromPlan(plan);
-  const postingLimit = active ? postingLimitBase : 0;
-  const postsRemaining = Math.max(postingLimit - postsToday, 0);
+  const access = resolveAccountAccess({
+    email: subscriptionRow?.email || licenseRow?.email || licenseKeyRow?.email || '',
+    rawPlan,
+    rawStatus,
+    explicitPostingLimit: configuredPostingLimit,
+    explicitPostsToday: postsToday,
+    explicitActiveFlags: [explicitPositive, bridgeActive],
+    explicitInactiveFlags: [explicitNegative],
+    explicitAccessGranted: normalizeBoolean(subscriptionRow?.account_snapshot?.access_granted)
+  });
   const billingSource = subscriptionRow ? "subscriptions" : (licenseRow || licenseKeyRow ? "license" : "bridge");
 
   return {
     id: clean(subscriptionRow?.id || ""),
-    plan,
-    normalized_plan: plan,
-    status: active ? "active" : status,
-    normalized_status: active ? "active" : status,
-    active,
-    access_granted: active,
-    posting_limit: postingLimit,
-    daily_posting_limit: postingLimit,
-    posts_today: postsToday,
-    posts_remaining: postsRemaining,
+    plan: access.plan,
+    normalized_plan: access.normalized_plan,
+    status: access.status,
+    normalized_status: access.normalized_status,
+    active: access.active,
+    access_granted: access.access_granted,
+    posting_limit: access.posting_limit,
+    daily_posting_limit: access.daily_posting_limit,
+    posts_today: access.posts_today,
+    posts_remaining: access.posts_remaining,
+    billing: access.billing,
+    can_post: access.can_post,
     current_period_end: clean(subscriptionRow?.current_period_end || ""),
     trial_end: clean(subscriptionRow?.trial_end || ""),
     cancel_at_period_end: normalizeBoolean(subscriptionRow?.cancel_at_period_end),
     billing_source: billingSource,
-    license_key: licenseKey
+    license_key: licenseKey,
+    testing_limit_override: Boolean(access.testing_limit_override)
   };
 }
 
@@ -640,16 +645,16 @@ export default async function handler(req, res) {
 
     const listingUsageToday = await getTodayListingPostedCount(supabase, user.id, email);
     subscription.posts_today = Math.max(Number(subscription.posts_today || 0), Number(listingUsageToday || 0));
-    if (hasTestingLimitOverride(email)) {
-      subscription.posting_limit = 25;
-      subscription.daily_posting_limit = 25;
-      subscription.testing_limit_override = true;
-      subscription.active = true;
-      subscription.access_granted = true;
-      subscription.status = 'active';
-      subscription.normalized_status = 'active';
-    }
-    subscription.posts_remaining = Math.max(Number(subscription.posting_limit || 0) - Number(subscription.posts_today || 0), 0);
+    const subscriptionAccess = resolveAccountAccess({
+      email,
+      rawPlan: subscription.plan,
+      rawStatus: subscription.status,
+      explicitPostingLimit: subscription.posting_limit || subscription.daily_posting_limit || 0,
+      explicitPostsToday: subscription.posts_today,
+      explicitActiveFlags: [subscription.active],
+      explicitAccessGranted: subscription.access_granted === true
+    });
+    Object.assign(subscription, subscriptionAccess, { billing: subscriptionAccess.billing, can_post: subscriptionAccess.can_post });
     const scannerConfigPayload = buildScannerConfigPayload(scannerConfig, dealership || {}, legacyProfile || {});
     const allowedDealerHosts = buildAllowedDealerHosts(dealership || {});
     const minimumVersion = DEFAULT_MINIMUM_VERSION;
@@ -668,15 +673,16 @@ export default async function handler(req, res) {
     const normalizedSubscriptionStatus = clean(subscription?.status || "").toLowerCase();
 
     if (!subscription.active && setupReady && !hardNegativeStatuses.includes(normalizedSubscriptionStatus)) {
-      subscription.active = true;
-      subscription.access_granted = true;
-      subscription.status = "active";
-      subscription.normalized_status = "active";
-      subscription.plan = normalizePlanLabel(subscription.plan || "Founder Beta");
-      subscription.normalized_plan = subscription.plan;
-      subscription.posting_limit = Number(subscription.posting_limit || inferPostingLimitFromPlan(subscription.plan));
-      subscription.daily_posting_limit = subscription.posting_limit;
-      subscription.posts_remaining = Math.max(Number(subscription.posting_limit || 0) - Number(subscription.posts_today || 0), 0);
+      const bridgedAccess = resolveAccountAccess({
+        email,
+        rawPlan: subscription.plan || "Founder Beta",
+        rawStatus: subscription.status || 'active',
+        explicitPostingLimit: subscription.posting_limit || subscription.daily_posting_limit || 0,
+        explicitPostsToday: subscription.posts_today || 0,
+        explicitActiveFlags: [true],
+        allowSetupBridge: true
+      });
+      Object.assign(subscription, bridgedAccess, { billing: bridgedAccess.billing, can_post: bridgedAccess.can_post });
     }
 
     subscription.minimum_version = minimumVersion;
