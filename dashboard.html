@@ -866,6 +866,49 @@
     .action-center-item-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
     .section-collapsible{margin-top:14px}
 
+
+    .phase1-top-grid {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 16px;
+      margin-bottom: 20px;
+    }
+    .progress-shell {
+      width: 100%; height: 10px; border-radius: 999px; background: rgba(255,255,255,0.08);
+      overflow: hidden; margin-top: 12px; border: 1px solid rgba(255,255,255,0.06);
+    }
+    .progress-bar {
+      height: 100%; width: 0%; background: linear-gradient(90deg, rgba(212,175,55,0.9), rgba(243,221,176,0.9));
+      transition: width 0.2s ease;
+    }
+    .mini-list { display:flex; flex-direction:column; gap:8px; margin-top:12px; }
+    .mini-list div {
+      padding:10px 12px; border-radius:10px; background:var(--panel-2); border:1px solid rgba(255,255,255,0.06);
+      font-size:13px; line-height:1.45;
+    }
+    .eyebrow {
+      font-size:12px; color:var(--gold); text-transform:uppercase; letter-spacing:1.3px; font-weight:700; margin-bottom:8px;
+    }
+    .inline-actions { display:flex; gap:10px; flex-wrap:wrap; margin-top:12px; }
+    .modal-overlay {
+      position:fixed; inset:0; background:rgba(0,0,0,0.7); display:none; align-items:center; justify-content:center;
+      z-index:9999; padding:20px;
+    }
+    .modal-overlay.open { display:flex; }
+    .modal-card {
+      width:min(760px, 100%); max-height:88vh; overflow:auto; background:linear-gradient(180deg, #141414 0%, #101010 100%);
+      border:1px solid var(--line-strong); border-radius:18px; box-shadow:var(--shadow); padding:22px;
+    }
+    .modal-head { display:flex; align-items:flex-start; justify-content:space-between; gap:14px; margin-bottom:16px; }
+    .modal-title { font-size:22px; line-height:1.2; margin-bottom:6px; }
+    .modal-body {
+      white-space:pre-wrap; line-height:1.65; color:var(--text); background:var(--panel-2); border:1px solid rgba(255,255,255,0.07);
+      border-radius:14px; padding:16px; font-size:14px;
+    }
+    .modal-actions { display:flex; justify-content:flex-end; gap:10px; flex-wrap:wrap; margin-top:16px; }
+    @media (max-width: 1280px) { .phase1-top-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+    @media (max-width: 760px) { .phase1-top-grid { grid-template-columns: 1fr; } }
+
   </style>
 </head>
 <body>
@@ -909,6 +952,41 @@
 
       <!-- OVERVIEW -->
       <section id="overview" class="dashboard-section">
+        <div class="phase1-top-grid">
+          <div class="card">
+            <div class="eyebrow">Activation</div>
+            <div id="activationPercent" class="stat-value">0%</div>
+            <div id="activationSummary" class="stat-sub">Loading activation status...</div>
+            <div class="progress-shell"><div id="activationProgressBar" class="progress-bar"></div></div>
+            <div id="activationBlockers" class="mini-list"><div>Loading blockers...</div></div>
+          </div>
+          <div class="card">
+            <div class="eyebrow">First Win</div>
+            <div id="firstWinStatus" class="stat-value">Loading...</div>
+            <div id="firstWinSummary" class="stat-sub">Checking first-win progress...</div>
+            <div id="firstWinChecklist" class="mini-list"><div>Loading milestones...</div></div>
+          </div>
+          <div class="card">
+            <div class="eyebrow">Time Saved</div>
+            <div id="roiMinutesToday" class="stat-value">0 min</div>
+            <div id="roiSummary" class="stat-sub">Loading ROI snapshot...</div>
+            <div id="roiMiniStats" class="mini-list"><div>Loading estimate...</div></div>
+          </div>
+          <div class="card">
+            <div class="eyebrow">Next Best Actions</div>
+            <div id="nextBestActions" class="mini-list"><div>Loading actions...</div></div>
+          </div>
+          <div class="card">
+            <div class="eyebrow">Growth Tools</div>
+            <div class="stat-sub">Read scripts in-dashboard, then copy only when needed.</div>
+            <div class="inline-actions">
+              <button id="viewTeammateInviteBtn" class="action-btn" type="button">View Teammate Invite</button>
+              <button id="viewDealerInviteBtn" class="action-btn" type="button">View Dealer Invite</button>
+              <button id="viewAffiliatePitchTopBtn" class="action-btn" type="button">View Affiliate Pitch</button>
+            </div>
+            <div id="growthQuickNote" class="status-line" style="margin-top:12px;">Loading growth prompts...</div>
+          </div>
+        </div>
         <div class="grid-3">
           <div class="card">
             <div class="stat-label">Access Status</div>
@@ -1370,7 +1448,7 @@
               <button id="openMarketplaceBtn" class="action-btn" type="button">Open Marketplace</button>
               <button id="openInventoryBtn" class="action-btn" type="button">Open Inventory URL</button>
               <button id="refreshExtensionStateBtn" class="action-btn" type="button">Refresh Extension State</button>
-              <button id="copySetupStepsBtn" class="action-btn" type="button">Copy Setup Steps</button>
+              <button id="copySetupStepsBtn" class="action-btn" type="button">View Setup Steps</button>
             </div>
 
             <div id="extensionActionStatus" class="status-line"></div>
@@ -1467,9 +1545,9 @@
             <div class="action-grid" style="margin-top:14px;">
               <button id="copyReferralCodeBtn" class="action-btn" type="button">Copy Referral Code</button>
               <button id="copyReferralLinkBtn" class="action-btn" type="button">Copy Referral Link</button>
-              <button id="copyAffiliateDMBtn" class="action-btn" type="button">Copy DM Script</button>
-              <button id="copyAffiliatePitchBtn" class="action-btn" type="button">Copy Short Pitch</button>
-              <button id="copyAffiliatePostBtn" class="action-btn" type="button">Copy Story/Post</button>
+              <button id="copyAffiliateDMBtn" class="action-btn" type="button">View DM Script</button>
+              <button id="copyAffiliatePitchBtn" class="action-btn" type="button">View Short Pitch</button>
+              <button id="copyAffiliatePostBtn" class="action-btn" type="button">View Story/Post</button>
             </div>
             <div class="subtext" style="margin-top:14px;">Professional partner program positioning: recurring commissions, clean referral economics, and dealership-level conversations.</div>
           </div>
@@ -1586,5 +1664,24 @@
 
   <script src="/js/supabase-client.js"></script>
   <script src="/dashboard.js"></script>
+
+  <div id="dashboardReadModal" class="modal-overlay" aria-hidden="true">
+    <div class="modal-card">
+      <div class="modal-head">
+        <div>
+          <div id="dashboardReadModalEyebrow" class="eyebrow">Read in dashboard</div>
+          <div id="dashboardReadModalTitle" class="modal-title">Dashboard Copy</div>
+          <div id="dashboardReadModalSubtitle" class="subtext">Read here first. Copy only when needed.</div>
+        </div>
+        <button id="dashboardReadModalCloseTop" class="action-btn" type="button">Close</button>
+      </div>
+      <div id="dashboardReadModalBody" class="modal-body"></div>
+      <div class="modal-actions">
+        <button id="dashboardReadModalCopyBtn" class="btn-secondary" type="button">Copy Text</button>
+        <button id="dashboardReadModalCloseBtn" class="btn-primary" type="button">Done</button>
+      </div>
+    </div>
+  </div>
+
 </body>
 </html>
