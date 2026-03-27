@@ -1113,6 +1113,17 @@ export default async function handler(req, res) {
           usage_today_computed: safeNumber(computed.posts_today, 0),
           testing_limit_override: forcedAccess
         },
+        listing_data_state: {
+          direct_rows_found: rows.length,
+          preview_rows_found: recentListings.length,
+          snapshot_active_listings: safeNumber(snapshot.active_listings ?? computed.active_listings, 0),
+          lifecycle_updated_at: clean(snapshot.lifecycle_updated_at || ''),
+          sources: {
+            user_listings: userListingRows.length,
+            listings: legacyListingRows.length,
+            merged: rows.length
+          }
+        },
         account_snapshot: {
           ...(snapshot || {}),
           user_id: finalUserId,
