@@ -198,16 +198,52 @@ function getSummaryProfileSnapshot() {
   return dashboardSummary?.profile_snapshot || dashboardSummary?.account_snapshot || {};
 }
 
+function readLocalProfileSnapshot() {
+  const keys = [
+    'ea_dashboard_profile_v1',
+    'elevate_profile_snapshot',
+    'ea_profile_snapshot',
+    'ea_user_profile',
+    'ea_account_profile'
+  ];
+  for (const key of keys) {
+    try {
+      const raw = localStorage.getItem(key);
+      if (!raw) continue;
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed === 'object') return parsed;
+    } catch (error) {
+      console.warn('readLocalProfileSnapshot warning:', error);
+    }
+  }
+  return {};
+}
+
+function readFormProfileSnapshot() {
+  const ids = ['full_name','dealership','city','province','phone','license_number','listing_location','dealer_phone','dealer_email','compliance_mode','dealer_website','inventory_url','scanner_type','software_license_key'];
+  const out = {};
+  ids.forEach((id) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    out[id] = clean(el.value || '');
+  });
+  return out;
+}
+
 function getCanonicalProfileState(overrideProfile = null, overrideSession = null) {
   const summaryProfile = getSummaryProfileSnapshot();
+  const storedProfile = readLocalProfileSnapshot();
+  const formProfile = readFormProfileSnapshot();
   const session = overrideSession || currentNormalizedSession || {};
   const profile = overrideProfile || currentProfile || {};
   const sessionProfile = session?.profile || {};
   const dealership = session?.dealership || {};
   const merged = {
     ...summaryProfile,
+    ...storedProfile,
     ...sessionProfile,
     ...profile,
+    ...formProfile,
     full_name: clean(profile.full_name || sessionProfile.full_name || sessionProfile.salesperson_name || summaryProfile.full_name || summaryProfile.salesperson_name || currentUser?.user_metadata?.full_name || currentUser?.email || ''),
     dealership: clean(profile.dealership || profile.dealer_name || sessionProfile.dealership || sessionProfile.dealer_name || dealership.name || dealership.dealer_name || summaryProfile.dealership || summaryProfile.dealer_name || ''),
     city: clean(profile.city || sessionProfile.city || summaryProfile.city || ''),
@@ -285,6 +321,9 @@ function rerenderCanonicalPanels() {
   renderAccessState(canonicalSession);
   renderExtensionControl(canonicalSession, canonicalProfile);
   updateSetupStates(canonicalProfile, canonicalSession);
+  renderSetupWorkspace(canonicalProfile, canonicalSession);
+  renderComplianceWorkspace(canonicalProfile, canonicalSession);
+  renderToolsWorkspace(canonicalProfile, canonicalSession);
   persistProfileSnapshots(buildExtensionProfileSnapshot(canonicalSession, canonicalProfile, currentUser), canonicalSession);
 }
 
@@ -517,6 +556,21 @@ document.querySelectorAll('.tool-tile').forEach((tile) => {
       await onSaveProfilePressed();
     });
   }
+
+  document.addEventListener('click', (event) => {
+    const jumpBtn = event.target.closest('.setup-jump-btn');
+    if (jumpBtn) {
+      jumpToSetupField(jumpBtn.getAttribute('data-field-id') || '');
+      return;
+    }
+    const toolsJump = event.target.closest('[data-open-section]');
+    if (toolsJump) {
+      const sectionId = toolsJump.getAttribute('data-open-section');
+      const fieldId = toolsJump.getAttribute('data-focus-field') || '';
+      if (sectionId) showSection(sectionId);
+      if (fieldId) jumpToSetupField(fieldId);
+    }
+  });
 
   const logoutBtn = document.getElementById("logoutBtn");
   if (logoutBtn) {
@@ -1277,10 +1331,144 @@ function renderDashboardAnalytics() {
   renderOverviewOperatorPanel();
   renderAnalyticsHub();
   renderMonetizationPanels();
+  renderSetupWorkspace();
+  renderComplianceWorkspace();
+  renderToolsWorkspace();
   drawActivityChart(buildChartSeries());
 }
 
 
+
+
+function getSetupChecklist(profile = null, session = null) {
+  const mergedProfile = getCanonicalProfileState(profile, session);
+  const normalizedSession = session || currentNormalizedSession || {};
+  const setup = dashboardSummary?.setup_status || {};
+  const subscription = getCanonicalSubscriptionState(normalizedSession);
+  return [
+    { key: 'full_name', label: 'Salesperson identity', ready: Boolean(setup.salesperson_name_present || mergedProfile.full_name), target: 'full_name' },
+    { key: 'dealership', label: 'Dealership name', ready: Boolean(setup.dealership_name_present || mergedProfile.dealership), target: 'dealership' },
+    { key: 'dealer_website', label: 'Dealer website', ready: Boolean(setup.dealer_website_present || mergedProfile.dealer_website), target: 'dealer_website' },
+    { key: 'inventory_url', label: 'Inventory URL', ready: Boolean(setup.inventory_url_present || mergedProfile.inventory_url), target: 'inventory_url' },
+    { key: 'scanner_type', label: 'Scanner type', ready: Boolean(setup.scanner_type_present || mergedProfile.scanner_type), target: 'scanner_type' },
+    { key: 'listing_location', label: 'Listing location', ready: Boolean(setup.listing_location_present || mergedProfile.listing_location), target: 'listing_location' },
+    { key: 'compliance_mode', label: 'Compliance mode', ready: Boolean(setup.compliance_mode_present || mergedProfile.compliance_mode || mergedProfile.province), target: 'compliance_mode' },
+    { key: 'license_number', label: 'License number', ready: Boolean(mergedProfile.license_number), target: 'license_number' },
+    { key: 'access', label: 'Account access', ready: Boolean(subscription.active), target: null }
+  ];
+}
+
+function jumpToSetupField(fieldId) {
+  showSection('profile');
+  if (!fieldId) return;
+  const el = document.getElementById(fieldId);
+  if (!el) return;
+  requestAnimationFrame(() => {
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    try { el.focus({ preventScroll: true }); } catch {}
+  });
+}
+
+function renderSetupWorkspace(profile = null, session = null) {
+  const checklist = getSetupChecklist(profile, session);
+  const readyCount = checklist.filter((item) => item.ready).length;
+  const total = checklist.length;
+  const percent = total ? Math.round((readyCount / total) * 100) : 0;
+  const blockers = checklist.filter((item) => !item.ready && item.key !== 'access');
+  setTextByIdForAll('setupReadinessPercent', `${percent}%`);
+  setTextByIdForAll('setupReadinessSummary', `${readyCount}/${total} setup checkpoints are ready.`);
+  const blockersEl = document.getElementById('setupBlockersList');
+  if (blockersEl) {
+    blockersEl.innerHTML = blockers.length
+      ? blockers.map((item) => `<div class="action-row"><div><strong>${escapeHtml(item.label)}</strong><div class="subtext">Required before the posting flow is truly launch-ready.</div></div><button class="action-btn setup-jump-btn" type="button" data-field-id="${escapeHtml(item.target || '')}">Fix Now</button></div>`).join('')
+      : '<div>No setup blockers remain. This account is ready for the posting flow.</div>';
+  }
+  const nextStepEl = document.getElementById('setupNextStepPanel');
+  if (nextStepEl) {
+    const nextItem = blockers[0] || checklist.find((item) => item.key === 'access' && !item.ready);
+    nextStepEl.innerHTML = nextItem
+      ? `<div><strong>Next step:</strong> ${escapeHtml(nextItem.label)}</div><div class="subtext">Complete this first so the platform has clean dealer routing and compliant output.</div>`
+      : '<div><strong>Setup complete.</strong> Move into Tools to verify posting state or Analytics to watch performance.</div>';
+  }
+}
+
+function buildComplianceFooterPreview(profile) {
+  const lines = [];
+  if (profile.dealership) lines.push(profile.dealership);
+  if (profile.listing_location) lines.push(profile.listing_location);
+  if (profile.dealer_phone || profile.phone) lines.push(profile.dealer_phone || profile.phone);
+  if (profile.dealer_email) lines.push(profile.dealer_email);
+  if ((profile.compliance_mode || profile.province || '').toUpperCase().startsWith('AB')) lines.push('AMVIC Licensed Business. Pricing plus taxes and fees as applicable.');
+  if ((profile.compliance_mode || profile.province || '').toUpperCase().startsWith('BC')) lines.push('Licensed dealer. Pricing and documentation subject to BC dealer requirements.');
+  return lines.filter(Boolean).join('\n') || 'Dealer footer preview will appear here once setup is complete.';
+}
+
+function renderComplianceWorkspace(profile = null, session = null) {
+  const mergedProfile = getCanonicalProfileState(profile, session);
+  const blockers = [];
+  if (!mergedProfile.province && !mergedProfile.compliance_mode) blockers.push('Province or compliance mode missing');
+  if (!mergedProfile.license_number) blockers.push('License number missing');
+  if (!mergedProfile.dealership) blockers.push('Dealership name missing');
+  if (!mergedProfile.dealer_phone && !mergedProfile.phone) blockers.push('Dealer or salesperson phone missing');
+  const statusEl = document.getElementById('complianceStatusPanel');
+  if (statusEl) {
+    statusEl.innerHTML = blockers.length
+      ? `<div class="status-line warn"><strong>Not ready to publish.</strong> ${escapeHtml(blockers.join(' • '))}</div>`
+      : '<div class="status-line success"><strong>Compliance ready.</strong> Profile data is present for dealer footer and province output.</div>';
+  }
+  const footerEl = document.getElementById('complianceFooterPreview');
+  if (footerEl) footerEl.textContent = buildComplianceFooterPreview(mergedProfile);
+  const descEl = document.getElementById('complianceDescriptionPreview');
+  if (descEl) {
+    const mode = (mergedProfile.compliance_mode || mergedProfile.province || '').toUpperCase();
+  }
+  if (descEl) {
+    const mode = (mergedProfile.compliance_mode || mergedProfile.province || '').toUpperCase();
+    descEl.textContent = mode.startsWith('AB')
+      ? 'AB / Alberta output: include dealership identity, AMVIC framing where required, and pricing language that avoids ambiguous all-in claims.'
+      : mode.startsWith('BC')
+        ? 'BC output: keep dealer identity visible, preserve compliance wording, and ensure listing copy aligns with BC dealer expectations.'
+        : 'Select a compliance mode to preview the output block that will feed Marketplace posting.';
+  }
+  const blockerEl = document.getElementById('complianceBlockersList');
+  if (blockerEl) {
+    blockerEl.innerHTML = blockers.length
+      ? blockers.map((item) => `<div>• ${escapeHtml(item)}</div>`).join('')
+      : '<div>• Province logic present</div><div>• License field present</div><div>• Dealer contact block available</div>';
+  }
+}
+
+function renderToolsWorkspace(profile = null, session = null) {
+  const mergedProfile = getCanonicalProfileState(profile, session);
+  const subscription = getCanonicalSubscriptionState(session);
+  const blockers = [];
+  if (!subscription.active) blockers.push('Access inactive');
+  if (!mergedProfile.inventory_url) blockers.push('Inventory URL missing');
+  if (!mergedProfile.scanner_type) blockers.push('Scanner type missing');
+  if (!(mergedProfile.compliance_mode || mergedProfile.province)) blockers.push('Compliance mode missing');
+  const statusEl = document.getElementById('toolsSystemStatusPanel');
+  if (statusEl) {
+    statusEl.innerHTML = blockers.length
+      ? `<div><strong>Ready to Post:</strong> No</div><div class="subtext">${escapeHtml(blockers.join(' • '))}</div>`
+      : '<div><strong>Ready to Post:</strong> Yes</div><div class="subtext">Routing, compliance, and access checks are present for beta operation.</div>';
+  }
+  const nextEl = document.getElementById('toolsNextStepPanel');
+  if (nextEl) {
+    nextEl.innerHTML = blockers.length
+      ? `<div><strong>Next step:</strong> ${escapeHtml(blockers[0])}</div><div class="subtext">Resolve this first, then refresh extension state.</div>`
+      : '<div><strong>Next step:</strong> Open inventory or Marketplace and run the posting flow.</div>';
+  }
+  const countsEl = document.getElementById('moduleCountsPanel');
+  if (countsEl) {
+    const modules = Array.from(document.querySelectorAll('.tool-tile'));
+    const count = (state) => modules.filter((tile) => cleanText(tile.getAttribute('data-module-state')).toLowerCase() === state).length;
+    countsEl.innerHTML = `
+      <div class="sidebar-card"><div class="sidebar-card-label">Active</div><div class="sidebar-card-value">${count('live')}</div></div>
+      <div class="sidebar-card"><div class="sidebar-card-label">Beta</div><div class="sidebar-card-value">${count('beta')}</div></div>
+      <div class="sidebar-card"><div class="sidebar-card-label">Locked / Pro</div><div class="sidebar-card-value">${count('pro') + count('locked')}</div></div>
+      <div class="sidebar-card"><div class="sidebar-card-label">Planned</div><div class="sidebar-card-value">${count('planned')}</div></div>`;
+  }
+}
 
 function renderOverviewOperatorPanel() {
   const roi = dashboardSummary?.roi_snapshot || {};
@@ -2172,6 +2360,8 @@ async function submitProfileSave(user) {
       setFieldValue("software_license_key", currentProfile.software_license_key);
     }
 
+    persistProfileSnapshots(buildExtensionProfileSnapshot(currentNormalizedSession || buildFallbackSessionFromLocalState(), currentProfile, currentUser), currentNormalizedSession || buildFallbackSessionFromLocalState());
+    await refreshDashboardState(true);
     rerenderCanonicalPanels();
     setStatus("profileStatus", "Profile saved successfully.");
   } catch (error) {
@@ -2600,8 +2790,10 @@ function persistProfileSnapshots(profileSnapshot, session) {
 function renderSetupSnapshot() {
   const snapshot = dashboardSummary?.account_snapshot || {};
   const setup = dashboardSummary?.setup_status || {};
+  const canonicalProfile = getCanonicalProfileState();
+  const subscription = getCanonicalSubscriptionState();
 
-  setTextByIdForAll("snapshotPostingLimit", String(numberOrZero(snapshot.posting_limit)));
+  setTextByIdForAll("snapshotPostingLimit", String(Math.max(numberOrZero(snapshot.posting_limit), numberOrZero(subscription.posting_limit))));
   setTextByIdForAll("snapshotPostsRemaining", String(Math.max(numberOrZero(snapshot.posts_remaining), numberOrZero(currentNormalizedSession?.subscription?.posts_remaining))));
   setTextByIdForAll("snapshotPostsUsed", String(Math.max(numberOrZero(snapshot.posts_today ?? snapshot.posts_used_today), numberOrZero(currentNormalizedSession?.subscription?.posts_today), numberOrZero(dashboardSummary?.posts_today))));
   setTextByIdForAll("snapshotBillingSource", clean(currentNormalizedSession?.subscription?.billing_source || snapshot.billing_source || "subscriptions/users") || "subscriptions/users");
