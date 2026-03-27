@@ -566,6 +566,43 @@ function buildSetupStatus(user, profileRow) {
     ...checks
   };
 }
+
+function buildProfileSnapshot(user = {}, profileRow = {}, snapshot = {}) {
+  const merged = { ...(snapshot || {}), ...(profileRow || {}) };
+  const fullName = clean(
+    merged.full_name ||
+    merged.salesperson_name ||
+    `${clean(user?.first_name)} ${clean(user?.last_name)}`.trim()
+  );
+  const dealership = clean(
+    merged.dealership ||
+    merged.dealer_name ||
+    merged.company_name ||
+    user?.company ||
+    ''
+  );
+  const province = clean(merged.province || '');
+  return {
+    full_name: fullName,
+    salesperson_name: fullName,
+    dealership,
+    dealer_name: dealership,
+    city: clean(merged.city || ''),
+    province,
+    phone: clean(merged.phone || ''),
+    license_number: clean(merged.license_number || ''),
+    listing_location: clean(merged.listing_location || merged.city || ''),
+    dealer_phone: clean(merged.dealer_phone || ''),
+    dealer_email: clean(merged.dealer_email || merged.email || ''),
+    compliance_mode: clean(merged.compliance_mode || province || ''),
+    dealer_website: clean(merged.dealer_website || merged.website || ''),
+    inventory_url: clean(merged.inventory_url || merged.inventory_link || ''),
+    scanner_type: clean(merged.scanner_type || merged.scanner || ''),
+    software_license_key: clean(merged.software_license_key || merged.license_key || ''),
+    profile_updated_at: merged.updated_at || merged.created_at || null
+  };
+}
+
 function buildComputedSummary(rows = []) {
   const today = dayKey();
   const month = monthKey();
@@ -875,7 +912,8 @@ export default async function handler(req, res) {
     const postsRemainingBase = Math.max(dailyLimit - usageToday, 0);
     const accessGranted = Boolean(forcedAccess || snapshot.access_granted === true || snapshot.active === true || subscriptionRow?.active === true || isActiveStatus(subscriptionRow?.status) || (clean(planValue) && dailyLimit > 0));
     const effectiveStatus = accessGranted ? 'active' : clean(subscriptionRow?.status || snapshot.status || 'inactive').toLowerCase();
-    const setupStatus = buildSetupStatus(user, profileRow);
+    const profileSnapshot = buildProfileSnapshot(user, profileRow, snapshot);
+    const setupStatus = buildSetupStatus(user, profileSnapshot);
     const creditEconomy = await getCreditEconomyState(supabase, { userId: finalUserId, email: finalEmail, dateKey: today });
     const creditsSummary = creditEconomy.summary || await getCreditSummary(supabase, { userId: finalUserId, email: finalEmail });
     const recentCreditEventsRaw = await listRecentCreditEvents(supabase, { userId: finalUserId, email: finalEmail, limit: 6 });
@@ -1093,8 +1131,10 @@ export default async function handler(req, res) {
           billing: accessState.billing,
           current_period_end: subscriptionRow?.current_period_end || null,
           trial_end: subscriptionRow?.trial_end || null,
-          cancel_at_period_end: Boolean(subscriptionRow?.cancel_at_period_end)
+          cancel_at_period_end: Boolean(subscriptionRow?.cancel_at_period_end),
+          ...profileSnapshot
         },
+        profile_snapshot: profileSnapshot,
         roi_snapshot: {
           estimated_minutes_saved_today: usageToday * 18,
           estimated_minutes_saved_week: Math.max(safeNumber(scorecards?.weekly?.posts_7d, usageToday) * 18, usageToday * 18),
