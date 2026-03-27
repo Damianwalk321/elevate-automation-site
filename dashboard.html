@@ -1269,9 +1269,9 @@
     <aside class="sidebar">
       <div class="brand-wrap">
         <div class="brand-eyebrow">Elevate Automation</div>
-        <div class="brand-title">Founder Beta Dashboard</div>
+        <div class="brand-title">Elevate Operator Console</div>
         <div class="brand-subtitle">
-          Control center for access, dealer routing, compliance, extension state, posting memory, and listing performance.
+          Operator center for access, setup, tools, analytics, compliance, posting control, and listing performance.
         </div>
       </div>
 
@@ -1282,12 +1282,12 @@
 
       <nav class="sidebar-nav">
         <button class="nav-btn active" data-section="overview">Overview</button>
-        <button class="nav-btn" data-section="profile">Profile & Dealer Setup</button>
+        <button class="nav-btn" data-section="profile">Setup</button>
         <button class="nav-btn" data-section="extension">Tools</button>
         <button class="nav-btn" data-section="tools">Analytics</button>
         <button class="nav-btn" data-section="compliance">Compliance</button>
-        <button class="nav-btn" data-section="affiliate">Affiliate Center</button>
-        <button class="nav-btn" data-section="billing">Billing & Access</button>
+        <button class="nav-btn" data-section="affiliate">Partners</button>
+        <button class="nav-btn" data-section="billing">Billing</button>
       </nav>
 
       <div class="sidebar-actions">
@@ -1503,7 +1503,10 @@
 
         <div class="card">
           <div class="section-head">
-            <h2>Recent Listings</h2>
+            <div>
+              <h2>Recent Listings</h2>
+              <div id="listingDataStatus" class="subtext">Loading listing pipeline...</div>
+            </div>
             <div class="toolbar" style="gap:12px; flex-wrap:wrap;">
               <div id="listingQuickFilters" style="display:flex; gap:8px; flex-wrap:wrap;">
                 <button class="action-btn active" type="button" data-filter="all">All</button>
@@ -1525,6 +1528,13 @@
               </select>
               <input id="listingSearchInput" type="text" placeholder="Search make, model, VIN, stock..." />
             </div>
+          </div>
+
+          <div class="overview-action-grid" style="margin-bottom:14px;">
+            <button id="refreshListingsBtn" class="action-btn" type="button">Refresh Listings</button>
+            <button class="action-btn" type="button" onclick="showSection('extension')">Open Tools</button>
+            <button class="action-btn" type="button" onclick="showSection('tools')">Open Analytics</button>
+            <button class="action-btn" type="button" onclick="showSection('profile')">Open Setup</button>
           </div>
 
           <div id="recentListingsGrid" class="listing-grid">
