@@ -385,6 +385,7 @@ function bindCreditActionButtons() {
 
 let dashboardListings = [];
 let filteredListings = [];
+let dashboardListingsMeta = { total: 0, source_counts: { user_listings: 0, listings: 0, merged: 0 }, used_summary_fallback: false, source: "api" };
 let listingQuickFilter = "all";
 
 document.addEventListener("DOMContentLoaded", async () => {
@@ -741,6 +742,21 @@ if (copyAffiliatePostBtn) {
     });
   }
 
+  const refreshListingsBtn = document.getElementById("refreshListingsBtn");
+  if (refreshListingsBtn) {
+    refreshListingsBtn.addEventListener("click", async () => {
+      try {
+        if (!currentUser) return;
+        setStatus("listingGridStatus", "Refreshing listings...");
+        await loadListingDashboardData(true);
+        setStatus("listingGridStatus", "Listings refreshed.");
+      } catch (error) {
+        console.error("refreshListingsBtn error:", error);
+        setStatus("listingGridStatus", "Could not refresh listings.");
+      }
+    });
+  }
+
   window.addEventListener("resize", debounce(() => {
     drawActivityChart(buildChartSeries());
   }, 150));
@@ -827,8 +843,25 @@ async function fetchDashboardSummary(forceFresh = false) {
 }
 
 async function fetchUserListings(forceFresh = false) {
+  dashboardListingsMeta = {
+    total: 0,
+    source_counts: { user_listings: 0, listings: 0, merged: 0 },
+    used_summary_fallback: false,
+    source: "api"
+  };
+
   try {
-    if (!currentUser?.id) return [];
+    const previewRows = Array.isArray(dashboardSummary?.recent_listings) ? dashboardSummary.recent_listings : [];
+
+    if (!currentUser?.id) {
+      dashboardListingsMeta = {
+        total: previewRows.length,
+        source_counts: { user_listings: 0, listings: 0, merged: previewRows.length },
+        used_summary_fallback: previewRows.length > 0,
+        source: previewRows.length ? "summary_preview" : "api"
+      };
+      return previewRows;
+    }
 
     const url = new URL("/api/get-user-listings", window.location.origin);
     url.searchParams.set("userId", currentUser.id);
@@ -841,14 +874,57 @@ async function fetchUserListings(forceFresh = false) {
       cache: "no-store"
     });
 
-    if (!response.ok) return [];
+    if (!response.ok) {
+      dashboardListingsMeta = {
+        total: previewRows.length,
+        source_counts: { user_listings: 0, listings: 0, merged: previewRows.length },
+        used_summary_fallback: previewRows.length > 0,
+        source: previewRows.length ? "summary_preview" : "api_error"
+      };
+      return previewRows;
+    }
 
     const result = await response.json();
     const rows = result?.data || result?.listings || result || [];
-    return Array.isArray(rows) ? rows : [];
+    const normalizedRows = Array.isArray(rows) ? rows : [];
+    const metaSources = result?.meta?.sources || {};
+
+    if (!normalizedRows.length && previewRows.length) {
+      dashboardListingsMeta = {
+        total: previewRows.length,
+        source_counts: {
+          user_listings: numberOrZero(metaSources.user_listings),
+          listings: numberOrZero(metaSources.listings),
+          merged: numberOrZero(metaSources.merged || previewRows.length)
+        },
+        used_summary_fallback: true,
+        source: "summary_preview"
+      };
+      return previewRows;
+    }
+
+    dashboardListingsMeta = {
+      total: normalizedRows.length,
+      source_counts: {
+        user_listings: numberOrZero(metaSources.user_listings),
+        listings: numberOrZero(metaSources.listings),
+        merged: numberOrZero(metaSources.merged || normalizedRows.length)
+      },
+      used_summary_fallback: false,
+      source: "api"
+    };
+
+    return normalizedRows;
   } catch (error) {
     console.warn("fetchUserListings fallback:", error);
-    return [];
+    const previewRows = Array.isArray(dashboardSummary?.recent_listings) ? dashboardSummary.recent_listings : [];
+    dashboardListingsMeta = {
+      total: previewRows.length,
+      source_counts: { user_listings: 0, listings: 0, merged: previewRows.length },
+      used_summary_fallback: previewRows.length > 0,
+      source: previewRows.length ? "summary_preview" : "api_exception"
+    };
+    return previewRows;
   }
 }
 
@@ -1527,13 +1603,46 @@ async function openListingSource(listingId, sourceUrl) {
   setTimeout(() => { refreshDashboardData?.(); }, 400);
 }
 
+function renderListingDataState(listings = []) {
+  const subtext = document.getElementById("listingDataStatus");
+  const statusEl = document.getElementById("listingGridStatus");
+  const summary = dashboardSummary || {};
+  const activeListings = numberOrZero(summary.active_listings);
+  const counts = dashboardListingsMeta?.source_counts || {};
+  const mergedCount = numberOrZero(dashboardListingsMeta?.total || listings.length);
+  const fallbackUsed = Boolean(dashboardListingsMeta?.used_summary_fallback);
+  const sourceLabel = fallbackUsed ? "summary preview" : "live listing rows";
+
+  const subtextParts = [
+    `${mergedCount} listing${mergedCount === 1 ? "" : "s"} loaded from ${sourceLabel}.`,
+    activeListings ? `${activeListings} active tracked.` : "No active tracked listings yet."
+  ];
+  if (fallbackUsed) subtextParts.push("Showing summary-backed preview while direct listing rows hydrate.");
+
+  if (subtext) subtext.textContent = subtextParts.join(" ");
+
+  if (statusEl) {
+    if (!listings.length && activeListings > 0) {
+      statusEl.textContent = `Tracked counts exist (${activeListings} active) but detailed listing cards are still hydrating. Refresh listings or trigger another backend sync after the next post/scan.`;
+      return;
+    }
+
+    statusEl.textContent = [
+      `${mergedCount} listing${mergedCount === 1 ? "" : "s"} loaded.`,
+      `Rows: user_listings ${numberOrZero(counts.user_listings)} • listings ${numberOrZero(counts.listings)} • merged ${numberOrZero(counts.merged || mergedCount)}.`,
+      summary.lifecycle_updated_at ? `Last lifecycle sync: ${cleanText(summary.lifecycle_updated_at)}.` : ""
+    ].filter(Boolean).join(" ");
+  }
+}
+
 function renderListingsGrid(listings) {
   const grid = document.getElementById("recentListingsGrid");
   if (!grid) return;
 
   if (!Array.isArray(listings) || !listings.length) {
-    grid.innerHTML = `<div class="listing-empty">No listings available yet. As posts get registered, vehicle cards will appear here.</div>`;
-    setStatus("listingGridStatus", "No listing records found.");
+    const activeTracked = numberOrZero(dashboardSummary?.active_listings);
+    grid.innerHTML = `<div class="listing-empty">${activeTracked > 0 ? `Tracked listing counts exist (${activeTracked} active), but detailed cards have not hydrated yet. Refresh listings after the next sync or post commit.` : `No listings available yet. As posts get registered, vehicle cards will appear here.`}</div>`;
+    renderListingDataState([]);
     return;
   }
 
@@ -1604,7 +1713,7 @@ function renderListingsGrid(listings) {
   }).join("");
 
   grid.innerHTML = html;
-  setStatus("listingGridStatus", `${listings.length} listing${listings.length === 1 ? "" : "s"} loaded.`);
+  renderListingDataState(listings);
 }
 
 
@@ -1952,12 +2061,12 @@ function showSection(sectionId) {
   });
 
   const titleMap = {
-    overview: "Founder Beta Dashboard",
-    profile: "Profile & Dealer Setup",
+    overview: "Elevate Operator Console",
+    profile: "Setup",
     extension: "Tools",
     compliance: "Compliance",
-    affiliate: "Affiliate Center",
-    billing: "Billing & Access",
+    affiliate: "Partners",
+    billing: "Billing",
     tools: "Analytics"
   };
 
