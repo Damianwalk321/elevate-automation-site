@@ -41,6 +41,7 @@ export function resolveAccountAccess({
   status,
   postsToday = 0,
   postingLimit,
+  creditExtraPosts = 0,
   email = "",
   stripeCustomerId = "",
   currentPeriodEnd = null,
@@ -52,17 +53,24 @@ export function resolveAccountAccess({
   const normalizedPlan = normalizePlanLabel(plan);
   const normalizedStatus = normalizeStatusValue(status, "inactive");
   const baseLimit = Number.isFinite(Number(postingLimit)) && Number(postingLimit) > 0 ? Number(postingLimit) : inferPostingLimitFromPlan(normalizedPlan);
-  const finalLimit = hasTestingLimitOverride(email) ? Math.max(25, baseLimit) : baseLimit;
+  const extraPostingLimit = Math.max(0, Number(creditExtraPosts) || 0);
+  const computedLimit = baseLimit + extraPostingLimit;
+  const finalLimit = hasTestingLimitOverride(email) ? Math.max(25, computedLimit) : computedLimit;
   const used = Math.max(0, Number(postsToday) || 0);
   const remaining = Math.max(0, finalLimit - used);
   const active = normalizedStatus === "active";
   const versionRequired = Boolean(minimumVersion) && Boolean(extensionVersion) && String(extensionVersion).localeCompare(String(minimumVersion), undefined, { numeric: true, sensitivity: 'base' }) < 0;
   return {
     plan: normalizedPlan,
+    plan_label: normalizedPlan,
+    is_pro: normalizedPlan.toLowerCase().includes("pro"),
     status: normalizedStatus,
+    base_posting_limit: baseLimit,
+    extra_posting_limit: extraPostingLimit,
     posting_limit: finalLimit,
     posts_today: used,
     posts_remaining: remaining,
+    access_granted: active,
     can_post: active && remaining > 0 && !versionRequired,
     active,
     billing: {
