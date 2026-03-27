@@ -230,7 +230,31 @@ function readFormProfileSnapshot() {
   return out;
 }
 
-function getCanonicalProfileState(overrideProfile = null, overrideSession = null) {
+function normalizeProvinceCode(value) {
+  const raw = clean(value).toUpperCase();
+  if (!raw) return '';
+  if (raw === 'ALBERTA' || raw === 'AB / ALBERTA' || raw.startsWith('AB /')) return 'AB';
+  if (raw === 'BRITISH COLUMBIA' || raw === 'BC / BRITISH COLUMBIA' || raw.startsWith('BC /')) return 'BC';
+  if (raw.startsWith('AB')) return 'AB';
+  if (raw.startsWith('BC')) return 'BC';
+  return raw;
+}
+
+function normalizeComplianceModeValue(value) {
+  const normalized = normalizeProvinceCode(value);
+  if (normalized === 'AB' || normalized === 'BC') return normalized;
+  return clean(value).toUpperCase();
+}
+
+function firstNonEmpty(...values) {
+  for (const value of values) {
+    const cleaned = clean(value);
+    if (cleaned) return cleaned;
+  }
+  return '';
+}
+
+function buildSystemState(overrideProfile = null, overrideSession = null) {
   const summaryProfile = getSummaryProfileSnapshot();
   const storedProfile = readLocalProfileSnapshot();
   const formProfile = readFormProfileSnapshot();
@@ -238,30 +262,174 @@ function getCanonicalProfileState(overrideProfile = null, overrideSession = null
   const profile = overrideProfile || currentProfile || {};
   const sessionProfile = session?.profile || {};
   const dealership = session?.dealership || {};
-  const merged = {
+  const subscription = getCanonicalSubscriptionState(session);
+
+  const province = normalizeProvinceCode(firstNonEmpty(
+    formProfile.province,
+    profile.province,
+    sessionProfile.province,
+    dealership.province,
+    storedProfile.province,
+    summaryProfile.province
+  ));
+
+  const complianceMode = normalizeComplianceModeValue(firstNonEmpty(
+    formProfile.compliance_mode,
+    profile.compliance_mode,
+    sessionProfile.compliance_mode,
+    storedProfile.compliance_mode,
+    summaryProfile.compliance_mode,
+    province
+  ));
+
+  const canonicalProfile = {
     ...summaryProfile,
     ...storedProfile,
     ...sessionProfile,
     ...profile,
     ...formProfile,
-    full_name: clean(profile.full_name || sessionProfile.full_name || sessionProfile.salesperson_name || summaryProfile.full_name || summaryProfile.salesperson_name || currentUser?.user_metadata?.full_name || currentUser?.email || ''),
-    dealership: clean(profile.dealership || profile.dealer_name || sessionProfile.dealership || sessionProfile.dealer_name || dealership.name || dealership.dealer_name || summaryProfile.dealership || summaryProfile.dealer_name || ''),
-    city: clean(profile.city || sessionProfile.city || summaryProfile.city || ''),
-    province: clean(profile.province || sessionProfile.province || dealership.province || summaryProfile.province || ''),
-    phone: clean(profile.phone || sessionProfile.phone || summaryProfile.phone || ''),
-    license_number: clean(profile.license_number || sessionProfile.license_number || summaryProfile.license_number || ''),
-    listing_location: clean(profile.listing_location || sessionProfile.listing_location || summaryProfile.listing_location || profile.city || sessionProfile.city || summaryProfile.city || ''),
-    dealer_phone: clean(profile.dealer_phone || sessionProfile.dealer_phone || dealership.phone || summaryProfile.dealer_phone || ''),
-    dealer_email: clean(profile.dealer_email || sessionProfile.dealer_email || dealership.email || summaryProfile.dealer_email || ''),
-    compliance_mode: clean(profile.compliance_mode || sessionProfile.compliance_mode || summaryProfile.compliance_mode || profile.province || sessionProfile.province || summaryProfile.province || ''),
-    dealer_website: clean(profile.dealer_website || sessionProfile.dealer_website || dealership.website || summaryProfile.dealer_website || ''),
-    inventory_url: clean(profile.inventory_url || sessionProfile.inventory_url || dealership.inventory_url || summaryProfile.inventory_url || ''),
-    scanner_type: clean(profile.scanner_type || sessionProfile.scanner_type || session?.scanner_config?.scanner_type || dealership.scanner_type || summaryProfile.scanner_type || ''),
-    software_license_key: clean(profile.software_license_key || session?.subscription?.license_key || summaryProfile.software_license_key || '')
+    full_name: firstNonEmpty(
+      formProfile.full_name,
+      profile.full_name,
+      sessionProfile.full_name,
+      sessionProfile.salesperson_name,
+      storedProfile.full_name,
+      storedProfile.salesperson_name,
+      summaryProfile.full_name,
+      summaryProfile.salesperson_name,
+      currentUser?.user_metadata?.full_name,
+      currentUser?.email
+    ),
+    dealership: firstNonEmpty(
+      formProfile.dealership,
+      profile.dealership,
+      profile.dealer_name,
+      sessionProfile.dealership,
+      sessionProfile.dealer_name,
+      dealership.name,
+      dealership.dealer_name,
+      storedProfile.dealership,
+      storedProfile.dealer_name,
+      summaryProfile.dealership,
+      summaryProfile.dealer_name
+    ),
+    city: firstNonEmpty(
+      formProfile.city,
+      profile.city,
+      sessionProfile.city,
+      storedProfile.city,
+      summaryProfile.city
+    ),
+    province,
+    phone: firstNonEmpty(
+      formProfile.phone,
+      profile.phone,
+      sessionProfile.phone,
+      storedProfile.phone,
+      summaryProfile.phone
+    ),
+    license_number: firstNonEmpty(
+      formProfile.license_number,
+      profile.license_number,
+      sessionProfile.license_number,
+      storedProfile.license_number,
+      summaryProfile.license_number
+    ),
+    listing_location: firstNonEmpty(
+      formProfile.listing_location,
+      profile.listing_location,
+      sessionProfile.listing_location,
+      storedProfile.listing_location,
+      summaryProfile.listing_location,
+      formProfile.city,
+      profile.city,
+      sessionProfile.city,
+      storedProfile.city,
+      summaryProfile.city
+    ),
+    dealer_phone: firstNonEmpty(
+      formProfile.dealer_phone,
+      profile.dealer_phone,
+      sessionProfile.dealer_phone,
+      dealership.phone,
+      storedProfile.dealer_phone,
+      summaryProfile.dealer_phone
+    ),
+    dealer_email: firstNonEmpty(
+      formProfile.dealer_email,
+      profile.dealer_email,
+      sessionProfile.dealer_email,
+      dealership.email,
+      storedProfile.dealer_email,
+      summaryProfile.dealer_email
+    ),
+    compliance_mode: complianceMode,
+    dealer_website: firstNonEmpty(
+      formProfile.dealer_website,
+      profile.dealer_website,
+      sessionProfile.dealer_website,
+      dealership.website,
+      storedProfile.dealer_website,
+      summaryProfile.dealer_website
+    ),
+    inventory_url: firstNonEmpty(
+      formProfile.inventory_url,
+      profile.inventory_url,
+      sessionProfile.inventory_url,
+      dealership.inventory_url,
+      storedProfile.inventory_url,
+      summaryProfile.inventory_url
+    ),
+    scanner_type: firstNonEmpty(
+      formProfile.scanner_type,
+      profile.scanner_type,
+      sessionProfile.scanner_type,
+      session?.scanner_config?.scanner_type,
+      dealership.scanner_type,
+      storedProfile.scanner_type,
+      summaryProfile.scanner_type
+    ),
+    software_license_key: firstNonEmpty(
+      formProfile.software_license_key,
+      profile.software_license_key,
+      session?.subscription?.license_key,
+      storedProfile.software_license_key,
+      summaryProfile.software_license_key
+    )
   };
-  merged.salesperson_name = merged.full_name;
-  merged.dealer_name = merged.dealership;
-  return merged;
+
+  canonicalProfile.salesperson_name = canonicalProfile.full_name;
+  canonicalProfile.dealer_name = canonicalProfile.dealership;
+
+  const setup = dashboardSummary?.setup_status || {};
+  const systemState = {
+    summary: dashboardSummary || {},
+    profile: canonicalProfile,
+    session,
+    subscription,
+    setup: {
+      ...setup,
+      dealer_website_present: Boolean(setup.dealer_website_present || canonicalProfile.dealer_website),
+      inventory_url_present: Boolean(setup.inventory_url_present || canonicalProfile.inventory_url),
+      scanner_type_present: Boolean(setup.scanner_type_present || canonicalProfile.scanner_type),
+      listing_location_present: Boolean(setup.listing_location_present || canonicalProfile.listing_location),
+      compliance_mode_present: Boolean(setup.compliance_mode_present || canonicalProfile.compliance_mode || canonicalProfile.province),
+      full_name_present: Boolean(setup.full_name_present || canonicalProfile.full_name),
+      dealership_present: Boolean(setup.dealership_present || canonicalProfile.dealership)
+    },
+    compliance: {
+      province: canonicalProfile.province,
+      mode: canonicalProfile.compliance_mode,
+      license_number: canonicalProfile.license_number,
+      dealer_contact: firstNonEmpty(canonicalProfile.dealer_phone, canonicalProfile.phone, canonicalProfile.dealer_email)
+    }
+  };
+  window.__EA_SYSTEM_STATE = systemState;
+  return systemState;
+}
+
+function getCanonicalProfileState(overrideProfile = null, overrideSession = null) {
+  return buildSystemState(overrideProfile, overrideSession).profile;
 }
 
 function getCanonicalSubscriptionState(overrideSession = null) {
@@ -315,7 +483,8 @@ function getCanonicalSubscriptionState(overrideSession = null) {
 
 function rerenderCanonicalPanels() {
   const canonicalSession = currentNormalizedSession || buildFallbackSessionFromLocalState();
-  const canonicalProfile = getCanonicalProfileState(currentProfile, canonicalSession);
+  const systemState = buildSystemState(currentProfile, canonicalSession);
+  const canonicalProfile = systemState.profile;
   renderProfileSummary(canonicalProfile);
   populateComplianceSummary(canonicalProfile);
   renderAccessState(canonicalSession);
@@ -1370,7 +1539,8 @@ function jumpToSetupField(fieldId) {
 }
 
 function renderSetupWorkspace(profile = null, session = null) {
-  const checklist = getSetupChecklist(profile, session);
+  const systemState = buildSystemState(profile, session);
+  const checklist = getSetupChecklist(systemState.profile, systemState.session);
   const readyCount = checklist.filter((item) => item.ready).length;
   const total = checklist.length;
   const percent = total ? Math.round((readyCount / total) * 100) : 0;
@@ -1404,7 +1574,8 @@ function buildComplianceFooterPreview(profile) {
 }
 
 function renderComplianceWorkspace(profile = null, session = null) {
-  const mergedProfile = getCanonicalProfileState(profile, session);
+  const systemState = buildSystemState(profile, session);
+  const mergedProfile = systemState.profile;
   const blockers = [];
   if (!mergedProfile.province && !mergedProfile.compliance_mode) blockers.push('Province or compliance mode missing');
   if (!mergedProfile.license_number) blockers.push('License number missing');
@@ -1439,8 +1610,9 @@ function renderComplianceWorkspace(profile = null, session = null) {
 }
 
 function renderToolsWorkspace(profile = null, session = null) {
-  const mergedProfile = getCanonicalProfileState(profile, session);
-  const subscription = getCanonicalSubscriptionState(session);
+  const systemState = buildSystemState(profile, session);
+  const mergedProfile = systemState.profile;
+  const subscription = systemState.subscription;
   const blockers = [];
   if (!subscription.active) blockers.push('Access inactive');
   if (!mergedProfile.inventory_url) blockers.push('Inventory URL missing');
@@ -2295,21 +2467,22 @@ async function loadProfile(userId) {
     }
 
     currentProfile = result.data;
+    const canonicalAfterLoad = getCanonicalProfileState(currentProfile, currentNormalizedSession || buildFallbackSessionFromLocalState());
 
-    setFieldValue("full_name", result.data.full_name);
-    setFieldValue("dealership", result.data.dealership);
-    setFieldValue("city", result.data.city);
-    setFieldValue("province", result.data.province);
-    setFieldValue("phone", result.data.phone);
-    setFieldValue("license_number", result.data.license_number);
-    setFieldValue("listing_location", result.data.listing_location);
-    setFieldValue("dealer_phone", result.data.dealer_phone);
-    setFieldValue("dealer_email", result.data.dealer_email);
+    setFieldValue("full_name", canonicalAfterLoad.full_name);
+    setFieldValue("dealership", canonicalAfterLoad.dealership);
+    setFieldValue("city", canonicalAfterLoad.city);
+    setFieldValue("province", canonicalAfterLoad.province);
+    setFieldValue("phone", canonicalAfterLoad.phone);
+    setFieldValue("license_number", canonicalAfterLoad.license_number);
+    setFieldValue("listing_location", canonicalAfterLoad.listing_location);
+    setFieldValue("dealer_phone", canonicalAfterLoad.dealer_phone);
+    setFieldValue("dealer_email", canonicalAfterLoad.dealer_email);
     setFieldValue("compliance_mode", result.data.compliance_mode || result.data.province);
-    setFieldValue("dealer_website", result.data.dealer_website);
-    setFieldValue("inventory_url", result.data.inventory_url);
-    setFieldValue("scanner_type", result.data.scanner_type);
-    setFieldValue("software_license_key", result.data.software_license_key || "");
+    setFieldValue("dealer_website", canonicalAfterLoad.dealer_website);
+    setFieldValue("inventory_url", canonicalAfterLoad.inventory_url);
+    setFieldValue("scanner_type", canonicalAfterLoad.scanner_type);
+    setFieldValue("software_license_key", canonicalAfterLoad.software_license_key || "");
 
     rerenderCanonicalPanels();
     setStatus("profileStatus", "Profile loaded.");
@@ -2355,12 +2528,12 @@ async function submitProfileSave(user) {
     }
 
     currentProfile = result.data || payload;
+    const canonicalAfterSave = getCanonicalProfileState(currentProfile, currentNormalizedSession || buildFallbackSessionFromLocalState());
+    [
+      'full_name','dealership','city','province','phone','license_number','listing_location','dealer_phone','dealer_email','compliance_mode','dealer_website','inventory_url','scanner_type','software_license_key'
+    ].forEach((fieldId) => setFieldValue(fieldId, canonicalAfterSave[fieldId] || ''));
 
-    if (currentProfile?.software_license_key) {
-      setFieldValue("software_license_key", currentProfile.software_license_key);
-    }
-
-    persistProfileSnapshots(buildExtensionProfileSnapshot(currentNormalizedSession || buildFallbackSessionFromLocalState(), currentProfile, currentUser), currentNormalizedSession || buildFallbackSessionFromLocalState());
+    persistProfileSnapshots(buildExtensionProfileSnapshot(currentNormalizedSession || buildFallbackSessionFromLocalState(), canonicalAfterSave, currentUser), currentNormalizedSession || buildFallbackSessionFromLocalState());
     await refreshDashboardState(true);
     rerenderCanonicalPanels();
     setStatus("profileStatus", "Profile saved successfully.");
@@ -2872,9 +3045,10 @@ function renderExtensionControl(session, profile) {
 }
 
 function updateSetupStates(profile, session) {
-  const setup = dashboardSummary?.setup_status || {};
-  const mergedProfile = getCanonicalProfileState(profile, session);
-  const subscription = getCanonicalSubscriptionState(session);
+  const systemState = buildSystemState(profile, session);
+  const setup = systemState.setup || {};
+  const mergedProfile = systemState.profile;
+  const subscription = systemState.subscription;
 
   const websiteReady = Boolean(setup.dealer_website_present || mergedProfile.dealer_website);
   const inventoryReady = Boolean(setup.inventory_url_present || mergedProfile.inventory_url);
@@ -3025,7 +3199,10 @@ function getFieldValue(id) {
 function setFieldValue(id, value) {
   const el = document.getElementById(id);
   if (!el) return;
-  el.value = value || "";
+  let nextValue = value || "";
+  if (id === 'province') nextValue = normalizeProvinceCode(nextValue);
+  if (id === 'compliance_mode') nextValue = normalizeComplianceModeValue(nextValue);
+  el.value = nextValue;
 }
 
 function setStatus(id, text) {
