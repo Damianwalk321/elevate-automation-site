@@ -25,6 +25,21 @@ function safeNumber(value, fallback = 0) {
 function normalizePlan(value) {
   return clean(value).toLowerCase();
 }
+
+function normalizeProvince(value) {
+  const raw = clean(value).toUpperCase();
+  if (!raw) return "";
+  if (raw === "ALBERTA" || raw.startsWith("AB")) return "AB";
+  if (raw === "BRITISH COLUMBIA" || raw.startsWith("BC")) return "BC";
+  return raw;
+}
+function normalizeComplianceMode(value, province = "") {
+  const raw = clean(value).toUpperCase();
+  if (!raw || raw === "STRICT") return normalizeProvince(province);
+  if (raw === "ALBERTA" || raw.startsWith("AB")) return "AB";
+  if (raw === "BRITISH COLUMBIA" || raw.startsWith("BC")) return "BC";
+  return raw;
+}
 function inferPostingLimitFromPlan(planValue) {
   const plan = normalizePlan(planValue);
   if (!plan) return 5;
@@ -528,7 +543,7 @@ function buildSetupStatus(user, profileRow) {
     user?.company ||
     ''
   );
-  const complianceMode = clean(profileRow?.compliance_mode || profileRow?.province || '');
+  const complianceMode = normalizeComplianceMode(profileRow?.compliance_mode, profileRow?.province);
   const website = clean(profileRow?.dealer_website || profileRow?.website || '');
   const scannerType = clean(profileRow?.scanner_type || profileRow?.scanner || '');
   const listingLocation = clean(profileRow?.listing_location || profileRow?.city || '');
@@ -581,7 +596,7 @@ function buildProfileSnapshot(user = {}, profileRow = {}, snapshot = {}) {
     user?.company ||
     ''
   );
-  const province = clean(merged.province || '');
+  const province = normalizeProvince(merged.province || '');
   return {
     full_name: fullName,
     salesperson_name: fullName,
@@ -594,7 +609,7 @@ function buildProfileSnapshot(user = {}, profileRow = {}, snapshot = {}) {
     listing_location: clean(merged.listing_location || merged.city || ''),
     dealer_phone: clean(merged.dealer_phone || ''),
     dealer_email: clean(merged.dealer_email || merged.email || ''),
-    compliance_mode: clean(merged.compliance_mode || province || ''),
+    compliance_mode: normalizeComplianceMode(merged.compliance_mode, province),
     dealer_website: clean(merged.dealer_website || merged.website || ''),
     inventory_url: clean(merged.inventory_url || merged.inventory_link || ''),
     scanner_type: clean(merged.scanner_type || merged.scanner || ''),
