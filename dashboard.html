@@ -1561,8 +1561,16 @@
           </div>
 
           <div class="card">
-            <h2>Setup Progress</h2>
-            <div class="setup-grid">
+            <div class="section-head">
+              <div>
+                <h2>Setup Readiness Engine</h2>
+                <div class="subtext" id="setupReadinessSummary">Checking setup checkpoints...</div>
+              </div>
+              <span id="setupReadinessPercent" class="badge warn">0%</span>
+            </div>
+            <div id="setupNextStepPanel" class="status-line">Loading next setup step...</div>
+            <div id="setupBlockersList" class="list-block" style="margin-top:14px;"></div>
+            <div class="setup-grid" style="margin-top:16px;">
               <div class="setup-item">
                 <div class="setup-item-label">Dealer website saved</div>
                 <div id="setupDealerWebsite" class="setup-state warn">Checking</div>
@@ -1701,6 +1709,23 @@
 
       <!-- EXTENSION -->
       <section id="extension" class="dashboard-section">
+        <div class="grid-2" style="margin-bottom:20px;">
+          <div class="card">
+            <div class="module-group-label">System Status</div>
+            <h2 style="margin-top:6px;">Posting Readiness</h2>
+            <div id="toolsSystemStatusPanel" class="list-block" style="margin-top:10px;">Loading system status...</div>
+            <div id="toolsNextStepPanel" class="status-line" style="margin-top:14px;">Loading next step...</div>
+            <div class="overview-action-grid" style="margin-top:14px;">
+              <button class="action-btn" type="button" data-open-section="profile" data-focus-field="inventory_url">Fix Setup</button>
+              <button class="action-btn" type="button" data-open-section="compliance" data-focus-field="compliance_mode">Open Compliance</button>
+            </div>
+          </div>
+          <div class="card">
+            <div class="module-group-label">Platform Modules</div>
+            <h2 style="margin-top:6px;">Module State Mix</h2>
+            <div id="moduleCountsPanel" class="grid-2" style="gap:14px; margin-top:14px;"></div>
+          </div>
+        </div>
         <div class="grid-2">
           <div class="card">
             <h2>Tools</h2>
@@ -1834,6 +1859,9 @@
       <div class="tool-tile" data-module-group="growth" data-module-state="live"><h3>Affiliate Center</h3><p>Referral economics, scripts, payout visibility, and partner growth tools.</p><div class="tool-status live">Live Now</div></div>
       <div class="tool-tile" data-module-group="growth" data-module-state="beta"><h3>AI Content</h3><p>Caption, title, and listing improvement support for faster execution.</p><div class="tool-status beta">Founder Beta</div></div>
       <div class="tool-tile" data-module-group="growth" data-module-state="pro" data-required-plan="pro"><h3>Market Intelligence</h3><p>VIN-level learning, pricing feedback, and priority recommendations.</p><div class="tool-status pro">Pro</div></div>
+      <div class="tool-tile" data-module-group="pipeline" data-module-state="planned"><h3>Follow-Up Engine</h3><p>Message memory, lead prompts, and daily follow-up execution stack.</p><div class="tool-status planned">Coming Soon</div></div>
+      <div class="tool-tile" data-module-group="growth" data-module-state="planned"><h3>Distribution Hub</h3><p>Marketplace first, then groups and social channel expansion from one operator surface.</p><div class="tool-status planned">Coming Soon</div></div>
+      <div class="tool-tile" data-module-group="growth" data-module-state="beta"><h3>Action Center</h3><p>Revenue-first queue for stale, weak, price-change, and promote-now decisions.</p><div class="tool-status beta">Founder Beta</div></div>
     </div>
     <div class="card" style="margin-top:20px;">
       <div class="section-head">
@@ -1851,15 +1879,12 @@
 
       <!-- COMPLIANCE -->
       <section id="compliance" class="dashboard-section">
-        <div class="grid-2">
+        <div class="grid-2" style="margin-bottom:20px;">
           <div class="card">
-            <h2>Compliance Settings</h2>
-            <p>
-              This profile data feeds Marketplace descriptions, caption footers,
-              dealer contact blocks, and province-specific compliance logic.
-            </p>
-
-            <div class="list-block">
+            <div class="module-group-label">Compliance Status</div>
+            <h2 style="margin-top:6px;">Publishing Readiness</h2>
+            <div id="complianceStatusPanel">Loading compliance status...</div>
+            <div class="list-block" style="margin-top:14px;">
               <div><strong>Province:</strong> <span id="complianceProvinceDisplay">Loading...</span></div>
               <div><strong>Compliance Mode:</strong> <span id="complianceModeDisplay">Loading...</span></div>
               <div><strong>License Number:</strong> <span id="complianceLicenseDisplay">Loading...</span></div>
@@ -1868,13 +1893,24 @@
           </div>
 
           <div class="card">
-            <h2>Dealer Onboarding</h2>
-            <div class="list-block">
-              <div>• Dealer website defines valid scan domain</div>
-              <div>• Inventory URL tells scanner where to start</div>
-              <div>• Scanner type determines parsing path</div>
-              <div>• Extension should only scan approved dealer context</div>
+            <div class="module-group-label">Hard Block Rules</div>
+            <h2 style="margin-top:6px;">What must exist before publish</h2>
+            <div id="complianceBlockersList" class="list-block" style="margin-top:10px;"></div>
+            <div class="overview-action-grid" style="margin-top:14px;">
+              <button class="action-btn" type="button" data-open-section="profile" data-focus-field="compliance_mode">Fix Compliance Data</button>
+              <button class="action-btn" type="button" data-open-section="profile" data-focus-field="license_number">Add License</button>
             </div>
+          </div>
+        </div>
+        <div class="grid-2">
+          <div class="card">
+            <h2>Footer Preview</h2>
+            <pre id="complianceFooterPreview" class="list-block" style="white-space:pre-wrap;">Loading footer preview...</pre>
+          </div>
+
+          <div class="card">
+            <h2>Description Output Preview</h2>
+            <div id="complianceDescriptionPreview" class="list-block">Loading description preview...</div>
           </div>
         </div>
       </section>
