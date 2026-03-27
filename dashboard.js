@@ -194,6 +194,100 @@ let currentAccountData = null;
 let currentNormalizedSession = null;
 let dashboardSummary = null;
 
+function getSummaryProfileSnapshot() {
+  return dashboardSummary?.profile_snapshot || dashboardSummary?.account_snapshot || {};
+}
+
+function getCanonicalProfileState(overrideProfile = null, overrideSession = null) {
+  const summaryProfile = getSummaryProfileSnapshot();
+  const session = overrideSession || currentNormalizedSession || {};
+  const profile = overrideProfile || currentProfile || {};
+  const sessionProfile = session?.profile || {};
+  const dealership = session?.dealership || {};
+  const merged = {
+    ...summaryProfile,
+    ...sessionProfile,
+    ...profile,
+    full_name: clean(profile.full_name || sessionProfile.full_name || sessionProfile.salesperson_name || summaryProfile.full_name || summaryProfile.salesperson_name || currentUser?.user_metadata?.full_name || currentUser?.email || ''),
+    dealership: clean(profile.dealership || profile.dealer_name || sessionProfile.dealership || sessionProfile.dealer_name || dealership.name || dealership.dealer_name || summaryProfile.dealership || summaryProfile.dealer_name || ''),
+    city: clean(profile.city || sessionProfile.city || summaryProfile.city || ''),
+    province: clean(profile.province || sessionProfile.province || dealership.province || summaryProfile.province || ''),
+    phone: clean(profile.phone || sessionProfile.phone || summaryProfile.phone || ''),
+    license_number: clean(profile.license_number || sessionProfile.license_number || summaryProfile.license_number || ''),
+    listing_location: clean(profile.listing_location || sessionProfile.listing_location || summaryProfile.listing_location || profile.city || sessionProfile.city || summaryProfile.city || ''),
+    dealer_phone: clean(profile.dealer_phone || sessionProfile.dealer_phone || dealership.phone || summaryProfile.dealer_phone || ''),
+    dealer_email: clean(profile.dealer_email || sessionProfile.dealer_email || dealership.email || summaryProfile.dealer_email || ''),
+    compliance_mode: clean(profile.compliance_mode || sessionProfile.compliance_mode || summaryProfile.compliance_mode || profile.province || sessionProfile.province || summaryProfile.province || ''),
+    dealer_website: clean(profile.dealer_website || sessionProfile.dealer_website || dealership.website || summaryProfile.dealer_website || ''),
+    inventory_url: clean(profile.inventory_url || sessionProfile.inventory_url || dealership.inventory_url || summaryProfile.inventory_url || ''),
+    scanner_type: clean(profile.scanner_type || sessionProfile.scanner_type || session?.scanner_config?.scanner_type || dealership.scanner_type || summaryProfile.scanner_type || ''),
+    software_license_key: clean(profile.software_license_key || session?.subscription?.license_key || summaryProfile.software_license_key || '')
+  };
+  merged.salesperson_name = merged.full_name;
+  merged.dealer_name = merged.dealership;
+  return merged;
+}
+
+function getCanonicalSubscriptionState(overrideSession = null) {
+  const session = overrideSession || currentNormalizedSession || {};
+  const subscription = session?.subscription || {};
+  const snapshot = dashboardSummary?.account_snapshot || {};
+  const planAccess = dashboardSummary?.plan_access || {};
+  const email = clean(currentUser?.email || session?.user?.email || snapshot?.email || '').toLowerCase();
+  const forceTestingAccess = email === 'damian044@icloud.com';
+  const plan = clean(subscription.plan || subscription.normalized_plan || snapshot.plan || planAccess.plan_label || 'Founder Beta') || 'Founder Beta';
+  const status = clean(subscription.normalized_status || subscription.status || snapshot.status || (snapshot.active ? 'active' : 'inactive')) || 'inactive';
+  const baseLimit = Math.max(
+    numberOrZero(subscription.posting_limit || subscription.daily_posting_limit),
+    numberOrZero(snapshot.base_posting_limit),
+    numberOrZero(snapshot.posting_limit),
+    numberOrZero(planAccess.posting_limit)
+  );
+  const used = Math.max(
+    numberOrZero(subscription.posts_today),
+    numberOrZero(snapshot.posts_today ?? snapshot.posts_used_today),
+    numberOrZero(dashboardSummary?.posts_today)
+  );
+  const remaining = Math.max(
+    numberOrZero(subscription.posts_remaining),
+    numberOrZero(snapshot.posts_remaining),
+    Math.max(baseLimit - used, 0)
+  );
+  const active = Boolean(
+    forceTestingAccess ||
+    subscription.access_granted === true ||
+    subscription.active === true ||
+    snapshot.access_granted === true ||
+    snapshot.active === true ||
+    status.toLowerCase() === 'active'
+  );
+  return {
+    ...snapshot,
+    ...subscription,
+    plan,
+    normalized_plan: plan,
+    status,
+    normalized_status: status,
+    active,
+    access_granted: active,
+    posting_limit: forceTestingAccess ? Math.max(25, baseLimit) : baseLimit,
+    posts_today: used,
+    posts_remaining: forceTestingAccess ? Math.max(0, Math.max(25, baseLimit) - used) : remaining,
+    license_key: clean(subscription.license_key || snapshot.software_license_key || '')
+  };
+}
+
+function rerenderCanonicalPanels() {
+  const canonicalSession = currentNormalizedSession || buildFallbackSessionFromLocalState();
+  const canonicalProfile = getCanonicalProfileState(currentProfile, canonicalSession);
+  renderProfileSummary(canonicalProfile);
+  populateComplianceSummary(canonicalProfile);
+  renderAccessState(canonicalSession);
+  renderExtensionControl(canonicalSession, canonicalProfile);
+  updateSetupStates(canonicalProfile, canonicalSession);
+  persistProfileSnapshots(buildExtensionProfileSnapshot(canonicalSession, canonicalProfile, currentUser), canonicalSession);
+}
+
 let currentReadCopyText = "";
 let selectedToolModule = null;
 let currentListingDetail = null;
@@ -691,6 +785,7 @@ async function loadListingDashboardData(forceFresh = false) {
     }
 
     filteredListings = [...dashboardListings];
+    rerenderCanonicalPanels();
 
     renderDashboardAnalytics();
     renderSetupSnapshot();
@@ -700,6 +795,7 @@ async function loadListingDashboardData(forceFresh = false) {
     dashboardListings = [];
     dashboardSummary = buildDashboardSummaryFromListings(dashboardListings);
     filteredListings = [];
+    rerenderCanonicalPanels();
     renderDashboardAnalytics();
     renderSetupSnapshot();
     applyListingFiltersAndRender();
@@ -1896,10 +1992,7 @@ async function loadProfile(userId) {
 
     if (!result?.data) {
       currentProfile = null;
-      renderProfileSummary(null);
-      updateSetupStates(null, currentNormalizedSession);
-      populateComplianceSummary(null);
-      persistProfileSnapshots(buildExtensionProfileSnapshot(currentNormalizedSession, null, currentUser), currentNormalizedSession);
+      rerenderCanonicalPanels();
       setStatus("profileStatus", "No profile loaded yet.");
       return;
     }
@@ -1921,10 +2014,7 @@ async function loadProfile(userId) {
     setFieldValue("scanner_type", result.data.scanner_type);
     setFieldValue("software_license_key", result.data.software_license_key || "");
 
-    renderProfileSummary(result.data);
-    populateComplianceSummary(result.data);
-    updateSetupStates(currentProfile, currentNormalizedSession);
-    persistProfileSnapshots(buildExtensionProfileSnapshot(currentNormalizedSession, currentProfile, currentUser), currentNormalizedSession);
+    rerenderCanonicalPanels();
     setStatus("profileStatus", "Profile loaded.");
   } catch (error) {
     console.error("loadProfile error:", error);
@@ -1973,10 +2063,7 @@ async function submitProfileSave(user) {
       setFieldValue("software_license_key", currentProfile.software_license_key);
     }
 
-    renderProfileSummary(currentProfile);
-    populateComplianceSummary(currentProfile);
-    updateSetupStates(currentProfile, currentNormalizedSession);
-    persistProfileSnapshots(buildExtensionProfileSnapshot(currentNormalizedSession, currentProfile, currentUser), currentNormalizedSession);
+    rerenderCanonicalPanels();
     setStatus("profileStatus", "Profile saved successfully.");
   } catch (error) {
     console.error("submitProfileSave error:", error);
@@ -1988,15 +2075,9 @@ function renderProfileSummary(profile) {
   const summaryEl = document.getElementById("profileSummary");
   if (!summaryEl) return;
 
-  const merged = {
-    ...(profile || {}),
-    software_license_key:
-      profile?.software_license_key ||
-      currentNormalizedSession?.subscription?.license_key ||
-      ""
-  };
+  const merged = getCanonicalProfileState(profile);
 
-  if (!profile) {
+  if (!merged.full_name && !merged.dealership && !merged.inventory_url && !merged.compliance_mode) {
     summaryEl.innerHTML = `
       <div><strong>Name:</strong> Not set</div>
       <div><strong>Dealership:</strong> Not set</div>
@@ -2035,13 +2116,14 @@ function renderProfileSummary(profile) {
 }
 
 function populateComplianceSummary(profile) {
-  setTextByIdForAll("complianceProvinceDisplay", profile?.province || "Not set");
-  setTextByIdForAll("complianceModeDisplay", profile?.compliance_mode || profile?.province || "Not set");
-  setTextByIdForAll("complianceLicenseDisplay", profile?.license_number || "Not set");
+  const canonical = getCanonicalProfileState(profile);
+  setTextByIdForAll("complianceProvinceDisplay", canonical.province || "Not set");
+  setTextByIdForAll("complianceModeDisplay", canonical.compliance_mode || canonical.province || "Not set");
+  setTextByIdForAll("complianceLicenseDisplay", canonical.license_number || "Not set");
 
   const contactBits = [
-    profile?.dealer_phone || null,
-    profile?.dealer_email || null
+    canonical.dealer_phone || canonical.phone || null,
+    canonical.dealer_email || null
   ].filter(Boolean);
 
   setTextByIdForAll("complianceDealerContactDisplay", contactBits.length ? contactBits.join(" • ") : "Not set");
@@ -2091,13 +2173,7 @@ async function loadAccountData(user, forceFresh = false) {
       currentNormalizedSession = buildFallbackSessionFromLocalState();
     }
 
-    renderAccessState(currentNormalizedSession);
-    renderExtensionControl(currentNormalizedSession, currentProfile);
-    updateSetupStates(currentProfile, currentNormalizedSession);
-    persistProfileSnapshots(
-      buildExtensionProfileSnapshot(currentNormalizedSession, currentProfile, currentUser),
-      currentNormalizedSession
-    );
+    rerenderCanonicalPanels();
 
     const extensionLoaded = Boolean(result);
     setStatus("accountStatus", extensionLoaded ? "Account data loaded." : "Account data loaded from dashboard summary.");
@@ -2151,16 +2227,13 @@ async function loadAccountData(user, forceFresh = false) {
 
     if (currentProfile) {
       currentProfile.software_license_key = currentNormalizedSession?.subscription?.license_key || "";
-      renderProfileSummary(currentProfile);
+      rerenderCanonicalPanels();
     }
   } catch (error) {
     console.error("loadAccountData error:", error);
     currentAccountData = null;
     currentNormalizedSession = buildFallbackSessionFromLocalState();
-    renderAccessState(currentNormalizedSession);
-    renderExtensionControl(currentNormalizedSession, currentProfile);
-    updateSetupStates(currentProfile, currentNormalizedSession);
-    persistProfileSnapshots(buildExtensionProfileSnapshot(currentNormalizedSession, currentProfile, currentUser), currentNormalizedSession);
+    rerenderCanonicalPanels();
     setStatus("accountStatus", "Failed to load extension-state. Using dashboard summary.");
     setStatus("accountStatusBilling", "Failed to load extension-state. Using dashboard summary.");
     setStatus("extensionActionStatus", "Extension state unavailable. Using saved account summary.");
@@ -2282,8 +2355,9 @@ function normalizeExtensionStateResponse(result, user, profile) {
 }
 
 function buildFallbackSessionFromLocalState() {
-  const fullName = clean(currentProfile?.full_name || "");
-  const dealerName = clean(currentProfile?.dealership || currentProfile?.dealer_name || "");
+  const summaryProfile = getSummaryProfileSnapshot();
+  const fullName = clean(currentProfile?.full_name || summaryProfile.full_name || summaryProfile.salesperson_name || "");
+  const dealerName = clean(currentProfile?.dealership || currentProfile?.dealer_name || summaryProfile.dealership || summaryProfile.dealer_name || "");
   const snapshot = dashboardSummary?.account_snapshot || {};
   const dashboardEmail = clean(currentUser?.email || snapshot.email || "").toLowerCase();
   const forceTestingAccess = dashboardEmail === "damian044@icloud.com";
@@ -2314,7 +2388,7 @@ function buildFallbackSessionFromLocalState() {
       normalized_status: snapshotStatus,
       plan: snapshotPlan,
       normalized_plan: snapshotPlan,
-      license_key: currentProfile?.software_license_key || "",
+      license_key: currentProfile?.software_license_key || summaryProfile.software_license_key || "",
       posting_limit: snapshotLimit,
       daily_posting_limit: snapshotLimit,
       posts_today: snapshotUsed,
@@ -2323,33 +2397,33 @@ function buildFallbackSessionFromLocalState() {
     dealership: {
       name: dealerName || "",
       dealer_name: dealerName || "",
-      website: currentProfile?.dealer_website || "",
-      inventory_url: currentProfile?.inventory_url || "",
-      province: currentProfile?.province || "",
-      scanner_type: currentProfile?.scanner_type || "",
-      phone: currentProfile?.dealer_phone || "",
-      email: currentProfile?.dealer_email || ""
+      website: currentProfile?.dealer_website || summaryProfile.dealer_website || "",
+      inventory_url: currentProfile?.inventory_url || summaryProfile.inventory_url || "",
+      province: currentProfile?.province || summaryProfile.province || "",
+      scanner_type: currentProfile?.scanner_type || summaryProfile.scanner_type || "",
+      phone: currentProfile?.dealer_phone || summaryProfile.dealer_phone || "",
+      email: currentProfile?.dealer_email || summaryProfile.dealer_email || ""
     },
     scanner_config: {
-      scanner_type: currentProfile?.scanner_type || ""
+      scanner_type: currentProfile?.scanner_type || summaryProfile.scanner_type || ""
     },
     profile: {
       full_name: fullName || "",
       salesperson_name: fullName || "",
       dealer_name: dealerName || "",
       dealership: dealerName || "",
-      phone: currentProfile?.phone || "",
-      dealer_phone: currentProfile?.dealer_phone || "",
+      phone: currentProfile?.phone || summaryProfile.phone || "",
+      dealer_phone: currentProfile?.dealer_phone || summaryProfile.dealer_phone || "",
       email: currentUser?.email || "",
-      dealer_email: currentProfile?.dealer_email || "",
-      city: currentProfile?.city || "",
-      province: currentProfile?.province || "",
-      listing_location: currentProfile?.listing_location || "",
-      compliance_mode: currentProfile?.compliance_mode || currentProfile?.province || "",
-      license_number: currentProfile?.license_number || "",
-      dealer_website: currentProfile?.dealer_website || "",
-      inventory_url: currentProfile?.inventory_url || "",
-      scanner_type: currentProfile?.scanner_type || ""
+      dealer_email: currentProfile?.dealer_email || summaryProfile.dealer_email || "",
+      city: currentProfile?.city || summaryProfile.city || "",
+      province: currentProfile?.province || summaryProfile.province || "",
+      listing_location: currentProfile?.listing_location || summaryProfile.listing_location || "",
+      compliance_mode: currentProfile?.compliance_mode || currentProfile?.province || summaryProfile.compliance_mode || summaryProfile.province || "",
+      license_number: currentProfile?.license_number || summaryProfile.license_number || "",
+      dealer_website: currentProfile?.dealer_website || summaryProfile.dealer_website || "",
+      inventory_url: currentProfile?.inventory_url || summaryProfile.inventory_url || "",
+      scanner_type: currentProfile?.scanner_type || summaryProfile.scanner_type || ""
     }
   };
 }
@@ -2445,109 +2519,36 @@ function renderSetupSnapshot() {
 }
 
 function renderAccessState(session) {
-  const snapshot = dashboardSummary?.account_snapshot || {};
-  const dashboardEmail = clean(currentUser?.email || session?.user?.email || snapshot?.email || "").toLowerCase();
-  const forceTestingAccess = dashboardEmail === "damian044@icloud.com";
-  const hasAccess = Boolean(
-    forceTestingAccess ||
-    session?.subscription?.access_granted === true ||
-    session?.subscription?.active === true ||
-    snapshot?.access_granted === true ||
-    snapshot?.active === true ||
-    clean(session?.subscription?.status).toLowerCase() === "active" ||
-    clean(session?.subscription?.normalized_status).toLowerCase() === "active" ||
-    clean(snapshot?.status).toLowerCase() === "active"
-  );
-  const plan =
-    session?.subscription?.plan ||
-    snapshot?.plan ||
-    "Founder Beta";
-  const status =
-    forceTestingAccess ? "active" : (
-      session?.subscription?.normalized_status ||
-      session?.subscription?.status ||
-      snapshot?.status ||
-      (hasAccess ? "active" : "inactive")
-    );
+  const subscription = getCanonicalSubscriptionState(session);
 
-  setTextByIdForAll("accessBadge", hasAccess ? "Active Access" : "Inactive Access");
-  setTextByIdForAll("planName", plan);
-  setTextByIdForAll("subscriptionStatus", status);
+  setTextByIdForAll("accessBadge", subscription.active ? "Active Access" : "Inactive Access");
+  setTextByIdForAll("planName", subscription.plan || "Founder Beta");
+  setTextByIdForAll("subscriptionStatus", subscription.status || (subscription.active ? "active" : "inactive"));
 
   document.querySelectorAll("#accessBadge").forEach((el) => {
     el.classList.remove("active", "inactive", "warn");
-    el.classList.add(hasAccess ? "active" : "inactive");
+    el.classList.add(subscription.active ? "active" : "inactive");
   });
 }
 
 function renderExtensionControl(session, profile) {
-  const mergedProfile = profile || {};
-  const summarySnapshot = dashboardSummary?.account_snapshot || {};
-  const dashboardEmail = clean(currentUser?.email || session?.user?.email || summarySnapshot?.email || "").toLowerCase();
-  const forceTestingAccess = dashboardEmail === "damian044@icloud.com";
-  const hasAccess = Boolean(
-    forceTestingAccess ||
-    session?.subscription?.access_granted === true ||
-    session?.subscription?.active === true ||
-    summarySnapshot?.access_granted === true ||
-    summarySnapshot?.active === true
-  );
-  const limit = Math.max(
-    Number(session?.subscription?.posting_limit || session?.subscription?.daily_posting_limit || 0),
-    Number(summarySnapshot?.posting_limit || summarySnapshot?.daily_posting_limit || 0),
-    forceTestingAccess ? 25 : 0
-  );
-  const used = Math.max(
-    Number(session?.subscription?.posts_today || 0),
-    Number(summarySnapshot?.posts_today ?? summarySnapshot?.posts_used_today ?? 0),
-    Number(dashboardSummary?.posts_today || 0)
-  );
-  const remaining = Math.max(
-    Number(session?.subscription?.posts_remaining ?? (limit - used)),
-    Number(summarySnapshot?.posts_remaining ?? (limit - used)),
-    limit - used,
-    0
-  );
+  const mergedProfile = getCanonicalProfileState(profile, session);
+  const subscription = getCanonicalSubscriptionState(session);
+  const dealerWebsite = mergedProfile.dealer_website || "Not set";
+  const inventoryUrl = mergedProfile.inventory_url || "Not set";
+  const scannerType = mergedProfile.scanner_type || "Not set";
+  const listingLocation = mergedProfile.listing_location || "Not set";
+  const complianceMode = mergedProfile.compliance_mode || mergedProfile.province || "Not set";
 
-  const dealerWebsite =
-    session?.dealership?.website ||
-    mergedProfile?.dealer_website ||
-    "Not set";
-
-  const inventoryUrl =
-    session?.dealership?.inventory_url ||
-    mergedProfile?.inventory_url ||
-    "Not set";
-
-  const scannerType =
-    session?.scanner_config?.scanner_type ||
-    session?.dealership?.scanner_type ||
-    mergedProfile?.scanner_type ||
-    "Not set";
-
-  const listingLocation =
-    session?.profile?.listing_location ||
-    mergedProfile?.listing_location ||
-    "Not set";
-
-  const complianceMode =
-    session?.profile?.compliance_mode ||
-    mergedProfile?.compliance_mode ||
-    mergedProfile?.province ||
-    session?.dealership?.province ||
-    "Not set";
-
-  const plan = session?.subscription?.plan || "Founder Beta";
-
-  setTextByIdForAll("extensionRemainingPosts", String(remaining));
+  setTextByIdForAll("extensionRemainingPosts", String(numberOrZero(subscription.posts_remaining)));
   setTextByIdForAll("extensionScannerType", scannerType);
   setTextByIdForAll("extensionDealerWebsite", dealerWebsite);
   setTextByIdForAll("extensionInventoryUrl", inventoryUrl);
   setTextByIdForAll("extensionListingLocation", listingLocation);
   setTextByIdForAll("extensionComplianceMode", complianceMode);
-  setTextByIdForAll("extensionPlan", plan);
-  setTextByIdForAll("extensionPostsUsed", String(used));
-  setTextByIdForAll("extensionPostLimit", String(limit));
+  setTextByIdForAll("extensionPlan", subscription.plan || "Founder Beta");
+  setTextByIdForAll("extensionPostsUsed", String(numberOrZero(subscription.posts_today)));
+  setTextByIdForAll("extensionPostLimit", String(numberOrZero(subscription.posting_limit)));
   const postingUsageFound = Boolean(dashboardSummary?.ingest_debug?.posting_usage_row_found);
   const postingUsageUpdatedAt = cleanText(dashboardSummary?.ingest_debug?.posting_usage_updated_at);
   const syncStatusText = postingUsageFound
@@ -2560,27 +2561,26 @@ function renderExtensionControl(session, profile) {
   setTextByIdForAll("extensionReviewQueue", String(numberOrZero(dashboardSummary?.review_queue_count)));
   setTextByIdForAll("extensionStaleListings", String(numberOrZero(dashboardSummary?.stale_listings)));
 
-  const accessText = !session
-    ? "Unavailable"
-    : !hasAccess
-      ? "Inactive Access"
-      : remaining <= 0
-        ? "Limit Reached"
-        : "Active Access";
+  const accessText = !subscription.active
+    ? "Inactive Access"
+    : numberOrZero(subscription.posts_remaining) <= 0
+      ? "Limit Reached"
+      : "Active Access";
 
   setTextByIdForAll("extensionAccessState", accessText);
 }
 
 function updateSetupStates(profile, session) {
   const setup = dashboardSummary?.setup_status || {};
-  const snapshot = dashboardSummary?.account_snapshot || {};
+  const mergedProfile = getCanonicalProfileState(profile, session);
+  const subscription = getCanonicalSubscriptionState(session);
 
-  const websiteReady = Boolean(profile?.dealer_website || session?.dealership?.website);
-  const inventoryReady = Boolean(setup.inventory_url_present || profile?.inventory_url || session?.dealership?.inventory_url);
-  const scannerReady = Boolean(profile?.scanner_type || session?.scanner_config?.scanner_type || session?.dealership?.scanner_type);
-  const listingReady = Boolean(profile?.listing_location || session?.profile?.listing_location);
-  const complianceReady = Boolean(setup.compliance_mode_present || profile?.compliance_mode || profile?.province || session?.profile?.compliance_mode || session?.dealership?.province);
-  const accessReady = Boolean(session?.subscription?.active || snapshot.active);
+  const websiteReady = Boolean(setup.dealer_website_present || mergedProfile.dealer_website);
+  const inventoryReady = Boolean(setup.inventory_url_present || mergedProfile.inventory_url);
+  const scannerReady = Boolean(setup.scanner_type_present || mergedProfile.scanner_type);
+  const listingReady = Boolean(setup.listing_location_present || mergedProfile.listing_location);
+  const complianceReady = Boolean(setup.compliance_mode_present || mergedProfile.compliance_mode || mergedProfile.province);
+  const accessReady = Boolean(subscription.active);
 
   setSetupState("setupDealerWebsite", websiteReady);
   setSetupState("setupInventoryUrl", inventoryReady);
@@ -2606,20 +2606,20 @@ function setSetupState(id, isGood) {
 }
 
 function buildSetupStepsText() {
-  const profile = currentProfile || {};
+  const profile = getCanonicalProfileState();
   const session = currentNormalizedSession || buildFallbackSessionFromLocalState();
-  const active = Boolean(session?.subscription?.active);
+  const subscription = getCanonicalSubscriptionState(session);
 
   return [
     "Elevate Automation Setup",
     "",
-    `Access: ${active ? "Active" : "Inactive"}`,
-    `Plan: ${session?.subscription?.plan || "Founder Beta"}`,
-    `Dealer Website: ${profile?.dealer_website || session?.dealership?.website || "Not set"}`,
-    `Inventory URL: ${profile?.inventory_url || session?.dealership?.inventory_url || "Not set"}`,
-    `Scanner Type: ${profile?.scanner_type || session?.scanner_config?.scanner_type || session?.dealership?.scanner_type || "Not set"}`,
-    `Listing Location: ${profile?.listing_location || session?.profile?.listing_location || "Not set"}`,
-    `Compliance Mode: ${profile?.compliance_mode || profile?.province || session?.profile?.compliance_mode || session?.dealership?.province || "Not set"}`,
+    `Access: ${subscription.active ? "Active" : "Inactive"}`,
+    `Plan: ${subscription.plan || "Founder Beta"}`,
+    `Dealer Website: ${profile.dealer_website || "Not set"}`,
+    `Inventory URL: ${profile.inventory_url || "Not set"}`,
+    `Scanner Type: ${profile.scanner_type || "Not set"}`,
+    `Listing Location: ${profile.listing_location || "Not set"}`,
+    `Compliance Mode: ${profile.compliance_mode || profile.province || "Not set"}`,
     "",
     "Steps:",
     "1. Install or reload the Elevate Automation extension.",
