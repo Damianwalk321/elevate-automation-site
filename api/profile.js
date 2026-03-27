@@ -16,6 +16,21 @@ function normalizeUrl(value) {
   if (/^https?:\/\//i.test(v)) return v;
   return `https://${v}`;
 }
+
+function normalizeProvince(value) {
+  const raw = clean(value).toUpperCase();
+  if (!raw) return "";
+  if (raw === "ALBERTA" || raw.startsWith("AB")) return "AB";
+  if (raw === "BRITISH COLUMBIA" || raw.startsWith("BC")) return "BC";
+  return raw;
+}
+function normalizeComplianceMode(value, province = "") {
+  const raw = clean(value).toUpperCase();
+  if (!raw || raw === "STRICT") return normalizeProvince(province);
+  if (raw === "ALBERTA" || raw.startsWith("AB")) return "AB";
+  if (raw === "BRITISH COLUMBIA" || raw.startsWith("BC")) return "BC";
+  return raw;
+}
 function parseJsonBody(body) {
   if (!body) return {};
   if (typeof body === "object") return body;
@@ -106,19 +121,20 @@ export default async function handler(req, res) {
       const body = parseJsonBody(req.body);
       const nowIso = new Date().toISOString();
 
+      const normalizedProvince = normalizeProvince(body.province);
       const payload = {
         id: clean(verifiedUser.id),
         email: lower(verifiedUser.email),
         full_name: clean(body.full_name) || null,
         dealership: clean(body.dealership || body.dealer_name || body.company_name) || null,
         city: clean(body.city) || null,
-        province: clean(body.province) || null,
+        province: normalizedProvince || null,
         phone: clean(body.phone) || null,
         license_number: clean(body.license_number) || null,
         listing_location: clean(body.listing_location || body.city) || null,
         dealer_phone: clean(body.dealer_phone) || null,
         dealer_email: lower(body.dealer_email) || null,
-        compliance_mode: clean(body.compliance_mode || "strict") || "strict",
+        compliance_mode: normalizeComplianceMode(body.compliance_mode, normalizedProvince) || null,
         dealer_website: normalizeUrl(body.dealer_website) || null,
         inventory_url: normalizeUrl(body.inventory_url) || null,
         scanner_type: clean(body.scanner_type) || null,
