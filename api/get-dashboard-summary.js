@@ -1,7 +1,7 @@
 
 import { createClient } from "@supabase/supabase-js";
 import { resolveAccountAccess } from "./_shared/account-access.js";
-import { getVerifiedRequestUser } from "./_shared/auth.js";
+import { getVerifiedRequestUser, getTrustedIdentity } from "./_shared/auth.js";
 import { getCreditSummary, listRecentCreditEvents, formatCreditEventLabel, getCreditEconomyState } from "./_shared/credits.js";
 
 const supabase = createClient(
@@ -618,6 +618,30 @@ function buildProfileSnapshot(user = {}, profileRow = {}, snapshot = {}) {
   };
 }
 
+
+function buildPublishingReadiness(profileSnapshot = {}) {
+  const province = normalizeProvince(profileSnapshot?.province || '');
+  const complianceMode = normalizeComplianceMode(profileSnapshot?.compliance_mode || '', province);
+  const dealershipName = clean(profileSnapshot?.dealership || profileSnapshot?.dealer_name || '');
+  const licenseNumber = clean(profileSnapshot?.license_number || '');
+  const dealerOrSalesPhone = clean(profileSnapshot?.dealer_phone || profileSnapshot?.phone || '');
+  const blockers = [
+    !province && !complianceMode ? 'Province or compliance mode missing' : '',
+    !licenseNumber ? 'License number missing' : '',
+    !dealershipName ? 'Dealership name missing' : '',
+    !dealerOrSalesPhone ? 'Dealer or salesperson phone missing' : ''
+  ].filter(Boolean);
+  return {
+    ready: blockers.length === 0,
+    province,
+    compliance_mode: complianceMode,
+    dealership_name: dealershipName,
+    license_number: licenseNumber,
+    dealer_contact: dealerOrSalesPhone,
+    blockers
+  };
+}
+
 function buildComputedSummary(rows = []) {
   const today = dayKey();
   const month = monthKey();
@@ -904,8 +928,9 @@ export default async function handler(req, res) {
   if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
   try {
     const verifiedUser = await getVerifiedRequestUser(req);
-    const requestUserId = clean(verifiedUser?.id || req.query?.userId || req.query?.user_id || '');
-    const requestEmail = normalizeEmail(verifiedUser?.email || req.query?.email || '');
+    const trustedIdentity = getTrustedIdentity({ verifiedUser, query: req.query || {} });
+    const requestUserId = clean(trustedIdentity?.id || req.query?.userId || req.query?.user_id || '');
+    const requestEmail = normalizeEmail(trustedIdentity?.email || req.query?.email || '');
     const user = await resolveUser({ userId: requestUserId, email: requestEmail });
     const finalUserId = clean(user?.id || requestUserId || '');
     const finalEmail = normalizeEmail(user?.email || requestEmail || '');
@@ -929,6 +954,7 @@ export default async function handler(req, res) {
     const effectiveStatus = accessGranted ? 'active' : clean(subscriptionRow?.status || snapshot.status || 'inactive').toLowerCase();
     const profileSnapshot = buildProfileSnapshot(user, profileRow, snapshot);
     const setupStatus = buildSetupStatus(user, profileSnapshot);
+    const publishingReadiness = buildPublishingReadiness(profileSnapshot);
     const creditEconomy = await getCreditEconomyState(supabase, { userId: finalUserId, email: finalEmail, dateKey: today });
     const creditsSummary = creditEconomy.summary || await getCreditSummary(supabase, { userId: finalUserId, email: finalEmail });
     const recentCreditEventsRaw = await listRecentCreditEvents(supabase, { userId: finalUserId, email: finalEmail, limit: 6 });
@@ -974,7 +1000,7 @@ export default async function handler(req, res) {
     const postsRemaining = Math.max(safeNumber(accessState.posting_limit, dailyLimit) - usageToday, 0);
     const activationSteps = {
       profile_complete: Boolean(setupStatus.profile_complete),
-      compliance_ready: Boolean(setupStatus.compliance_mode_present),
+      compliance_ready: Boolean(publishingReadiness.ready),
       extension_connected: accessState.active,
       first_post: usageToday > 0,
       first_sync: rows.length > 0,
@@ -1161,6 +1187,7 @@ export default async function handler(req, res) {
           ...profileSnapshot
         },
         profile_snapshot: profileSnapshot,
+        publishing_readiness: publishingReadiness,
         roi_snapshot: {
           estimated_minutes_saved_today: usageToday * 18,
           estimated_minutes_saved_week: Math.max(safeNumber(scorecards?.weekly?.posts_7d, usageToday) * 18, usageToday * 18),
