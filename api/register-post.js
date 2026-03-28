@@ -453,6 +453,45 @@ async function syncSubscriptionSnapshot(supabase, resolved, postsUsedToday) {
   return { ok: true, snapshot: nextSnapshot };
 }
 
+
+async function findProfileForCompliance(supabase, resolved) {
+  const userId = clean(resolved?.user_id);
+  const email = lower(resolved?.email);
+  const attempts = [
+    () => userId ? supabase.from("profiles").select("*").eq("id", userId).maybeSingle() : Promise.resolve({ data: null, error: null }),
+    () => userId ? supabase.from("profiles").select("*").eq("user_id", userId).maybeSingle() : Promise.resolve({ data: null, error: null }),
+    () => email ? supabase.from("profiles").select("*").ilike("email", email).order("updated_at", { ascending: false }).limit(1).maybeSingle() : Promise.resolve({ data: null, error: null })
+  ];
+  for (const run of attempts) {
+    const { data, error } = await run();
+    if (!error && data) return data;
+  }
+  return null;
+}
+
+function evaluateCompliance(profile = {}) {
+  const province = clean(profile?.province || '').toUpperCase();
+  const complianceMode = clean(profile?.compliance_mode || '').toUpperCase();
+  const licenseNumber = clean(profile?.license_number || '');
+  const dealershipName = clean(profile?.dealership || profile?.dealer_name || profile?.company_name || '');
+  const dealerOrSalesPhone = clean(profile?.dealer_phone || profile?.phone || '');
+  const blockers = [
+    (!province && !complianceMode) ? 'Province or compliance mode missing' : '',
+    !licenseNumber ? 'License number missing' : '',
+    !dealershipName ? 'Dealership name missing' : '',
+    !dealerOrSalesPhone ? 'Dealer or salesperson phone missing' : ''
+  ].filter(Boolean);
+  return {
+    ready: blockers.length === 0,
+    blockers,
+    province,
+    compliance_mode: complianceMode || province,
+    license_number: licenseNumber,
+    dealership_name: dealershipName,
+    dealer_contact: dealerOrSalesPhone
+  };
+}
+
 export default async function handler(req, res) {
   if (req.method !== "POST") {
     return json(res, 405, { ok: false, error: "Method not allowed" });
@@ -483,6 +522,17 @@ export default async function handler(req, res) {
 
     if (!clean(resolved.user_id) && !lower(resolved.email)) {
       return json(res, 400, { ok: false, error: "Missing user identity" });
+    }
+
+    const complianceProfile = await findProfileForCompliance(supabase, resolved);
+    const compliance = evaluateCompliance(complianceProfile || {});
+    if (!compliance.ready) {
+      return json(res, 409, {
+        ok: false,
+        error: "Compliance not ready",
+        code: "COMPLIANCE_BLOCK",
+        compliance
+      });
     }
 
     const seedListingRow = buildListingRow(payload, resolved);
@@ -557,6 +607,7 @@ export default async function handler(req, res) {
               }))
           : []
       },
+      compliance,
       debug: {
         duplicate,
         usage_incremented: !duplicate,
