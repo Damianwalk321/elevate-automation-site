@@ -1,8 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
-import { getVerifiedRequestUser, getTrustedIdentity, isDashboardClient } from "./_shared/auth.js";
-
-const SUPABASE_URL = process.env.SUPABASE_URL;
-const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+import { getVerifiedRequestUser, getTrustedIdentity } from "./_shared/auth.js";
 
 function clean(value) {
   return String(value || "").trim();
@@ -11,12 +8,11 @@ function lower(value) {
   return clean(value).toLowerCase();
 }
 function normalizeUrl(value) {
-  const v = clean(value);
-  if (!v) return "";
-  if (/^https?:\/\//i.test(v)) return v;
-  return `https://${v}`;
+  const raw = clean(value);
+  if (!raw) return "";
+  if (/^https?:\/\//i.test(raw)) return raw;
+  return `https://${raw}`;
 }
-
 function normalizeProvince(value) {
   const raw = clean(value).toUpperCase();
   if (!raw) return "";
@@ -31,14 +27,14 @@ function normalizeComplianceMode(value, province = "") {
   if (raw === "BRITISH COLUMBIA" || raw.startsWith("BC")) return "BC";
   return raw;
 }
-function parseJsonBody(body) {
+function parseBody(body) {
   if (!body) return {};
   if (typeof body === "object") return body;
-  try {
-    return JSON.parse(body);
-  } catch {
-    return {};
-  }
+  try { return JSON.parse(body); } catch { return {}; }
+}
+function sendJson(res, status, body) {
+  res.status(status).setHeader("Content-Type", "application/json");
+  return res.json(body);
 }
 function buildCompletion(data = {}) {
   const checks = {
@@ -72,47 +68,48 @@ function buildCompletion(data = {}) {
     checks
   };
 }
-function sendJson(res, status, body) {
-  res.status(status).setHeader("Content-Type", "application/json");
-  return res.json(body);
-}
+
 async function findProfileRow(supabase, { userId = "", email = "" } = {}) {
-  const id = clean(userId);
+  const cleanUserId = clean(userId);
   const normalizedEmail = lower(email);
   const attempts = [
-    () => id ? supabase.from("profiles").select("*").eq("id", id).maybeSingle() : Promise.resolve({ data: null, error: null }),
-    () => id ? supabase.from("profiles").select("*").eq("user_id", id).maybeSingle() : Promise.resolve({ data: null, error: null }),
-    () => normalizedEmail ? supabase.from("profiles").select("*").ilike("email", normalizedEmail).order("updated_at", { ascending: false }).limit(1).maybeSingle() : Promise.resolve({ data: null, error: null })
+    async () => cleanUserId ? await supabase.from("profiles").select("*").eq("id", cleanUserId).maybeSingle() : { data: null, error: null },
+    async () => cleanUserId ? await supabase.from("profiles").select("*").eq("user_id", cleanUserId).maybeSingle() : { data: null, error: null },
+    async () => normalizedEmail ? await supabase.from("profiles").select("*").ilike("email", normalizedEmail).order("updated_at", { ascending: false }).limit(1).maybeSingle() : { data: null, error: null }
   ];
   for (const run of attempts) {
-    const { data, error } = await run();
-    if (!error && data) return data;
+    const result = await run();
+    if (!result.error && result.data) return result.data;
   }
   return null;
 }
 
 export default async function handler(req, res) {
   try {
-    if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
-      return sendJson(res, 500, { error: "Missing server env" });
+    if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
+      return sendJson(res, 500, { ok: false, error: "Missing Supabase env variables" });
     }
+
     const verifiedUser = await getVerifiedRequestUser(req);
     const trustedIdentity = getTrustedIdentity({
       verifiedUser,
-      body: parseJsonBody(req.body),
+      body: parseBody(req.body),
       query: req.query || {}
     });
 
     if (!trustedIdentity?.id && !trustedIdentity?.email) {
-      return sendJson(res, 401, { error: "Unauthorized" });
+      return sendJson(res, 401, { ok: false, error: "Unauthorized" });
     }
 
-    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+    const supabase = createClient(
+      process.env.SUPABASE_URL,
+      process.env.SUPABASE_SERVICE_ROLE_KEY
+    );
 
     if (req.method === "GET") {
       const profile = await findProfileRow(supabase, {
-        userId: trustedIdentity.id,
-        email: trustedIdentity.email
+        userId: trustedIdentity.id || req.query?.id || req.query?.user_id || "",
+        email: trustedIdentity.email || req.query?.email || ""
       });
 
       return sendJson(res, 200, {
@@ -123,13 +120,15 @@ export default async function handler(req, res) {
     }
 
     if (req.method === "POST") {
-      const body = parseJsonBody(req.body);
+      const body = parseBody(req.body);
       const nowIso = new Date().toISOString();
-
       const normalizedProvince = normalizeProvince(body.province);
+      const normalizedEmail = lower(trustedIdentity.email || body.email);
+
       const payload = {
-        id: clean(trustedIdentity.id),
-        email: lower(trustedIdentity.email),
+        id: clean(trustedIdentity.id || body.id) || null,
+        user_id: clean(trustedIdentity.id || body.user_id || body.id) || null,
+        email: normalizedEmail || null,
         full_name: clean(body.full_name) || null,
         dealership: clean(body.dealership || body.dealer_name || body.company_name) || null,
         city: clean(body.city) || null,
@@ -146,40 +145,62 @@ export default async function handler(req, res) {
         updated_at: nowIso
       };
 
+      if (!payload.email) {
+        return sendJson(res, 400, { ok: false, error: "Missing email" });
+      }
+
       const existingProfile = await findProfileRow(supabase, {
-        userId: trustedIdentity.id,
-        email: trustedIdentity.email
+        userId: payload.user_id,
+        email: payload.email
       });
 
-      let writeQuery;
+      let data = null;
+      let error = null;
+
       if (existingProfile?.id) {
-        writeQuery = supabase.from("profiles").update(payload).eq("id", existingProfile.id).select().single();
-      } else if (existingProfile?.user_id) {
-        writeQuery = supabase.from("profiles").update({ ...payload, user_id: trustedIdentity.id }).eq("user_id", trustedIdentity.id).select().single();
-      } else {
-        writeQuery = supabase
+        ({ data, error } = await supabase
           .from("profiles")
-          .upsert({ ...payload, user_id: trustedIdentity.id, created_at: nowIso }, { onConflict: "email" })
+          .update(payload)
+          .eq("id", existingProfile.id)
           .select()
-          .single();
+          .maybeSingle());
+      } else if (existingProfile?.user_id) {
+        ({ data, error } = await supabase
+          .from("profiles")
+          .update(payload)
+          .eq("user_id", existingProfile.user_id)
+          .select()
+          .maybeSingle());
+      } else {
+        ({ data, error } = await supabase
+          .from("profiles")
+          .upsert({ ...payload, created_at: nowIso }, { onConflict: "email" })
+          .select()
+          .maybeSingle());
       }
 
-      const { data: result, error: writeError } = await writeQuery;
-      if (writeError) {
-        console.error("profile save error:", writeError);
-        return sendJson(res, 500, { error: "Failed to save profile", detail: writeError.message });
+      if (error) {
+        return sendJson(res, 200, {
+          ok: false,
+          error: "Failed to save profile",
+          detail: error.message
+        });
       }
 
+      const saved = data || { ...(existingProfile || {}), ...payload };
       return sendJson(res, 200, {
         ok: true,
-        data: result || { ...existingProfile, ...payload, user_id: trustedIdentity.id },
-        meta: { completion: buildCompletion(result || payload) }
+        data: saved,
+        meta: { completion: buildCompletion(saved) }
       });
     }
 
-    return sendJson(res, 405, { error: "Method not allowed" });
+    return sendJson(res, 405, { ok: false, error: "Method not allowed" });
   } catch (error) {
-    console.error("profile fatal error:", error);
-    return sendJson(res, 500, { error: "Unexpected profile error", detail: error?.message || String(error) });
+    return sendJson(res, 200, {
+      ok: false,
+      error: "Unexpected profile error",
+      detail: error?.message || String(error)
+    });
   }
 }
