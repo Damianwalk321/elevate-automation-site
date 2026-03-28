@@ -2512,7 +2512,7 @@ async function loadProfile(userId) {
   try {
     setStatus("profileStatus", "Loading profile...");
 
-    const response = await apiFetch(`/api/profile?id=${encodeURIComponent(userId)}`, {
+    const response = await apiFetch(`/api/profile?id=${encodeURIComponent(userId)}${currentUser?.email ? `&email=${encodeURIComponent(currentUser.email)}` : ""}`, {
       method: "GET",
       cache: "no-store"
     });
@@ -2523,7 +2523,9 @@ async function loadProfile(userId) {
       throw new Error(cleanText(result?.error || "Failed to load profile."));
     }
 
-    if (!result?.data) {
+    const profileData = result?.data || result?.profile || null;
+
+    if (!profileData) {
       currentProfile = mergeProfileSources(readLocalProfileSnapshot(), getSummaryProfileSnapshot());
       setSystemStateFromSources(currentProfile, currentNormalizedSession);
       applySystemStateToForm(SYSTEM_STATE?.profile);
@@ -2532,7 +2534,7 @@ async function loadProfile(userId) {
       return;
     }
 
-    currentProfile = mergeProfileSources(result.data);
+    currentProfile = mergeProfileSources(profileData);
     const canonicalAfterLoad = setSystemStateFromSources(currentProfile, currentNormalizedSession || buildFallbackSessionFromLocalState()).profile;
     applySystemStateToForm(canonicalAfterLoad);
 
@@ -2579,7 +2581,7 @@ async function submitProfileSave(user) {
       return;
     }
 
-    currentProfile = mergeProfileSources(result.data || payload);
+    currentProfile = mergeProfileSources(result.data || result.profile || payload);
     const canonicalAfterSave = setSystemStateFromSources(currentProfile, currentNormalizedSession || buildFallbackSessionFromLocalState()).profile;
     applySystemStateToForm(canonicalAfterSave);
 
