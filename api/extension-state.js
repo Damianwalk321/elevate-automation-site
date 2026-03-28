@@ -102,6 +102,45 @@ function normalizeStatusValue(value, fallback = "inactive") {
   return status;
 }
 
+
+function normalizeProvince(value) {
+  const raw = clean(value).toUpperCase();
+  if (!raw) return "";
+  if (raw === "ALBERTA" || raw.startsWith("AB")) return "AB";
+  if (raw === "BRITISH COLUMBIA" || raw.startsWith("BC")) return "BC";
+  return raw;
+}
+
+function normalizeComplianceMode(value, province = "") {
+  const raw = clean(value).toUpperCase();
+  if (!raw || raw === "STRICT") return normalizeProvince(province);
+  if (raw === "ALBERTA" || raw.startsWith("AB")) return "AB";
+  if (raw === "BRITISH COLUMBIA" || raw.startsWith("BC")) return "BC";
+  return raw;
+}
+
+function buildComplianceState(profile = {}, dealership = {}) {
+  const province = normalizeProvince(profile?.province || dealership?.province || profile?.compliance_mode || '');
+  const complianceMode = normalizeComplianceMode(profile?.compliance_mode || '', province);
+  const dealershipName = clean(dealership?.name || profile?.dealership || '');
+  const licenseNumber = clean(profile?.license_number || '');
+  const dealerContact = clean(profile?.dealer_phone || profile?.phone || '');
+  const blockers = [
+    (!province && !complianceMode) ? 'Province or compliance mode missing' : '',
+    !licenseNumber ? 'License number missing' : '',
+    !dealershipName ? 'Dealership name missing' : '',
+    !dealerContact ? 'Dealer or salesperson phone missing' : ''
+  ].filter(Boolean);
+  return {
+    ready: blockers.length === 0,
+    province,
+    compliance_mode: complianceMode,
+    license_number: licenseNumber,
+    dealer_contact: dealerContact,
+    blockers
+  };
+}
+
 function isActiveStatus(value) {
   return normalizeStatusValue(value) === "active";
 }
@@ -508,7 +547,8 @@ export default async function handler(req, res) {
       supabase
         .from("profiles")
         .select("*")
-        .or(`id.eq.${user.id},email.eq.${email}`)
+        .or(`id.eq.${user.id},user_id.eq.${user.id},email.eq.${email}`)
+        .order("updated_at", { ascending: false })
         .limit(1)
         .maybeSingle(),
       supabase
@@ -635,6 +675,7 @@ export default async function handler(req, res) {
     }
 
     const profile = buildProfilePayload(user, userProfile, legacyProfile, dealership || {});
+    const compliance = buildComplianceState(profile, dealership || {});
     const subscription = buildSubscriptionPayload(
       subscriptionRow,
       postingLimitRow,
@@ -691,6 +732,7 @@ export default async function handler(req, res) {
     subscription.update_required = updateRequired;
     subscription.allowed_dealer_hosts = allowedDealerHosts;
     subscription.access_granted = Boolean(subscription.active);
+    subscription.can_post = Boolean(subscription.can_post && compliance.ready);
 
     const session = {
       user: {
@@ -719,6 +761,7 @@ export default async function handler(req, res) {
         active: dealership.active !== false
       },
       profile,
+      compliance,
       subscription: { ...(subscription || {}), plan_access: { is_pro: Boolean(subscription?.posting_limit >= 25 || String(subscription?.plan || subscription?.plan_name || "").toLowerCase().includes("pro")), posting_limit: Number(subscription?.posting_limit || 0), plan_label: clean(subscription?.plan || subscription?.plan_name || "Founder Beta") || "Founder Beta" } },
       scanner_config: scannerConfigPayload,
       meta: {
@@ -726,6 +769,8 @@ export default async function handler(req, res) {
         requested_page_url: pageUrl,
         mode: membershipList.length ? "multi_tenant" : "solo_bridge",
         setup_ready: setupReady,
+        compliance_ready: compliance.ready,
+        posting_blockers: compliance.ready ? [] : compliance.blockers,
         billing_active: Boolean(subscription?.active),
         minimum_version: minimumVersion,
         latest_version: latestVersion,
