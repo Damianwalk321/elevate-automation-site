@@ -608,6 +608,13 @@ export default async function handler(req, res) {
           : []
       },
       compliance,
+      lifecycle_event: {
+        type: duplicate ? "duplicate_refresh" : "post_registered",
+        listing_id: rowForUpsert.id,
+        status: rowForUpsert.status,
+        lifecycle_status: rowForUpsert.lifecycle_status,
+        happened_at: nowIso()
+      },
       debug: {
         duplicate,
         usage_incremented: !duplicate,
