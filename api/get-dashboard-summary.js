@@ -1154,6 +1154,30 @@ export default async function handler(req, res) {
           usage_today_computed: safeNumber(computed.posts_today, 0),
           testing_limit_override: forcedAccess
         },
+        lifecycle_tracking: {
+          total_listings: computed.total_listings,
+          active_listings: computed.active_listings,
+          stale_listings: computed.stale_listings,
+          review_queue_count: computed.review_queue_count,
+          weak_listings: computed.weak_listings,
+          needs_action_count: computed.needs_action_count,
+          lifecycle_updated_at: clean(snapshot.lifecycle_updated_at || ''),
+          source_counts: {
+            user_listings: userListingRows.length,
+            listings: legacyListingRows.length,
+            merged: rows.length
+          }
+        },
+        recent_activity: recentListings.slice(0, 8).map((row) => ({
+          id: row.id || '',
+          title: row.title || '',
+          status: row.status || '',
+          lifecycle_status: row.lifecycle_status || '',
+          posted_at: row.posted_at || row.updated_at || '',
+          views_count: safeNumber(row.views_count, 0),
+          messages_count: safeNumber(row.messages_count, 0),
+          recommended_action: row.recommended_action || ''
+        })),
         listing_data_state: {
           direct_rows_found: rows.length,
           preview_rows_found: recentListings.length,
