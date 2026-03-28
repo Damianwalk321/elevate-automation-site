@@ -580,6 +580,16 @@ async function apiFetch(url, options = {}) {
   return response;
 }
 
+async function parseApiJson(response) {
+  const rawText = await response.text();
+  try {
+    return JSON.parse(rawText || '{}');
+  } catch (error) {
+    const preview = cleanText(rawText).slice(0, 180);
+    throw new Error(preview || `Non-JSON API response (${response.status})`);
+  }
+}
+
 function openReadCopyModal({ title = "Read in Dashboard", subtitle = "Read this in the dashboard first, then copy only if needed.", eyebrow = "Dashboard Script", body = "" } = {}) {
   const modal = document.getElementById("readCopyModal");
   if (!modal) return;
@@ -2507,7 +2517,7 @@ async function loadProfile(userId) {
       cache: "no-store"
     });
 
-    const result = await response.json().catch(() => ({}));
+    const result = await parseApiJson(response).catch(() => ({}));
 
     if (!response.ok) {
       throw new Error(cleanText(result?.error || "Failed to load profile."));
@@ -2562,10 +2572,10 @@ async function submitProfileSave(user) {
       body: JSON.stringify(payload)
     });
 
-    const result = await response.json();
+    const result = await parseApiJson(response);
 
-    if (!response.ok) {
-      setStatus("profileStatus", `Save failed: ${result.error || result.message || "Unknown error"}`);
+    if (!response.ok || result?.ok === false) {
+      setStatus("profileStatus", `Save failed: ${result?.detail || result?.error || result?.message || "Unknown error"}`);
       return;
     }
 
