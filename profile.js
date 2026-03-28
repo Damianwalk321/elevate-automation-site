@@ -380,7 +380,7 @@
     }
 
     const response = await fetch(
-      `/api/profile?id=${encodeURIComponent(currentUser.id)}`,
+      `/api/profile?id=${encodeURIComponent(currentUser.id)}&email=${encodeURIComponent(currentUser.email || '')}`,
       {
         method: "GET",
         headers: await buildAuthHeaders()
@@ -393,7 +393,7 @@
       throw new Error(result?.error || "Failed to load profile.");
     }
 
-    return result?.data || null;
+    return result?.data || result?.profile || null;
   }
 
   async function saveProfile() {
@@ -443,7 +443,7 @@
       }
 
       setExtraProfile(extras);
-      currentProfile = result?.data || payload;
+      currentProfile = result?.data || result?.profile || payload;
       populateForm(currentProfile, extras);
 
       showStatus("Profile saved successfully.", "success");
