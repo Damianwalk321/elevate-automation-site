@@ -1,5 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
-import { getVerifiedRequestUser } from "./_shared/auth.js";
+import { getVerifiedRequestUser, getTrustedIdentity, isDashboardClient } from "./_shared/auth.js";
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -96,9 +96,14 @@ export default async function handler(req, res) {
     if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
       return sendJson(res, 500, { error: "Missing server env" });
     }
-
     const verifiedUser = await getVerifiedRequestUser(req);
-    if (!verifiedUser?.id || !verifiedUser?.email) {
+    const trustedIdentity = getTrustedIdentity({
+      verifiedUser,
+      body: parseJsonBody(req.body),
+      query: req.query || {}
+    });
+
+    if (!trustedIdentity?.id && !trustedIdentity?.email) {
       return sendJson(res, 401, { error: "Unauthorized" });
     }
 
@@ -106,8 +111,8 @@ export default async function handler(req, res) {
 
     if (req.method === "GET") {
       const profile = await findProfileRow(supabase, {
-        userId: verifiedUser.id,
-        email: verifiedUser.email
+        userId: trustedIdentity.id,
+        email: trustedIdentity.email
       });
 
       return sendJson(res, 200, {
@@ -123,8 +128,8 @@ export default async function handler(req, res) {
 
       const normalizedProvince = normalizeProvince(body.province);
       const payload = {
-        id: clean(verifiedUser.id),
-        email: lower(verifiedUser.email),
+        id: clean(trustedIdentity.id),
+        email: lower(trustedIdentity.email),
         full_name: clean(body.full_name) || null,
         dealership: clean(body.dealership || body.dealer_name || body.company_name) || null,
         city: clean(body.city) || null,
@@ -142,19 +147,19 @@ export default async function handler(req, res) {
       };
 
       const existingProfile = await findProfileRow(supabase, {
-        userId: verifiedUser.id,
-        email: verifiedUser.email
+        userId: trustedIdentity.id,
+        email: trustedIdentity.email
       });
 
       let writeQuery;
       if (existingProfile?.id) {
         writeQuery = supabase.from("profiles").update(payload).eq("id", existingProfile.id).select().single();
       } else if (existingProfile?.user_id) {
-        writeQuery = supabase.from("profiles").update({ ...payload, user_id: verifiedUser.id }).eq("user_id", verifiedUser.id).select().single();
+        writeQuery = supabase.from("profiles").update({ ...payload, user_id: trustedIdentity.id }).eq("user_id", trustedIdentity.id).select().single();
       } else {
         writeQuery = supabase
           .from("profiles")
-          .upsert({ ...payload, user_id: verifiedUser.id, created_at: nowIso }, { onConflict: "id" })
+          .upsert({ ...payload, user_id: trustedIdentity.id, created_at: nowIso }, { onConflict: "email" })
           .select()
           .single();
       }
@@ -167,7 +172,7 @@ export default async function handler(req, res) {
 
       return sendJson(res, 200, {
         ok: true,
-        data: result || { ...existingProfile, ...payload, user_id: verifiedUser.id },
+        data: result || { ...existingProfile, ...payload, user_id: trustedIdentity.id },
         meta: { completion: buildCompletion(result || payload) }
       });
     }
