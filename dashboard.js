@@ -193,6 +193,7 @@ let currentProfile = null;
 let currentAccountData = null;
 let currentNormalizedSession = null;
 let dashboardSummary = null;
+let SYSTEM_STATE = null;
 
 function getSummaryProfileSnapshot() {
   return dashboardSummary?.profile_snapshot || dashboardSummary?.account_snapshot || {};
@@ -246,6 +247,55 @@ function normalizeComplianceModeValue(value) {
   return clean(value).toUpperCase();
 }
 
+function isMeaningfulValue(value) {
+  return clean(value) !== '';
+}
+
+function mergeProfileSources(...sources) {
+  const merged = {};
+  for (const source of sources) {
+    if (!source || typeof source !== 'object') continue;
+    for (const [key, value] of Object.entries(source)) {
+      if (isMeaningfulValue(value)) merged[key] = value;
+    }
+  }
+  return merged;
+}
+
+function applySystemStateToForm(profile = null) {
+  const data = profile || SYSTEM_STATE?.profile || {};
+  [
+    'full_name','dealership','city','province','phone','license_number','listing_location',
+    'dealer_phone','dealer_email','compliance_mode','dealer_website','inventory_url',
+    'scanner_type','software_license_key'
+  ].forEach((fieldId) => {
+    const nextValue = data[fieldId] ?? '';
+    if (isMeaningfulValue(nextValue) || ['province','compliance_mode'].includes(fieldId)) {
+      setFieldValue(fieldId, nextValue);
+    }
+  });
+}
+
+function setSystemStateFromSources(profileOverride = null, sessionOverride = null) {
+  const mergedProfile = mergeProfileSources(
+    getSummaryProfileSnapshot(),
+    readLocalProfileSnapshot(),
+    currentProfile || {},
+    profileOverride || {}
+  );
+  const nextSession = sessionOverride || currentNormalizedSession || buildFallbackSessionFromLocalState();
+  SYSTEM_STATE = buildSystemState(mergedProfile, nextSession);
+  window.__EA_SYSTEM_STATE = SYSTEM_STATE;
+  return SYSTEM_STATE;
+}
+
+function getSystemState(profileOverride = null, sessionOverride = null) {
+  if (profileOverride || sessionOverride || !SYSTEM_STATE) {
+    return setSystemStateFromSources(profileOverride, sessionOverride);
+  }
+  return SYSTEM_STATE;
+}
+
 function firstNonEmpty(...values) {
   for (const value of values) {
     const cleaned = clean(value);
@@ -265,8 +315,8 @@ function buildSystemState(overrideProfile = null, overrideSession = null) {
   const subscription = getCanonicalSubscriptionState(session);
 
   const province = normalizeProvinceCode(firstNonEmpty(
-    formProfile.province,
     profile.province,
+    formProfile.province,
     sessionProfile.province,
     dealership.province,
     storedProfile.province,
@@ -274,8 +324,8 @@ function buildSystemState(overrideProfile = null, overrideSession = null) {
   ));
 
   const complianceMode = normalizeComplianceModeValue(firstNonEmpty(
-    formProfile.compliance_mode,
     profile.compliance_mode,
+    formProfile.compliance_mode,
     sessionProfile.compliance_mode,
     storedProfile.compliance_mode,
     summaryProfile.compliance_mode,
@@ -289,8 +339,8 @@ function buildSystemState(overrideProfile = null, overrideSession = null) {
     ...profile,
     ...formProfile,
     full_name: firstNonEmpty(
-      formProfile.full_name,
       profile.full_name,
+      formProfile.full_name,
       sessionProfile.full_name,
       sessionProfile.salesperson_name,
       storedProfile.full_name,
@@ -301,8 +351,8 @@ function buildSystemState(overrideProfile = null, overrideSession = null) {
       currentUser?.email
     ),
     dealership: firstNonEmpty(
-      formProfile.dealership,
       profile.dealership,
+      formProfile.dealership,
       profile.dealer_name,
       sessionProfile.dealership,
       sessionProfile.dealer_name,
@@ -314,50 +364,50 @@ function buildSystemState(overrideProfile = null, overrideSession = null) {
       summaryProfile.dealer_name
     ),
     city: firstNonEmpty(
-      formProfile.city,
       profile.city,
+      formProfile.city,
       sessionProfile.city,
       storedProfile.city,
       summaryProfile.city
     ),
     province,
     phone: firstNonEmpty(
-      formProfile.phone,
       profile.phone,
+      formProfile.phone,
       sessionProfile.phone,
       storedProfile.phone,
       summaryProfile.phone
     ),
     license_number: firstNonEmpty(
-      formProfile.license_number,
       profile.license_number,
+      formProfile.license_number,
       sessionProfile.license_number,
       storedProfile.license_number,
       summaryProfile.license_number
     ),
     listing_location: firstNonEmpty(
-      formProfile.listing_location,
       profile.listing_location,
+      formProfile.listing_location,
       sessionProfile.listing_location,
       storedProfile.listing_location,
       summaryProfile.listing_location,
-      formProfile.city,
       profile.city,
+      formProfile.city,
       sessionProfile.city,
       storedProfile.city,
       summaryProfile.city
     ),
     dealer_phone: firstNonEmpty(
-      formProfile.dealer_phone,
       profile.dealer_phone,
+      formProfile.dealer_phone,
       sessionProfile.dealer_phone,
       dealership.phone,
       storedProfile.dealer_phone,
       summaryProfile.dealer_phone
     ),
     dealer_email: firstNonEmpty(
-      formProfile.dealer_email,
       profile.dealer_email,
+      formProfile.dealer_email,
       sessionProfile.dealer_email,
       dealership.email,
       storedProfile.dealer_email,
@@ -365,24 +415,24 @@ function buildSystemState(overrideProfile = null, overrideSession = null) {
     ),
     compliance_mode: complianceMode,
     dealer_website: firstNonEmpty(
-      formProfile.dealer_website,
       profile.dealer_website,
+      formProfile.dealer_website,
       sessionProfile.dealer_website,
       dealership.website,
       storedProfile.dealer_website,
       summaryProfile.dealer_website
     ),
     inventory_url: firstNonEmpty(
-      formProfile.inventory_url,
       profile.inventory_url,
+      formProfile.inventory_url,
       sessionProfile.inventory_url,
       dealership.inventory_url,
       storedProfile.inventory_url,
       summaryProfile.inventory_url
     ),
     scanner_type: firstNonEmpty(
-      formProfile.scanner_type,
       profile.scanner_type,
+      formProfile.scanner_type,
       sessionProfile.scanner_type,
       session?.scanner_config?.scanner_type,
       dealership.scanner_type,
@@ -390,8 +440,8 @@ function buildSystemState(overrideProfile = null, overrideSession = null) {
       summaryProfile.scanner_type
     ),
     software_license_key: firstNonEmpty(
-      formProfile.software_license_key,
       profile.software_license_key,
+      formProfile.software_license_key,
       session?.subscription?.license_key,
       storedProfile.software_license_key,
       summaryProfile.software_license_key
@@ -429,7 +479,7 @@ function buildSystemState(overrideProfile = null, overrideSession = null) {
 }
 
 function getCanonicalProfileState(overrideProfile = null, overrideSession = null) {
-  return buildSystemState(overrideProfile, overrideSession).profile;
+  return getSystemState(overrideProfile, overrideSession).profile;
 }
 
 function getCanonicalSubscriptionState(overrideSession = null) {
@@ -483,7 +533,7 @@ function getCanonicalSubscriptionState(overrideSession = null) {
 
 function rerenderCanonicalPanels() {
   const canonicalSession = currentNormalizedSession || buildFallbackSessionFromLocalState();
-  const systemState = buildSystemState(currentProfile, canonicalSession);
+  const systemState = getSystemState(currentProfile, canonicalSession);
   const canonicalProfile = systemState.profile;
   renderProfileSummary(canonicalProfile);
   populateComplianceSummary(canonicalProfile);
@@ -493,6 +543,7 @@ function rerenderCanonicalPanels() {
   renderSetupWorkspace(canonicalProfile, canonicalSession);
   renderComplianceWorkspace(canonicalProfile, canonicalSession);
   renderToolsWorkspace(canonicalProfile, canonicalSession);
+  applySystemStateToForm(canonicalProfile);
   persistProfileSnapshots(buildExtensionProfileSnapshot(canonicalSession, canonicalProfile, currentUser), canonicalSession);
 }
 
@@ -1024,6 +1075,7 @@ async function loadListingDashboardData(forceFresh = false) {
     }
 
     filteredListings = [...dashboardListings];
+    setSystemStateFromSources(currentProfile, currentNormalizedSession);
     rerenderCanonicalPanels();
 
     renderDashboardAnalytics();
@@ -1034,6 +1086,7 @@ async function loadListingDashboardData(forceFresh = false) {
     dashboardListings = [];
     dashboardSummary = buildDashboardSummaryFromListings(dashboardListings);
     filteredListings = [];
+    setSystemStateFromSources(currentProfile, currentNormalizedSession);
     rerenderCanonicalPanels();
     renderDashboardAnalytics();
     renderSetupSnapshot();
@@ -1539,7 +1592,8 @@ function jumpToSetupField(fieldId) {
 }
 
 function renderSetupWorkspace(profile = null, session = null) {
-  const systemState = buildSystemState(profile, session);
+  const systemState = getSystemState(profile, session);
+  applySystemStateToForm(systemState.profile);
   const checklist = getSetupChecklist(systemState.profile, systemState.session);
   const readyCount = checklist.filter((item) => item.ready).length;
   const total = checklist.length;
@@ -1574,7 +1628,7 @@ function buildComplianceFooterPreview(profile) {
 }
 
 function renderComplianceWorkspace(profile = null, session = null) {
-  const systemState = buildSystemState(profile, session);
+  const systemState = getSystemState(profile, session);
   const mergedProfile = systemState.profile;
   const blockers = [];
   if (!mergedProfile.province && !mergedProfile.compliance_mode) blockers.push('Province or compliance mode missing');
@@ -1610,7 +1664,7 @@ function renderComplianceWorkspace(profile = null, session = null) {
 }
 
 function renderToolsWorkspace(profile = null, session = null) {
-  const systemState = buildSystemState(profile, session);
+  const systemState = getSystemState(profile, session);
   const mergedProfile = systemState.profile;
   const subscription = systemState.subscription;
   const blockers = [];
@@ -2460,29 +2514,17 @@ async function loadProfile(userId) {
     }
 
     if (!result?.data) {
-      currentProfile = null;
+      currentProfile = mergeProfileSources(readLocalProfileSnapshot(), getSummaryProfileSnapshot());
+      setSystemStateFromSources(currentProfile, currentNormalizedSession);
+      applySystemStateToForm(SYSTEM_STATE?.profile);
       rerenderCanonicalPanels();
-      setStatus("profileStatus", "No profile loaded yet.");
+      setStatus("profileStatus", isMeaningfulValue(currentProfile?.full_name || currentProfile?.dealership || currentProfile?.inventory_url) ? "Using saved local profile snapshot." : "No profile loaded yet.");
       return;
     }
 
-    currentProfile = result.data;
-    const canonicalAfterLoad = getCanonicalProfileState(currentProfile, currentNormalizedSession || buildFallbackSessionFromLocalState());
-
-    setFieldValue("full_name", canonicalAfterLoad.full_name);
-    setFieldValue("dealership", canonicalAfterLoad.dealership);
-    setFieldValue("city", canonicalAfterLoad.city);
-    setFieldValue("province", canonicalAfterLoad.province);
-    setFieldValue("phone", canonicalAfterLoad.phone);
-    setFieldValue("license_number", canonicalAfterLoad.license_number);
-    setFieldValue("listing_location", canonicalAfterLoad.listing_location);
-    setFieldValue("dealer_phone", canonicalAfterLoad.dealer_phone);
-    setFieldValue("dealer_email", canonicalAfterLoad.dealer_email);
-    setFieldValue("compliance_mode", result.data.compliance_mode || result.data.province);
-    setFieldValue("dealer_website", canonicalAfterLoad.dealer_website);
-    setFieldValue("inventory_url", canonicalAfterLoad.inventory_url);
-    setFieldValue("scanner_type", canonicalAfterLoad.scanner_type);
-    setFieldValue("software_license_key", canonicalAfterLoad.software_license_key || "");
+    currentProfile = mergeProfileSources(result.data);
+    const canonicalAfterLoad = setSystemStateFromSources(currentProfile, currentNormalizedSession || buildFallbackSessionFromLocalState()).profile;
+    applySystemStateToForm(canonicalAfterLoad);
 
     rerenderCanonicalPanels();
     setStatus("profileStatus", "Profile loaded.");
@@ -2527,14 +2569,13 @@ async function submitProfileSave(user) {
       return;
     }
 
-    currentProfile = result.data || payload;
-    const canonicalAfterSave = getCanonicalProfileState(currentProfile, currentNormalizedSession || buildFallbackSessionFromLocalState());
-    [
-      'full_name','dealership','city','province','phone','license_number','listing_location','dealer_phone','dealer_email','compliance_mode','dealer_website','inventory_url','scanner_type','software_license_key'
-    ].forEach((fieldId) => setFieldValue(fieldId, canonicalAfterSave[fieldId] || ''));
+    currentProfile = mergeProfileSources(result.data || payload);
+    const canonicalAfterSave = setSystemStateFromSources(currentProfile, currentNormalizedSession || buildFallbackSessionFromLocalState()).profile;
+    applySystemStateToForm(canonicalAfterSave);
 
     persistProfileSnapshots(buildExtensionProfileSnapshot(currentNormalizedSession || buildFallbackSessionFromLocalState(), canonicalAfterSave, currentUser), currentNormalizedSession || buildFallbackSessionFromLocalState());
     await refreshDashboardState(true);
+    setSystemStateFromSources(currentProfile, currentNormalizedSession);
     rerenderCanonicalPanels();
     setStatus("profileStatus", "Profile saved successfully.");
   } catch (error) {
@@ -2645,6 +2686,7 @@ async function loadAccountData(user, forceFresh = false) {
       currentNormalizedSession = buildFallbackSessionFromLocalState();
     }
 
+    setSystemStateFromSources(currentProfile, currentNormalizedSession);
     rerenderCanonicalPanels();
 
     const extensionLoaded = Boolean(result);
@@ -2705,6 +2747,7 @@ async function loadAccountData(user, forceFresh = false) {
     console.error("loadAccountData error:", error);
     currentAccountData = null;
     currentNormalizedSession = buildFallbackSessionFromLocalState();
+    setSystemStateFromSources(currentProfile, currentNormalizedSession);
     rerenderCanonicalPanels();
     setStatus("accountStatus", "Failed to load extension-state. Using dashboard summary.");
     setStatus("accountStatusBilling", "Failed to load extension-state. Using dashboard summary.");
