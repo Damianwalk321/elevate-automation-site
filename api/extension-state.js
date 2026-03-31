@@ -530,7 +530,6 @@ export default async function handler(req, res) {
     const [
       membershipsResult,
       legacyProfileResult,
-      userProfileResult,
       subscriptionResult,
       postingUsageResult,
       licenseResult,
@@ -550,11 +549,6 @@ export default async function handler(req, res) {
         .or(`id.eq.${user.id},user_id.eq.${user.id},email.eq.${email}`)
         .order("updated_at", { ascending: false })
         .limit(1)
-        .maybeSingle(),
-      supabase
-        .from("user_profiles")
-        .select("*")
-        .eq("user_id", user.id)
         .maybeSingle(),
       supabase
         .from("subscriptions")
