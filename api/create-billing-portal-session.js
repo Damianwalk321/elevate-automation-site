@@ -2,7 +2,13 @@ import Stripe from "stripe";
 import { createClient } from "@supabase/supabase-js";
 import { requireVerifiedDashboardUser, getTrustedIdentity } from "./_shared/auth.js";
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
+function getStripeClient() {
+  const secretKey = clean(process.env.STRIPE_SECRET_KEY);
+  if (!secretKey) {
+    throw new Error("Missing STRIPE_SECRET_KEY");
+  }
+  return new Stripe(secretKey);
+}
 
 function json(res, status, body) {
   res.status(status).setHeader("Content-Type", "application/json");
@@ -234,7 +240,7 @@ async function findUserBillingState({ email, userId }) {
   return null;
 }
 
-async function resolveCustomer({ email, userId }) {
+async function resolveCustomer({ stripeClient, email, userId }) {
   const normalizedEmail = normalizeEmail(email);
   const cleanedUserId = clean(userId);
 
@@ -249,7 +255,7 @@ async function resolveCustomer({ email, userId }) {
 
   if (storedCustomerId) {
     try {
-      const customer = await stripe.customers.retrieve(storedCustomerId);
+      const customer = await stripeClient.customers.retrieve(storedCustomerId);
       if (customer && !customer.deleted) {
         return customer;
       }
@@ -261,7 +267,7 @@ async function resolveCustomer({ email, userId }) {
   const subscriptionMirror = await findSubscriptionMirror({ email: normalizedEmail, userId: cleanedUserId });
   if (subscriptionMirror?.stripe_customer_id) {
     try {
-      const customer = await stripe.customers.retrieve(clean(subscriptionMirror.stripe_customer_id));
+      const customer = await stripeClient.customers.retrieve(clean(subscriptionMirror.stripe_customer_id));
       if (customer && !customer.deleted) {
         return customer;
       }
@@ -271,7 +277,7 @@ async function resolveCustomer({ email, userId }) {
   }
 
   if (normalizedEmail) {
-    const existing = await stripe.customers.list({
+    const existing = await stripeClient.customers.list({
       email: normalizedEmail,
       limit: 1
     });
@@ -287,7 +293,7 @@ async function resolveCustomer({ email, userId }) {
 
       let finalCustomer = customer;
       if (JSON.stringify(nextMetadata) !== JSON.stringify(customer.metadata || {})) {
-        finalCustomer = await stripe.customers.update(customer.id, {
+        finalCustomer = await stripeClient.customers.update(customer.id, {
           metadata: nextMetadata
         });
       }
@@ -305,7 +311,7 @@ async function resolveCustomer({ email, userId }) {
   return null;
 }
 
-async function customerHasManageableSubscription(customerId, mirrorState = null, userState = null) {
+async function customerHasManageableSubscription(stripeClient, customerId, mirrorState = null, userState = null) {
   if (!customerId) return false;
 
   if (clean(mirrorState?.stripe_subscription_id) && statusMeansSubscriptionExists(mirrorState?.subscription_status || mirrorState?.status)) {
@@ -317,7 +323,7 @@ async function customerHasManageableSubscription(customerId, mirrorState = null,
   }
 
   try {
-    const subscriptions = await stripe.subscriptions.list({
+    const subscriptions = await stripeClient.subscriptions.list({
       customer: customerId,
       status: "all",
       limit: 10
@@ -341,9 +347,7 @@ export default async function handler(req, res) {
   }
 
   try {
-    if (!process.env.STRIPE_SECRET_KEY) {
-      return json(res, 500, { error: "Missing STRIPE_SECRET_KEY" });
-    }
+    const stripe = getStripeClient();
 
     const body = parseBody(req);
     if (body.__parse_error) {
@@ -368,7 +372,7 @@ export default async function handler(req, res) {
       body.planType || ""
     );
 
-    const customer = await resolveCustomer({ email, userId });
+    const customer = await resolveCustomer({ stripeClient: stripe, email, userId });
 
     if (!customer?.id) {
       return json(res, 200, {
@@ -378,7 +382,7 @@ export default async function handler(req, res) {
       });
     }
 
-    const hasSubscription = await customerHasManageableSubscription(customer.id, subscriptionMirror, userState);
+    const hasSubscription = await customerHasManageableSubscription(stripe, customer.id, subscriptionMirror, userState);
     if (!hasSubscription) {
       await mirrorCustomerToSupabase({
         email,
