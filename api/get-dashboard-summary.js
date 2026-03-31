@@ -317,15 +317,20 @@ async function getSubscription(userId, email) {
   return null;
 }
 async function getProfileRow(userId, email) {
-  if (userId) {
-    const direct = await supabase.from('profiles').select('*').eq('id', userId).maybeSingle();
-    if (!direct.error && direct.data) return direct.data;
-    const userLinked = await supabase.from('profiles').select('*').eq('user_id', userId).maybeSingle();
-    if (!userLinked.error && userLinked.data) return userLinked.data;
-  }
-  if (email) {
-    const byEmail = await supabase.from('profiles').select('*').ilike('email', email).order('updated_at', { ascending: false }).limit(1).maybeSingle();
-    if (!byEmail.error && byEmail.data) return byEmail.data;
+  const tables = ['user_profiles', 'profiles'];
+  for (const table of tables) {
+    if (userId) {
+      const direct = await supabase.from(table).select('*').eq('id', userId).maybeSingle();
+      if (!direct.error && direct.data) return direct.data;
+      const userLinked = await supabase.from(table).select('*').eq('user_id', userId).maybeSingle();
+      if (!userLinked.error && userLinked.data) return userLinked.data;
+    }
+    if (email) {
+      const byEmail = await supabase.from(table).select('*').ilike('email', email).order('updated_at', { ascending: false }).limit(1).maybeSingle();
+      if (!byEmail.error && byEmail.data) return byEmail.data;
+      const byDealerEmail = await supabase.from(table).select('*').ilike('dealer_email', email).order('updated_at', { ascending: false }).limit(1).maybeSingle();
+      if (!byDealerEmail.error && byDealerEmail.data) return byDealerEmail.data;
+    }
   }
   return null;
 }
