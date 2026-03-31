@@ -317,7 +317,7 @@ async function getSubscription(userId, email) {
   return null;
 }
 async function getProfileRow(userId, email) {
-  const tables = ['user_profiles', 'profiles'];
+  const tables = ['profiles'];
   for (const table of tables) {
     if (userId) {
       const direct = await supabase.from(table).select('*').eq('id', userId).maybeSingle();
