@@ -82,11 +82,6 @@ export default async function handler(req, res) {
       await supabase.from("profiles").upsert(profileSeed, { onConflict: "id" });
     }
 
-    const { data: existingUserProfile } = await supabase.from("user_profiles").select("id,user_id,email,full_name,updated_at").eq("user_id", id).maybeSingle();
-    if (!existingUserProfile) {
-      await supabase.from("user_profiles").upsert(profileSeed, { onConflict: "id" });
-    }
-
     const creditLedger = await ensureUserCreditLedger(supabase, { userId: id, email });
 
     return res.status(200).json({
