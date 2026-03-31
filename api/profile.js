@@ -1,7 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 import { requireVerifiedDashboardUser, getTrustedIdentity } from "./_shared/auth.js";
 
-const PROFILE_TABLES = ["user_profiles", "profiles"];
+const PROFILE_TABLE = "profiles";
 
 function clean(value) {
   return String(value || "").replace(/\s+/g, " ").trim();
@@ -91,8 +91,8 @@ function buildProfilePayload(body = {}, identity = {}) {
     phone: clean(body.phone || "") || null,
     license_number: clean(body.license_number || body.licenseNumber || "") || null,
     listing_location: clean(body.listing_location || body.location || body.default_listing_location || body.city || "") || null,
-    dealer_phone: clean(body.dealer_phone || body.phone || body.dealerPhone || "") || null,
-    dealer_email: normalizeEmail(body.dealer_email || body.email || "") || normalizeEmail(identity.email || "") || null,
+    dealer_phone: clean(body.dealer_phone || body.dealerPhone || "") || null,
+    dealer_email: normalizeEmail(body.dealer_email || "") || normalizeEmail(identity.email || "") || null,
     compliance_mode: clean(body.compliance_mode || body.complianceMode || "") || null,
     dealer_website: clean(body.dealer_website || body.dealership_website || body.dealerWebsite || "") || null,
     inventory_url: clean(body.inventory_url || body.inventoryUrl || "") || null,
@@ -137,34 +137,26 @@ async function findUserRow(supabase, { userId = "", email = "" } = {}) {
   return null;
 }
 
-async function findProfileRowInTable(supabase, table, { userId = "", email = "" } = {}) {
+async function findProfileRow(supabase, { userId = "", email = "" } = {}) {
   const cleanedUserId = clean(userId);
   const normalizedEmail = normalizeEmail(email);
 
   const attempts = [
-    () => cleanedUserId ? safeMaybeSingle(supabase.from(table).select("*").eq("id", cleanedUserId).maybeSingle()) : Promise.resolve({ data: null, error: null }),
-    () => cleanedUserId ? safeMaybeSingle(supabase.from(table).select("*").eq("user_id", cleanedUserId).maybeSingle()) : Promise.resolve({ data: null, error: null }),
-    () => normalizedEmail ? safeMaybeSingle(supabase.from(table).select("*").ilike("email", normalizedEmail).order("updated_at", { ascending: false }).limit(1).maybeSingle()) : Promise.resolve({ data: null, error: null }),
-    () => normalizedEmail ? safeMaybeSingle(supabase.from(table).select("*").ilike("dealer_email", normalizedEmail).order("updated_at", { ascending: false }).limit(1).maybeSingle()) : Promise.resolve({ data: null, error: null })
+    () => cleanedUserId ? safeMaybeSingle(supabase.from(PROFILE_TABLE).select("*").eq("id", cleanedUserId).maybeSingle()) : Promise.resolve({ data: null, error: null }),
+    () => cleanedUserId ? safeMaybeSingle(supabase.from(PROFILE_TABLE).select("*").eq("user_id", cleanedUserId).maybeSingle()) : Promise.resolve({ data: null, error: null }),
+    () => normalizedEmail ? safeMaybeSingle(supabase.from(PROFILE_TABLE).select("*").ilike("email", normalizedEmail).order("updated_at", { ascending: false }).limit(1).maybeSingle()) : Promise.resolve({ data: null, error: null }),
+    () => normalizedEmail ? safeMaybeSingle(supabase.from(PROFILE_TABLE).select("*").ilike("dealer_email", normalizedEmail).order("updated_at", { ascending: false }).limit(1).maybeSingle()) : Promise.resolve({ data: null, error: null })
   ];
 
   for (const run of attempts) {
     const result = await run();
     if (result.data) return result.data;
     if (result.error && !isMissingRelationError(result.error) && !isMissingColumnError(result.error)) {
-      console.error(`[profile] ${table} lookup warning:`, result.error);
+      console.error(`[profile] ${PROFILE_TABLE} lookup warning:`, result.error);
     }
   }
 
   return null;
-}
-
-async function findProfileRow(supabase, identity) {
-  for (const table of PROFILE_TABLES) {
-    const row = await findProfileRowInTable(supabase, table, identity);
-    if (row) return { row, table };
-  }
-  return { row: null, table: "" };
 }
 
 function mergeProfileResponse(profileRow = null, userRow = null, identity = {}) {
@@ -214,25 +206,25 @@ async function mutateUsersTable(supabase, payload, userRow = null) {
   return null;
 }
 
-async function upsertProfileToTable(supabase, table, payload, existingRow = null) {
+async function upsertProfile(supabase, payload, existingRow = null) {
   let current = removeUndefined({ ...payload });
 
   for (let attempts = 0; attempts < 12; attempts += 1) {
     let response;
     if (existingRow?.id) {
-      response = await supabase.from(table).update(removeNulls(current)).eq("id", existingRow.id).select("*").maybeSingle();
+      response = await supabase.from(PROFILE_TABLE).update(removeNulls(current)).eq("id", existingRow.id).select("*").maybeSingle();
     } else if (clean(existingRow?.user_id)) {
-      response = await supabase.from(table).update(removeNulls(current)).eq("user_id", clean(existingRow.user_id)).select("*").maybeSingle();
+      response = await supabase.from(PROFILE_TABLE).update(removeNulls(current)).eq("user_id", clean(existingRow.user_id)).select("*").maybeSingle();
     } else if (normalizeEmail(existingRow?.email)) {
-      response = await supabase.from(table).update(removeNulls(current)).ilike("email", normalizeEmail(existingRow.email)).select("*").limit(1).maybeSingle();
+      response = await supabase.from(PROFILE_TABLE).update(removeNulls(current)).ilike("email", normalizeEmail(existingRow.email)).select("*").limit(1).maybeSingle();
     } else if (current.id) {
-      response = await supabase.from(table).upsert(removeNulls(current), { onConflict: "id" }).select("*").maybeSingle();
+      response = await supabase.from(PROFILE_TABLE).upsert(removeNulls(current), { onConflict: "id" }).select("*").maybeSingle();
     } else if (current.user_id) {
-      response = await supabase.from(table).upsert(removeNulls(current), { onConflict: "user_id" }).select("*").maybeSingle();
+      response = await supabase.from(PROFILE_TABLE).upsert(removeNulls(current), { onConflict: "user_id" }).select("*").maybeSingle();
     } else if (current.email) {
-      response = await supabase.from(table).upsert(removeNulls(current), { onConflict: "email" }).select("*").maybeSingle();
+      response = await supabase.from(PROFILE_TABLE).upsert(removeNulls(current), { onConflict: "email" }).select("*").maybeSingle();
     } else {
-      response = await supabase.from(table).insert(removeNulls(current)).select("*").maybeSingle();
+      response = await supabase.from(PROFILE_TABLE).insert(removeNulls(current)).select("*").maybeSingle();
     }
 
     if (!response.error) return response.data || current;
@@ -244,22 +236,7 @@ async function upsertProfileToTable(supabase, table, payload, existingRow = null
     delete current[missingColumn];
   }
 
-  throw new Error(`Profile mutation exhausted retry budget for ${table}`);
-}
-
-async function syncProfileTables(supabase, payload, identity) {
-  const results = [];
-  for (const table of PROFILE_TABLES) {
-    const existing = await findProfileRowInTable(supabase, table, identity);
-    try {
-      const row = await upsertProfileToTable(supabase, table, payload, existing);
-      if (row) results.push({ table, row });
-    } catch (error) {
-      console.error(`[profile] ${table} mutation error:`, error);
-      throw error;
-    }
-  }
-  return results;
+  throw new Error(`Profile mutation exhausted retry budget for ${PROFILE_TABLE}`);
 }
 
 export default async function handler(req, res) {
@@ -295,17 +272,17 @@ export default async function handler(req, res) {
     const supabase = getSupabaseAdmin();
 
     if (req.method === "GET") {
-      const [profileResult, userRow] = await Promise.all([
+      const [profileRow, userRow] = await Promise.all([
         findProfileRow(supabase, { userId, email }),
         findUserRow(supabase, { userId, email })
       ]);
 
-      const merged = mergeProfileResponse(profileResult.row, userRow, { id: userId, email });
+      const merged = mergeProfileResponse(profileRow, userRow, { id: userId, email });
       return json(res, 200, {
         ok: true,
         data: merged,
         profile: merged,
-        source: profileResult.table || (userRow ? "users" : "empty")
+        source: profileRow ? PROFILE_TABLE : (userRow ? "users" : "empty")
       });
     }
 
@@ -316,20 +293,21 @@ export default async function handler(req, res) {
     if (!payload.city) return json(res, 400, { ok: false, error: "City is required" });
 
     const existingUser = await findUserRow(supabase, { userId, email });
+    const existingProfile = await findProfileRow(supabase, { userId, email });
     await mutateUsersTable(supabase, payload, existingUser);
-    await syncProfileTables(supabase, payload, { userId, email });
+    await upsertProfile(supabase, payload, existingProfile);
 
-    const [savedProfileResult, savedUser] = await Promise.all([
+    const [savedProfile, savedUser] = await Promise.all([
       findProfileRow(supabase, { userId, email }),
       findUserRow(supabase, { userId, email })
     ]);
 
-    const merged = mergeProfileResponse(savedProfileResult.row || payload, savedUser, { id: userId, email });
+    const merged = mergeProfileResponse(savedProfile || payload, savedUser, { id: userId, email });
     return json(res, 200, {
       ok: true,
       data: merged,
       profile: merged,
-      source: savedProfileResult.table || "users"
+      source: savedProfile ? PROFILE_TABLE : "users"
     });
   } catch (error) {
     console.error("[profile] fatal error:", error);
