@@ -1,6 +1,6 @@
-import { createClient } from '@supabase/supabase-js';
+const { createClient } = require('@supabase/supabase-js');
 
-export default async function handler(req, res) {
+module.exports = async function handler(req, res) {
   try {
     const SUPABASE_URL = process.env.SUPABASE_URL;
     const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -17,6 +17,9 @@ export default async function handler(req, res) {
       SUPABASE_SERVICE_ROLE_KEY
     );
 
+    // -------------------------
+    // GET PROFILE
+    // -------------------------
     if (req.method === 'GET') {
       const email =
         typeof req.query?.email === 'string'
@@ -36,10 +39,9 @@ export default async function handler(req, res) {
         .maybeSingle();
 
       if (error) {
-        console.error('PROFILE API GET ERROR:', error);
+        console.error('PROFILE GET ERROR:', error);
         return res.status(500).json({
-          error: 'Failed to load profile',
-          details: error.message
+          error: error.message
         });
       }
 
@@ -49,6 +51,9 @@ export default async function handler(req, res) {
       });
     }
 
+    // -------------------------
+    // SAVE PROFILE
+    // -------------------------
     if (req.method === 'POST') {
       const body =
         typeof req.body === 'string'
@@ -93,10 +98,9 @@ export default async function handler(req, res) {
         .single();
 
       if (error) {
-        console.error('PROFILE API POST ERROR:', error);
+        console.error('PROFILE SAVE ERROR:', error);
         return res.status(500).json({
-          error: 'Failed to save profile',
-          details: error.message
+          error: error.message
         });
       }
 
@@ -109,11 +113,11 @@ export default async function handler(req, res) {
     return res.status(405).json({
       error: 'Method not allowed'
     });
+
   } catch (err) {
-    console.error('PROFILE API CRASH:', err);
+    console.error('PROFILE ROUTE CRASH:', err);
     return res.status(500).json({
-      error: 'Server crash',
-      details: err?.message || 'Unknown error'
+      error: err?.message || 'Server crash'
     });
   }
-}
+};
