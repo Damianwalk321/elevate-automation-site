@@ -76,9 +76,15 @@ export default async function handler(req, res) {
       }
     }
 
+    const profileSeed = { id, user_id: id, email, full_name: fullName || null, updated_at: nowIso };
     const { data: existingProfile } = await supabase.from("profiles").select("id,email,full_name,updated_at").eq("id", id).maybeSingle();
     if (!existingProfile) {
-      await supabase.from("profiles").upsert({ id, email, full_name: fullName || null, updated_at: nowIso }, { onConflict: "id" });
+      await supabase.from("profiles").upsert(profileSeed, { onConflict: "id" });
+    }
+
+    const { data: existingUserProfile } = await supabase.from("user_profiles").select("id,user_id,email,full_name,updated_at").eq("user_id", id).maybeSingle();
+    if (!existingUserProfile) {
+      await supabase.from("user_profiles").upsert(profileSeed, { onConflict: "id" });
     }
 
     const creditLedger = await ensureUserCreditLedger(supabase, { userId: id, email });
