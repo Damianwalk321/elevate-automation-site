@@ -2,7 +2,13 @@ import Stripe from "stripe";
 import { createClient } from "@supabase/supabase-js";
 import { requireVerifiedDashboardUser, getTrustedIdentity } from "./_shared/auth.js";
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
+function getStripeClient() {
+  const secretKey = clean(process.env.STRIPE_SECRET_KEY);
+  if (!secretKey) {
+    throw new Error("Missing STRIPE_SECRET_KEY");
+  }
+  return new Stripe(secretKey);
+}
 
 function json(res, status, body) {
   res.status(status).setHeader("Content-Type", "application/json");
@@ -278,6 +284,8 @@ export default async function handler(req, res) {
     if (!process.env.STRIPE_SECRET_KEY) {
       return json(res, 500, { error: "Missing STRIPE_SECRET_KEY" });
     }
+
+    const stripe = getStripeClient();
 
     const body = parseBody(req);
     if (body.__parse_error) {
