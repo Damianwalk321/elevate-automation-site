@@ -1,538 +1,302 @@
-// /profile.js
-// Elevate Automation Profile Module
-// Uses the existing Supabase auth session + /api/profile backend route
-// Persists supported profile fields to Supabase and keeps newer UI-only fields in local storage
+import { createClient } from "@supabase/supabase-js";
+import { requireVerifiedDashboardUser, getTrustedIdentity } from "./_shared/auth.js";
 
-(function () {
-  const SUPABASE_URL =
-    window.__ELEVATE_SUPABASE_URL ||
-    "https://teixblbxkoershwgqpym.supabase.co";
+const SUPABASE_URL = process.env.SUPABASE_URL;
+const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-  const SUPABASE_ANON_KEY =
-    window.__ELEVATE_SUPABASE_ANON_KEY ||
-    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRlaXhibGJ4a29lcnNod2dxcHltIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMwODUzMDMsImV4cCI6MjA4ODY2MTMwM30.wxt9zjKhsBuflaFZZT9awZiwckRzYkEl-OLm_4q8qF4";
+function json(res, status, body) {
+  res.status(status).setHeader("Content-Type", "application/json");
+  return res.send(JSON.stringify(body));
+}
 
-  const els = {};
-  let supabaseClient = null;
-  let currentUser = null;
-  let currentProfile = null;
-  let isSaving = false;
+function clean(value) {
+  return String(value || "").replace(/\s+/g, " ").trim();
+}
 
-  const EXTRA_PROFILE_PREFIX = "ea_profile_extras_v1_";
+function normalizeEmail(value) {
+  return clean(value).toLowerCase();
+}
 
-  function $(id) {
-    return document.getElementById(id);
+function parseBody(req) {
+  try {
+    if (!req.body) return {};
+    if (typeof req.body === "string") return JSON.parse(req.body || "{}");
+    if (typeof req.body === "object") return req.body;
+    return {};
+  } catch (error) {
+    return { __parse_error: error?.message || "Invalid JSON body" };
+  }
+}
+
+function getSupabaseAdmin() {
+  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
+    throw new Error("Missing Supabase server environment variables");
+  }
+  return createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
+    auth: { persistSession: false, autoRefreshToken: false }
+  });
+}
+
+function isMissingColumnError(error) {
+  const message = clean(error?.message || "");
+  return error?.code === "42703" || /column/i.test(message) && /does not exist/i.test(message);
+}
+
+function extractMissingColumnName(error) {
+  const message = clean(error?.message || "");
+  const patterns = [
+    /column\s+"([^"]+)"\s+does\s+not\s+exist/i,
+    /column\s+'([^']+)'\s+does\s+not\s+exist/i,
+    /column\s+([a-zA-Z0-9_]+)\s+does\s+not\s+exist/i
+  ];
+  for (const pattern of patterns) {
+    const match = message.match(pattern);
+    if (match?.[1]) return clean(match[1]);
+  }
+  return "";
+}
+
+function buildProfilePayload(body = {}, identity = {}) {
+  const nowIso = new Date().toISOString();
+  const payload = {
+    id: clean(identity.id || body.id || body.user_id || body.auth_user_id || "") || null,
+    user_id: clean(identity.id || body.user_id || body.id || "") || null,
+    email: normalizeEmail(identity.email || body.email || body.dealer_email || "") || null,
+    full_name: clean(body.full_name || body.fullName || body.name || "") || null,
+    dealership: clean(body.dealership || body.dealer_name || body.dealership_name || "") || null,
+    city: clean(body.city || "") || null,
+    province: clean(body.province || "") || null,
+    phone: clean(body.phone || "") || null,
+    license_number: clean(body.license_number || body.licenseNumber || "") || null,
+    listing_location: clean(body.listing_location || body.location || body.default_listing_location || body.city || "") || null,
+    dealer_phone: clean(body.dealer_phone || body.phone || body.dealerPhone || "") || null,
+    dealer_email: normalizeEmail(body.dealer_email || body.email || "") || normalizeEmail(identity.email || "") || null,
+    compliance_mode: clean(body.compliance_mode || body.complianceMode || "") || null,
+    dealer_website: clean(body.dealer_website || body.dealership_website || body.dealerWebsite || "") || null,
+    inventory_url: clean(body.inventory_url || body.inventoryUrl || "") || null,
+    scanner_type: clean(body.scanner_type || body.scannerType || "") || null,
+    updated_at: nowIso
+  };
+
+  Object.keys(payload).forEach((key) => {
+    if (payload[key] === "") payload[key] = null;
+  });
+
+  if (!payload.id && payload.user_id) payload.id = payload.user_id;
+  if (!payload.user_id && payload.id) payload.user_id = payload.id;
+  return payload;
+}
+
+function removeNullish(payload = {}) {
+  const out = {};
+  for (const [key, value] of Object.entries(payload)) {
+    if (value !== undefined) out[key] = value;
+  }
+  return out;
+}
+
+async function findUserRow(supabase, { userId = "", email = "" } = {}) {
+  const cleanedUserId = clean(userId);
+  const normalizedEmail = normalizeEmail(email);
+
+  if (cleanedUserId) {
+    const byId = await supabase.from("users").select("*").eq("id", cleanedUserId).maybeSingle();
+    if (!byId.error && byId.data) return byId.data;
   }
 
-  function cacheElements() {
-    [
-      "full_name",
-      "phone",
-      "display_email",
-      "booking_link",
-      "instagram_handle",
-      "primary_cta",
-      "dealership_name",
-      "dealership_website",
-      "city",
-      "province",
-      "logo_url",
-      "default_seller_name",
-      "compliance_mode",
-      "active_disclaimer",
-      "trades_welcome",
-      "financing_cta",
-      "delivery_available",
-      "carfax_mention",
-      "saveTopBtn",
-      "saveBottomBtn",
-      "statusBox",
-      "sessionEmail",
-      "profileRecordStatus",
-      "complianceContext",
-      "dealershipContext"
-    ].forEach((id) => {
-      els[id] = $(id);
-    });
+  if (normalizedEmail) {
+    const byEmail = await supabase.from("users").select("*").ilike("email", normalizedEmail).order("updated_at", { ascending: false }).limit(1).maybeSingle();
+    if (!byEmail.error && byEmail.data) return byEmail.data;
   }
 
-  function ensureSupabaseClient() {
-    if (window.supabaseClient) {
-      supabaseClient = window.supabaseClient;
-      return supabaseClient;
-    }
+  return null;
+}
 
-    if (!window.supabase || !window.supabase.createClient) {
-      throw new Error("Supabase CDN client is not loaded.");
-    }
+async function findProfileRow(supabase, { userId = "", email = "" } = {}) {
+  const cleanedUserId = clean(userId);
+  const normalizedEmail = normalizeEmail(email);
+  const attempts = [
+    () => cleanedUserId ? supabase.from("profiles").select("*").eq("id", cleanedUserId).maybeSingle() : Promise.resolve({ data: null, error: null }),
+    () => cleanedUserId ? supabase.from("profiles").select("*").eq("user_id", cleanedUserId).maybeSingle() : Promise.resolve({ data: null, error: null }),
+    () => normalizedEmail ? supabase.from("profiles").select("*").ilike("email", normalizedEmail).order("updated_at", { ascending: false }).limit(1).maybeSingle() : Promise.resolve({ data: null, error: null })
+  ];
 
-    supabaseClient = window.supabase.createClient(
-      SUPABASE_URL,
-      SUPABASE_ANON_KEY
-    );
-
-    window.supabaseClient = supabaseClient;
-    window.__ELEVATE_SUPABASE_URL = SUPABASE_URL;
-    window.__ELEVATE_SUPABASE_ANON_KEY = SUPABASE_ANON_KEY;
-
-    return supabaseClient;
-  }
-
-  function escapeHtml(value) {
-    return String(value || "")
-      .replace(/&/g, "&amp;")
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;")
-      .replace(/"/g, "&quot;")
-      .replace(/'/g, "&#039;");
-  }
-
-  function clean(value) {
-    return String(value || "").replace(/\s+/g, " ").trim();
-  }
-
-  function lower(value) {
-    return clean(value).toLowerCase();
-  }
-
-  function extrasStorageKey(userId) {
-    return `${EXTRA_PROFILE_PREFIX}${userId || "guest"}`;
-  }
-
-  function getExtraProfile() {
-    if (!currentUser?.id) return {};
-
+  for (const run of attempts) {
     try {
-      const raw = localStorage.getItem(extrasStorageKey(currentUser.id));
-      return raw ? JSON.parse(raw) : {};
+      const { data, error } = await run();
+      if (!error && data) return data;
     } catch (error) {
-      console.error("[profile] extras load error:", error);
-      return {};
+      console.error("[profile] lookup warning:", error);
     }
   }
 
-  function setExtraProfile(value) {
-    if (!currentUser?.id) return;
+  return null;
+}
 
-    try {
-      localStorage.setItem(
-        extrasStorageKey(currentUser.id),
-        JSON.stringify(value || {})
-      );
-    } catch (error) {
-      console.error("[profile] extras save error:", error);
-    }
-  }
+function mergeProfileResponse(profileRow = null, userRow = null, identity = {}) {
+  const merged = {
+    ...(userRow?.profile_snapshot && typeof userRow.profile_snapshot === "object" ? userRow.profile_snapshot : {}),
+    ...(profileRow && typeof profileRow === "object" ? profileRow : {})
+  };
 
-  function showStatus(message, type = "info") {
-    if (!els.statusBox) return;
+  if (!clean(merged.id) && clean(identity.id)) merged.id = clean(identity.id);
+  if (!clean(merged.user_id) && clean(identity.id)) merged.user_id = clean(identity.id);
+  if (!normalizeEmail(merged.email) && normalizeEmail(identity.email)) merged.email = normalizeEmail(identity.email);
+  if (!normalizeEmail(merged.dealer_email) && normalizeEmail(identity.email)) merged.dealer_email = normalizeEmail(identity.email);
+  if (!clean(merged.listing_location) && clean(merged.city)) merged.listing_location = clean(merged.city);
+  if (!clean(merged.dealer_phone) && clean(merged.phone)) merged.dealer_phone = clean(merged.phone);
+  return merged;
+}
 
-    els.statusBox.className = "status show";
-    if (type === "success") els.statusBox.classList.add("success");
-    if (type === "error") els.statusBox.classList.add("error");
-    els.statusBox.innerHTML = escapeHtml(message);
-  }
+async function runProfileMutation(supabase, mode, payload, existing = null) {
+  let current = removeNullish({ ...payload });
+  let attempts = 0;
 
-  function clearStatus() {
-    if (!els.statusBox) return;
-    els.statusBox.className = "status";
-    els.statusBox.textContent = "";
-  }
+  while (attempts < 10) {
+    attempts += 1;
 
-  function setSavingState(isBusy) {
-    isSaving = !!isBusy;
-    const label = isBusy ? "Saving..." : "Save Profile";
-
-    if (els.saveTopBtn) {
-      els.saveTopBtn.disabled = isBusy;
-      els.saveTopBtn.textContent = label;
-    }
-
-    if (els.saveBottomBtn) {
-      els.saveBottomBtn.disabled = isBusy;
-      els.saveBottomBtn.textContent = label;
-    }
-  }
-
-  function getCheckbox(id, fallback = false) {
-    return !!(els[id] ? els[id].checked : fallback);
-  }
-
-  function setCheckbox(id, value) {
-    if (els[id]) {
-      els[id].checked = !!value;
-    }
-  }
-
-  function getValue(id, fallback = "") {
-    return els[id] ? clean(els[id].value) : fallback;
-  }
-
-  function setValue(id, value) {
-    if (els[id]) {
-      els[id].value = value == null ? "" : String(value);
-    }
-  }
-
-  function provinceShortName(province) {
-    const map = {
-      alberta: "AB",
-      "british columbia": "BC",
-      saskatchewan: "SK",
-      ontario: "ON"
-    };
-    return map[lower(province)] || clean(province);
-  }
-
-  function buildDefaultDisclaimer() {
-    const province = getValue("province", "Alberta");
-    const fullName = getValue("full_name");
-    const dealership = getValue("dealership_name");
-    const phone = getValue("phone");
-    const city = getValue("city");
-    const provinceCode = provinceShortName(province);
-
-    const sellerPart = fullName ? `Contact ${fullName}` : "Contact our team";
-    const dealerPart = dealership ? ` at ${dealership}` : "";
-    const phonePart = phone ? ` at ${phone}` : "";
-    const locationPart =
-      city && provinceCode ? ` in ${city}, ${provinceCode}` : "";
-
-    if (lower(province) === "british columbia") {
-      return `${sellerPart}${dealerPart}${phonePart}${locationPart} for current pricing, availability, financing options, trade appraisal information, and full vehicle details. Dealer fees, taxes, and licensing may apply.`;
+    let response;
+    if (mode === "update" && existing?.id) {
+      response = await supabase.from("profiles").update(current).eq("id", existing.id).select("*").maybeSingle();
+    } else if (mode === "update" && clean(existing?.user_id)) {
+      response = await supabase.from("profiles").update(current).eq("user_id", clean(existing.user_id)).select("*").maybeSingle();
+    } else if (mode === "update" && normalizeEmail(existing?.email)) {
+      response = await supabase.from("profiles").update(current).eq("email", normalizeEmail(existing.email)).select("*").maybeSingle();
+    } else {
+      response = await supabase.from("profiles").upsert(current, { onConflict: "id" }).select("*").maybeSingle();
     }
 
-    if (lower(province) === "alberta") {
-      return `AMVIC-compliant dealer listing. ${sellerPart}${dealerPart}${phonePart}${locationPart} for current pricing, availability, financing options, and trade appraisal information. Dealer fees, taxes, and licensing may apply.`;
-    }
+    if (!response.error) return response.data || current;
 
-    return `${sellerPart}${dealerPart}${phonePart}${locationPart} for current pricing, availability, financing options, trade appraisal information, and full vehicle details. Dealer fees, taxes, and licensing may apply.`;
+    if (!isMissingColumnError(response.error)) throw response.error;
+
+    const missingColumn = extractMissingColumnName(response.error);
+    if (!missingColumn || !(missingColumn in current)) throw response.error;
+    delete current[missingColumn];
   }
 
-  function maybeRefreshDefaultDisclaimer(force) {
-    const current = getValue("active_disclaimer");
-    if (!current || force) {
-      setValue("active_disclaimer", buildDefaultDisclaimer());
+  throw new Error("Profile mutation exhausted retry budget");
+}
+
+async function syncUsersTable(supabase, payload, userRow = null) {
+  const base = removeNullish({
+    id: clean(payload.id || userRow?.id || "") || null,
+    email: normalizeEmail(payload.email || userRow?.email || "") || null,
+    full_name: clean(payload.full_name || userRow?.full_name || "") || null,
+    updated_at: payload.updated_at || new Date().toISOString()
+  });
+
+  if (!base.id && !base.email) return null;
+
+  let current = { ...base };
+  for (let attempts = 0; attempts < 6; attempts += 1) {
+    let response;
+    if (base.id) {
+      response = await supabase.from("users").upsert(current, { onConflict: "id" }).select("*").maybeSingle();
+    } else {
+      response = await supabase.from("users").upsert(current, { onConflict: "email" }).select("*").maybeSingle();
     }
+
+    if (!response.error) return response.data || current;
+    if (!isMissingColumnError(response.error)) {
+      console.error("[profile] users sync warning:", response.error);
+      return null;
+    }
+
+    const missingColumn = extractMissingColumnName(response.error);
+    if (!missingColumn || !(missingColumn in current)) {
+      console.error("[profile] users sync warning:", response.error);
+      return null;
+    }
+    delete current[missingColumn];
   }
 
-  function populateAccountContext() {
-    if (els.sessionEmail) {
-      els.sessionEmail.textContent = currentUser?.email || "-";
-    }
+  return null;
+}
 
-    const province = getValue("province", currentProfile?.province || "Alberta");
-    const mode = getValue(
-      "compliance_mode",
-      currentProfile?.compliance_mode || "strict"
-    );
-    const dealership = getValue(
-      "dealership_name",
-      currentProfile?.dealership || ""
-    );
-    const city = getValue("city", currentProfile?.city || "");
-
-    if (els.profileRecordStatus) {
-      els.profileRecordStatus.textContent = currentProfile
-        ? "Loaded"
-        : "Not saved yet";
-    }
-
-    if (els.complianceContext) {
-      const label = `${provinceShortName(province)} • ${mode || "strict"}`;
-      els.complianceContext.textContent = label;
-    }
-
-    if (els.dealershipContext) {
-      els.dealershipContext.textContent =
-        [dealership, city].filter(Boolean).join(" • ") || "-";
-    }
+export default async function handler(req, res) {
+  if (req.method === "OPTIONS") {
+    res.status(204);
+    res.setHeader("Allow", "GET, POST, OPTIONS");
+    return res.end();
   }
 
-  function populateForm(profile, extras) {
-    currentProfile = profile || null;
-
-    setValue("full_name", profile?.full_name || "");
-    setValue("phone", profile?.phone || profile?.dealer_phone || "");
-    setValue("display_email", profile?.dealer_email || profile?.email || currentUser?.email || "");
-    setValue("dealership_name", profile?.dealership || "");
-    setValue("dealership_website", profile?.dealer_website || "");
-    setValue("city", profile?.city || profile?.listing_location || "");
-    setValue("province", profile?.province || "Alberta");
-    setValue("compliance_mode", profile?.compliance_mode || "strict");
-
-    setValue("booking_link", extras?.booking_link || "");
-    setValue("instagram_handle", extras?.instagram_handle || "");
-    setValue("primary_cta", extras?.primary_cta || "");
-    setValue("logo_url", extras?.logo_url || "");
-    setValue(
-      "default_seller_name",
-      extras?.default_seller_name || profile?.full_name || ""
-    );
-    setValue("active_disclaimer", extras?.active_disclaimer || "");
-
-    setCheckbox(
-      "trades_welcome",
-      typeof extras?.trades_welcome === "boolean" ? extras.trades_welcome : true
-    );
-    setCheckbox(
-      "financing_cta",
-      typeof extras?.financing_cta === "boolean" ? extras.financing_cta : true
-    );
-    setCheckbox(
-      "delivery_available",
-      typeof extras?.delivery_available === "boolean"
-        ? extras.delivery_available
-        : false
-    );
-    setCheckbox(
-      "carfax_mention",
-      typeof extras?.carfax_mention === "boolean" ? extras.carfax_mention : true
-    );
-
-    maybeRefreshDefaultDisclaimer(false);
-    populateAccountContext();
+  if (!["GET", "POST"].includes(req.method)) {
+    return json(res, 405, { ok: false, error: "Method not allowed" });
   }
 
-  function collectPayload() {
-    const fullName = getValue("full_name");
-    const phone = getValue("phone");
-    const displayEmail = lower(getValue("display_email") || currentUser?.email || "");
-    const dealershipName = getValue("dealership_name");
-    const dealershipWebsite = getValue("dealership_website");
-    const city = getValue("city");
-    const province = getValue("province", "Alberta");
-    const complianceMode = getValue("compliance_mode", "strict");
-
-    const payload = {
-      id: currentUser?.id || "",
-      email: lower(currentUser?.email || displayEmail),
-      full_name: fullName,
-      dealership: dealershipName,
-      city,
-      province,
-      phone,
-      license_number: "",
-      listing_location: city,
-      dealer_phone: phone,
-      dealer_email: displayEmail,
-      compliance_mode: complianceMode,
-      dealer_website: dealershipWebsite,
-      inventory_url: "",
-      scanner_type: ""
-    };
-
-    const extras = {
-      booking_link: getValue("booking_link"),
-      instagram_handle: getValue("instagram_handle"),
-      primary_cta:
-        getValue("primary_cta") ||
-        (fullName ? `Call or text ${fullName} today` : ""),
-      logo_url: getValue("logo_url"),
-      default_seller_name: getValue("default_seller_name") || fullName,
-      active_disclaimer:
-        getValue("active_disclaimer") || buildDefaultDisclaimer(),
-      trades_welcome: getCheckbox("trades_welcome", true),
-      financing_cta: getCheckbox("financing_cta", true),
-      delivery_available: getCheckbox("delivery_available", false),
-      carfax_mention: getCheckbox("carfax_mention", true)
-    };
-
-    return { payload, extras };
-  }
-
-  async function getCurrentUserFromSession() {
-    const client = ensureSupabaseClient();
-
-    const sessionResult = await client.auth.getSession();
-    if (sessionResult?.error) {
-      throw sessionResult.error;
-    }
-
-    const sessionUser = sessionResult?.data?.session?.user;
-    if (sessionUser) return sessionUser;
-
-    const userResult = await client.auth.getUser();
-    if (userResult?.error) {
-      throw userResult.error;
-    }
-
-    return userResult?.data?.user || null;
-  }
-
-  async function buildAuthHeaders(extraHeaders = {}) {
-    const headers = { Accept: "application/json", ...extraHeaders };
-    try {
-      const client = ensureSupabaseClient();
-      const sessionResult = await client.auth.getSession();
-      const token = sessionResult?.data?.session?.access_token || "";
-      if (token) headers.Authorization = `Bearer ${token}`;
-      headers["x-elevate-client"] = "dashboard";
-    } catch (error) {
-      console.warn("[profile] auth header warning:", error);
-    }
-    return headers;
-  }
-
-  async function loadProfile() {
-    if (!currentUser?.id) {
-      throw new Error("Missing authenticated user id.");
-    }
-
-    const response = await fetch(
-      `/api/profile?id=${encodeURIComponent(currentUser.id)}&email=${encodeURIComponent(currentUser.email || '')}`,
-      {
-        method: "GET",
-        headers: await buildAuthHeaders()
-      }
-    );
-
-    const result = await response.json().catch(() => null);
-
-    if (!response.ok) {
-      throw new Error(result?.error || "Failed to load profile.");
-    }
-
-    return result?.data || result?.profile || null;
-  }
-
-  async function saveProfile() {
-    if (isSaving) return;
-
-    clearStatus();
-
-    if (!currentUser?.id) {
-      showStatus("No active authenticated user session found.", "error");
+  try {
+    const verifiedUser = await requireVerifiedDashboardUser(req, res);
+    if (req.headers?.["x-elevate-client"] && !verifiedUser && String(req.headers["x-elevate-client"]).toLowerCase() === "dashboard") {
       return;
     }
 
-    const { payload, extras } = collectPayload();
-
-    if (!payload.full_name) {
-      showStatus("Full Name is required.", "error");
-      if (els.full_name) els.full_name.focus();
-      return;
+    const body = req.method === "POST" ? parseBody(req) : {};
+    if (body.__parse_error) {
+      return json(res, 400, { ok: false, error: body.__parse_error });
     }
 
-    if (!payload.dealership) {
-      showStatus("Dealership Name is required.", "error");
-      if (els.dealership_name) els.dealership_name.focus();
-      return;
+    const identity = getTrustedIdentity({ verifiedUser, body, query: req.query || {} });
+    const userId = clean(identity.id || req.query?.id || req.query?.user_id || body.id || body.user_id || "");
+    const email = normalizeEmail(identity.email || req.query?.email || body.email || body.dealer_email || "");
+
+    if (!userId && !email) {
+      return json(res, 400, { ok: false, error: "Missing user identity" });
     }
 
-    if (!payload.city) {
-      showStatus("City is required.", "error");
-      if (els.city) els.city.focus();
-      return;
-    }
+    const supabase = getSupabaseAdmin();
 
-    setSavingState(true);
-    showStatus("Saving profile...", "info");
-
-    try {
-      const response = await fetch("/api/profile", {
-        method: "POST",
-        headers: await buildAuthHeaders({ "Content-Type": "application/json" }),
-        body: JSON.stringify(payload)
-      });
-
-      const result = await response.json().catch(() => null);
-
-      if (!response.ok) {
-        throw new Error(result?.error || "Failed to save profile.");
-      }
-
-      setExtraProfile(extras);
-      currentProfile = result?.data || result?.profile || payload;
-      populateForm(currentProfile, extras);
-
-      showStatus("Profile saved successfully.", "success");
-    } catch (error) {
-      console.error("[profile] save error:", error);
-      showStatus(error?.message || "Failed to save profile.", "error");
-    } finally {
-      setSavingState(false);
-    }
-  }
-
-  function bindEvents() {
-    if (els.saveTopBtn) {
-      els.saveTopBtn.addEventListener("click", saveProfile);
-    }
-
-    if (els.saveBottomBtn) {
-      els.saveBottomBtn.addEventListener("click", saveProfile);
-    }
-
-    ["province", "full_name", "phone", "dealership_name", "city"].forEach((id) => {
-      if (!els[id]) return;
-      els[id].addEventListener("change", function () {
-        if (!getValue("active_disclaimer")) {
-          maybeRefreshDefaultDisclaimer(false);
-        }
-        populateAccountContext();
-      });
-    });
-
-    if (els.compliance_mode) {
-      els.compliance_mode.addEventListener("change", function () {
-        populateAccountContext();
-      });
-    }
-
-    if (els.dealership_name) {
-      els.dealership_name.addEventListener("input", populateAccountContext);
-    }
-
-    if (els.city) {
-      els.city.addEventListener("input", populateAccountContext);
-    }
-
-    if (els.active_disclaimer) {
-      els.active_disclaimer.addEventListener("focus", function () {
-        if (!getValue("active_disclaimer")) {
-          maybeRefreshDefaultDisclaimer(false);
-        }
-      });
-    }
-  }
-
-  async function boot() {
-    cacheElements();
-    setSavingState(false);
-    showStatus("Checking session...", "info");
-
-    try {
-      ensureSupabaseClient();
-
-      currentUser = await getCurrentUserFromSession();
-
-      if (!currentUser) {
-        window.location.href = "/login.html";
-        return;
-      }
-
-      localStorage.setItem("user_email", currentUser.email || "");
-
-      const [profile, extras] = await Promise.all([
-        loadProfile(),
-        Promise.resolve(getExtraProfile())
+    if (req.method === "GET") {
+      const [profileRow, userRow] = await Promise.all([
+        findProfileRow(supabase, { userId, email }),
+        findUserRow(supabase, { userId, email })
       ]);
 
-      populateForm(profile, extras);
-      bindEvents();
-
-      showStatus(
-        profile
-          ? "Profile loaded. Review and save any changes."
-          : "No saved profile found yet. Complete setup and save.",
-        profile ? "success" : "info"
-      );
-    } catch (error) {
-      console.error("[profile] boot error:", error);
-      showStatus(error?.message || "Failed to load profile module.", "error");
+      const merged = mergeProfileResponse(profileRow, userRow, { id: userId, email });
+      return json(res, 200, {
+        ok: true,
+        data: merged,
+        profile: merged,
+        source: profileRow ? "profiles" : (userRow ? "users" : "empty")
+      });
     }
-  }
 
-  document.addEventListener("DOMContentLoaded", boot);
-})();
+    const payload = buildProfilePayload(body, { id: userId, email });
+
+    if (!payload.full_name) {
+      return json(res, 400, { ok: false, error: "Full name is required" });
+    }
+    if (!payload.dealership) {
+      return json(res, 400, { ok: false, error: "Dealership is required" });
+    }
+    if (!payload.city) {
+      return json(res, 400, { ok: false, error: "City is required" });
+    }
+
+    const [existingProfile, existingUser] = await Promise.all([
+      findProfileRow(supabase, { userId, email }),
+      findUserRow(supabase, { userId, email })
+    ]);
+
+    await syncUsersTable(supabase, payload, existingUser);
+    await runProfileMutation(supabase, existingProfile ? "update" : "upsert", payload, existingProfile);
+
+    const [savedProfile, savedUser] = await Promise.all([
+      findProfileRow(supabase, { userId, email }),
+      findUserRow(supabase, { userId, email })
+    ]);
+
+    const merged = mergeProfileResponse(savedProfile || payload, savedUser, { id: userId, email });
+    return json(res, 200, {
+      ok: true,
+      data: merged,
+      profile: merged
+    });
+  } catch (error) {
+    console.error("[profile] fatal error:", error);
+    return json(res, 500, {
+      ok: false,
+      error: error?.message || "Failed to process profile request"
+    });
+  }
+}
