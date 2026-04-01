@@ -2,6 +2,9 @@
   "name": "elevate-automation",
   "version": "1.0.0",
   "type": "module",
+  "scripts": {
+    "check:conflicts": "bash scripts/check-conflict-markers.sh"
+  },
   "dependencies": {
     "@supabase/supabase-js": "^2.43.4",
     "stripe": "^14.21.0"
