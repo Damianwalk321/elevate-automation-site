@@ -665,6 +665,7 @@ function bindCreditActionButtons() {
 let dashboardListings = [];
 let filteredListings = [];
 let dashboardListingsMeta = { total: 0, source_counts: { user_listings: 0, listings: 0, merged: 0 }, used_summary_fallback: false, source: "api" };
+let dashboardListingsDiagnostics = { raw_rows: 0, normalized_rows: 0, dropped_rows: 0 };
 let listingQuickFilter = "all";
 
 document.addEventListener("DOMContentLoaded", async () => {
@@ -1053,6 +1054,18 @@ if (copyAffiliatePostBtn) {
     });
   }
 
+  document.querySelectorAll("[data-filter]").forEach((button) => {
+    if (button.dataset.boundListingFilter === "true") return;
+    button.dataset.boundListingFilter = "true";
+    button.addEventListener("click", () => {
+      listingQuickFilter = clean(button.getAttribute("data-filter") || "all").toLowerCase() || "all";
+      document.querySelectorAll("[data-filter]").forEach((other) => {
+        other.classList.toggle("active", other === button);
+      });
+      applyListingFiltersAndRender();
+    });
+  });
+
   window.addEventListener("resize", debounce(() => {
     drawActivityChart(buildChartSeries());
   }, 150));
@@ -1084,11 +1097,16 @@ async function refreshDashboardState(forceFresh = false) {
 async function loadListingDashboardData(forceFresh = false) {
   try {
     dashboardSummary = await fetchDashboardSummary(forceFresh);
-    dashboardListings = await fetchUserListings(forceFresh);
+    const rawListings = await fetchUserListings(forceFresh);
 
-    dashboardListings = Array.isArray(dashboardListings)
-      ? dashboardListings.map(normalizeListingRecord).filter(Boolean)
+    dashboardListings = Array.isArray(rawListings)
+      ? rawListings.map(normalizeListingRecord).filter(Boolean)
       : [];
+    dashboardListingsDiagnostics = {
+      raw_rows: Array.isArray(rawListings) ? rawListings.length : 0,
+      normalized_rows: dashboardListings.length,
+      dropped_rows: Math.max((Array.isArray(rawListings) ? rawListings.length : 0) - dashboardListings.length, 0)
+    };
 
     if (!dashboardSummary) {
       dashboardSummary = buildDashboardSummaryFromListings(dashboardListings);
@@ -1106,6 +1124,7 @@ async function loadListingDashboardData(forceFresh = false) {
   } catch (error) {
     console.error("loadListingDashboardData error:", error);
     dashboardListings = [];
+    dashboardListingsDiagnostics = { raw_rows: 0, normalized_rows: 0, dropped_rows: 0 };
     dashboardSummary = buildDashboardSummaryFromListings(dashboardListings);
     filteredListings = [];
     setSystemStateFromSources(currentProfile, currentNormalizedSession);
@@ -1591,6 +1610,7 @@ function renderDashboardAnalytics() {
   setTextByIdForAll("kpiMessages", String(numberOrZero(dashboardSummary?.total_messages)));
   setTextByIdForAll("kpiPostsRemaining", String(numberOrZero(currentNormalizedSession?.subscription?.posts_remaining ?? dashboardSummary?.account_snapshot?.posts_remaining)));
   setTextByIdForAll("kpiDailyLimit", String(numberOrZero(currentNormalizedSession?.subscription?.posting_limit ?? dashboardSummary?.account_snapshot?.posting_limit)));
+  renderRevenueActionPanels();
 
   // lifecycle-ready safe no-op if ids do not exist yet
   setTextByIdForAll("kpiReviewQueue", String(numberOrZero(dashboardSummary?.review_queue_count)));
@@ -1615,6 +1635,43 @@ function renderDashboardAnalytics() {
   renderComplianceWorkspace();
   renderToolsWorkspace();
   drawActivityChart(buildChartSeries());
+}
+
+function updateListingFilterCounts() {
+  const rows = Array.isArray(dashboardListings) ? dashboardListings : [];
+  const countBy = (predicate) => rows.filter(predicate).length;
+  const counts = {
+    all: rows.length,
+    review: countBy((item) => {
+      const lifecycle = clean((item.lifecycle_status || "").toLowerCase());
+      const bucket = clean((item.review_bucket || "").toLowerCase()).replace(/[\s_-]+/g, "");
+      return ["review_delete", "review_price_update", "review_new"].includes(lifecycle) || ["removedvehicles", "pricechanges", "newvehicles"].includes(bucket);
+    }),
+    stale: countBy((item) => {
+      const lifecycle = clean((item.lifecycle_status || "").toLowerCase());
+      const bucket = clean((item.review_bucket || "").toLowerCase()).replace(/[\s_-]+/g, "");
+      const status = clean((item.status || "").toLowerCase());
+      return lifecycle === "stale" || status === "stale" || lifecycle === "review_delete" || bucket === "removedvehicles";
+    }),
+    price: countBy((item) => clean((item.lifecycle_status || "").toLowerCase()) === "review_price_update" || clean((item.review_bucket || "").toLowerCase()).replace(/[\s_-]+/g, "") === "pricechanges"),
+    new: countBy((item) => clean((item.lifecycle_status || "").toLowerCase()) === "review_new" || clean((item.review_bucket || "").toLowerCase()).replace(/[\s_-]+/g, "") === "newvehicles"),
+    weak: countBy((item) => Boolean(item.weak)),
+    needs_action: countBy((item) => Boolean(item.needs_action)),
+    promote: countBy((item) => Boolean(item.promote_now)),
+    likely_sold: countBy((item) => Boolean(item.likely_sold)),
+    active: countBy((item) => {
+      const status = clean((item.status || "").toLowerCase());
+      const lifecycle = clean((item.lifecycle_status || "").toLowerCase());
+      return !["sold", "deleted", "inactive", "stale"].includes(status) && lifecycle !== "review_delete";
+    })
+  };
+
+  document.querySelectorAll("[data-filter]").forEach((button) => {
+    const key = clean(button.getAttribute("data-filter") || "all").toLowerCase();
+    const base = clean(button.textContent || "");
+    const label = base.replace(/\s*\(\d+\)\s*$/, "");
+    button.textContent = `${label} (${numberOrZero(counts[key])})`;
+  });
 }
 
 
@@ -1988,6 +2045,7 @@ function renderAnalyticsHub() {
 }
 
 function applyListingFiltersAndRender() {
+  updateListingFilterCounts();
   const searchTerm = clean((document.getElementById("listingSearchInput")?.value || "").toLowerCase());
   const sortMode = clean(document.getElementById("listingSortSelect")?.value || "popular");
 
@@ -2102,6 +2160,7 @@ function renderListingDataState(listings = []) {
     statusEl.textContent = [
       `${mergedCount} listing${mergedCount === 1 ? "" : "s"} loaded.`,
       `Rows: user_listings ${numberOrZero(counts.user_listings)} • listings ${numberOrZero(counts.listings)} • merged ${numberOrZero(counts.merged || mergedCount)}.`,
+      `Normalize: raw ${numberOrZero(dashboardListingsDiagnostics.raw_rows)} • rendered ${numberOrZero(dashboardListingsDiagnostics.normalized_rows)} • dropped ${numberOrZero(dashboardListingsDiagnostics.dropped_rows)}.`,
       summary.lifecycle_updated_at ? `Last lifecycle sync: ${cleanText(summary.lifecycle_updated_at)}.` : ""
     ].filter(Boolean).join(" ");
   }
