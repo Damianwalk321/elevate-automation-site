@@ -21,12 +21,17 @@ async function resolveIdentityCandidates({ userId, email, authUid = "" }) {
   const emails = new Set([normalizeEmail(email)].filter(Boolean));
   const matchedUsers = [];
 
+
   async function collectFromQuery(queryBuilder, label = "users_lookup") {
     const { data, error } = await queryBuilder;
     if (error) {
       console.warn(`${label} warning:`, error?.message || error);
       return;
     }
+  async function collectFromQuery(queryBuilder) {
+    const { data, error } = await queryBuilder;
+    if (error) throw error;
+ 
     for (const row of (Array.isArray(data) ? data : [])) {
       matchedUsers.push(row);
       if (clean(row?.id)) userIds.add(clean(row.id));
@@ -54,6 +59,10 @@ async function resolveIdentityCandidates({ userId, email, authUid = "" }) {
         .order("created_at", { ascending: false })
         .limit(20),
       "users_lookup_by_auth_user_id"
+
+        .or(ids.map((id) => `id.eq.${id},auth_user_id.eq.${id}`).join(","))
+        .order("created_at", { ascending: false })
+        .limit(20)
     );
   }
 
@@ -66,6 +75,10 @@ async function resolveIdentityCandidates({ userId, email, authUid = "" }) {
         .order("created_at", { ascending: false })
         .limit(20),
       "users_lookup_by_email"
+
+
+        .limit(20)
+
     );
   }
 
@@ -88,6 +101,7 @@ async function fetchTableRows(tableName, userIds = [], emails = []) {
       console.warn(`${tableName} fetch warning:`, error?.message || error);
       return;
     }
+    if (error) throw error;
     for (const row of (Array.isArray(data) ? data : [])) {
       const key = clean(row?.id || "") || `${clean(row?.marketplace_listing_id || "")}|${clean(row?.posted_at || row?.created_at || "")}`;
       if (!key || seen.has(key)) continue;
@@ -147,6 +161,10 @@ async function backfillListingIdentity(tableName, rows = [], canonicalUserId = "
     } catch (error) {
       console.warn(`listing identity backfill warning (${tableName}:${rowId})`, error?.message || error);
     }
+
+    const { error } = await supabase.from(tableName).update(payload).eq("id", rowId);
+    if (!error) updated += 1;
+ main
   }
   return { updated };
 }
@@ -154,3 +172,9 @@ function matchesFilter(row, { status, lifecycleStatus, reviewBucket, search, pre
 function sortRows(rows, sort) { const items = [...rows]; if (sort === "price_high") return items.sort((a, b) => safeNumber(b.price) - safeNumber(a.price)); if (sort === "price_low") return items.sort((a, b) => safeNumber(a.price) - safeNumber(b.price)); if (sort === "popular") return items.sort((a, b) => safeNumber(b.popularity_score) - safeNumber(a.popularity_score)); if (sort === "predicted") return items.sort((a, b) => safeNumber(b.predicted_score) - safeNumber(a.predicted_score)); return items.sort((a, b) => new Date(b.posted_at || b.updated_at || 0).getTime() - new Date(a.posted_at || a.updated_at || 0).getTime()); }
 
 export default async function handler(req, res) { res.setHeader("Content-Type", "application/json"); if (req.method !== "GET") return res.status(405).json({ error: "Method not allowed" }); try { const verifiedUser = await getVerifiedRequestUser(req); if (!verifiedUser?.id || !verifiedUser?.email) return res.status(401).json({ error: "Unauthorized" }); const userId = clean(verifiedUser.id || req.query?.userId || req.query?.user_id || ""); const email = normalizeEmail(verifiedUser.email || req.query?.email || ""); const status = clean(req.query?.status || "").toLowerCase(); const preset = clean(req.query?.preset || "").toLowerCase(); const lifecycleStatus = clean(req.query?.lifecycle_status || req.query?.lifecycleStatus || "").toLowerCase(); const reviewBucket = normalizeReviewBucket(req.query?.review_bucket || req.query?.reviewBucket || ""); const search = clean(req.query?.search || "").toLowerCase(); const sort = clean(req.query?.sort || "newest").toLowerCase(); const limit = Math.min(Math.max(Number(req.query?.limit || 100), 1), 300); const identity = await resolveIdentityCandidates({ userId, email, authUid: clean(verifiedUser.id || "") }); const finalUserId = clean(identity.primary_user_id || userId || ""); const finalEmail = normalizeEmail(identity.primary_email || email || ""); if (!finalUserId && !finalEmail) return res.status(400).json({ error: "Missing userId or email" }); const [userRows, legacyRows] = await Promise.all([fetchTableRows("user_listings", identity.user_ids, identity.emails), fetchTableRows("listings", identity.user_ids, identity.emails)]); const [userBackfill, legacyBackfill] = await Promise.all([backfillListingIdentity("user_listings", userRows, finalUserId, finalEmail), backfillListingIdentity("listings", legacyRows, finalUserId, finalEmail)]); const mergedMap = new Map(); for (const row of userRows) { const normalized = normalizeListingRow(row, "user_listings"); mergedMap.set(normalized.identity_key, preferListingRow(mergedMap.get(normalized.identity_key), normalized)); } for (const row of legacyRows) { const normalized = normalizeListingRow(row, "listings"); mergedMap.set(normalized.identity_key, preferListingRow(mergedMap.get(normalized.identity_key), normalized)); } let rows = [...mergedMap.values()].filter((row) => matchesFilter(row, { status, lifecycleStatus, reviewBucket, search, preset })); rows = sortRows(rows, sort).slice(0, limit); return res.status(200).json({ success: true, data: rows, meta: { total: rows.length, limit, identity: { primary_user_id: finalUserId, primary_email: finalEmail, user_ids_considered: identity.user_ids.length, emails_considered: identity.emails.length }, sources: { user_listings: userRows.length, listings: legacyRows.length, merged: mergedMap.size }, backfill: { user_listings_updated: userBackfill.updated, listings_updated: legacyBackfill.updated } } }); } catch (error) { console.error("get-user-listings fatal error:", error); return res.status(500).json({ error: error.message || "Internal server error" }); } }
+
+function matchesFilter(row, { status, lifecycleStatus, reviewBucket, search, preset }) { const normalizedStatus = normalizeStatus(row.status); const normalizedLifecycle = normalizeLifecycleStatus(row.lifecycle_status, row.review_bucket); const normalizedBucket = normalizeReviewBucket(row.review_bucket); if (status) { if (status === "review") { if (!["review_delete", "review_price_update", "review_new"].includes(normalizedLifecycle)) return false; } else if (normalizedStatus !== status) return false; } if (lifecycleStatus && normalizedLifecycle !== lifecycleStatus) return false; if (reviewBucket && normalizedBucket !== reviewBucket) return false; if (preset) { if (preset === "review" && !["review_delete", "review_price_update", "review_new"].includes(normalizedLifecycle)) return false; if (preset === "stale" && !(normalizedStatus === "stale" || normalizedLifecycle === "stale" || normalizedLifecycle === "review_delete")) return false; if (preset === "price" && normalizedLifecycle !== "review_price_update" && normalizedBucket !== "pricechanges") return false; if (preset === "new" && normalizedLifecycle !== "review_new" && normalizedBucket !== "newvehicles") return false; if (preset === "active" && ["sold", "deleted", "inactive", "stale"].includes(normalizedStatus)) return false; if (preset === "promote" && !row.promote_now) return false; if (preset === "likely_sold" && !row.likely_sold) return false; if (preset === "weak" && !row.weak) return false; if (preset === "needs_action" && !row.needs_action) return false; } if (search) { const haystack = [row.title, row.make, row.model, row.trim, row.vin, row.stock_number, row.body_style, row.vehicle_type, row.exterior_color, row.fuel_type, row.location, row.lifecycle_status, row.review_bucket, row.source_url, row.predicted_label, row.recommended_action, row.pricing_insight].map((value) => clean(value).toLowerCase()).join(" "); if (!haystack.includes(search)) return false; } return true; }
+function sortRows(rows, sort) { const items = [...rows]; if (sort === "price_high") return items.sort((a, b) => safeNumber(b.price) - safeNumber(a.price)); if (sort === "price_low") return items.sort((a, b) => safeNumber(a.price) - safeNumber(b.price)); if (sort === "popular") return items.sort((a, b) => safeNumber(b.popularity_score) - safeNumber(a.popularity_score)); if (sort === "predicted") return items.sort((a, b) => safeNumber(b.predicted_score) - safeNumber(a.predicted_score)); return items.sort((a, b) => new Date(b.posted_at || b.updated_at || 0).getTime() - new Date(a.posted_at || a.updated_at || 0).getTime()); }
+
+export default async function handler(req, res) { res.setHeader("Content-Type", "application/json"); if (req.method !== "GET") return res.status(405).json({ error: "Method not allowed" }); try { const verifiedUser = await getVerifiedRequestUser(req); if (!verifiedUser?.id || !verifiedUser?.email) return res.status(401).json({ error: "Unauthorized" }); const userId = clean(verifiedUser.id || req.query?.userId || req.query?.user_id || ""); const email = normalizeEmail(verifiedUser.email || req.query?.email || ""); const status = clean(req.query?.status || "").toLowerCase(); const preset = clean(req.query?.preset || "").toLowerCase(); const lifecycleStatus = clean(req.query?.lifecycle_status || req.query?.lifecycleStatus || "").toLowerCase(); const reviewBucket = normalizeReviewBucket(req.query?.review_bucket || req.query?.reviewBucket || ""); const search = clean(req.query?.search || "").toLowerCase(); const sort = clean(req.query?.sort || "newest").toLowerCase(); const limit = Math.min(Math.max(Number(req.query?.limit || 100), 1), 300); const identity = await resolveIdentityCandidates({ userId, email, authUid: clean(verifiedUser.id || "") }); const finalUserId = clean(identity.primary_user_id || userId || ""); const finalEmail = normalizeEmail(identity.primary_email || email || ""); if (!finalUserId && !finalEmail) return res.status(400).json({ error: "Missing userId or email" }); const [userRows, legacyRows] = await Promise.all([fetchTableRows("user_listings", identity.user_ids, identity.emails), fetchTableRows("listings", identity.user_ids, identity.emails)]); const mergedMap = new Map(); for (const row of userRows) { const normalized = normalizeListingRow(row, "user_listings"); mergedMap.set(normalized.identity_key, preferListingRow(mergedMap.get(normalized.identity_key), normalized)); } for (const row of legacyRows) { const normalized = normalizeListingRow(row, "listings"); mergedMap.set(normalized.identity_key, preferListingRow(mergedMap.get(normalized.identity_key), normalized)); } let rows = [...mergedMap.values()].filter((row) => matchesFilter(row, { status, lifecycleStatus, reviewBucket, search, preset })); rows = sortRows(rows, sort).slice(0, limit); return res.status(200).json({ success: true, data: rows, meta: { total: rows.length, limit, identity: { primary_user_id: finalUserId, primary_email: finalEmail, user_ids_considered: identity.user_ids.length, emails_considered: identity.emails.length }, sources: { user_listings: userRows.length, listings: legacyRows.length, merged: mergedMap.size } } }); } catch (error) { console.error("get-user-listings fatal error:", error); return res.status(500).json({ error: error.message || "Internal server error" }); } }
+
