@@ -1,88 +1,86 @@
+import { supabase } from '../lib/supabase.js';
 
-function clean(value) {
-  return String(value || "").replace(/\s+/g, " ").trim();
-}
+const CORS = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'GET, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+};
 
-function normalizeEmail(value) {
-  return clean(value).toLowerCase();
-}
+export default async function handler(req, res) {
+  if (req.method === 'OPTIONS') {
+    return res.status(200).set(CORS).end();
+  }
 
-export function normalizePlanLabel(value) {
-  const raw = clean(value).toLowerCase();
-  if (!raw || raw === "no plan") return "Founder Beta";
-  if (raw.includes("founder") && raw.includes("pro")) return "Founder Pro";
-  if (raw.includes("founder") && raw.includes("starter")) return "Founder Beta";
-  if (raw.includes("founder") || raw.includes("beta")) return "Founder Beta";
-  if (raw.includes("pro")) return "Pro";
-  if (raw.includes("starter")) return "Starter";
-  return clean(value) || "Founder Beta";
-}
+  Object.entries(CORS).forEach(([k, v]) => res.setHeader(k, v));
 
-export function inferPostingLimitFromPlan(value) {
-  const raw = normalizePlanLabel(value).toLowerCase();
-  if ((raw.includes("founder") && raw.includes("pro")) || raw === "pro" || (!raw.includes("founder") && raw.includes("pro"))) return 25;
-  return 5;
-}
+  if (req.method !== 'GET') {
+    return res.status(405).json({ error: 'Method not allowed' });
+  }
 
-export function normalizeStatusValue(value, fallback = "inactive") {
-  const status = clean(value).toLowerCase();
-  if (!status) return fallback;
-  if (["active", "trialing", "paid", "checkout_pending"].includes(status)) return "active";
-  if (["canceled", "cancelled", "unpaid", "past_due", "expired", "suspended", "inactive"].includes(status)) return "inactive";
-  return status;
-}
+  const email = req.query.email?.toLowerCase();
+  const licenseKey = req.query.license_key;
 
-export function hasTestingLimitOverride(email) {
-  return new Set(["damian044@icloud.com"]).has(normalizeEmail(email));
-}
+  if (!email && !licenseKey) {
+    return res.status(400).json({ access: false, error: 'email or license_key required' });
+  }
 
-export function resolveAccountAccess({
-  plan,
-  status,
-  postsToday = 0,
-  postingLimit,
-  creditExtraPosts = 0,
-  email = "",
-  stripeCustomerId = "",
-  currentPeriodEnd = null,
-  cancelAtPeriodEnd = false,
-  minimumVersion = "",
-  latestVersion = "",
-  extensionVersion = ""
-} = {}) {
-  const normalizedPlan = normalizePlanLabel(plan);
-  const normalizedStatus = normalizeStatusValue(status, "inactive");
-  const baseLimit = Number.isFinite(Number(postingLimit)) && Number(postingLimit) > 0 ? Number(postingLimit) : inferPostingLimitFromPlan(normalizedPlan);
-  const extraPostingLimit = Math.max(0, Number(creditExtraPosts) || 0);
-  const computedLimit = baseLimit + extraPostingLimit;
-  const finalLimit = hasTestingLimitOverride(email) ? Math.max(25, computedLimit) : computedLimit;
-  const used = Math.max(0, Number(postsToday) || 0);
-  const remaining = Math.max(0, finalLimit - used);
-  const active = normalizedStatus === "active";
-  const versionRequired = Boolean(minimumVersion) && Boolean(extensionVersion) && String(extensionVersion).localeCompare(String(minimumVersion), undefined, { numeric: true, sensitivity: 'base' }) < 0;
-  return {
-    plan: normalizedPlan,
-    plan_label: normalizedPlan,
-    is_pro: normalizedPlan.toLowerCase().includes("pro"),
-    status: normalizedStatus,
-    base_posting_limit: baseLimit,
-    extra_posting_limit: extraPostingLimit,
-    posting_limit: finalLimit,
-    posts_today: used,
-    posts_remaining: remaining,
-    access_granted: active,
-    can_post: active && remaining > 0 && !versionRequired,
-    active,
-    billing: {
-      needs_checkout: !active && !clean(stripeCustomerId),
-      can_access_portal: Boolean(clean(stripeCustomerId)),
-      current_period_end: currentPeriodEnd || null,
-      cancel_at_period_end: Boolean(cancelAtPeriodEnd)
-    },
-    extension: {
-      update_required: versionRequired,
-      minimum_version: minimumVersion || "",
-      latest_version: latestVersion || minimumVersion || ""
+  try {
+    // Check by license key first if provided
+    if (licenseKey) {
+      const { data: license } = await supabase
+        .from('license_keys')
+        .select('status, plan_type, expires_at')
+        .eq('license_key', licenseKey)
+        .maybeSingle();
+
+      if (license && license.status === 'active') {
+        const expired = license.expires_at && new Date(license.expires_at) < new Date();
+        return res.status(200).json({
+          access: !expired,
+          plan: license.plan_type || 'starter',
+          method: 'license_key',
+        });
+      }
     }
-  };
+
+    // Check by email via subscriptions
+    if (email) {
+      const { data: userRow } = await supabase
+        .from('users')
+        .select('id, stripe_subscription_id')
+        .ilike('email', email)
+        .maybeSingle();
+
+      if (!userRow) {
+        return res.status(200).json({ access: false, reason: 'user_not_found' });
+      }
+
+      const { data: sub } = await supabase
+        .from('subscriptions')
+        .select('subscription_status, plan_type, daily_posting_limit, is_active, bridge_access')
+        .eq('user_id', userRow.id)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      const hasAccess =
+        sub?.is_active ||
+        sub?.bridge_access ||
+        sub?.subscription_status === 'active' ||
+        sub?.subscription_status === 'trialing';
+
+      return res.status(200).json({
+        access: hasAccess || false,
+        plan: sub?.plan_type || 'none',
+        status: sub?.subscription_status || 'none',
+        dailyLimit: sub?.daily_posting_limit || 5,
+        method: 'subscription',
+      });
+    }
+
+    return res.status(200).json({ access: false, reason: 'no_valid_identity' });
+  } catch (err) {
+    console.error('[account-access] Error:', err.message);
+    return res.status(500).json({ access: false, error: err.message });
+  }
 }
