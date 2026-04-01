@@ -580,6 +580,7 @@ async function apiFetch(url, options = {}) {
   }
   return response;
 }
+function sleep(ms = 0) { return new Promise((resolve) => setTimeout(resolve, ms)); }
 
 async function parseApiJson(response) {
   const rawText = await response.text();
@@ -664,6 +665,7 @@ function bindCreditActionButtons() {
 
 let dashboardListings = [];
 let filteredListings = [];
+let dashboardListingsMeta = { total: 0, source_counts: { user_listings: 0, listings: 0, merged: 0 }, used_summary_fallback: false, source: "api", request_id: "", warnings: [] };
 let dashboardListingsMeta = { total: 0, source_counts: { user_listings: 0, listings: 0, merged: 0 }, used_summary_fallback: false, source: "api" };
 let dashboardListingsDiagnostics = { raw_rows: 0, normalized_rows: 0, dropped_rows: 0 };
 let listingQuickFilter = "all";
@@ -1164,7 +1166,9 @@ async function fetchUserListings(forceFresh = false) {
     total: 0,
     source_counts: { user_listings: 0, listings: 0, merged: 0 },
     used_summary_fallback: false,
-    source: "api"
+    source: "api",
+    request_id: "",
+    warnings: []
   };
 
   try {
@@ -1175,7 +1179,9 @@ async function fetchUserListings(forceFresh = false) {
         total: previewRows.length,
         source_counts: { user_listings: 0, listings: 0, merged: previewRows.length },
         used_summary_fallback: previewRows.length > 0,
-        source: previewRows.length ? "summary_preview" : "api"
+        source: previewRows.length ? "summary_preview" : "api",
+        request_id: "",
+        warnings: []
       };
       return previewRows;
     }
@@ -1186,25 +1192,47 @@ async function fetchUserListings(forceFresh = false) {
     url.searchParams.set("limit", "250");
     if (forceFresh) url.searchParams.set("_ts", String(Date.now()));
 
-    const response = await apiFetch(url.toString(), {
-      method: "GET",
-      cache: "no-store"
-    });
+    const retryDelays = [0, 1000, 3000, 8000];
+    let response = null;
+    let result = null;
+    let lastStatus = 0;
+    let lastRequestId = "";
+    let lastError = "";
 
-    if (!response.ok) {
+    for (let attempt = 0; attempt < retryDelays.length; attempt += 1) {
+      if (retryDelays[attempt] > 0) await sleep(retryDelays[attempt]);
+      response = await apiFetch(url.toString(), {
+        method: "GET",
+        cache: "no-store"
+      });
+      lastStatus = numberOrZero(response?.status);
+      lastRequestId = clean(response?.headers?.get("x-request-id") || "");
+      const parsed = await parseJsonWithDebug(response);
+      if (parsed.ok) result = parsed.data || {};
+      if (response.ok && parsed.ok) break;
+      lastError = clean(parsed?.data?.error || parsed?.rawText || `Request failed (${lastStatus})`).slice(0, 180);
+      if (attempt < retryDelays.length - 1) {
+        console.warn("fetchUserListings retrying", { attempt: attempt + 1, status: lastStatus, request_id: lastRequestId || parsed?.data?.request_id || "" });
+      }
+    }
+
+    if (!response?.ok || !result) {
       dashboardListingsMeta = {
         total: previewRows.length,
         source_counts: { user_listings: 0, listings: 0, merged: previewRows.length },
         used_summary_fallback: previewRows.length > 0,
-        source: previewRows.length ? "summary_preview" : "api_error"
+        source: previewRows.length ? "summary_preview" : "api_error",
+        request_id: lastRequestId || "",
+        warnings: lastError ? [lastError] : []
       };
       return previewRows;
     }
 
-    const result = await response.json();
     const rows = result?.data || result?.listings || result || [];
     const normalizedRows = Array.isArray(rows) ? rows : [];
     const metaSources = result?.meta?.sources || {};
+    const requestId = clean(result?.request_id || response.headers.get("x-request-id") || "");
+    const warnings = Array.isArray(result?.meta?.warnings) ? result.meta.warnings : [];
 
     if (!normalizedRows.length && previewRows.length) {
       dashboardListingsMeta = {
@@ -1215,7 +1243,9 @@ async function fetchUserListings(forceFresh = false) {
           merged: numberOrZero(metaSources.merged || previewRows.length)
         },
         used_summary_fallback: true,
-        source: "summary_preview"
+        source: "summary_preview",
+        request_id: requestId,
+        warnings
       };
       return previewRows;
     }
@@ -1228,7 +1258,9 @@ async function fetchUserListings(forceFresh = false) {
         merged: numberOrZero(metaSources.merged || normalizedRows.length)
       },
       used_summary_fallback: false,
-      source: "api"
+      source: "api",
+      request_id: requestId,
+      warnings
     };
 
     return normalizedRows;
@@ -1239,7 +1271,9 @@ async function fetchUserListings(forceFresh = false) {
       total: previewRows.length,
       source_counts: { user_listings: 0, listings: 0, merged: previewRows.length },
       used_summary_fallback: previewRows.length > 0,
-      source: previewRows.length ? "summary_preview" : "api_exception"
+      source: previewRows.length ? "summary_preview" : "api_exception",
+      request_id: "",
+      warnings: [clean(error?.message || "fetch exception")]
     };
     return previewRows;
   }
@@ -2142,12 +2176,15 @@ function renderListingDataState(listings = []) {
   const mergedCount = numberOrZero(dashboardListingsMeta?.total || listings.length);
   const fallbackUsed = Boolean(dashboardListingsMeta?.used_summary_fallback);
   const sourceLabel = fallbackUsed ? "summary preview" : "live listing rows";
+  const requestId = clean(dashboardListingsMeta?.request_id || "");
+  const warnings = Array.isArray(dashboardListingsMeta?.warnings) ? dashboardListingsMeta.warnings.filter(Boolean) : [];
 
   const subtextParts = [
     `${mergedCount} listing${mergedCount === 1 ? "" : "s"} loaded from ${sourceLabel}.`,
     activeListings ? `${activeListings} active tracked.` : "No active tracked listings yet."
   ];
   if (fallbackUsed) subtextParts.push("Showing summary-backed preview while direct listing rows hydrate.");
+  if (requestId) subtextParts.push(`Request ID: ${requestId}.`);
 
   if (subtext) subtext.textContent = subtextParts.join(" ");
 
@@ -2157,6 +2194,14 @@ function renderListingDataState(listings = []) {
       return;
     }
 
+      statusEl.textContent = [
+        `${mergedCount} listing${mergedCount === 1 ? "" : "s"} loaded.`,
+        `Rows: user_listings ${numberOrZero(counts.user_listings)} • listings ${numberOrZero(counts.listings)} • merged ${numberOrZero(counts.merged || mergedCount)}.`,
+        `Normalize: raw ${numberOrZero(dashboardListingsDiagnostics.raw_rows)} • rendered ${numberOrZero(dashboardListingsDiagnostics.normalized_rows)} • dropped ${numberOrZero(dashboardListingsDiagnostics.dropped_rows)}.`,
+        warnings.length ? `Warnings: ${cleanText(warnings[0])}.` : "",
+        requestId ? `Request ID: ${requestId}.` : "",
+        summary.lifecycle_updated_at ? `Last lifecycle sync: ${cleanText(summary.lifecycle_updated_at)}.` : ""
+      ].filter(Boolean).join(" ");
     statusEl.textContent = [
       `${mergedCount} listing${mergedCount === 1 ? "" : "s"} loaded.`,
       `Rows: user_listings ${numberOrZero(counts.user_listings)} • listings ${numberOrZero(counts.listings)} • merged ${numberOrZero(counts.merged || mergedCount)}.`,
