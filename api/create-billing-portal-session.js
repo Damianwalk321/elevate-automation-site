@@ -1,5 +1,6 @@
 import Stripe from "stripe";
 import { createClient } from "@supabase/supabase-js";
+import { randomUUID } from "node:crypto";
 import { requireVerifiedDashboardUser, getTrustedIdentity } from "./_shared/auth.js";
 
 function getStripeClient() {
@@ -342,8 +343,11 @@ async function customerHasManageableSubscription(stripeClient, customerId, mirro
 }
 
 export default async function handler(req, res) {
+  const requestId = randomUUID();
+  res.setHeader("x-request-id", requestId);
+
   if (req.method !== "POST") {
-    return json(res, 405, { error: "Method not allowed" });
+    return json(res, 405, { error: "Method not allowed", request_id: requestId });
   }
 
   try {
@@ -351,7 +355,7 @@ export default async function handler(req, res) {
 
     const body = parseBody(req);
     if (body.__parse_error) {
-      return json(res, 400, { error: body.__parse_error });
+      return json(res, 400, { error: body.__parse_error, request_id: requestId });
     }
 
     const verifiedUser = await requireVerifiedDashboardUser(req, res);
@@ -378,7 +382,8 @@ export default async function handler(req, res) {
       return json(res, 200, {
         redirectToCheckout: true,
         message: "Billing profile not active yet. Start checkout first.",
-        checkoutContext
+        checkoutContext,
+        request_id: requestId
       });
     }
 
@@ -393,7 +398,8 @@ export default async function handler(req, res) {
       return json(res, 200, {
         redirectToCheckout: true,
         message: "Stripe customer found, but no active plan is attached yet. Start checkout to activate billing.",
-        checkoutContext
+        checkoutContext,
+        request_id: requestId
       });
     }
 
@@ -403,13 +409,15 @@ export default async function handler(req, res) {
     });
 
     return json(res, 200, {
-      url: session.url
+      url: session.url,
+      request_id: requestId
     });
   } catch (error) {
     console.error("[billing-portal] fatal error:", error);
 
     return json(res, 500, {
-      error: error?.message || "Failed to create billing portal session"
+      error: error?.message || "Failed to create billing portal session",
+      request_id: requestId
     });
   }
 }
