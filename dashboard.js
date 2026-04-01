@@ -331,6 +331,7 @@ function buildSystemState(overrideProfile = null, overrideSession = null) {
     summaryProfile.compliance_mode,
     province
   ));
+  const normalizedProvince = province || ((complianceMode === 'AB' || complianceMode === 'BC') ? complianceMode : '');
 
   const canonicalProfile = {
     ...summaryProfile,
@@ -370,7 +371,7 @@ function buildSystemState(overrideProfile = null, overrideSession = null) {
       storedProfile.city,
       summaryProfile.city
     ),
-    province,
+    province: normalizedProvince,
     phone: firstNonEmpty(
       profile.phone,
       formProfile.phone,
@@ -587,6 +588,15 @@ async function parseApiJson(response) {
   } catch (error) {
     const preview = cleanText(rawText).slice(0, 180);
     throw new Error(preview || `Non-JSON API response (${response.status})`);
+  }
+}
+
+async function parseJsonWithDebug(response) {
+  const rawText = await response.text();
+  try {
+    return { ok: true, data: JSON.parse(rawText || '{}'), rawText };
+  } catch {
+    return { ok: false, data: null, rawText };
   }
 }
 
@@ -970,18 +980,20 @@ if (copyAffiliatePostBtn) {
           })
         });
 
-        const rawText = await response.text();
+        const parsed = await parseJsonWithDebug(response);
+        const requestId = response.headers.get("x-request-id") || "";
+        const responseMeta = `status=${response.status}${requestId ? ` req=${requestId}` : ""}`;
 
-        let data;
-        try {
-          data = JSON.parse(rawText);
-        } catch (parseError) {
-          console.error("[billing] Non-JSON response:", rawText);
-          throw new Error("Server error (non-JSON response)");
+        if (!parsed.ok) {
+          const preview = cleanText(parsed.rawText).slice(0, 200);
+          console.error("[billing] Non-JSON response:", parsed.rawText);
+          throw new Error(`Server error (non-JSON response, ${responseMeta})${preview ? `: ${preview}` : ""}`);
         }
 
+        const data = parsed.data || {};
+
         if (!response.ok) {
-          throw new Error(data.error || "Could not open billing portal.");
+          throw new Error(`${cleanText(data.error || "Could not open billing portal.")} (${responseMeta})`);
         }
 
         if (!data.url) {
@@ -1395,6 +1407,40 @@ function mergeSummaryWithListings(summary, listings) {
     sessionPostsToday,
     snapshotPostsToday
   );
+  const planFromSession = cleanText(currentNormalizedSession?.subscription?.plan || "");
+  const planFromPlanAccess = cleanText(summary?.plan_access?.plan_label || "");
+  const planFromSnapshot = cleanText(summary?.account_snapshot?.plan || "");
+  const statusFromSession = cleanText(currentNormalizedSession?.subscription?.status || "");
+  const statusFromSnapshot = cleanText(summary?.account_snapshot?.status || "");
+  const limitFromSession = numberOrZero(currentNormalizedSession?.subscription?.posting_limit);
+  const limitFromPlanAccess = numberOrZero(summary?.plan_access?.posting_limit);
+  const limitFromSnapshot = numberOrZero(summary?.account_snapshot?.posting_limit);
+  const remainingFromSession = numberOrZero(currentNormalizedSession?.subscription?.posts_remaining);
+  const remainingFromSnapshot = numberOrZero(summary?.account_snapshot?.posts_remaining);
+  const setupFromSummary = summary?.setup_status && Object.keys(summary.setup_status || {}).length > 0;
+
+  const canonicalAccess = {
+    plan: planFromSession || planFromPlanAccess || planFromSnapshot || "Founder Beta",
+    status: statusFromSession || statusFromSnapshot || "inactive",
+    posting_limit: limitFromSession || limitFromPlanAccess || limitFromSnapshot || 0,
+    posts_remaining: remainingFromSession || remainingFromSnapshot || 0
+  };
+
+  const stateProvenance = {
+    posts_today: bestPostsToday === snapshotPostsToday && snapshotPostsToday > 0
+      ? "summary.account_snapshot.posts_today"
+      : (bestPostsToday === sessionPostsToday && sessionPostsToday > 0
+        ? "session.subscription.posts_today"
+        : "computed.listings.posts_today"),
+    plan: planFromSession
+      ? "session.subscription.plan"
+      : (planFromPlanAccess ? "summary.plan_access.plan_label" : (planFromSnapshot ? "summary.account_snapshot.plan" : "default")),
+    status: statusFromSession ? "session.subscription.status" : (statusFromSnapshot ? "summary.account_snapshot.status" : "default"),
+    posting_limit: limitFromSession > 0
+      ? "session.subscription.posting_limit"
+      : (limitFromPlanAccess > 0 ? "summary.plan_access.posting_limit" : (limitFromSnapshot > 0 ? "summary.account_snapshot.posting_limit" : "default")),
+    setup_status: setupFromSummary ? "summary.setup_status" : "fallback"
+  };
 
   return {
     posts_today: bestPostsToday,
@@ -1414,6 +1460,8 @@ function mergeSummaryWithListings(summary, listings) {
     top_listing_title: clean(summary.top_listing_title || computed.top_listing_title || "None yet"),
     account_snapshot: summary.account_snapshot || {},
     setup_status: summary.setup_status || {},
+    canonical_access: canonicalAccess,
+    state_provenance: stateProvenance,
     manager_access: Boolean(summary.manager_access),
     action_center: summary.action_center || summary.daily_ops_queues || {},
     daily_ops_queues: summary.daily_ops_queues || summary.action_center || {},
@@ -2721,8 +2769,12 @@ async function loadAccountData(user, forceFresh = false) {
     setTextByIdForAll("referralCode", referral);
     setTextByIdForAll("referralCodeAffiliate", referral);
 
-    setTextByIdForAll("planNameBilling", currentNormalizedSession?.subscription?.plan || "Founder Beta");
-    setTextByIdForAll("subscriptionStatusBilling", currentNormalizedSession?.subscription?.status || "inactive");
+    const summaryPlan = cleanText(dashboardSummary?.plan_access?.plan_label || dashboardSummary?.account_snapshot?.plan || "");
+    const summaryStatus = cleanText(dashboardSummary?.account_snapshot?.status || "");
+    const effectivePlanLabel = cleanText(currentNormalizedSession?.subscription?.plan || summaryPlan || "Founder Beta");
+    const effectiveStatusLabel = cleanText(currentNormalizedSession?.subscription?.status || summaryStatus || "inactive");
+    setTextByIdForAll("planNameBilling", effectivePlanLabel);
+    setTextByIdForAll("subscriptionStatusBilling", effectiveStatusLabel);
     setTextByIdForAll("affiliateDirectCommission", "20% recurring");
     setTextByIdForAll("affiliateTierOverride", "5% second level");
     setTextByIdForAll("affiliatePartnerType", "Founding Partner");
@@ -3018,11 +3070,13 @@ function persistProfileSnapshots(profileSnapshot, session) {
 function renderSetupSnapshot() {
   const snapshot = dashboardSummary?.account_snapshot || {};
   const setup = dashboardSummary?.setup_status || {};
+  const canonicalAccess = dashboardSummary?.canonical_access || {};
+  const provenance = dashboardSummary?.state_provenance || {};
   const canonicalProfile = getCanonicalProfileState();
   const subscription = getCanonicalSubscriptionState();
 
-  setTextByIdForAll("snapshotPostingLimit", String(Math.max(numberOrZero(snapshot.posting_limit), numberOrZero(subscription.posting_limit))));
-  setTextByIdForAll("snapshotPostsRemaining", String(Math.max(numberOrZero(snapshot.posts_remaining), numberOrZero(currentNormalizedSession?.subscription?.posts_remaining))));
+  setTextByIdForAll("snapshotPostingLimit", String(Math.max(numberOrZero(canonicalAccess.posting_limit), numberOrZero(snapshot.posting_limit), numberOrZero(subscription.posting_limit))));
+  setTextByIdForAll("snapshotPostsRemaining", String(Math.max(numberOrZero(canonicalAccess.posts_remaining), numberOrZero(snapshot.posts_remaining), numberOrZero(currentNormalizedSession?.subscription?.posts_remaining))));
   setTextByIdForAll("snapshotPostsUsed", String(Math.max(numberOrZero(snapshot.posts_today ?? snapshot.posts_used_today), numberOrZero(currentNormalizedSession?.subscription?.posts_today), numberOrZero(dashboardSummary?.posts_today))));
   setTextByIdForAll("snapshotBillingSource", clean(currentNormalizedSession?.subscription?.billing_source || snapshot.billing_source || "subscriptions/users") || "subscriptions/users");
   setTextByIdForAll("snapshotCurrentPeriodEnd", formatShortDate(snapshot.current_period_end || currentNormalizedSession?.subscription?.current_period_end || ""));
@@ -3044,7 +3098,15 @@ function renderSetupSnapshot() {
         setup.compliance_mode_present ? null : "compliance mode missing"
       ].filter(Boolean);
 
-  setStatus("snapshotSetupSummary", summaryBits.length ? `Setup gaps: ${summaryBits.join(" • ")}` : "Account setup looks complete for beta use.");
+  const sourceBits = [
+    provenance.plan ? `plan=${provenance.plan}` : "",
+    provenance.posting_limit ? `limit=${provenance.posting_limit}` : "",
+    provenance.setup_status ? `setup=${provenance.setup_status}` : ""
+  ].filter(Boolean);
+  setStatus(
+    "snapshotSetupSummary",
+    `${summaryBits.length ? `Setup gaps: ${summaryBits.join(" • ")}` : "Account setup looks complete for beta use."}${sourceBits.length ? ` (sources: ${sourceBits.join(" | ")})` : ""}`
+  );
 }
 
 function renderAccessState(session) {
