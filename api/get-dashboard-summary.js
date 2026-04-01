@@ -962,6 +962,7 @@ export default async function handler(req, res) {
     const profileSnapshot = buildProfileSnapshot(user, profileRow, snapshot);
     const setupStatus = buildSetupStatus(user, profileSnapshot);
     const publishingReadiness = buildPublishingReadiness(profileSnapshot);
+    const today = dayKey(new Date());
     const creditEconomy = await getCreditEconomyState(supabase, { userId: finalUserId, email: finalEmail, dateKey: today });
     const creditsSummary = creditEconomy.summary || await getCreditSummary(supabase, { userId: finalUserId, email: finalEmail });
     const recentCreditEventsRaw = await listRecentCreditEvents(supabase, { userId: finalUserId, email: finalEmail, limit: 6 });

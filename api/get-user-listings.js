@@ -76,6 +76,7 @@ async function resolveIdentityCandidates({ userId, email, authUid = "" }) {
         .limit(20),
       "users_lookup_by_email"
 
+
         .limit(20)
 
     );
@@ -96,6 +97,10 @@ async function fetchTableRows(tableName, userIds = [], emails = []) {
 
   async function pushRows(query) {
     const { data, error } = await query;
+    if (error) {
+      console.warn(`${tableName} fetch warning:`, error?.message || error);
+      return;
+    }
     if (error) throw error;
     for (const row of (Array.isArray(data) ? data : [])) {
       const key = clean(row?.id || "") || `${clean(row?.marketplace_listing_id || "")}|${clean(row?.posted_at || row?.created_at || "")}`;
