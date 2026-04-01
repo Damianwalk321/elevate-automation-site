@@ -949,8 +949,10 @@ export default async function handler(req, res) {
     ]);
     const computed = buildComputedSummary(rows);
     const snapshot = subscriptionRow?.account_snapshot && typeof subscriptionRow.account_snapshot === 'object' ? subscriptionRow.account_snapshot : {};
-    const planValue = clean(subscriptionRow?.plan_type || subscriptionRow?.plan_name || subscriptionRow?.plan || user?.plan || user?.user_type || 'Founder Beta');
     const forcedAccess = hasTestingLimitOverride(finalEmail);
+    const planValue = forcedAccess
+      ? 'Pro'
+      : clean(subscriptionRow?.plan_type || subscriptionRow?.plan_name || subscriptionRow?.plan || user?.plan || user?.user_type || 'Founder Beta');
     const configuredLimit = safeNumber(snapshot.posting_limit ?? subscriptionRow?.daily_posting_limit ?? subscriptionRow?.posting_limit ?? inferPostingLimitFromPlan(planValue), inferPostingLimitFromPlan(planValue));
     const dailyLimit = forcedAccess ? 25 : configuredLimit;
     const usageToday = Math.max(safeNumber(postingUsageRow?.posts_today ?? postingUsageRow?.posts_used ?? postingUsageRow?.used_today, 0), safeNumber(snapshot.posts_today ?? snapshot.posts_used_today, 0), safeNumber(computed.posts_today, 0));
@@ -960,6 +962,7 @@ export default async function handler(req, res) {
     const profileSnapshot = buildProfileSnapshot(user, profileRow, snapshot);
     const setupStatus = buildSetupStatus(user, profileSnapshot);
     const publishingReadiness = buildPublishingReadiness(profileSnapshot);
+    const today = dayKey(new Date());
     const creditEconomy = await getCreditEconomyState(supabase, { userId: finalUserId, email: finalEmail, dateKey: today });
     const creditsSummary = creditEconomy.summary || await getCreditSummary(supabase, { userId: finalUserId, email: finalEmail });
     const recentCreditEventsRaw = await listRecentCreditEvents(supabase, { userId: finalUserId, email: finalEmail, limit: 6 });
@@ -1068,6 +1071,14 @@ export default async function handler(req, res) {
       totalMessages: computed.total_messages
     });
 
+    const listingSourceCounts = rows.reduce((acc, row) => {
+      const source = clean(row?.source_table || '');
+      if (source === 'user_listings') acc.user_listings += 1;
+      else if (source === 'listings') acc.listings += 1;
+      else acc.other += 1;
+      return acc;
+    }, { user_listings: 0, listings: 0, other: 0 });
+
     const recentListings = rows.slice(0, 12).map((row) => ({
       id: row.id,
       title: row.title,
@@ -1168,9 +1179,10 @@ export default async function handler(req, res) {
           needs_action_count: computed.needs_action_count,
           lifecycle_updated_at: clean(snapshot.lifecycle_updated_at || ''),
           source_counts: {
-            user_listings: userListingRows.length,
-            listings: legacyListingRows.length,
-            merged: rows.length
+            user_listings: listingSourceCounts.user_listings,
+            listings: listingSourceCounts.listings,
+            merged: rows.length,
+            other: listingSourceCounts.other
           }
         },
         recent_activity: recentListings.slice(0, 8).map((row) => ({
@@ -1189,9 +1201,10 @@ export default async function handler(req, res) {
           snapshot_active_listings: safeNumber(snapshot.active_listings ?? computed.active_listings, 0),
           lifecycle_updated_at: clean(snapshot.lifecycle_updated_at || ''),
           sources: {
-            user_listings: userListingRows.length,
-            listings: legacyListingRows.length,
-            merged: rows.length
+            user_listings: listingSourceCounts.user_listings,
+            listings: listingSourceCounts.listings,
+            merged: rows.length,
+            other: listingSourceCounts.other
           }
         },
         account_snapshot: {
