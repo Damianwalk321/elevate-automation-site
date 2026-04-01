@@ -331,6 +331,7 @@ function buildSystemState(overrideProfile = null, overrideSession = null) {
     summaryProfile.compliance_mode,
     province
   ));
+  const normalizedProvince = province || ((complianceMode === 'AB' || complianceMode === 'BC') ? complianceMode : '');
 
   const canonicalProfile = {
     ...summaryProfile,
@@ -370,7 +371,7 @@ function buildSystemState(overrideProfile = null, overrideSession = null) {
       storedProfile.city,
       summaryProfile.city
     ),
-    province,
+    province: normalizedProvince,
     phone: firstNonEmpty(
       profile.phone,
       formProfile.phone,
@@ -572,12 +573,32 @@ async function buildAuthHeaders(extraHeaders = {}) {
 
 async function apiFetch(url, options = {}) {
   const headers = await buildAuthHeaders(options.headers || {});
-  const response = await fetch(url, { ...options, headers });
+  const timeoutMs = Number(options.timeoutMs || 20000);
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(new Error(`Request timeout after ${timeoutMs}ms`)), timeoutMs);
+  let response;
+  try {
+    response = await fetch(url, { ...options, headers, signal: options.signal || controller.signal });
+  } finally {
+    clearTimeout(timeoutId);
+  }
   if (response.status === 401) {
     setBootStatus("Session expired. Redirecting to login...");
     setTimeout(() => redirectToLogin(), 500);
   }
   return response;
+}
+function sleep(ms = 0) { return new Promise((resolve) => setTimeout(resolve, ms)); }
+function withTimeout(promise, label = "operation", timeoutMs = 20000) {
+  let timer = null;
+  return Promise.race([
+    promise,
+    new Promise((_, reject) => {
+      timer = setTimeout(() => reject(new Error(`${label} timed out after ${timeoutMs}ms`)), timeoutMs);
+    })
+  ]).finally(() => {
+    if (timer) clearTimeout(timer);
+  });
 }
 
 async function parseApiJson(response) {
@@ -587,6 +608,15 @@ async function parseApiJson(response) {
   } catch (error) {
     const preview = cleanText(rawText).slice(0, 180);
     throw new Error(preview || `Non-JSON API response (${response.status})`);
+  }
+}
+
+async function parseJsonWithDebug(response) {
+  const rawText = await response.text();
+  try {
+    return { ok: true, data: JSON.parse(rawText || '{}'), rawText };
+  } catch {
+    return { ok: false, data: null, rawText };
   }
 }
 
@@ -654,7 +684,8 @@ function bindCreditActionButtons() {
 
 let dashboardListings = [];
 let filteredListings = [];
-let dashboardListingsMeta = { total: 0, source_counts: { user_listings: 0, listings: 0, merged: 0 }, used_summary_fallback: false, source: "api" };
+let dashboardListingsMeta = { total: 0, source_counts: { user_listings: 0, listings: 0, merged: 0 }, used_summary_fallback: false, source: "api", request_id: "", warnings: [] };
+let dashboardListingsDiagnostics = { raw_rows: 0, normalized_rows: 0, dropped_rows: 0 };
 let listingQuickFilter = "all";
 
 document.addEventListener("DOMContentLoaded", async () => {
@@ -684,7 +715,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     const {
       data: { session },
       error: sessionError
-    } = await supabaseClient.auth.getSession();
+    } = await withTimeout(supabaseClient.auth.getSession(), "auth.getSession");
 
     if (sessionError) {
       console.error("Session error:", sessionError);
@@ -701,16 +732,16 @@ document.addEventListener("DOMContentLoaded", async () => {
     renderUserBasics(currentUser);
 
     pushBootStage("User", "Syncing account record...");
-    await syncUserIfNeeded(currentUser);
+    await withTimeout(syncUserIfNeeded(currentUser), "syncUserIfNeeded");
 
     pushBootStage("Profile", "Loading saved dealer profile...");
-    await loadProfile(currentUser.id);
+    await withTimeout(loadProfile(currentUser.id), "loadProfile");
 
     pushBootStage("Workspace", "Loading billing, extension state, metrics, and listings...");
-    await refreshDashboardState(true);
+    await withTimeout(refreshDashboardState(true), "refreshDashboardState", 30000);
 
     pushBootStage("Extension", "Pushing live profile sync to extension...");
-    await pushExtensionProfileSync();
+    await withTimeout(pushExtensionProfileSync(), "pushExtensionProfileSync");
 
     showSection("overview");
     setBootStatus("Dashboard ready.");
@@ -970,18 +1001,20 @@ if (copyAffiliatePostBtn) {
           })
         });
 
-        const rawText = await response.text();
+        const parsed = await parseJsonWithDebug(response);
+        const requestId = response.headers.get("x-request-id") || "";
+        const responseMeta = `status=${response.status}${requestId ? ` req=${requestId}` : ""}`;
 
-        let data;
-        try {
-          data = JSON.parse(rawText);
-        } catch (parseError) {
-          console.error("[billing] Non-JSON response:", rawText);
-          throw new Error("Server error (non-JSON response)");
+        if (!parsed.ok) {
+          const preview = cleanText(parsed.rawText).slice(0, 200);
+          console.error("[billing] Non-JSON response:", parsed.rawText);
+          throw new Error(`Server error (non-JSON response, ${responseMeta})${preview ? `: ${preview}` : ""}`);
         }
 
+        const data = parsed.data || {};
+
         if (!response.ok) {
-          throw new Error(data.error || "Could not open billing portal.");
+          throw new Error(`${cleanText(data.error || "Could not open billing portal.")} (${responseMeta})`);
         }
 
         if (!data.url) {
@@ -1041,6 +1074,18 @@ if (copyAffiliatePostBtn) {
     });
   }
 
+  document.querySelectorAll("[data-filter]").forEach((button) => {
+    if (button.dataset.boundListingFilter === "true") return;
+    button.dataset.boundListingFilter = "true";
+    button.addEventListener("click", () => {
+      listingQuickFilter = clean(button.getAttribute("data-filter") || "all").toLowerCase() || "all";
+      document.querySelectorAll("[data-filter]").forEach((other) => {
+        other.classList.toggle("active", other === button);
+      });
+      applyListingFiltersAndRender();
+    });
+  });
+
   window.addEventListener("resize", debounce(() => {
     drawActivityChart(buildChartSeries());
   }, 150));
@@ -1072,11 +1117,16 @@ async function refreshDashboardState(forceFresh = false) {
 async function loadListingDashboardData(forceFresh = false) {
   try {
     dashboardSummary = await fetchDashboardSummary(forceFresh);
-    dashboardListings = await fetchUserListings(forceFresh);
+    const rawListings = await fetchUserListings(forceFresh);
 
-    dashboardListings = Array.isArray(dashboardListings)
-      ? dashboardListings.map(normalizeListingRecord).filter(Boolean)
+    dashboardListings = Array.isArray(rawListings)
+      ? rawListings.map(normalizeListingRecord).filter(Boolean)
       : [];
+    dashboardListingsDiagnostics = {
+      raw_rows: Array.isArray(rawListings) ? rawListings.length : 0,
+      normalized_rows: dashboardListings.length,
+      dropped_rows: Math.max((Array.isArray(rawListings) ? rawListings.length : 0) - dashboardListings.length, 0)
+    };
 
     if (!dashboardSummary) {
       dashboardSummary = buildDashboardSummaryFromListings(dashboardListings);
@@ -1094,6 +1144,7 @@ async function loadListingDashboardData(forceFresh = false) {
   } catch (error) {
     console.error("loadListingDashboardData error:", error);
     dashboardListings = [];
+    dashboardListingsDiagnostics = { raw_rows: 0, normalized_rows: 0, dropped_rows: 0 };
     dashboardSummary = buildDashboardSummaryFromListings(dashboardListings);
     filteredListings = [];
     setSystemStateFromSources(currentProfile, currentNormalizedSession);
@@ -1133,7 +1184,9 @@ async function fetchUserListings(forceFresh = false) {
     total: 0,
     source_counts: { user_listings: 0, listings: 0, merged: 0 },
     used_summary_fallback: false,
-    source: "api"
+    source: "api",
+    request_id: "",
+    warnings: []
   };
 
   try {
@@ -1144,7 +1197,9 @@ async function fetchUserListings(forceFresh = false) {
         total: previewRows.length,
         source_counts: { user_listings: 0, listings: 0, merged: previewRows.length },
         used_summary_fallback: previewRows.length > 0,
-        source: previewRows.length ? "summary_preview" : "api"
+        source: previewRows.length ? "summary_preview" : "api",
+        request_id: "",
+        warnings: []
       };
       return previewRows;
     }
@@ -1155,25 +1210,47 @@ async function fetchUserListings(forceFresh = false) {
     url.searchParams.set("limit", "250");
     if (forceFresh) url.searchParams.set("_ts", String(Date.now()));
 
-    const response = await apiFetch(url.toString(), {
-      method: "GET",
-      cache: "no-store"
-    });
+    const retryDelays = [0, 1000, 3000, 8000];
+    let response = null;
+    let result = null;
+    let lastStatus = 0;
+    let lastRequestId = "";
+    let lastError = "";
 
-    if (!response.ok) {
+    for (let attempt = 0; attempt < retryDelays.length; attempt += 1) {
+      if (retryDelays[attempt] > 0) await sleep(retryDelays[attempt]);
+      response = await apiFetch(url.toString(), {
+        method: "GET",
+        cache: "no-store"
+      });
+      lastStatus = numberOrZero(response?.status);
+      lastRequestId = clean(response?.headers?.get("x-request-id") || "");
+      const parsed = await parseJsonWithDebug(response);
+      if (parsed.ok) result = parsed.data || {};
+      if (response.ok && parsed.ok) break;
+      lastError = clean(parsed?.data?.error || parsed?.rawText || `Request failed (${lastStatus})`).slice(0, 180);
+      if (attempt < retryDelays.length - 1) {
+        console.warn("fetchUserListings retrying", { attempt: attempt + 1, status: lastStatus, request_id: lastRequestId || parsed?.data?.request_id || "" });
+      }
+    }
+
+    if (!response?.ok || !result) {
       dashboardListingsMeta = {
         total: previewRows.length,
         source_counts: { user_listings: 0, listings: 0, merged: previewRows.length },
         used_summary_fallback: previewRows.length > 0,
-        source: previewRows.length ? "summary_preview" : "api_error"
+        source: previewRows.length ? "summary_preview" : "api_error",
+        request_id: lastRequestId || "",
+        warnings: lastError ? [lastError] : []
       };
       return previewRows;
     }
 
-    const result = await response.json();
     const rows = result?.data || result?.listings || result || [];
     const normalizedRows = Array.isArray(rows) ? rows : [];
     const metaSources = result?.meta?.sources || {};
+    const requestId = clean(result?.request_id || response.headers.get("x-request-id") || "");
+    const warnings = Array.isArray(result?.meta?.warnings) ? result.meta.warnings : [];
 
     if (!normalizedRows.length && previewRows.length) {
       dashboardListingsMeta = {
@@ -1184,7 +1261,9 @@ async function fetchUserListings(forceFresh = false) {
           merged: numberOrZero(metaSources.merged || previewRows.length)
         },
         used_summary_fallback: true,
-        source: "summary_preview"
+        source: "summary_preview",
+        request_id: requestId,
+        warnings
       };
       return previewRows;
     }
@@ -1197,7 +1276,9 @@ async function fetchUserListings(forceFresh = false) {
         merged: numberOrZero(metaSources.merged || normalizedRows.length)
       },
       used_summary_fallback: false,
-      source: "api"
+      source: "api",
+      request_id: requestId,
+      warnings
     };
 
     return normalizedRows;
@@ -1208,7 +1289,9 @@ async function fetchUserListings(forceFresh = false) {
       total: previewRows.length,
       source_counts: { user_listings: 0, listings: 0, merged: previewRows.length },
       used_summary_fallback: previewRows.length > 0,
-      source: previewRows.length ? "summary_preview" : "api_exception"
+      source: previewRows.length ? "summary_preview" : "api_exception",
+      request_id: "",
+      warnings: [clean(error?.message || "fetch exception")]
     };
     return previewRows;
   }
@@ -1273,6 +1356,9 @@ function normalizeListingRecord(row) {
     review_bucket: clean(row.review_bucket || ""),
     posted_at: postedAt,
     created_at: row.created_at || postedAt,
+    updated_at: row.updated_at || row.created_at || postedAt,
+    last_seen_at: row.last_seen_at || row.updated_at || row.created_at || postedAt,
+    marketplace_listing_id: clean(row.marketplace_listing_id || row.listing_id || ""),
     views_count: views,
     messages_count: messages,
     popularity_score: (messages * 1000) + (views * 10) + getTimestamp(postedAt) / 100000000,
@@ -1395,6 +1481,40 @@ function mergeSummaryWithListings(summary, listings) {
     sessionPostsToday,
     snapshotPostsToday
   );
+  const planFromSession = cleanText(currentNormalizedSession?.subscription?.plan || "");
+  const planFromPlanAccess = cleanText(summary?.plan_access?.plan_label || "");
+  const planFromSnapshot = cleanText(summary?.account_snapshot?.plan || "");
+  const statusFromSession = cleanText(currentNormalizedSession?.subscription?.status || "");
+  const statusFromSnapshot = cleanText(summary?.account_snapshot?.status || "");
+  const limitFromSession = numberOrZero(currentNormalizedSession?.subscription?.posting_limit);
+  const limitFromPlanAccess = numberOrZero(summary?.plan_access?.posting_limit);
+  const limitFromSnapshot = numberOrZero(summary?.account_snapshot?.posting_limit);
+  const remainingFromSession = numberOrZero(currentNormalizedSession?.subscription?.posts_remaining);
+  const remainingFromSnapshot = numberOrZero(summary?.account_snapshot?.posts_remaining);
+  const setupFromSummary = summary?.setup_status && Object.keys(summary.setup_status || {}).length > 0;
+
+  const canonicalAccess = {
+    plan: planFromSession || planFromPlanAccess || planFromSnapshot || "Founder Beta",
+    status: statusFromSession || statusFromSnapshot || "inactive",
+    posting_limit: limitFromSession || limitFromPlanAccess || limitFromSnapshot || 0,
+    posts_remaining: remainingFromSession || remainingFromSnapshot || 0
+  };
+
+  const stateProvenance = {
+    posts_today: bestPostsToday === snapshotPostsToday && snapshotPostsToday > 0
+      ? "summary.account_snapshot.posts_today"
+      : (bestPostsToday === sessionPostsToday && sessionPostsToday > 0
+        ? "session.subscription.posts_today"
+        : "computed.listings.posts_today"),
+    plan: planFromSession
+      ? "session.subscription.plan"
+      : (planFromPlanAccess ? "summary.plan_access.plan_label" : (planFromSnapshot ? "summary.account_snapshot.plan" : "default")),
+    status: statusFromSession ? "session.subscription.status" : (statusFromSnapshot ? "summary.account_snapshot.status" : "default"),
+    posting_limit: limitFromSession > 0
+      ? "session.subscription.posting_limit"
+      : (limitFromPlanAccess > 0 ? "summary.plan_access.posting_limit" : (limitFromSnapshot > 0 ? "summary.account_snapshot.posting_limit" : "default")),
+    setup_status: setupFromSummary ? "summary.setup_status" : "fallback"
+  };
 
   return {
     posts_today: bestPostsToday,
@@ -1414,6 +1534,8 @@ function mergeSummaryWithListings(summary, listings) {
     top_listing_title: clean(summary.top_listing_title || computed.top_listing_title || "None yet"),
     account_snapshot: summary.account_snapshot || {},
     setup_status: summary.setup_status || {},
+    canonical_access: canonicalAccess,
+    state_provenance: stateProvenance,
     manager_access: Boolean(summary.manager_access),
     action_center: summary.action_center || summary.daily_ops_queues || {},
     daily_ops_queues: summary.daily_ops_queues || summary.action_center || {},
@@ -1543,6 +1665,7 @@ function renderDashboardAnalytics() {
   setTextByIdForAll("kpiMessages", String(numberOrZero(dashboardSummary?.total_messages)));
   setTextByIdForAll("kpiPostsRemaining", String(numberOrZero(currentNormalizedSession?.subscription?.posts_remaining ?? dashboardSummary?.account_snapshot?.posts_remaining)));
   setTextByIdForAll("kpiDailyLimit", String(numberOrZero(currentNormalizedSession?.subscription?.posting_limit ?? dashboardSummary?.account_snapshot?.posting_limit)));
+  renderRevenueActionPanels();
 
   // lifecycle-ready safe no-op if ids do not exist yet
   setTextByIdForAll("kpiReviewQueue", String(numberOrZero(dashboardSummary?.review_queue_count)));
@@ -1567,6 +1690,43 @@ function renderDashboardAnalytics() {
   renderComplianceWorkspace();
   renderToolsWorkspace();
   drawActivityChart(buildChartSeries());
+}
+
+function updateListingFilterCounts() {
+  const rows = Array.isArray(dashboardListings) ? dashboardListings : [];
+  const countBy = (predicate) => rows.filter(predicate).length;
+  const counts = {
+    all: rows.length,
+    review: countBy((item) => {
+      const lifecycle = clean((item.lifecycle_status || "").toLowerCase());
+      const bucket = clean((item.review_bucket || "").toLowerCase()).replace(/[\s_-]+/g, "");
+      return ["review_delete", "review_price_update", "review_new"].includes(lifecycle) || ["removedvehicles", "pricechanges", "newvehicles"].includes(bucket);
+    }),
+    stale: countBy((item) => {
+      const lifecycle = clean((item.lifecycle_status || "").toLowerCase());
+      const bucket = clean((item.review_bucket || "").toLowerCase()).replace(/[\s_-]+/g, "");
+      const status = clean((item.status || "").toLowerCase());
+      return lifecycle === "stale" || status === "stale" || lifecycle === "review_delete" || bucket === "removedvehicles";
+    }),
+    price: countBy((item) => clean((item.lifecycle_status || "").toLowerCase()) === "review_price_update" || clean((item.review_bucket || "").toLowerCase()).replace(/[\s_-]+/g, "") === "pricechanges"),
+    new: countBy((item) => clean((item.lifecycle_status || "").toLowerCase()) === "review_new" || clean((item.review_bucket || "").toLowerCase()).replace(/[\s_-]+/g, "") === "newvehicles"),
+    weak: countBy((item) => Boolean(item.weak)),
+    needs_action: countBy((item) => Boolean(item.needs_action)),
+    promote: countBy((item) => Boolean(item.promote_now)),
+    likely_sold: countBy((item) => Boolean(item.likely_sold)),
+    active: countBy((item) => {
+      const status = clean((item.status || "").toLowerCase());
+      const lifecycle = clean((item.lifecycle_status || "").toLowerCase());
+      return !["sold", "deleted", "inactive", "stale"].includes(status) && lifecycle !== "review_delete";
+    })
+  };
+
+  document.querySelectorAll("[data-filter]").forEach((button) => {
+    const key = clean(button.getAttribute("data-filter") || "all").toLowerCase();
+    const base = clean(button.textContent || "");
+    const label = base.replace(/\s*\(\d+\)\s*$/, "");
+    button.textContent = `${label} (${numberOrZero(counts[key])})`;
+  });
 }
 
 
@@ -1940,6 +2100,7 @@ function renderAnalyticsHub() {
 }
 
 function applyListingFiltersAndRender() {
+  updateListingFilterCounts();
   const searchTerm = clean((document.getElementById("listingSearchInput")?.value || "").toLowerCase());
   const sortMode = clean(document.getElementById("listingSortSelect")?.value || "popular");
 
@@ -2021,6 +2182,28 @@ async function trackListingMessage(listingId) {
   await refreshDashboardData?.();
 }
 
+async function syncListingTraction(listingId) {
+  const item = dashboardListings.find((row) => String(row.id) === String(listingId));
+  if (!item) return;
+  const viewsInput = window.prompt("Sync views count from Facebook/Marketplace", String(numberOrZero(item.views_count)));
+  if (viewsInput == null) return;
+  const messagesInput = window.prompt("Sync messages count from Facebook/Marketplace", String(numberOrZero(item.messages_count)));
+  if (messagesInput == null) return;
+  const views = Math.max(0, numberOrZero(viewsInput));
+  const messages = Math.max(0, numberOrZero(messagesInput));
+  const metadata = {
+    source: "dashboard_manual_sync",
+    source_url: clean(item.source_url || ""),
+    marketplace_listing_id: clean(item.marketplace_listing_id || ""),
+    views_count: views,
+    messages_count: messages
+  };
+  await logListingUsage("listing_view_sync_v2", listingId, metadata);
+  await logListingUsage("listing_message_sync_v2", listingId, metadata);
+  setStatus("listingGridStatus", `Traction synced for ${cleanText(item.title || "listing")} (views ${views}, messages ${messages}).`);
+  await refreshDashboardData?.();
+}
+
 async function openListingSource(listingId, sourceUrl) {
   await logListingUsage("listing_card_opened", listingId, { source: "dashboard_open_source", source_url: sourceUrl });
   if (sourceUrl) window.open(sourceUrl, "_blank");
@@ -2036,12 +2219,15 @@ function renderListingDataState(listings = []) {
   const mergedCount = numberOrZero(dashboardListingsMeta?.total || listings.length);
   const fallbackUsed = Boolean(dashboardListingsMeta?.used_summary_fallback);
   const sourceLabel = fallbackUsed ? "summary preview" : "live listing rows";
+  const requestId = clean(dashboardListingsMeta?.request_id || "");
+  const warnings = Array.isArray(dashboardListingsMeta?.warnings) ? dashboardListingsMeta.warnings.filter(Boolean) : [];
 
   const subtextParts = [
-    `${mergedCount} listing${mergedCount === 1 ? "" : "s"} loaded from ${sourceLabel}.`,
+    `${sourceLabel === "summary preview" ? "Preview Mode" : "Live Mode"} • ${mergedCount} listing${mergedCount === 1 ? "" : "s"} loaded.`,
     activeListings ? `${activeListings} active tracked.` : "No active tracked listings yet."
   ];
-  if (fallbackUsed) subtextParts.push("Showing summary-backed preview while direct listing rows hydrate.");
+  if (fallbackUsed) subtextParts.push("Direct listing rows are still hydrating.");
+  if (requestId) subtextParts.push(`Request ID: ${requestId}.`);
 
   if (subtext) subtext.textContent = subtextParts.join(" ");
 
@@ -2051,11 +2237,14 @@ function renderListingDataState(listings = []) {
       return;
     }
 
-    statusEl.textContent = [
-      `${mergedCount} listing${mergedCount === 1 ? "" : "s"} loaded.`,
-      `Rows: user_listings ${numberOrZero(counts.user_listings)} • listings ${numberOrZero(counts.listings)} • merged ${numberOrZero(counts.merged || mergedCount)}.`,
-      summary.lifecycle_updated_at ? `Last lifecycle sync: ${cleanText(summary.lifecycle_updated_at)}.` : ""
-    ].filter(Boolean).join(" ");
+      statusEl.textContent = [
+        `${mergedCount} listing${mergedCount === 1 ? "" : "s"} loaded.`,
+        `Rows: user_listings ${numberOrZero(counts.user_listings)} • listings ${numberOrZero(counts.listings)} • merged ${numberOrZero(counts.merged || mergedCount)}.`,
+        `Normalize: raw ${numberOrZero(dashboardListingsDiagnostics.raw_rows)} • rendered ${numberOrZero(dashboardListingsDiagnostics.normalized_rows)} • dropped ${numberOrZero(dashboardListingsDiagnostics.dropped_rows)}.`,
+        warnings.length ? `Warnings: ${cleanText(warnings[0])}.` : "",
+        requestId ? `Request ID: ${requestId}.` : "",
+        summary.lifecycle_updated_at ? `Last lifecycle sync: ${cleanText(summary.lifecycle_updated_at)}.` : ""
+      ].filter(Boolean).join(" ");
   }
 }
 
@@ -2119,12 +2308,15 @@ function renderListingsGrid(listings) {
             </div>
           </div>
 
+          <div class="listing-note" style="margin:0 0 12px;color:var(--muted);font-size:12px;"><strong>Last Traction Sync:</strong> ${escapeHtml(formatRelativeOrDate(item.last_seen_at || item.updated_at || item.posted_at))}</div>
+
           <div class="listing-actions">
             <button class="action-btn" type="button" onclick="openListingDetailModal('${escapeJs(item.id)}')">Inspect</button>
             <button class="action-btn" type="button" onclick="markListingAction('${escapeJs(item.id)}','approved')">Approve</button>
             <button class="action-btn" type="button" onclick="markListingSold('${escapeJs(item.id)}')">Mark Sold</button>
             <button class="action-btn" type="button" onclick="trackListingView('${escapeJs(item.id)}')">Log View</button>
             <button class="action-btn" type="button" onclick="trackListingMessage('${escapeJs(item.id)}')">Log Message</button>
+            <button class="action-btn" type="button" onclick="syncListingTraction('${escapeJs(item.id)}')">Sync Traction</button>
             ${
               item.source_url
                 ? `<button class="action-btn" type="button" onclick="openListingSource('${escapeJs(item.id)}','${escapeJs(item.source_url)}')">Open Source</button>`
@@ -2721,8 +2913,12 @@ async function loadAccountData(user, forceFresh = false) {
     setTextByIdForAll("referralCode", referral);
     setTextByIdForAll("referralCodeAffiliate", referral);
 
-    setTextByIdForAll("planNameBilling", currentNormalizedSession?.subscription?.plan || "Founder Beta");
-    setTextByIdForAll("subscriptionStatusBilling", currentNormalizedSession?.subscription?.status || "inactive");
+    const summaryPlan = cleanText(dashboardSummary?.plan_access?.plan_label || dashboardSummary?.account_snapshot?.plan || "");
+    const summaryStatus = cleanText(dashboardSummary?.account_snapshot?.status || "");
+    const effectivePlanLabel = cleanText(currentNormalizedSession?.subscription?.plan || summaryPlan || "Founder Beta");
+    const effectiveStatusLabel = cleanText(currentNormalizedSession?.subscription?.status || summaryStatus || "inactive");
+    setTextByIdForAll("planNameBilling", effectivePlanLabel);
+    setTextByIdForAll("subscriptionStatusBilling", effectiveStatusLabel);
     setTextByIdForAll("affiliateDirectCommission", "20% recurring");
     setTextByIdForAll("affiliateTierOverride", "5% second level");
     setTextByIdForAll("affiliatePartnerType", "Founding Partner");
@@ -3018,11 +3214,13 @@ function persistProfileSnapshots(profileSnapshot, session) {
 function renderSetupSnapshot() {
   const snapshot = dashboardSummary?.account_snapshot || {};
   const setup = dashboardSummary?.setup_status || {};
+  const canonicalAccess = dashboardSummary?.canonical_access || {};
+  const provenance = dashboardSummary?.state_provenance || {};
   const canonicalProfile = getCanonicalProfileState();
   const subscription = getCanonicalSubscriptionState();
 
-  setTextByIdForAll("snapshotPostingLimit", String(Math.max(numberOrZero(snapshot.posting_limit), numberOrZero(subscription.posting_limit))));
-  setTextByIdForAll("snapshotPostsRemaining", String(Math.max(numberOrZero(snapshot.posts_remaining), numberOrZero(currentNormalizedSession?.subscription?.posts_remaining))));
+  setTextByIdForAll("snapshotPostingLimit", String(Math.max(numberOrZero(canonicalAccess.posting_limit), numberOrZero(snapshot.posting_limit), numberOrZero(subscription.posting_limit))));
+  setTextByIdForAll("snapshotPostsRemaining", String(Math.max(numberOrZero(canonicalAccess.posts_remaining), numberOrZero(snapshot.posts_remaining), numberOrZero(currentNormalizedSession?.subscription?.posts_remaining))));
   setTextByIdForAll("snapshotPostsUsed", String(Math.max(numberOrZero(snapshot.posts_today ?? snapshot.posts_used_today), numberOrZero(currentNormalizedSession?.subscription?.posts_today), numberOrZero(dashboardSummary?.posts_today))));
   setTextByIdForAll("snapshotBillingSource", clean(currentNormalizedSession?.subscription?.billing_source || snapshot.billing_source || "subscriptions/users") || "subscriptions/users");
   setTextByIdForAll("snapshotCurrentPeriodEnd", formatShortDate(snapshot.current_period_end || currentNormalizedSession?.subscription?.current_period_end || ""));
@@ -3044,7 +3242,15 @@ function renderSetupSnapshot() {
         setup.compliance_mode_present ? null : "compliance mode missing"
       ].filter(Boolean);
 
-  setStatus("snapshotSetupSummary", summaryBits.length ? `Setup gaps: ${summaryBits.join(" • ")}` : "Account setup looks complete for beta use.");
+  const sourceBits = [
+    provenance.plan ? `plan=${provenance.plan}` : "",
+    provenance.posting_limit ? `limit=${provenance.posting_limit}` : "",
+    provenance.setup_status ? `setup=${provenance.setup_status}` : ""
+  ].filter(Boolean);
+  setStatus(
+    "snapshotSetupSummary",
+    `${summaryBits.length ? `Setup gaps: ${summaryBits.join(" • ")}` : "Account setup looks complete for beta use."}${sourceBits.length ? ` (sources: ${sourceBits.join(" | ")})` : ""}`
+  );
 }
 
 function renderAccessState(session) {
@@ -3463,6 +3669,7 @@ window.copyVehicleSummary = copyVehicleSummary;
 
 window.trackListingView = trackListingView;
 window.trackListingMessage = trackListingMessage;
+window.syncListingTraction = syncListingTraction;
 window.openListingSource = openListingSource;
 
 window.markListingAction = markListingAction;

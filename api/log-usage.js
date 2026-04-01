@@ -38,7 +38,9 @@ const ALLOWED_ACTIONS = new Set([
   "listing_message",
   "listing_card_opened",
   "listing_view_sync",
-  "listing_view_sync_v2"
+  "listing_view_sync_v2",
+  "listing_message_sync",
+  "listing_message_sync_v2"
 ]);
 
 
@@ -192,6 +194,34 @@ export default async function handler(req, res) {
           }
         } catch (metricError) {
           console.warn("listing view sync metric warning:", metricError);
+        }
+      }
+
+      if (payload.action === "listing_message_sync" || payload.action === "listing_message_sync_v2") {
+        try {
+          const incomingMessages = Number(payload.metadata?.messages_count ?? payload.metadata?.messages ?? body.messages_count ?? body.messages ?? 0);
+          let listingId = payload.listing_id;
+          let row = null;
+          if (listingId) {
+            const lookup = await supabase.from("user_listings").select("id,messages_count").eq("id", listingId).maybeSingle();
+            row = lookup.data || null;
+          }
+          if (!row && payload.metadata?.marketplace_listing_id) {
+            const lookup = await supabase.from("user_listings").select("id,messages_count").eq("marketplace_listing_id", String(payload.metadata.marketplace_listing_id)).order("updated_at", { ascending: false }).limit(1).maybeSingle();
+            row = lookup.data || null;
+            listingId = row?.id || listingId;
+          }
+          if (!row && payload.metadata?.source_url) {
+            const lookup = await supabase.from("user_listings").select("id,messages_count").eq("source_url", String(payload.metadata.source_url)).order("updated_at", { ascending: false }).limit(1).maybeSingle();
+            row = lookup.data || null;
+            listingId = row?.id || listingId;
+          }
+          if (listingId) {
+            const nextMessages = Math.max(Number(row?.messages_count || 0), incomingMessages);
+            await bumpListingMetric(listingId, { messages_count: nextMessages, last_seen_at: nowIso() });
+          }
+        } catch (metricError) {
+          console.warn("listing message sync metric warning:", metricError);
         }
       }
     }
