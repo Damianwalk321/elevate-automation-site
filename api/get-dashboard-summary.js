@@ -293,12 +293,12 @@ function mergeListingRows(userRows, legacyRows) {
 async function resolveUser({ userId, email }) {
   if (userId) {
     const { data, error } = await supabase.from('users').select('*').eq('id', userId).maybeSingle();
-    if (error) throw error;
+    if (error) console.warn('resolveUser by id warning:', error?.message || error);
     if (data) return data;
   }
   if (email) {
     const { data, error } = await supabase.from('users').select('*').ilike('email', email).order('created_at', { ascending: false }).limit(1).maybeSingle();
-    if (error) throw error;
+    if (error) console.warn('resolveUser by email warning:', error?.message || error);
     if (data) return data;
   }
   return null;
@@ -306,12 +306,12 @@ async function resolveUser({ userId, email }) {
 async function getSubscription(userId, email) {
   if (userId) {
     const { data, error } = await supabase.from('subscriptions').select('*').eq('user_id', userId).order('created_at', { ascending: false }).limit(1).maybeSingle();
-    if (error) throw error;
+    if (error) console.warn('getSubscription by user_id warning:', error?.message || error);
     if (data) return data;
   }
   if (email) {
     const { data, error } = await supabase.from('subscriptions').select('*').ilike('email', email).order('created_at', { ascending: false }).limit(1).maybeSingle();
-    if (error) throw error;
+    if (error) console.warn('getSubscription by email warning:', error?.message || error);
     if (data) return data;
   }
   return null;
@@ -338,12 +338,12 @@ async function getPostingUsageRow(userId, email) {
   const today = dayKey();
   if (userId) {
     const { data, error } = await supabase.from('posting_usage').select('*').eq('user_id', userId).eq('date_key', today).order('updated_at', { ascending: false }).limit(1).maybeSingle();
-    if (error) throw error;
+    if (error) console.warn('getPostingUsageRow by user_id warning:', error?.message || error);
     if (data) return data;
   }
   if (email) {
     const { data, error } = await supabase.from('posting_usage').select('*').ilike('email', email).eq('date_key', today).order('updated_at', { ascending: false }).limit(1).maybeSingle();
-    if (error) throw error;
+    if (error) console.warn('getPostingUsageRow by email warning:', error?.message || error);
     if (data) return data;
   }
   return null;
@@ -356,7 +356,10 @@ async function getTableListingRows(tableName, userId, email) {
     if (mode === 'user' && userId) query = query.eq('user_id', userId);
     if (mode === 'email' && email) query = query.ilike('email', email);
     const { data, error } = await query;
-    if (error) throw error;
+    if (error) {
+      console.warn(`${tableName} listing read warning (${mode}):`, error?.message || error);
+      return;
+    }
     for (const row of (Array.isArray(data) ? data : [])) {
       const key = clean(row?.id || '') || `${clean(row?.marketplace_listing_id || '')}|${clean(row?.posted_at || row?.created_at || '')}`;
       if (!key || seen.has(key)) continue;
@@ -416,7 +419,10 @@ async function getAffiliateSummary({ referralCode, email }) {
     .ilike('referral_code', code)
     .order('created_at', { ascending: false })
     .limit(200);
-  if (error) throw error;
+  if (error) {
+    console.warn('getAffiliateSummary warning:', error?.message || error);
+    return base;
+  }
 
   const rows = (Array.isArray(data) ? data : []).filter((row) => normalizeEmail(row?.email) !== ownerEmail);
   let active = 0;

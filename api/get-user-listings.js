@@ -77,6 +77,7 @@ async function resolveIdentityCandidates({ userId, email, authUid = "" }) {
       "users_lookup_by_email"
 
 
+
         .limit(20)
 
     );
@@ -101,6 +102,7 @@ async function fetchTableRows(tableName, userIds = [], emails = []) {
       console.warn(`${tableName} fetch warning:`, error?.message || error);
       return;
     }
+
     if (error) throw error;
     for (const row of (Array.isArray(data) ? data : [])) {
       const key = clean(row?.id || "") || `${clean(row?.marketplace_listing_id || "")}|${clean(row?.posted_at || row?.created_at || "")}`;
@@ -161,6 +163,7 @@ async function backfillListingIdentity(tableName, rows = [], canonicalUserId = "
     } catch (error) {
       console.warn(`listing identity backfill warning (${tableName}:${rowId})`, error?.message || error);
     }
+
 
     const { error } = await supabase.from(tableName).update(payload).eq("id", rowId);
     if (!error) updated += 1;
