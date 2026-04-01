@@ -122,7 +122,7 @@ async function resolveUserId(supabase, userId, email) {
   const cleanedEmail = lower(email);
 
   if (cleanedUserId) {
-    const { data, error } = await supabase.from("users").select("id,email").eq("id", cleanedUserId).maybeSingle();
+    const { data, error } = await supabase.from("users").select("id,email").or(`id.eq.${cleanedUserId},auth_user_id.eq.${cleanedUserId}`).maybeSingle();
     if (error) throw error;
     if (data?.id) {
       return { user_id: data.id, email: lower(data.email || cleanedEmail) };
