@@ -1,57 +1,72 @@
-import { createClient } from "@supabase/supabase-js";
+import { supabase } from '../lib/supabase.js';
 
-const SUPABASE_URL = process.env.SUPABASE_URL;
-const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_PUBLIC_ANON_KEY || "";
+const CORS = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+};
 
-function clean(value) {
-  return String(value || "").trim();
-}
+export default async function handler(req, res) {
+  if (req.method === 'OPTIONS') {
+    return res.status(200).set(CORS).end();
+  }
 
-export function isDashboardClient(req) {
-  return clean(req?.headers?.["x-elevate-client"] || req?.headers?.["X-ELEVATE-CLIENT"] || "").toLowerCase() === "dashboard";
-}
+  Object.entries(CORS).forEach(([k, v]) => res.setHeader(k, v));
 
-export async function getVerifiedRequestUser(req) {
+  const authHeader = req.headers.authorization || '';
+  if (!authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({ authenticated: false, error: 'No token' });
+  }
+
+  const token = authHeader.slice(7);
+
   try {
-    const authHeader = clean(req.headers?.authorization || "");
-    if (!authHeader.toLowerCase().startsWith("bearer ")) return null;
-    const token = authHeader.slice(7).trim();
-    if (!token || !SUPABASE_URL || !SUPABASE_ANON_KEY) return null;
-    const client = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-      global: { headers: { Authorization: `Bearer ${token}` } },
-      auth: { persistSession: false, autoRefreshToken: false }
+    const { data: { user }, error } = await supabase.auth.getUser(token);
+
+    if (error || !user) {
+      return res.status(401).json({ authenticated: false, error: 'Invalid or expired token' });
+    }
+
+    const email = user.email?.toLowerCase();
+
+    // Load profile
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('id', user.id)
+      .maybeSingle();
+
+    // Load subscription
+    const { data: userRow } = await supabase
+      .from('users')
+      .select('id, plan, stripe_customer_id, stripe_subscription_id')
+      .eq('auth_user_id', user.id)
+      .maybeSingle();
+
+    let subscription = null;
+    if (userRow) {
+      const { data: sub } = await supabase
+        .from('subscriptions')
+        .select('subscription_status, plan_type, daily_posting_limit, is_active, trial_end')
+        .eq('user_id', userRow.id)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      subscription = sub;
+    }
+
+    return res.status(200).json({
+      authenticated: true,
+      user: {
+        id: user.id,
+        email,
+      },
+      profile: profile || null,
+      subscription: subscription || { subscription_status: 'none', is_active: false },
+      stripeCustomerId: userRow?.stripe_customer_id || null,
     });
-    const { data, error } = await client.auth.getUser(token);
-    if (error || !data?.user) return null;
-    return data.user;
-  } catch {
-    return null;
+  } catch (err) {
+    console.error('[auth] Error:', err.message);
+    return res.status(500).json({ authenticated: false, error: err.message });
   }
-}
-
-export async function requireVerifiedDashboardUser(req, res) {
-  const verifiedUser = await getVerifiedRequestUser(req);
-  if (isDashboardClient(req) && !verifiedUser) {
-    res.status(401).setHeader("Content-Type", "application/json");
-    res.send(JSON.stringify({ error: "Unauthorized", requires_auth: true }));
-    return null;
-  }
-  return verifiedUser;
-}
-
-export function getTrustedIdentity({ verifiedUser = null, body = {}, query = {} } = {}) {
-  const bodyId = clean(body.id || body.user_id || body.auth_user_id || query.id || query.user_id);
-  const bodyEmail = clean(body.email || query.email).toLowerCase();
-  if (verifiedUser?.id || verifiedUser?.email) {
-    return {
-      id: clean(verifiedUser.id || bodyId),
-      email: clean(verifiedUser.email || bodyEmail).toLowerCase(),
-      verified: true
-    };
-  }
-  return {
-    id: bodyId,
-    email: bodyEmail,
-    verified: false
-  };
 }
