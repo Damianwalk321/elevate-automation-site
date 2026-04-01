@@ -949,8 +949,10 @@ export default async function handler(req, res) {
     ]);
     const computed = buildComputedSummary(rows);
     const snapshot = subscriptionRow?.account_snapshot && typeof subscriptionRow.account_snapshot === 'object' ? subscriptionRow.account_snapshot : {};
-    const planValue = clean(subscriptionRow?.plan_type || subscriptionRow?.plan_name || subscriptionRow?.plan || user?.plan || user?.user_type || 'Founder Beta');
     const forcedAccess = hasTestingLimitOverride(finalEmail);
+    const planValue = forcedAccess
+      ? 'Pro'
+      : clean(subscriptionRow?.plan_type || subscriptionRow?.plan_name || subscriptionRow?.plan || user?.plan || user?.user_type || 'Founder Beta');
     const configuredLimit = safeNumber(snapshot.posting_limit ?? subscriptionRow?.daily_posting_limit ?? subscriptionRow?.posting_limit ?? inferPostingLimitFromPlan(planValue), inferPostingLimitFromPlan(planValue));
     const dailyLimit = forcedAccess ? 25 : configuredLimit;
     const usageToday = Math.max(safeNumber(postingUsageRow?.posts_today ?? postingUsageRow?.posts_used ?? postingUsageRow?.used_today, 0), safeNumber(snapshot.posts_today ?? snapshot.posts_used_today, 0), safeNumber(computed.posts_today, 0));
