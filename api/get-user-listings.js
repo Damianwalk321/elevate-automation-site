@@ -18,9 +18,12 @@ function buildListingIntelligence(row = {}) { const postedValue = row.posted_at 
 function normalizeListingRow(row = {}, source = "user_listings") { const normalized = { ...row, id: clean(row.id || ""), source_table: source, status: normalizeStatus(row.status), lifecycle_status: normalizeLifecycleStatus(row.lifecycle_status, row.review_bucket), review_bucket: normalizeReviewBucket(row.review_bucket), identity_key: listingIdentityKey(row), title: clean(row.title || ""), posted_at: row.posted_at || row.created_at || null, updated_at: row.updated_at || row.created_at || null, views_count: safeNumber(row.views_count, 0), messages_count: safeNumber(row.messages_count, 0), price: safeNumber(row.price, 0), mileage: safeNumber(row.mileage || row.kilometers || row.km, 0), body_style: clean(row.body_style || ""), make: clean(row.make || ""), model: clean(row.model || ""), trim: clean(row.trim || "") }; return { ...normalized, ...buildListingIntelligence(normalized) }; }
 function preferListingRow(current, incoming) { if (!current) return incoming; const currentScore = (current.source_table === "user_listings" ? 1000 : 0) + safeNumber(current.views_count) + safeNumber(current.messages_count) * 10 + new Date(current.updated_at || current.posted_at || 0).getTime() / 1000000000000; const incomingScore = (incoming.source_table === "user_listings" ? 1000 : 0) + safeNumber(incoming.views_count) + safeNumber(incoming.messages_count) * 10 + new Date(incoming.updated_at || incoming.posted_at || 0).getTime() / 1000000000000; return incomingScore >= currentScore ? { ...current, ...incoming } : { ...incoming, ...current }; }
 async function resolveIdentityCandidates({ userId, email, authUid = "", warnings = [] }) {
+
+async function resolveIdentityCandidates({ userId, email, authUid = "" }) {
   const userIds = new Set([clean(userId), clean(authUid)].filter(Boolean));
   const emails = new Set([normalizeEmail(email)].filter(Boolean));
   const matchedUsers = [];
+
 
   async function collectFromQuery(queryBuilder, label = "users_lookup") {
     const { data, error } = await queryBuilder;
@@ -29,6 +32,13 @@ async function resolveIdentityCandidates({ userId, email, authUid = "", warnings
       warnings.push(`${label}:${error?.message || "query_failed"}`);
       return;
     }
+
+      return;
+    }
+  async function collectFromQuery(queryBuilder) {
+    const { data, error } = await queryBuilder;
+    if (error) throw error;
+ 
     for (const row of (Array.isArray(data) ? data : [])) {
       matchedUsers.push(row);
       if (clean(row?.id)) userIds.add(clean(row.id));
@@ -56,6 +66,10 @@ async function resolveIdentityCandidates({ userId, email, authUid = "", warnings
         .order("created_at", { ascending: false })
         .limit(20),
       "users_lookup_by_auth_user_id"
+
+        .or(ids.map((id) => `id.eq.${id},auth_user_id.eq.${id}`).join(","))
+        .order("created_at", { ascending: false })
+        .limit(20)
     );
   }
 
@@ -68,6 +82,11 @@ async function resolveIdentityCandidates({ userId, email, authUid = "", warnings
         .order("created_at", { ascending: false })
         .limit(20),
       "users_lookup_by_email"
+
+
+
+        .limit(20)
+
     );
   }
 
@@ -81,6 +100,7 @@ async function resolveIdentityCandidates({ userId, email, authUid = "", warnings
 }
 
 async function fetchTableRows(tableName, userIds = [], emails = [], warnings = []) {
+async function fetchTableRows(tableName, userIds = [], emails = []) {
   const rows = [];
   const seen = new Set();
 
@@ -91,6 +111,11 @@ async function fetchTableRows(tableName, userIds = [], emails = [], warnings = [
       warnings.push(`${tableName}:${error?.message || "query_failed"}`);
       return;
     }
+
+      return;
+    }
+
+    if (error) throw error;
     for (const row of (Array.isArray(data) ? data : [])) {
       const key = clean(row?.id || "") || `${clean(row?.marketplace_listing_id || "")}|${clean(row?.posted_at || row?.created_at || "")}`;
       if (!key || seen.has(key)) continue;
