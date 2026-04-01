@@ -185,15 +185,15 @@ async function executeActionCenterItemById(listingId, actionType) {
 }
 
 
-let bootStages = [];
+var bootStages = [];
 
-let supabaseClient = null;
-let currentUser = null;
-let currentProfile = null;
-let currentAccountData = null;
-let currentNormalizedSession = null;
-let dashboardSummary = null;
-let SYSTEM_STATE = null;
+var supabaseClient = null;
+var currentUser = null;
+var currentProfile = null;
+var currentAccountData = null;
+var currentNormalizedSession = null;
+var dashboardSummary = null;
+var SYSTEM_STATE = null;
 
 function getSummaryProfileSnapshot() {
   return dashboardSummary?.profile_snapshot || dashboardSummary?.account_snapshot || {};
@@ -682,6 +682,11 @@ function bindCreditActionButtons() {
   });
 }
 
+var dashboardListings = [];
+var filteredListings = [];
+var dashboardListingsMeta = { total: 0, source_counts: { user_listings: 0, listings: 0, merged: 0 }, used_summary_fallback: false, source: "api", request_id: "", warnings: [] };
+var dashboardListingsDiagnostics = { raw_rows: 0, normalized_rows: 0, dropped_rows: 0 };
+var listingQuickFilter = "all";
 let dashboardListings = [];
 let filteredListings = [];
 let dashboardListingsMeta = { total: 0, source_counts: { user_listings: 0, listings: 0, merged: 0 }, used_summary_fallback: false, source: "api", request_id: "", warnings: [] };
