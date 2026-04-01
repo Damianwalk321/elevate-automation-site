@@ -1,123 +1,139 @@
-const { createClient } = require('@supabase/supabase-js');
+import { supabase } from '../lib/supabase.js';
 
-module.exports = async function handler(req, res) {
-  try {
-    const SUPABASE_URL = process.env.SUPABASE_URL;
-    const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const CORS = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+};
 
-    if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
-      console.error('PROFILE API: Missing Supabase environment variables');
-      return res.status(500).json({
-        error: 'Missing Supabase environment variables'
-      });
+export default async function handler(req, res) {
+  if (req.method === 'OPTIONS') {
+    return res.status(200).set(CORS).end();
+  }
+
+  Object.entries(CORS).forEach(([k, v]) => res.setHeader(k, v));
+
+  // ── Resolve identity ─────────────────────────────────────────────────────
+  // Accept either a Bearer token (auth UID lookup) or a plain email param
+  // for backwards-compat with the extension which still passes ?email=
+  let authUid = null;
+  let email = null;
+
+  const authHeader = req.headers.authorization || '';
+  if (authHeader.startsWith('Bearer ')) {
+    const token = authHeader.slice(7);
+    const { data: { user }, error } = await supabase.auth.getUser(token);
+    if (!error && user) {
+      authUid = user.id;
+      email = user.email;
+    }
+  }
+
+  // Fallback: email from query or body
+  if (!email) {
+    email = req.query.email || req.body?.email;
+  }
+
+  if (!email && !authUid) {
+    return res.status(400).json({ error: 'No identity provided' });
+  }
+
+  // ── Normalize email casing (damian044 vs Damian044) ──────────────────────
+  if (email) email = email.toLowerCase();
+
+  // ── GET: load profile ────────────────────────────────────────────────────
+  if (req.method === 'GET') {
+    let query = supabase
+      .from('profiles')
+      .select('*');
+
+    if (authUid) {
+      query = query.eq('id', authUid);
+    } else {
+      query = query.ilike('email', email);
     }
 
-    const supabase = createClient(
-      SUPABASE_URL,
-      SUPABASE_SERVICE_ROLE_KEY
-    );
+    const { data, error } = await query.maybeSingle();
 
-    // -------------------------
-    // GET PROFILE
-    // -------------------------
-    if (req.method === 'GET') {
-      const email =
-        typeof req.query?.email === 'string'
-          ? req.query.email.trim().toLowerCase()
-          : '';
+    if (error) {
+      console.error('[profile GET] Supabase error:', error.message);
+      return res.status(500).json({ error: error.message });
+    }
 
-      if (!email) {
-        return res.status(400).json({
-          error: 'Missing email'
-        });
-      }
+    if (!data) {
+      return res.status(200).json({ profile: null });
+    }
 
-      const { data, error } = await supabase
+    return res.status(200).json({ profile: data });
+  }
+
+  // ── POST: save profile ───────────────────────────────────────────────────
+  if (req.method === 'POST') {
+    const body = req.body || {};
+
+    // Build the update payload — only include fields that were actually sent
+    const allowed = [
+      'full_name', 'phone', 'dealership', 'city', 'province',
+      'dealer_phone', 'dealer_email', 'dealer_website', 'inventory_url',
+      'scanner_type', 'listing_location', 'license_number', 'compliance_mode',
+      // Phase 1 new fields
+      'booking_link', 'instagram_handle', 'primary_cta', 'dealership_website',
+      'default_seller_name', 'trades_welcome', 'financing_cta',
+      'delivery_available', 'carfax_mention', 'active_disclaimer', 'logo_url',
+    ];
+
+    const updates = {};
+    for (const field of allowed) {
+      if (field in body) updates[field] = body[field];
+    }
+
+    if (Object.keys(updates).length === 0) {
+      return res.status(400).json({ error: 'No valid fields to update' });
+    }
+
+    updates.updated_at = new Date().toISOString();
+
+    // Determine the lookup key — prefer auth UID, fallback to email
+    let upsertData;
+    if (authUid) {
+      upsertData = { id: authUid, email: email || body.email?.toLowerCase(), ...updates };
+    } else {
+      // We need the profile's UUID to upsert correctly
+      const { data: existing } = await supabase
         .from('profiles')
-        .select('*')
-        .eq('email', email)
+        .select('id')
+        .ilike('email', email)
         .maybeSingle();
 
-      if (error) {
-        console.error('PROFILE GET ERROR:', error);
-        return res.status(500).json({
-          error: error.message
-        });
-      }
+      if (existing) {
+        upsertData = { id: existing.id, email, ...updates };
+      } else {
+        // First-time save with no auth UID — create with a new UUID
+        const { data: userRow } = await supabase
+          .from('users')
+          .select('auth_user_id')
+          .ilike('email', email)
+          .maybeSingle();
 
-      return res.status(200).json({
-        success: true,
-        profile: data || null
-      });
+        const profileId = userRow?.auth_user_id || crypto.randomUUID();
+        upsertData = { id: profileId, email, ...updates };
+      }
     }
 
-    // -------------------------
-    // SAVE PROFILE
-    // -------------------------
-    if (req.method === 'POST') {
-      const body =
-        typeof req.body === 'string'
-          ? JSON.parse(req.body || '{}')
-          : (req.body || {});
+    const { data, error } = await supabase
+      .from('profiles')
+      .upsert(upsertData, { onConflict: 'id' })
+      .select()
+      .single();
 
-      const email =
-        typeof body.email === 'string'
-          ? body.email.trim().toLowerCase()
-          : '';
-
-      if (!email) {
-        return res.status(400).json({
-          error: 'Email is required'
-        });
-      }
-
-      const payload = {
-        email,
-        full_name:
-          typeof body.full_name === 'string' && body.full_name.trim()
-            ? body.full_name.trim()
-            : null,
-        dealership:
-          typeof body.dealership === 'string' && body.dealership.trim()
-            ? body.dealership.trim()
-            : null,
-        city:
-          typeof body.city === 'string' && body.city.trim()
-            ? body.city.trim()
-            : null,
-        province:
-          typeof body.province === 'string' && body.province.trim()
-            ? body.province.trim()
-            : null
-      };
-
-      const { data, error } = await supabase
-        .from('profiles')
-        .upsert(payload, { onConflict: 'email' })
-        .select()
-        .single();
-
-      if (error) {
-        console.error('PROFILE SAVE ERROR:', error);
-        return res.status(500).json({
-          error: error.message
-        });
-      }
-
-      return res.status(200).json({
-        success: true,
-        profile: data
-      });
+    if (error) {
+      console.error('[profile POST] Supabase error:', error.message);
+      return res.status(500).json({ error: error.message });
     }
 
-    return res.status(405).json({
-      error: 'Method not allowed'
-    });
-
-  } catch (err) {
-    console.error('PROFILE ROUTE CRASH:', err);
-    return res.status(500).json({
-      error: err?.message || 'Server crash'
-    });
+    console.log(`[profile POST] Saved profile for ${email || authUid} at ${data.updated_at}`);
+    return res.status(200).json({ success: true, profile: data });
   }
-};
+
+  return res.status(405).json({ error: 'Method not allowed' });
+}
