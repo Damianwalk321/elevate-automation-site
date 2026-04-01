@@ -331,6 +331,7 @@ function buildSystemState(overrideProfile = null, overrideSession = null) {
     summaryProfile.compliance_mode,
     province
   ));
+  const normalizedProvince = province || ((complianceMode === 'AB' || complianceMode === 'BC') ? complianceMode : '');
 
   const canonicalProfile = {
     ...summaryProfile,
@@ -370,7 +371,7 @@ function buildSystemState(overrideProfile = null, overrideSession = null) {
       storedProfile.city,
       summaryProfile.city
     ),
-    province,
+    province: normalizedProvince,
     phone: firstNonEmpty(
       profile.phone,
       formProfile.phone,
@@ -587,6 +588,15 @@ async function parseApiJson(response) {
   } catch (error) {
     const preview = cleanText(rawText).slice(0, 180);
     throw new Error(preview || `Non-JSON API response (${response.status})`);
+  }
+}
+
+async function parseJsonWithDebug(response) {
+  const rawText = await response.text();
+  try {
+    return { ok: true, data: JSON.parse(rawText || '{}'), rawText };
+  } catch {
+    return { ok: false, data: null, rawText };
   }
 }
 
@@ -970,18 +980,20 @@ if (copyAffiliatePostBtn) {
           })
         });
 
-        const rawText = await response.text();
+        const parsed = await parseJsonWithDebug(response);
+        const requestId = response.headers.get("x-request-id") || "";
+        const responseMeta = `status=${response.status}${requestId ? ` req=${requestId}` : ""}`;
 
-        let data;
-        try {
-          data = JSON.parse(rawText);
-        } catch (parseError) {
-          console.error("[billing] Non-JSON response:", rawText);
-          throw new Error("Server error (non-JSON response)");
+        if (!parsed.ok) {
+          const preview = cleanText(parsed.rawText).slice(0, 200);
+          console.error("[billing] Non-JSON response:", parsed.rawText);
+          throw new Error(`Server error (non-JSON response, ${responseMeta})${preview ? `: ${preview}` : ""}`);
         }
 
+        const data = parsed.data || {};
+
         if (!response.ok) {
-          throw new Error(data.error || "Could not open billing portal.");
+          throw new Error(`${cleanText(data.error || "Could not open billing portal.")} (${responseMeta})`);
         }
 
         if (!data.url) {
@@ -2721,8 +2733,12 @@ async function loadAccountData(user, forceFresh = false) {
     setTextByIdForAll("referralCode", referral);
     setTextByIdForAll("referralCodeAffiliate", referral);
 
-    setTextByIdForAll("planNameBilling", currentNormalizedSession?.subscription?.plan || "Founder Beta");
-    setTextByIdForAll("subscriptionStatusBilling", currentNormalizedSession?.subscription?.status || "inactive");
+    const summaryPlan = cleanText(dashboardSummary?.plan_access?.plan_label || dashboardSummary?.account_snapshot?.plan || "");
+    const summaryStatus = cleanText(dashboardSummary?.account_snapshot?.status || "");
+    const effectivePlanLabel = cleanText(currentNormalizedSession?.subscription?.plan || summaryPlan || "Founder Beta");
+    const effectiveStatusLabel = cleanText(currentNormalizedSession?.subscription?.status || summaryStatus || "inactive");
+    setTextByIdForAll("planNameBilling", effectivePlanLabel);
+    setTextByIdForAll("subscriptionStatusBilling", effectiveStatusLabel);
     setTextByIdForAll("affiliateDirectCommission", "20% recurring");
     setTextByIdForAll("affiliateTierOverride", "5% second level");
     setTextByIdForAll("affiliatePartnerType", "Founding Partner");
