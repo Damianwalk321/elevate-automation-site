@@ -666,6 +666,7 @@ function bindCreditActionButtons() {
 let dashboardListings = [];
 let filteredListings = [];
 let dashboardListingsMeta = { total: 0, source_counts: { user_listings: 0, listings: 0, merged: 0 }, used_summary_fallback: false, source: "api", request_id: "", warnings: [] };
+let dashboardListingsMeta = { total: 0, source_counts: { user_listings: 0, listings: 0, merged: 0 }, used_summary_fallback: false, source: "api" };
 let dashboardListingsDiagnostics = { raw_rows: 0, normalized_rows: 0, dropped_rows: 0 };
 let listingQuickFilter = "all";
 
@@ -2201,6 +2202,12 @@ function renderListingDataState(listings = []) {
         requestId ? `Request ID: ${requestId}.` : "",
         summary.lifecycle_updated_at ? `Last lifecycle sync: ${cleanText(summary.lifecycle_updated_at)}.` : ""
       ].filter(Boolean).join(" ");
+    statusEl.textContent = [
+      `${mergedCount} listing${mergedCount === 1 ? "" : "s"} loaded.`,
+      `Rows: user_listings ${numberOrZero(counts.user_listings)} • listings ${numberOrZero(counts.listings)} • merged ${numberOrZero(counts.merged || mergedCount)}.`,
+      `Normalize: raw ${numberOrZero(dashboardListingsDiagnostics.raw_rows)} • rendered ${numberOrZero(dashboardListingsDiagnostics.normalized_rows)} • dropped ${numberOrZero(dashboardListingsDiagnostics.dropped_rows)}.`,
+      summary.lifecycle_updated_at ? `Last lifecycle sync: ${cleanText(summary.lifecycle_updated_at)}.` : ""
+    ].filter(Boolean).join(" ");
   }
 }
 
