@@ -51,13 +51,13 @@ function nowIso() {
 
 async function resolveUser({ userId, email }) {
   if (userId) {
-    const { data, error } = await supabase.from("users").select("id,email").eq("id", userId).maybeSingle();
+    const { data, error } = await supabase.from("users").select("id,email").or(`id.eq.${userId},auth_user_id.eq.${userId}`).maybeSingle();
     if (error) throw error;
     if (data) return data;
   }
 
   if (email) {
-    const { data, error } = await supabase.from("users").select("id,email").eq("email", email).maybeSingle();
+    const { data, error } = await supabase.from("users").select("id,email").ilike("email", email).order("created_at", { ascending: false }).limit(1).maybeSingle();
     if (error) throw error;
     if (data) return data;
   }
