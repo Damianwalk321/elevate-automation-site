@@ -1,4 +1,5 @@
 import { supabase } from '../lib/supabase.js';
+import { randomUUID } from 'node:crypto';
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -30,6 +31,7 @@ export default async function handler(req, res) {
   }
 
   // Fallback: email from query or body
+  const requestedId = req.query.id || req.body?.id || req.body?.user_id || null;
   if (!email) {
     email = req.query.email || req.body?.email;
   }
@@ -49,6 +51,8 @@ export default async function handler(req, res) {
 
     if (authUid) {
       query = query.eq('id', authUid);
+    } else if (requestedId) {
+      query = query.eq('id', requestedId);
     } else {
       query = query.ilike('email', email);
     }
@@ -115,7 +119,7 @@ export default async function handler(req, res) {
           .ilike('email', email)
           .maybeSingle();
 
-        const profileId = userRow?.auth_user_id || crypto.randomUUID();
+        const profileId = userRow?.auth_user_id || requestedId || randomUUID();
         upsertData = { id: profileId, email, ...updates };
       }
     }
