@@ -2180,9 +2180,10 @@ function renderListingDataState(listings = []) {
   const warnings = Array.isArray(dashboardListingsMeta?.warnings) ? dashboardListingsMeta.warnings.filter(Boolean) : [];
 
   const subtextParts = [
-    `${mergedCount} listing${mergedCount === 1 ? "" : "s"} loaded from ${sourceLabel}.`,
+    `${sourceLabel === "summary preview" ? "Preview Mode" : "Live Mode"} • ${mergedCount} listing${mergedCount === 1 ? "" : "s"} loaded.`,
     activeListings ? `${activeListings} active tracked.` : "No active tracked listings yet."
   ];
+  if (fallbackUsed) subtextParts.push("Direct listing rows are still hydrating.");
   if (fallbackUsed) subtextParts.push("Showing summary-backed preview while direct listing rows hydrate.");
   if (requestId) subtextParts.push(`Request ID: ${requestId}.`);
 
