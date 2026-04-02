@@ -191,6 +191,23 @@ async function executeActionCenterItemById(listingId, actionType) {
 }
 
 
+globalThis.bootStages = Array.isArray(globalThis.bootStages) ? globalThis.bootStages : [];
+globalThis.supabaseClient = globalThis.supabaseClient || null;
+globalThis.currentUser = globalThis.currentUser || null;
+globalThis.currentProfile = globalThis.currentProfile || null;
+globalThis.currentAccountData = globalThis.currentAccountData || null;
+globalThis.currentNormalizedSession = globalThis.currentNormalizedSession || null;
+globalThis.dashboardSummary = globalThis.dashboardSummary || null;
+globalThis.SYSTEM_STATE = globalThis.SYSTEM_STATE || null;
+
+bootStages = globalThis.bootStages;
+supabaseClient = globalThis.supabaseClient;
+currentUser = globalThis.currentUser;
+currentProfile = globalThis.currentProfile;
+currentAccountData = globalThis.currentAccountData;
+currentNormalizedSession = globalThis.currentNormalizedSession;
+dashboardSummary = globalThis.dashboardSummary;
+SYSTEM_STATE = globalThis.SYSTEM_STATE;
 var bootStages = [];
 
 var supabaseClient = null;
@@ -688,6 +705,17 @@ function bindCreditActionButtons() {
   });
 }
 
+globalThis.dashboardListings = Array.isArray(globalThis.dashboardListings) ? globalThis.dashboardListings : [];
+globalThis.filteredListings = Array.isArray(globalThis.filteredListings) ? globalThis.filteredListings : [];
+globalThis.dashboardListingsMeta = globalThis.dashboardListingsMeta || { total: 0, source_counts: { user_listings: 0, listings: 0, merged: 0 }, used_summary_fallback: false, source: "api", request_id: "", warnings: [] };
+globalThis.dashboardListingsDiagnostics = globalThis.dashboardListingsDiagnostics || { raw_rows: 0, normalized_rows: 0, dropped_rows: 0 };
+globalThis.listingQuickFilter = globalThis.listingQuickFilter || "all";
+
+dashboardListings = globalThis.dashboardListings;
+filteredListings = globalThis.filteredListings;
+dashboardListingsMeta = globalThis.dashboardListingsMeta;
+dashboardListingsDiagnostics = globalThis.dashboardListingsDiagnostics;
+listingQuickFilter = globalThis.listingQuickFilter;
 var dashboardListings = [];
 var filteredListings = [];
 var dashboardListingsMeta = { total: 0, source_counts: { user_listings: 0, listings: 0, merged: 0 }, used_summary_fallback: false, source: "api", request_id: "", warnings: [] };
