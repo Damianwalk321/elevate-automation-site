@@ -209,6 +209,24 @@ currentNormalizedSession = globalThis.currentNormalizedSession;
 dashboardSummary = globalThis.dashboardSummary;
 SYSTEM_STATE = globalThis.SYSTEM_STATE;
 
+bootStages = globalThis.bootStages;
+supabaseClient = globalThis.supabaseClient;
+currentUser = globalThis.currentUser;
+currentProfile = globalThis.currentProfile;
+currentAccountData = globalThis.currentAccountData;
+currentNormalizedSession = globalThis.currentNormalizedSession;
+dashboardSummary = globalThis.dashboardSummary;
+SYSTEM_STATE = globalThis.SYSTEM_STATE;
+var bootStages = [];
+
+var supabaseClient = null;
+var currentUser = null;
+var currentProfile = null;
+var currentAccountData = null;
+var currentNormalizedSession = null;
+var dashboardSummary = null;
+var SYSTEM_STATE = null;
+
 function getSummaryProfileSnapshot() {
   return dashboardSummary?.profile_snapshot || dashboardSummary?.account_snapshot || {};
 }
@@ -707,6 +725,17 @@ filteredListings = globalThis.filteredListings;
 dashboardListingsMeta = globalThis.dashboardListingsMeta;
 dashboardListingsDiagnostics = globalThis.dashboardListingsDiagnostics;
 listingQuickFilter = globalThis.listingQuickFilter;
+var dashboardListings = [];
+var filteredListings = [];
+var dashboardListingsMeta = { total: 0, source_counts: { user_listings: 0, listings: 0, merged: 0 }, used_summary_fallback: false, source: "api", request_id: "", warnings: [] };
+var dashboardListingsDiagnostics = { raw_rows: 0, normalized_rows: 0, dropped_rows: 0 };
+var listingQuickFilter = "all";
+let dashboardListings = [];
+let filteredListings = [];
+let dashboardListingsMeta = { total: 0, source_counts: { user_listings: 0, listings: 0, merged: 0 }, used_summary_fallback: false, source: "api", request_id: "", warnings: [] };
+let dashboardListingsMeta = { total: 0, source_counts: { user_listings: 0, listings: 0, merged: 0 }, used_summary_fallback: false, source: "api" };
+let dashboardListingsDiagnostics = { raw_rows: 0, normalized_rows: 0, dropped_rows: 0 };
+let listingQuickFilter = "all";
 
 document.addEventListener("DOMContentLoaded", async () => {
   try {
@@ -2247,6 +2276,7 @@ function renderListingDataState(listings = []) {
     activeListings ? `${activeListings} active tracked.` : "No active tracked listings yet."
   ];
   if (fallbackUsed) subtextParts.push("Direct listing rows are still hydrating.");
+  if (fallbackUsed) subtextParts.push("Showing summary-backed preview while direct listing rows hydrate.");
   if (requestId) subtextParts.push(`Request ID: ${requestId}.`);
 
   if (subtext) subtext.textContent = subtextParts.join(" ");
@@ -2265,6 +2295,12 @@ function renderListingDataState(listings = []) {
         requestId ? `Request ID: ${requestId}.` : "",
         summary.lifecycle_updated_at ? `Last lifecycle sync: ${cleanText(summary.lifecycle_updated_at)}.` : ""
       ].filter(Boolean).join(" ");
+    statusEl.textContent = [
+      `${mergedCount} listing${mergedCount === 1 ? "" : "s"} loaded.`,
+      `Rows: user_listings ${numberOrZero(counts.user_listings)} • listings ${numberOrZero(counts.listings)} • merged ${numberOrZero(counts.merged || mergedCount)}.`,
+      `Normalize: raw ${numberOrZero(dashboardListingsDiagnostics.raw_rows)} • rendered ${numberOrZero(dashboardListingsDiagnostics.normalized_rows)} • dropped ${numberOrZero(dashboardListingsDiagnostics.dropped_rows)}.`,
+      summary.lifecycle_updated_at ? `Last lifecycle sync: ${cleanText(summary.lifecycle_updated_at)}.` : ""
+    ].filter(Boolean).join(" ");
   }
 }
 
