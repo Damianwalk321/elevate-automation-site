@@ -1405,9 +1405,6 @@ function normalizeListingRecord(row) {
     review_bucket: clean(row.review_bucket || ""),
     posted_at: postedAt,
     created_at: row.created_at || postedAt,
-    updated_at: row.updated_at || row.created_at || postedAt,
-    last_seen_at: row.last_seen_at || row.updated_at || row.created_at || postedAt,
-    marketplace_listing_id: clean(row.marketplace_listing_id || row.listing_id || ""),
     views_count: views,
     messages_count: messages,
     popularity_score: (messages * 1000) + (views * 10) + getTimestamp(postedAt) / 100000000,
@@ -2231,28 +2228,6 @@ async function trackListingMessage(listingId) {
   await refreshDashboardData?.();
 }
 
-async function syncListingTraction(listingId) {
-  const item = dashboardListings.find((row) => String(row.id) === String(listingId));
-  if (!item) return;
-  const viewsInput = window.prompt("Sync views count from Facebook/Marketplace", String(numberOrZero(item.views_count)));
-  if (viewsInput == null) return;
-  const messagesInput = window.prompt("Sync messages count from Facebook/Marketplace", String(numberOrZero(item.messages_count)));
-  if (messagesInput == null) return;
-  const views = Math.max(0, numberOrZero(viewsInput));
-  const messages = Math.max(0, numberOrZero(messagesInput));
-  const metadata = {
-    source: "dashboard_manual_sync",
-    source_url: clean(item.source_url || ""),
-    marketplace_listing_id: clean(item.marketplace_listing_id || ""),
-    views_count: views,
-    messages_count: messages
-  };
-  await logListingUsage("listing_view_sync_v2", listingId, metadata);
-  await logListingUsage("listing_message_sync_v2", listingId, metadata);
-  setStatus("listingGridStatus", `Traction synced for ${cleanText(item.title || "listing")} (views ${views}, messages ${messages}).`);
-  await refreshDashboardData?.();
-}
-
 async function openListingSource(listingId, sourceUrl) {
   await logListingUsage("listing_card_opened", listingId, { source: "dashboard_open_source", source_url: sourceUrl });
   if (sourceUrl) window.open(sourceUrl, "_blank");
@@ -2364,15 +2339,12 @@ function renderListingsGrid(listings) {
             </div>
           </div>
 
-          <div class="listing-note" style="margin:0 0 12px;color:var(--muted);font-size:12px;"><strong>Last Traction Sync:</strong> ${escapeHtml(formatRelativeOrDate(item.last_seen_at || item.updated_at || item.posted_at))}</div>
-
           <div class="listing-actions">
             <button class="action-btn" type="button" onclick="openListingDetailModal('${escapeJs(item.id)}')">Inspect</button>
             <button class="action-btn" type="button" onclick="markListingAction('${escapeJs(item.id)}','approved')">Approve</button>
             <button class="action-btn" type="button" onclick="markListingSold('${escapeJs(item.id)}')">Mark Sold</button>
             <button class="action-btn" type="button" onclick="trackListingView('${escapeJs(item.id)}')">Log View</button>
             <button class="action-btn" type="button" onclick="trackListingMessage('${escapeJs(item.id)}')">Log Message</button>
-            <button class="action-btn" type="button" onclick="syncListingTraction('${escapeJs(item.id)}')">Sync Traction</button>
             ${
               item.source_url
                 ? `<button class="action-btn" type="button" onclick="openListingSource('${escapeJs(item.id)}','${escapeJs(item.source_url)}')">Open Source</button>`
@@ -3725,7 +3697,6 @@ window.copyVehicleSummary = copyVehicleSummary;
 
 window.trackListingView = trackListingView;
 window.trackListingMessage = trackListingMessage;
-window.syncListingTraction = syncListingTraction;
 window.openListingSource = openListingSource;
 
 window.markListingAction = markListingAction;

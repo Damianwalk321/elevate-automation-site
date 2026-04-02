@@ -241,7 +241,6 @@ export default async function handler(req, res) {
           emails_considered: identity.emails.length
         },
         sources: { user_listings: userRows.length, listings: legacyRows.length, merged: mergedMap.size },
-        backfill: { enabled: false, note: "backfill disabled on read path" }
         backfill: { enabled: shouldBackfill, user_listings_updated: userBackfill.updated, listings_updated: legacyBackfill.updated }
       }
     });
