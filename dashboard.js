@@ -1,3 +1,9 @@
+(() => {
+if (window.__ELEVATE_DASHBOARD_SCRIPT_LOADED__) {
+  console.warn("[Elevate Dashboard] Script already loaded; skipping duplicate initialization.");
+  return;
+}
+window.__ELEVATE_DASHBOARD_SCRIPT_LOADED__ = true;
 
 const EXTENSION_DOWNLOAD_URL = "/downloads/elevate-automation-extension.zip";
 const EXTENSION_FALLBACK_URL = "https://github.com/Damianwalk321/elevate-automation-vehicle-poster/archive/refs/heads/Dev.zip";
@@ -3689,3 +3695,4 @@ window.markListingAction = markListingAction;
 
 window.openListingDetailModal = openListingDetailModal;
 window.showSection = showSection;
+})();
