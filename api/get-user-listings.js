@@ -18,9 +18,12 @@ function buildListingIntelligence(row = {}) { const postedValue = row.posted_at 
 function normalizeListingRow(row = {}, source = "user_listings") { const normalized = { ...row, id: clean(row.id || ""), source_table: source, status: normalizeStatus(row.status), lifecycle_status: normalizeLifecycleStatus(row.lifecycle_status, row.review_bucket), review_bucket: normalizeReviewBucket(row.review_bucket), identity_key: listingIdentityKey(row), title: clean(row.title || ""), posted_at: row.posted_at || row.created_at || null, updated_at: row.updated_at || row.created_at || null, views_count: safeNumber(row.views_count, 0), messages_count: safeNumber(row.messages_count, 0), price: safeNumber(row.price, 0), mileage: safeNumber(row.mileage || row.kilometers || row.km, 0), body_style: clean(row.body_style || ""), make: clean(row.make || ""), model: clean(row.model || ""), trim: clean(row.trim || "") }; return { ...normalized, ...buildListingIntelligence(normalized) }; }
 function preferListingRow(current, incoming) { if (!current) return incoming; const currentScore = (current.source_table === "user_listings" ? 1000 : 0) + safeNumber(current.views_count) + safeNumber(current.messages_count) * 10 + new Date(current.updated_at || current.posted_at || 0).getTime() / 1000000000000; const incomingScore = (incoming.source_table === "user_listings" ? 1000 : 0) + safeNumber(incoming.views_count) + safeNumber(incoming.messages_count) * 10 + new Date(incoming.updated_at || incoming.posted_at || 0).getTime() / 1000000000000; return incomingScore >= currentScore ? { ...current, ...incoming } : { ...incoming, ...current }; }
 async function resolveIdentityCandidates({ userId, email, authUid = "", warnings = [] }) {
+
+async function resolveIdentityCandidates({ userId, email, authUid = "" }) {
   const userIds = new Set([clean(userId), clean(authUid)].filter(Boolean));
   const emails = new Set([normalizeEmail(email)].filter(Boolean));
   const matchedUsers = [];
+
 
   async function collectFromQuery(queryBuilder, label = "users_lookup") {
     const { data, error } = await queryBuilder;
@@ -29,6 +32,13 @@ async function resolveIdentityCandidates({ userId, email, authUid = "", warnings
       warnings.push(`${label}:${error?.message || "query_failed"}`);
       return;
     }
+
+      return;
+    }
+  async function collectFromQuery(queryBuilder) {
+    const { data, error } = await queryBuilder;
+    if (error) throw error;
+ 
     for (const row of (Array.isArray(data) ? data : [])) {
       matchedUsers.push(row);
       if (clean(row?.id)) userIds.add(clean(row.id));
@@ -56,6 +66,10 @@ async function resolveIdentityCandidates({ userId, email, authUid = "", warnings
         .order("created_at", { ascending: false })
         .limit(20),
       "users_lookup_by_auth_user_id"
+
+        .or(ids.map((id) => `id.eq.${id},auth_user_id.eq.${id}`).join(","))
+        .order("created_at", { ascending: false })
+        .limit(20)
     );
   }
 
@@ -68,6 +82,11 @@ async function resolveIdentityCandidates({ userId, email, authUid = "", warnings
         .order("created_at", { ascending: false })
         .limit(20),
       "users_lookup_by_email"
+
+
+
+        .limit(20)
+
     );
   }
 
@@ -81,6 +100,7 @@ async function resolveIdentityCandidates({ userId, email, authUid = "", warnings
 }
 
 async function fetchTableRows(tableName, userIds = [], emails = [], warnings = []) {
+async function fetchTableRows(tableName, userIds = [], emails = []) {
   const rows = [];
   const seen = new Set();
 
@@ -91,6 +111,11 @@ async function fetchTableRows(tableName, userIds = [], emails = [], warnings = [
       warnings.push(`${tableName}:${error?.message || "query_failed"}`);
       return;
     }
+
+      return;
+    }
+
+    if (error) throw error;
     for (const row of (Array.isArray(data) ? data : [])) {
       const key = clean(row?.id || "") || `${clean(row?.marketplace_listing_id || "")}|${clean(row?.posted_at || row?.created_at || "")}`;
       if (!key || seen.has(key)) continue;
@@ -124,6 +149,35 @@ async function fetchTableRows(tableName, userIds = [], emails = [], warnings = [
   return rows;
 }
 
+async function backfillListingIdentity(tableName, rows = [], canonicalUserId = "", canonicalEmail = "") {
+  const targetUserId = clean(canonicalUserId);
+  const targetEmail = normalizeEmail(canonicalEmail);
+  if (!targetUserId && !targetEmail) return { updated: 0 };
+
+  let updated = 0;
+  for (const row of rows) {
+    const rowId = clean(row?.id || "");
+    if (!rowId) continue;
+    const nextUserId = targetUserId || clean(row?.user_id || "");
+    const nextEmail = targetEmail || normalizeEmail(row?.email || "");
+    const userMismatch = nextUserId && clean(row?.user_id || "") !== nextUserId;
+    const emailMismatch = nextEmail && normalizeEmail(row?.email || "") !== nextEmail;
+    if (!userMismatch && !emailMismatch) continue;
+
+    const payload = {
+      user_id: nextUserId || null,
+      email: nextEmail || null,
+      updated_at: new Date().toISOString()
+    };
+    try {
+      const { error } = await supabase.from(tableName).update(payload).eq("id", rowId);
+      if (!error) updated += 1;
+    } catch (error) {
+      console.warn(`listing identity backfill warning (${tableName}:${rowId})`, error?.message || error);
+    }
+  }
+  return { updated };
+}
 function matchesFilter(row, { status, lifecycleStatus, reviewBucket, search, preset }) { const normalizedStatus = normalizeStatus(row.status); const normalizedLifecycle = normalizeLifecycleStatus(row.lifecycle_status, row.review_bucket); const normalizedBucket = normalizeReviewBucket(row.review_bucket); if (status) { if (status === "review") { if (!["review_delete", "review_price_update", "review_new"].includes(normalizedLifecycle)) return false; } else if (normalizedStatus !== status) return false; } if (lifecycleStatus && normalizedLifecycle !== lifecycleStatus) return false; if (reviewBucket && normalizedBucket !== reviewBucket) return false; if (preset) { if (preset === "review" && !["review_delete", "review_price_update", "review_new"].includes(normalizedLifecycle)) return false; if (preset === "stale" && !(normalizedStatus === "stale" || normalizedLifecycle === "stale" || normalizedLifecycle === "review_delete")) return false; if (preset === "price" && normalizedLifecycle !== "review_price_update" && normalizedBucket !== "pricechanges") return false; if (preset === "new" && normalizedLifecycle !== "review_new" && normalizedBucket !== "newvehicles") return false; if (preset === "active" && ["sold", "deleted", "inactive", "stale"].includes(normalizedStatus)) return false; if (preset === "promote" && !row.promote_now) return false; if (preset === "likely_sold" && !row.likely_sold) return false; if (preset === "weak" && !row.weak) return false; if (preset === "needs_action" && !row.needs_action) return false; } if (search) { const haystack = [row.title, row.make, row.model, row.trim, row.vin, row.stock_number, row.body_style, row.vehicle_type, row.exterior_color, row.fuel_type, row.location, row.lifecycle_status, row.review_bucket, row.source_url, row.predicted_label, row.recommended_action, row.pricing_insight].map((value) => clean(value).toLowerCase()).join(" "); if (!haystack.includes(search)) return false; } return true; }
 function sortRows(rows, sort) { const items = [...rows]; if (sort === "price_high") return items.sort((a, b) => safeNumber(b.price) - safeNumber(a.price)); if (sort === "price_low") return items.sort((a, b) => safeNumber(a.price) - safeNumber(b.price)); if (sort === "popular") return items.sort((a, b) => safeNumber(b.popularity_score) - safeNumber(a.popularity_score)); if (sort === "predicted") return items.sort((a, b) => safeNumber(b.predicted_score) - safeNumber(a.predicted_score)); return items.sort((a, b) => new Date(b.posted_at || b.updated_at || 0).getTime() - new Date(a.posted_at || a.updated_at || 0).getTime()); }
 function makeRequestId() { try { return randomUUID(); } catch { return `req_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 9)}`; } }
@@ -154,6 +208,13 @@ export default async function handler(req, res) {
       fetchTableRows("user_listings", identity.user_ids, identity.emails, warnings),
       fetchTableRows("listings", identity.user_ids, identity.emails, warnings)
     ]);
+    const shouldBackfill = String(req.query?.enable_backfill || "").toLowerCase() === "true";
+    const [userBackfill, legacyBackfill] = shouldBackfill
+      ? await Promise.all([
+        backfillListingIdentity("user_listings", userRows, finalUserId, finalEmail),
+        backfillListingIdentity("listings", legacyRows, finalUserId, finalEmail)
+      ])
+      : [{ updated: 0 }, { updated: 0 }];
     const mergedMap = new Map();
     for (const row of userRows) {
       const normalized = normalizeListingRow(row, "user_listings");
@@ -181,6 +242,7 @@ export default async function handler(req, res) {
         },
         sources: { user_listings: userRows.length, listings: legacyRows.length, merged: mergedMap.size },
         backfill: { enabled: false, note: "backfill disabled on read path" }
+        backfill: { enabled: shouldBackfill, user_listings_updated: userBackfill.updated, listings_updated: legacyBackfill.updated }
       }
     });
   } catch (error) {
