@@ -88,7 +88,7 @@ async function resolveUserId(supabase, userId, email) {
     const { data, error } = await supabase
       .from("users")
       .select("id,email,company")
-      .eq("id", cleanedUserId)
+      .or(`id.eq.${cleanedUserId},auth_user_id.eq.${cleanedUserId}`)
       .maybeSingle();
 
     if (error) throw error;

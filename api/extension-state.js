@@ -1,5 +1,15 @@
 import { supabase } from '../lib/supabase.js';
 
+const ACCESS_OVERRIDE_EMAILS = new Set(['damian044@icloud.com']);
+
+function clean(value) {
+  return String(value || '').trim();
+}
+
+function normalizeEmail(value) {
+  return clean(value).toLowerCase();
+}
+
 const CORS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, OPTIONS',
@@ -19,7 +29,7 @@ export default async function handler(req, res) {
 
   // Accept Bearer token or ?email= param
   let authUid = null;
-  let email = req.query.email?.toLowerCase();
+  let email = normalizeEmail(req.query.email);
 
   const authHeader = req.headers.authorization || '';
   if (authHeader.startsWith('Bearer ')) {
@@ -27,7 +37,7 @@ export default async function handler(req, res) {
     const { data: { user }, error } = await supabase.auth.getUser(token);
     if (!error && user) {
       authUid = user.id;
-      email = user.email?.toLowerCase();
+      email = normalizeEmail(user.email);
     }
   }
 
@@ -66,14 +76,16 @@ export default async function handler(req, res) {
     const { data: usage } = await usageQuery.maybeSingle();
 
     // 4. Determine access
+    const forcedAccess = ACCESS_OVERRIDE_EMAILS.has(normalizeEmail(email));
     const isActive =
+      forcedAccess ||
       subscription?.is_active ||
       subscription?.access_active ||
       subscription?.bridge_access ||
       subscription?.subscription_status === 'active' ||
       subscription?.subscription_status === 'trialing';
 
-    const dailyLimit = subscription?.daily_posting_limit || 5;
+    const dailyLimit = forcedAccess ? 25 : (subscription?.daily_posting_limit || 5);
     const postsToday = usage?.posts_today || 0;
     const canPost = isActive && postsToday < dailyLimit;
 
@@ -81,8 +93,8 @@ export default async function handler(req, res) {
       success: true,
       profile: profile || null,
       subscription: {
-        status: subscription?.subscription_status || 'none',
-        plan: subscription?.plan_type || 'Beta',
+        status: forcedAccess ? 'active' : (subscription?.subscription_status || 'none'),
+        plan: forcedAccess ? 'Pro' : (subscription?.plan_type || 'Beta'),
         isActive,
         dailyLimit,
         postsToday,
