@@ -2110,6 +2110,35 @@
   </div>
 </div>
 
+<script>
+  (function () {
+    const guardedPaths = new Set(["/dashboard.js", "/js/supabase-client.js"]);
+    const append = Element.prototype.appendChild;
+    const insertBefore = Element.prototype.insertBefore;
+    function shouldBlockScript(node) {
+      if (!node || String(node.tagName || "").toUpperCase() !== "SCRIPT") return false;
+      const src = String(node.src || "");
+      if (!src) return false;
+      try {
+        const url = new URL(src, window.location.origin);
+        if (!guardedPaths.has(url.pathname)) return false;
+        if (url.pathname === "/dashboard.js" && window.__ELEVATE_DASHBOARD_SCRIPT_LOADED__) return true;
+        if (url.pathname === "/js/supabase-client.js" && window.supabaseClient) return true;
+      } catch {}
+      return false;
+    }
+    Element.prototype.appendChild = function (node) {
+      if (shouldBlockScript(node)) return node;
+      return append.call(this, node);
+    };
+    Element.prototype.insertBefore = function (node, referenceNode) {
+      if (shouldBlockScript(node)) return node;
+      return insertBefore.call(this, node, referenceNode);
+    };
+  })();
+</script>
+<script src="/js/supabase-client.js?v=20260401g"></script>
+  <script src="/dashboard.js?v=20260401g"></script>
 <script src="/js/supabase-client.js?v=20260401f"></script>
   <script src="/dashboard.js?v=20260401f"></script>
 <script src="/js/supabase-client.js?v=20260401e"></script>

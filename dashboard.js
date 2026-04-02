@@ -208,6 +208,15 @@ currentAccountData = globalThis.currentAccountData;
 currentNormalizedSession = globalThis.currentNormalizedSession;
 dashboardSummary = globalThis.dashboardSummary;
 SYSTEM_STATE = globalThis.SYSTEM_STATE;
+
+bootStages = globalThis.bootStages;
+supabaseClient = globalThis.supabaseClient;
+currentUser = globalThis.currentUser;
+currentProfile = globalThis.currentProfile;
+currentAccountData = globalThis.currentAccountData;
+currentNormalizedSession = globalThis.currentNormalizedSession;
+dashboardSummary = globalThis.dashboardSummary;
+SYSTEM_STATE = globalThis.SYSTEM_STATE;
 var bootStages = [];
 
 var supabaseClient = null;
