@@ -293,6 +293,16 @@ export function formatCreditEventLabel(type = "") {
   }
 }
 
+export function getCreditEconomyState() {
+  return {
+    rewards: { ...DEFAULT_REWARDS },
+    schema: {
+      ledger_table: "user_credits",
+      events_table: "credit_events"
+    }
+  };
+}
+
 export async function awardPostCredits(supabase, { userId = "", email = "", listingId = "", duplicate = false, postsUsedToday = 0 } = {}) {
   const normalizedListingId = clean(listingId);
   const outcomes = [];
