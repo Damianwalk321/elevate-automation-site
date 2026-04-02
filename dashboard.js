@@ -605,15 +605,7 @@ async function buildAuthHeaders(extraHeaders = {}) {
 
 async function apiFetch(url, options = {}) {
   const headers = await buildAuthHeaders(options.headers || {});
-  const timeoutMs = Number(options.timeoutMs || 20000);
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(new Error(`Request timeout after ${timeoutMs}ms`)), timeoutMs);
-  let response;
-  try {
-    response = await fetch(url, { ...options, headers, signal: options.signal || controller.signal });
-  } finally {
-    clearTimeout(timeoutId);
-  }
+  const response = await fetch(url, { ...options, headers });
   if (response.status === 401) {
     setBootStatus("Session expired. Redirecting to login...");
     setTimeout(() => redirectToLogin(), 500);
@@ -621,17 +613,6 @@ async function apiFetch(url, options = {}) {
   return response;
 }
 function sleep(ms = 0) { return new Promise((resolve) => setTimeout(resolve, ms)); }
-function withTimeout(promise, label = "operation", timeoutMs = 20000) {
-  let timer = null;
-  return Promise.race([
-    promise,
-    new Promise((_, reject) => {
-      timer = setTimeout(() => reject(new Error(`${label} timed out after ${timeoutMs}ms`)), timeoutMs);
-    })
-  ]).finally(() => {
-    if (timer) clearTimeout(timer);
-  });
-}
 
 async function parseApiJson(response) {
   const rawText = await response.text();
@@ -764,7 +745,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     const {
       data: { session },
       error: sessionError
-    } = await withTimeout(supabaseClient.auth.getSession(), "auth.getSession");
+    } = await supabaseClient.auth.getSession();
 
     if (sessionError) {
       console.error("Session error:", sessionError);
@@ -781,16 +762,16 @@ document.addEventListener("DOMContentLoaded", async () => {
     renderUserBasics(currentUser);
 
     pushBootStage("User", "Syncing account record...");
-    await withTimeout(syncUserIfNeeded(currentUser), "syncUserIfNeeded");
+    await syncUserIfNeeded(currentUser);
 
     pushBootStage("Profile", "Loading saved dealer profile...");
-    await withTimeout(loadProfile(currentUser.id), "loadProfile");
+    await loadProfile(currentUser.id);
 
     pushBootStage("Workspace", "Loading billing, extension state, metrics, and listings...");
-    await withTimeout(refreshDashboardState(true), "refreshDashboardState", 30000);
+    await refreshDashboardState(true);
 
     pushBootStage("Extension", "Pushing live profile sync to extension...");
-    await withTimeout(pushExtensionProfileSync(), "pushExtensionProfileSync");
+    await pushExtensionProfileSync();
 
     showSection("overview");
     setBootStatus("Dashboard ready.");
