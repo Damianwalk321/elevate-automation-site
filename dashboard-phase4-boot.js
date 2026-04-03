@@ -28,6 +28,9 @@
           try { NS.phase5workflow?.renderSalesOS?.(); } catch {}
         });
       }
+  function boot() {
+    try {
+      NS.overview?.applyOverviewHierarchy?.();
       if (NS.state) NS.state.set("booted", true);
     } catch (error) {
       console.warn("[Elevate Dashboard] Phase 4 boot warning:", error);
@@ -36,6 +39,7 @@
 
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", () => { boot(); });
+    document.addEventListener("DOMContentLoaded", boot);
   } else {
     boot();
   }
