@@ -6,23 +6,24 @@
   window.__ELEVATE_DASHBOARD_PHASE4_LOADER__ = true;
 
   const NS = (window.ElevateDashboard = window.ElevateDashboard || {});
-  NS.version = "phase4-loader-v1";
+  NS.version = "phase4-loader-v2";
   NS.modules = NS.modules || {};
   NS.events = NS.events || new EventTarget();
 
   const MODULES = [
-    "/dashboard-state.js?v=20260403p4a",
-    "/dashboard-ui.js?v=20260403p4a",
-    "/dashboard-api.js?v=20260403p4a",
-    "/dashboard-overview.js?v=20260403p4a",
-    "/dashboard-listings.js?v=20260403p4a",
-    "/dashboard-profile.js?v=20260403p4a",
-    "/dashboard-tools.js?v=20260403p4a",
-    "/dashboard-analytics.js?v=20260403p4a",
-    "/dashboard-affiliate.js?v=20260403p4a",
-    "/dashboard-billing.js?v=20260403p4a",
-    "/dashboard-legacy.js?v=20260403p4a",
-    "/dashboard-phase4-boot.js?v=20260403p4a"
+    "/dashboard-state.js?v=20260406p12a",
+    "/dashboard-ui.js?v=20260406p12a",
+    "/dashboard-api.js?v=20260406p12a",
+    "/dashboard-overview.js?v=20260406p12a",
+    "/dashboard-listings.js?v=20260406p12a",
+    "/dashboard-profile.js?v=20260406p12a",
+    "/dashboard-tools.js?v=20260406p12a",
+    "/dashboard-analytics.js?v=20260406p12a",
+    "/dashboard-affiliate.js?v=20260406p12a",
+    "/dashboard-billing.js?v=20260406p12a",
+    "/dashboard-legacy.js?v=20260406p12a",
+    "/dashboard-phase4-boot.js?v=20260406p12a",
+    "/dashboard-bootstrap.js?v=20260406p12a"
   ];
 
   function loadScriptSequentially(index = 0) {
