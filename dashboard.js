@@ -3,6 +3,56 @@
     console.warn("[Elevate Dashboard] Phase 4 loader already initialized.");
     return;
   }
+  wrap.innerHTML = `<div class="action-center-list">${visible.map((item) => `
+    <div class="action-center-item">
+      <div class="action-center-item-head">
+        <div>
+          <div class="action-center-item-title">${escapeHtml(item.title || "Listing")}</div>
+          <div class="action-center-item-meta">${escapeHtml(item.subtitle || "")}</div>
+        </div>
+        <div class="badge ${item.priority === "opportunity" ? "active" : "warn"}">${escapeHtml(item.priority === "opportunity" ? "Opportunity" : "Needs Action")}</div>
+      </div>
+      <div class="action-center-item-copy">${escapeHtml(item.reason || item.recommended_action || "Review this listing.")}</div>
+      <div class="action-center-item-actions">
+        <button class="action-btn" type="button" onclick='executeActionCenterItemById("${escapeJs(String(item.id || ""))}", "${escapeJs(String(item.action_type || ""))}")'>${escapeHtml(getActionLabel(item.action_type))}</button>
+        <button class="action-btn secondary" type="button" onclick='openListingDetail("${escapeJs(String(item.id || ""))}")'>Inspect</button>
+        <button class="action-btn secondary" type="button" onclick='snoozeActionItem("${escapeJs(String(item.id || ""))}")'>Snooze</button>
+      </div>
+    </div>`).join("")}</div>`;
+}
+
+async function executeActionCenterItemById(listingId, actionType) {
+  if (!listingId) return;
+  try {
+    await markListingAction(listingId, getActionPayload(actionType));
+    await refreshDashboardState(true);
+  } catch (error) {
+    console.warn("execute action center item warning", error);
+  }
+}
+
+
+var bootStages = [];
+
+var supabaseClient = null;
+var currentUser = null;
+var currentProfile = null;
+var currentAccountData = null;
+var currentNormalizedSession = null;
+var dashboardSummary = null;
+var SYSTEM_STATE = null;
+
+function getSummaryProfileSnapshot() {
+  return dashboardSummary?.profile_snapshot || dashboardSummary?.account_snapshot || {};
+}
+
+function readLocalProfileSnapshot() {
+  const keys = [
+    'ea_dashboard_profile_v1',
+    'elevate_profile_snapshot',
+    'ea_profile_snapshot',
+    'ea_user_profile',
+    'ea_account_profile'
   window.__ELEVATE_DASHBOARD_PHASE4_LOADER__ = true;
 
   const NS = (window.ElevateDashboard = window.ElevateDashboard || {});
@@ -29,6 +79,451 @@
   function loadScriptSequentially(index = 0) {
     if (index >= MODULES.length) return Promise.resolve();
 
+  const setup = dashboardSummary?.setup_status || {};
+  const systemState = {
+    summary: dashboardSummary || {},
+    profile: canonicalProfile,
+    session,
+    subscription,
+    setup: {
+      ...setup,
+      dealer_website_present: Boolean(setup.dealer_website_present || canonicalProfile.dealer_website),
+      inventory_url_present: Boolean(setup.inventory_url_present || canonicalProfile.inventory_url),
+      scanner_type_present: Boolean(setup.scanner_type_present || canonicalProfile.scanner_type),
+      listing_location_present: Boolean(setup.listing_location_present || canonicalProfile.listing_location),
+      compliance_mode_present: Boolean(setup.compliance_mode_present || canonicalProfile.compliance_mode || canonicalProfile.province),
+      full_name_present: Boolean(setup.full_name_present || canonicalProfile.full_name),
+      dealership_present: Boolean(setup.dealership_present || canonicalProfile.dealership)
+    },
+    compliance: {
+      province: canonicalProfile.province,
+      mode: canonicalProfile.compliance_mode,
+      license_number: canonicalProfile.license_number,
+      dealer_contact: firstNonEmpty(canonicalProfile.dealer_phone, canonicalProfile.phone, canonicalProfile.dealer_email)
+    }
+  };
+  window.__EA_SYSTEM_STATE = systemState;
+  return systemState;
+}
+
+function getCanonicalProfileState(overrideProfile = null, overrideSession = null) {
+  return getSystemState(overrideProfile, overrideSession).profile;
+}
+
+function getCanonicalSubscriptionState(overrideSession = null) {
+  const session = overrideSession || currentNormalizedSession || {};
+  const subscription = session?.subscription || {};
+  const snapshot = dashboardSummary?.account_snapshot || {};
+  const planAccess = dashboardSummary?.plan_access || {};
+  const email = clean(currentUser?.email || session?.user?.email || snapshot?.email || '').toLowerCase();
+  const forceTestingAccess = email === 'damian044@icloud.com';
+  const plan = clean(subscription.plan || subscription.normalized_plan || snapshot.plan || planAccess.plan_label || 'Founder Beta') || 'Founder Beta';
+  const status = clean(subscription.normalized_status || subscription.status || snapshot.status || (snapshot.active ? 'active' : 'inactive')) || 'inactive';
+  const baseLimit = Math.max(
+    numberOrZero(subscription.posting_limit || subscription.daily_posting_limit),
+    numberOrZero(snapshot.base_posting_limit),
+    numberOrZero(snapshot.posting_limit),
+    numberOrZero(planAccess.posting_limit)
+  );
+  const used = Math.max(
+    numberOrZero(subscription.posts_today),
+    numberOrZero(snapshot.posts_today ?? snapshot.posts_used_today),
+    numberOrZero(dashboardSummary?.posts_today)
+  );
+  const remaining = Math.max(
+    numberOrZero(subscription.posts_remaining),
+    numberOrZero(snapshot.posts_remaining),
+    Math.max(baseLimit - used, 0)
+  );
+  const active = Boolean(
+    forceTestingAccess ||
+    subscription.access_granted === true ||
+    subscription.active === true ||
+    snapshot.access_granted === true ||
+    snapshot.active === true ||
+    status.toLowerCase() === 'active'
+  );
+  return {
+    ...snapshot,
+    ...subscription,
+    plan,
+    normalized_plan: plan,
+    status,
+    normalized_status: status,
+    active,
+    access_granted: active,
+    posting_limit: forceTestingAccess ? Math.max(25, baseLimit) : baseLimit,
+    posts_today: used,
+    posts_remaining: forceTestingAccess ? Math.max(0, Math.max(25, baseLimit) - used) : remaining,
+    license_key: clean(subscription.license_key || snapshot.software_license_key || '')
+  };
+}
+
+function rerenderCanonicalPanels() {
+  const canonicalSession = currentNormalizedSession || buildFallbackSessionFromLocalState();
+  const systemState = getSystemState(currentProfile, canonicalSession);
+  const canonicalProfile = systemState.profile;
+  renderProfileSummary(canonicalProfile);
+  populateComplianceSummary(canonicalProfile);
+  renderAccessState(canonicalSession);
+  renderExtensionControl(canonicalSession, canonicalProfile);
+  updateSetupStates(canonicalProfile, canonicalSession);
+  renderSetupWorkspace(canonicalProfile, canonicalSession);
+  renderComplianceWorkspace(canonicalProfile, canonicalSession);
+  renderToolsWorkspace(canonicalProfile, canonicalSession);
+  applySystemStateToForm(canonicalProfile);
+  persistProfileSnapshots(buildExtensionProfileSnapshot(canonicalSession, canonicalProfile, currentUser), canonicalSession);
+}
+
+let currentReadCopyText = "";
+let selectedToolModule = null;
+let currentListingDetail = null;
+
+async function getAuthAccessToken() {
+  try {
+    if (supabaseClient?.auth?.getSession) {
+      const { data } = await supabaseClient.auth.getSession();
+      return data?.session?.access_token || "";
+    }
+  } catch (error) {
+    console.warn("getAuthAccessToken warning:", error);
+  }
+  return "";
+}
+
+async function buildAuthHeaders(extraHeaders = {}) {
+  const headers = { ...extraHeaders, "x-elevate-client": "dashboard" };
+  const token = await getAuthAccessToken();
+  if (token) headers.Authorization = `Bearer ${token}`;
+  return headers;
+}
+
+async function apiFetch(url, options = {}) {
+  const headers = await buildAuthHeaders(options.headers || {});
+  const timeoutMs = Number(options.timeoutMs || 20000);
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(new Error(`Request timeout after ${timeoutMs}ms`)), timeoutMs);
+  let response;
+  try {
+    response = await fetch(url, { ...options, headers, signal: options.signal || controller.signal });
+  } finally {
+    clearTimeout(timeoutId);
+  }
+  if (response.status === 401) {
+    setBootStatus("Session expired. Redirecting to login...");
+    setTimeout(() => redirectToLogin(), 500);
+  }
+  return response;
+}
+function sleep(ms = 0) { return new Promise((resolve) => setTimeout(resolve, ms)); }
+function withTimeout(promise, label = "operation", timeoutMs = 20000) {
+  let timer = null;
+  return Promise.race([
+    promise,
+    new Promise((_, reject) => {
+      timer = setTimeout(() => reject(new Error(`${label} timed out after ${timeoutMs}ms`)), timeoutMs);
+    })
+  ]).finally(() => {
+    if (timer) clearTimeout(timer);
+  });
+}
+
+async function parseApiJson(response) {
+  const rawText = await response.text();
+  try {
+    return JSON.parse(rawText || '{}');
+  } catch (error) {
+    const preview = cleanText(rawText).slice(0, 180);
+    throw new Error(preview || `Non-JSON API response (${response.status})`);
+  }
+}
+
+async function parseJsonWithDebug(response) {
+  const rawText = await response.text();
+  try {
+    return { ok: true, data: JSON.parse(rawText || '{}'), rawText };
+  } catch {
+    return { ok: false, data: null, rawText };
+  }
+}
+
+function openReadCopyModal({ title = "Read in Dashboard", subtitle = "Read this in the dashboard first, then copy only if needed.", eyebrow = "Dashboard Script", body = "" } = {}) {
+  const modal = document.getElementById("readCopyModal");
+  if (!modal) return;
+  currentReadCopyText = String(body || "");
+  const titleEl = document.getElementById("readCopyModalTitle");
+  const subtitleEl = document.getElementById("readCopyModalSubtitle");
+  const eyebrowEl = document.getElementById("readCopyModalEyebrow");
+  const bodyEl = document.getElementById("readCopyModalBody");
+  if (titleEl) titleEl.textContent = title;
+  if (subtitleEl) subtitleEl.textContent = subtitle;
+  if (eyebrowEl) eyebrowEl.textContent = eyebrow;
+  if (bodyEl) bodyEl.textContent = currentReadCopyText;
+  modal.classList.add("open");
+  modal.setAttribute("aria-hidden", "false");
+}
+function closeReadCopyModal() {
+  const modal = document.getElementById("readCopyModal");
+  if (!modal) return;
+  modal.classList.remove("open");
+  modal.setAttribute("aria-hidden", "true");
+}
+
+
+async function redeemCreditActionRequest(actionKey, quantity = 1) {
+  const response = await apiFetch("/api/redeem-credit-action", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ action: actionKey, quantity })
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok || data.success === false) {
+    throw new Error(cleanText(data.error || "Unable to redeem credit action."));
+  }
+  return data;
+}
+
+function bindCreditActionButtons() {
+  document.querySelectorAll("[data-credit-action]").forEach((button) => {
+    if (button.dataset.boundCreditAction === "true") return;
+    button.dataset.boundCreditAction = "true";
+    button.addEventListener("click", async () => {
+      const actionKey = cleanText(button.getAttribute("data-credit-action"));
+      if (!actionKey) return;
+      const original = button.textContent;
+      try {
+        button.disabled = true;
+        button.textContent = "Applying...";
+        const result = await redeemCreditActionRequest(actionKey, 1);
+        const statusEl = document.getElementById("creditActionStatus");
+        if (statusEl) statusEl.textContent = `${cleanText(result.action?.title || "Action applied")}: -${numberOrZero(result.amount_spent)} credits, +${numberOrZero(result.grants_posts)} post today.`;
+        await refreshDashboardData?.();
+      } catch (error) {
+        const statusEl = document.getElementById("creditActionStatus");
+        if (statusEl) statusEl.textContent = cleanText(error.message || "Unable to redeem credit action.");
+      } finally {
+        button.disabled = false;
+        button.textContent = original;
+      }
+    });
+  });
+}
+
+var dashboardListings = [];
+var filteredListings = [];
+var dashboardListingsMeta = { total: 0, source_counts: { user_listings: 0, listings: 0, merged: 0 }, used_summary_fallback: false, source: "api", request_id: "", warnings: [] };
+var dashboardListingsDiagnostics = { raw_rows: 0, normalized_rows: 0, dropped_rows: 0 };
+var listingQuickFilter = "all";
+let dashboardListings = [];
+let filteredListings = [];
+let dashboardListingsMeta = { total: 0, source_counts: { user_listings: 0, listings: 0, merged: 0 }, used_summary_fallback: false, source: "api", request_id: "", warnings: [] };
+let dashboardListingsMeta = { total: 0, source_counts: { user_listings: 0, listings: 0, merged: 0 }, used_summary_fallback: false, source: "api" };
+let dashboardListingsDiagnostics = { raw_rows: 0, normalized_rows: 0, dropped_rows: 0 };
+let listingQuickFilter = "all";
+
+document.addEventListener("DOMContentLoaded", async () => {
+  try {
+    setBootStatus("Booting dashboard...");
+
+    if (!window.supabase || !window.supabase.createClient) {
+      setBootStatus("Supabase library missing.");
+      return;
+    }
+
+    supabaseClient =
+      window.supabaseClient ||
+      window.supabase.createClient(
+        window.__ELEVATE_SUPABASE_URL,
+        window.__ELEVATE_SUPABASE_ANON_KEY
+      );
+
+    if (!supabaseClient) {
+      setBootStatus("Supabase client unavailable.");
+      return;
+    }
+
+    bindDashboardUI();
+
+    pushBootStage("Session", "Checking login session...");
+    const {
+      data: { session },
+      error: sessionError
+    } = await withTimeout(supabaseClient.auth.getSession(), "auth.getSession");
+
+    if (sessionError) {
+      console.error("Session error:", sessionError);
+      setBootStatus("Session error.");
+      return;
+    }
+
+    if (!session || !session.user) {
+      redirectToLogin();
+      return;
+    }
+
+    currentUser = session.user;
+    renderUserBasics(currentUser);
+
+    pushBootStage("User", "Syncing account record...");
+    await withTimeout(syncUserIfNeeded(currentUser), "syncUserIfNeeded");
+
+    pushBootStage("Profile", "Loading saved dealer profile...");
+    await withTimeout(loadProfile(currentUser.id), "loadProfile");
+
+    pushBootStage("Workspace", "Loading billing, extension state, metrics, and listings...");
+    await withTimeout(refreshDashboardState(true), "refreshDashboardState", 30000);
+
+    pushBootStage("Extension", "Pushing live profile sync to extension...");
+    await withTimeout(pushExtensionProfileSync(), "pushExtensionProfileSync");
+
+    showSection("overview");
+    setBootStatus("Dashboard ready.");
+  } catch (error) {
+    console.error("Dashboard boot failed:", error);
+    setBootStatus(`Dashboard failed to load: ${error.message || "Unknown error"}`);
+  }
+});
+
+function bindDashboardUI() {
+  document.querySelectorAll("[data-section]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const sectionId = button.getAttribute("data-section");
+      showSection(sectionId);
+    });
+  });
+
+
+const closeReadCopyModalBtn = document.getElementById("closeReadCopyModalBtn");
+if (closeReadCopyModalBtn) closeReadCopyModalBtn.addEventListener("click", closeReadCopyModal);
+const readCopyModal = document.getElementById("readCopyModal");
+if (readCopyModal) {
+  readCopyModal.addEventListener("click", (event) => {
+    if (event.target === readCopyModal) closeReadCopyModal();
+  });
+}
+const copyReadCopyModalBtn = document.getElementById("copyReadCopyModalBtn");
+if (copyReadCopyModalBtn) {
+  copyReadCopyModalBtn.addEventListener("click", async () => {
+    if (!currentReadCopyText) return;
+    try {
+      await navigator.clipboard.writeText(currentReadCopyText);
+      setBootStatus("Text copied.");
+    } catch (error) {
+      console.error("read copy modal clipboard error:", error);
+      setBootStatus("Could not copy text.");
+    }
+  });
+}
+
+const closeListingDetailModalBtn = document.getElementById('closeListingDetailModalBtn');
+if (closeListingDetailModalBtn) closeListingDetailModalBtn.addEventListener('click', closeListingDetailModal);
+const listingDetailModal = document.getElementById('listingDetailModal');
+if (listingDetailModal) {
+  listingDetailModal.addEventListener('click', (event) => {
+    if (event.target === listingDetailModal) closeListingDetailModal();
+  });
+}
+const toolModuleFilter = document.getElementById('toolModuleFilter');
+if (toolModuleFilter) toolModuleFilter.addEventListener('change', applyToolModuleFilters);
+const toolStateFilter = document.getElementById('toolStateFilter');
+if (toolStateFilter) toolStateFilter.addEventListener('change', applyToolModuleFilters);
+document.querySelectorAll('.tool-tile').forEach((tile) => {
+  tile.addEventListener('click', () => {
+    const requiredPlan = cleanText(tile.getAttribute('data-required-plan') || '').toLowerCase();
+    if (requiredPlan === 'pro' && !getPlanAccessSnapshot().is_pro) {
+      openPremiumPreviewModal('tools');
+    }
+    selectedToolModule = {
+      title: cleanText(tile.querySelector('h3')?.textContent || 'Module'),
+      description: cleanText(tile.querySelector('p')?.textContent || ''),
+      group: cleanText(tile.getAttribute('data-module-group') || ''),
+      state: cleanText(tile.getAttribute('data-module-state') || '')
+    };
+    renderToolModuleDetail();
+  });
+});
+
+  const saveProfileBtn = document.getElementById("saveProfileBtn");
+  if (saveProfileBtn) {
+    saveProfileBtn.addEventListener("click", async (event) => {
+      event.preventDefault();
+      await onSaveProfilePressed();
+    });
+  }
+
+  document.addEventListener('click', (event) => {
+    const jumpBtn = event.target.closest('.setup-jump-btn');
+    if (jumpBtn) {
+      jumpToSetupField(jumpBtn.getAttribute('data-field-id') || '');
+      return;
+    }
+    const toolsJump = event.target.closest('[data-open-section]');
+    if (toolsJump) {
+      const sectionId = toolsJump.getAttribute('data-open-section');
+      const fieldId = toolsJump.getAttribute('data-focus-field') || '';
+      if (sectionId) showSection(sectionId);
+      if (fieldId) jumpToSetupField(fieldId);
+    }
+  });
+
+  const logoutBtn = document.getElementById("logoutBtn");
+  if (logoutBtn) {
+    logoutBtn.addEventListener("click", async () => {
+      await signOutUser();
+    });
+  }
+
+  const refreshAccessBtn = document.getElementById("refreshAccessBtn");
+  if (refreshAccessBtn) {
+    refreshAccessBtn.addEventListener("click", async () => {
+      if (!currentUser) return;
+      await refreshDashboardState(true);
+      await pushExtensionProfileSync();
+    });
+  }
+
+  const refreshExtensionStateBtn = document.getElementById("refreshExtensionStateBtn");
+  if (refreshExtensionStateBtn) {
+    refreshExtensionStateBtn.addEventListener("click", async () => {
+      if (!currentUser) return;
+      await loadAccountData(currentUser, true);
+      await pushExtensionProfileSync();
+      setStatus("extensionActionStatus", "Extension state refreshed.");
+    });
+  }
+
+  const downloadExtensionBtn = document.getElementById("downloadExtensionBtn");
+  if (downloadExtensionBtn) {
+    downloadExtensionBtn.addEventListener("click", async () => {
+      const target = await resolveExtensionDownloadUrl();
+      window.open(target, "_blank");
+      setStatus(
+        "extensionActionStatus",
+        target === EXTENSION_DOWNLOAD_URL
+          ? "Opening hosted extension download..."
+          : "Hosted extension file missing. Opening GitHub fallback..."
+      );
+    });
+  }
+
+  const openMarketplaceBtn = document.getElementById("openMarketplaceBtn");
+  if (openMarketplaceBtn) {
+    openMarketplaceBtn.addEventListener("click", () => {
+      window.open("https://www.facebook.com/marketplace/create/vehicle", "_blank");
+    });
+  }
+
+  const openInventoryBtn = document.getElementById("openInventoryBtn");
+  if (openInventoryBtn) {
+    openInventoryBtn.addEventListener("click", () => {
+      const inventoryUrl =
+        getFieldValue("inventory_url") ||
+        currentProfile?.inventory_url ||
+        currentNormalizedSession?.dealership?.inventory_url ||
+        "";
+
+      if (!inventoryUrl) {
+        setStatus("extensionActionStatus", "No inventory URL saved yet.");
     const src = MODULES[index];
     return new Promise((resolve, reject) => {
       const existing = Array.from(document.scripts).find((s) => s.src && s.src.includes(src.split("?")[0]));
