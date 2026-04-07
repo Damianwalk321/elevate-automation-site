@@ -1,72 +1,105 @@
-import { supabase } from '../lib/supabase.js';
-
-const CORS = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-};
-
-export default async function handler(req, res) {
-  if (req.method === 'OPTIONS') {
-    return res.status(200).set(CORS).end();
+(function () {
+  function clean(value) {
+    return String(value || "").trim();
   }
 
-  Object.entries(CORS).forEach(([k, v]) => res.setHeader(k, v));
-
-  const authHeader = req.headers.authorization || '';
-  if (!authHeader.startsWith('Bearer ')) {
-    return res.status(401).json({ authenticated: false, error: 'No token' });
+  function getClient() {
+    const client = window.supabaseClient;
+    if (!client) {
+      throw new Error("Supabase client is not initialized.");
+    }
+    return client;
   }
 
-  const token = authHeader.slice(7);
+  async function getSessionToken() {
+    const client = getClient();
+    const { data, error } = await client.auth.getSession();
+    if (error) throw error;
+    return data?.session?.access_token || "";
+  }
 
-  try {
-    const { data: { user }, error } = await supabase.auth.getUser(token);
+  async function syncUserRecord() {
+    try {
+      const token = await getSessionToken();
+      if (!token) return;
 
-    if (error || !user) {
-      return res.status(401).json({ authenticated: false, error: 'Invalid or expired token' });
+      await fetch("/api/sync-user", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+          "x-elevate-client": "dashboard"
+        },
+        body: JSON.stringify({})
+      });
+    } catch (error) {
+      console.warn("[Elevate Auth] syncUserRecord warning:", error);
     }
+  }
 
-    const email = user.email?.toLowerCase();
-
-    // Load profile
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('id', user.id)
-      .maybeSingle();
-
-    // Load subscription
-    const { data: userRow } = await supabase
-      .from('users')
-      .select('id, plan, stripe_customer_id, stripe_subscription_id')
-      .eq('auth_user_id', user.id)
-      .maybeSingle();
-
-    let subscription = null;
-    if (userRow) {
-      const { data: sub } = await supabase
-        .from('subscriptions')
-        .select('subscription_status, plan_type, daily_posting_limit, is_active, trial_end')
-        .eq('user_id', userRow.id)
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      subscription = sub;
-    }
-
-    return res.status(200).json({
-      authenticated: true,
-      user: {
-        id: user.id,
-        email,
-      },
-      profile: profile || null,
-      subscription: subscription || { subscription_status: 'none', is_active: false },
-      stripeCustomerId: userRow?.stripe_customer_id || null,
+  async function signInWithEmail(email, password) {
+    const client = getClient();
+    const { data, error } = await client.auth.signInWithPassword({
+      email: clean(email).toLowerCase(),
+      password
     });
-  } catch (err) {
-    console.error('[auth] Error:', err.message);
-    return res.status(500).json({ authenticated: false, error: err.message });
+
+    if (error) throw error;
+    await syncUserRecord();
+    return data;
   }
-}
+
+  async function signUpWithEmail(email, password, fullName = "", referral = {}) {
+    const client = getClient();
+    const referralCode = clean(referral?.referral_code || "");
+    const referralSource = clean(referral?.referral_source || "");
+
+    const { data, error } = await client.auth.signUp({
+      email: clean(email).toLowerCase(),
+      password,
+      options: {
+        emailRedirectTo: `${window.location.origin}/login.html`,
+        data: {
+          full_name: clean(fullName),
+          referral_code: referralCode,
+          referral_source: referralSource
+        }
+      }
+    });
+
+    if (error) throw error;
+    await syncUserRecord();
+    return data;
+  }
+
+  async function sendResetPassword(email) {
+    const client = getClient();
+    const { data, error } = await client.auth.resetPasswordForEmail(clean(email).toLowerCase(), {
+      redirectTo: `${window.location.origin}/reset-password.html`
+    });
+
+    if (error) throw error;
+    return data;
+  }
+
+  async function updatePassword(newPassword) {
+    const client = getClient();
+    const { data, error } = await client.auth.updateUser({ password: newPassword });
+    if (error) throw error;
+    return data;
+  }
+
+  async function signOutWithEmail() {
+    const client = getClient();
+    const { error } = await client.auth.signOut();
+    if (error) throw error;
+  }
+
+  window.signInWithEmail = signInWithEmail;
+  window.signUpWithEmail = signUpWithEmail;
+  window.sendResetPassword = sendResetPassword;
+  window.updatePassword = updatePassword;
+  window.signOutWithEmail = signOutWithEmail;
+
+  console.log("[Elevate Auth] Browser auth helpers loaded.");
+})();

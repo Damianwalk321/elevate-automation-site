@@ -1245,7 +1245,7 @@
         min-width: 100%;
       }
     }
-  
+
     .action-center-list{display:flex;flex-direction:column;gap:12px}
     .action-center-item{background:var(--panel-2);border:1px solid var(--line);border-radius:14px;padding:14px}
     .action-center-item-head{display:flex;justify-content:space-between;gap:12px;align-items:flex-start;margin-bottom:8px}
@@ -1262,6 +1262,260 @@
   .modal-copy{white-space:pre-wrap;line-height:1.65;background:var(--panel-2);border:1px solid var(--line);border-radius:16px;padding:16px;max-height:52vh;overflow:auto}
   .module-toolbar{display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:16px}
   .module-group-label{font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--accent)}
+
+/* Phase 3 streamline layer */
+:root {
+  --accent: #d4af37;
+  --panel-soft: #141414;
+  --panel-deep: #101010;
+  --text-soft: #d6d6d6;
+}
+
+.main-header {
+  gap: 8px;
+  margin-bottom: 20px;
+}
+.main-header h1 {
+  font-size: 28px;
+}
+#bootStatus {
+  min-height: 16px;
+  font-size: 12px;
+  opacity: 0.85;
+}
+
+#overview .command-center-grid {
+  grid-template-columns: minmax(0, 1.95fr) minmax(280px, 0.85fr);
+  gap: 16px;
+  margin-bottom: 16px;
+}
+#overview .command-primary,
+#overview .command-side-card,
+#overview .mini-stat,
+#overview .card {
+  border-radius: 16px;
+}
+#overview .command-primary {
+  padding: 24px;
+}
+#overview .command-title-row h2 {
+  font-size: 30px;
+  max-width: 680px;
+}
+#overview .command-meta-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+#overview .command-meta-card {
+  padding: 14px;
+}
+#overview .command-meta-value {
+  font-size: 24px;
+}
+#overview .command-side-stack {
+  gap: 16px;
+}
+#overview .overview-action-grid {
+  gap: 10px;
+}
+#overview .overview-action-list {
+  gap: 8px;
+}
+#overview .overview-action-item {
+  padding: 12px 14px;
+  border-radius: 12px;
+}
+
+#overview .operator-strip {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+}
+#overview .mini-stat {
+  min-height: 118px;
+  padding: 16px;
+}
+#overview .mini-stat .stat-value {
+  font-size: 24px;
+}
+#overview .mini-stat .stat-sub {
+  font-size: 12px;
+}
+
+.phase3-overview-shell {
+  display: grid;
+  gap: 16px;
+}
+
+.phase3-overview-group {
+  display: grid;
+  gap: 16px;
+}
+
+.phase3-overview-group[data-group="secondary"] .card {
+  background: linear-gradient(180deg, rgba(255,255,255,0.018), rgba(255,255,255,0.006));
+}
+
+.phase3-toolbar {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+.phase3-segment {
+  display: inline-flex;
+  gap: 8px;
+  background: #111;
+  border: 1px solid rgba(212,175,55,0.12);
+  border-radius: 999px;
+  padding: 6px;
+}
+.phase3-segment button {
+  appearance: none;
+  border: none;
+  background: transparent;
+  color: #d8d8d8;
+  padding: 10px 14px;
+  border-radius: 999px;
+  cursor: pointer;
+  font-weight: 700;
+  font-size: 13px;
+}
+.phase3-segment button.active {
+  background: rgba(212,175,55,0.15);
+  color: var(--gold-soft);
+}
+
+.phase3-quiet {
+  opacity: 0.96;
+}
+.phase3-muted-block .section-head h2,
+.phase3-muted-block h2 {
+  font-size: 20px;
+}
+.phase3-muted-block .subtext,
+.phase3-muted-block .list-block,
+.phase3-muted-block .status-line {
+  color: var(--text-soft);
+}
+
+.phase3-collapse {
+  border: 1px solid rgba(212,175,55,0.10);
+  border-radius: 16px;
+  overflow: hidden;
+  background: #111;
+}
+.phase3-collapse-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  cursor: pointer;
+  background: rgba(255,255,255,0.02);
+}
+.phase3-collapse-head strong {
+  font-size: 14px;
+  letter-spacing: 0.02em;
+}
+.phase3-collapse-body {
+  display: none;
+  padding: 16px;
+  border-top: 1px solid rgba(212,175,55,0.08);
+}
+.phase3-collapse.open .phase3-collapse-body {
+  display: block;
+}
+
+.phase3-listings-shell {
+  display: grid;
+  gap: 14px;
+}
+.phase3-listings-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.phase3-listings-head .subtext {
+  max-width: 700px;
+}
+#overview #recentListingsGrid {
+  gap: 14px;
+}
+#overview .listing-card {
+  border-radius: 16px;
+}
+#overview .listing-media {
+  height: 170px;
+}
+#overview .listing-content {
+  gap: 10px;
+  padding: 14px;
+}
+#overview .listing-title {
+  font-size: 17px;
+}
+#overview .listing-price {
+  font-size: 22px;
+}
+#overview .listing-actions {
+  gap: 8px;
+}
+#overview .listing-actions .action-btn {
+  padding: 12px 12px;
+  font-size: 13px;
+}
+
+.phase3-secondary-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.phase3-section-tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: rgba(212,175,55,0.10);
+  border: 1px solid rgba(212,175,55,0.16);
+  color: var(--gold-soft);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.phase3-hidden {
+  display: none !important;
+}
+
+@media (max-width: 1280px) {
+  #overview .command-center-grid {
+    grid-template-columns: 1fr;
+  }
+  #overview .operator-strip {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .phase3-secondary-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 760px) {
+  #overview .operator-strip {
+    grid-template-columns: 1fr;
+  }
+  .phase3-toolbar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
+
 </style>
 </head>
 <body>
@@ -1305,7 +1559,7 @@
       </div>
 
       <!-- OVERVIEW -->
-      
+
 <section id="overview" class="dashboard-section">
         <div class="command-center-grid">
           <div class="card command-primary">
@@ -1796,7 +2050,7 @@
     </div>
   </div>
 
-  
+
   <div class="card upgrade-card" style="margin-top:20px; margin-bottom:20px;">
     <div class="section-head">
       <div>
@@ -2005,7 +2259,7 @@
         </div>
       </section>
 
-      
+
 <!-- ANALYTICS -->
 <section id="tools" class="dashboard-section">
   <div class="grid-3" style="margin-bottom:20px;">
@@ -2064,7 +2318,7 @@
   <div class="grid-3">
     <div class="card"><div class="section-head"><h2>System Health</h2><div class="subtext">Data freshness and lifecycle visibility</div></div><div id="analyticsSystemHealth" class="list-block"><div>Loading system health...</div></div></div>
     <div class="card"><div class="section-head"><h2>Growth Signals</h2><div class="subtext">What is improving and where to lean in</div></div><div id="analyticsGrowthSignals" class="list-block"><div>Loading growth signals...</div></div></div>
-    
+
   <div class="card"><div class="section-head"><h2>Credit Actions</h2><div class="subtext">Use credits to unlock more output without leaving the dashboard.</div></div><div id="creditActionPanel" class="list-block"><div>Loading credit actions...</div></div><div id="creditActionStatus" class="subtext" style="margin-top:10px;">Extra post unlocks and future economy actions will appear here.</div></div>
 <div class="card"><div class="section-head"><h2>Credit Activity</h2><div class="subtext">Recent economy events tied to real product actions</div></div><div id="analyticsCreditActivity" class="list-block"><div>Loading credit activity...</div></div></div>
   </div>
@@ -2114,5 +2368,7 @@
   <script src="/dashboard.js?v=20260401c"></script>
 <script src="/js/supabase-client.js?v=20260401b"></script>
   <script src="/dashboard.js?v=20260401b"></script>
+<script src="/js/supabase-client.js?v=20260401h"></script>
+<script src="/dashboard.js?v=20260401h"></script>
 </body>
 </html>
