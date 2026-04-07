@@ -1,50 +1,1352 @@
 (() => {
-  if (window.__ELEVATE_DASHBOARD_PHASE4_LOADER__) {
-    console.warn("[Elevate Dashboard] Phase 4 loader already initialized.");
+if (window.__ELEVATE_DASHBOARD_SCRIPT_LOADED__) {
+  console.warn("[Elevate Dashboard] Script already loaded; skipping duplicate initialization.");
+  return;
+}
+window.__ELEVATE_DASHBOARD_SCRIPT_LOADED__ = true;
+
+const EXTENSION_DOWNLOAD_URL = "/downloads/elevate-automation-extension.zip";
+const EXTENSION_FALLBACK_URL = "https://github.com/Damianwalk321/elevate-automation-vehicle-poster/archive/refs/heads/Dev.zip";
+
+function cleanText(value) {
+  if (value === null || value === undefined) return "";
+  return String(value).trim();
+}
+
+
+
+function getPlanAccessSnapshot() {
+  const summary = dashboardSummary || {};
+  const snapshot = summary.plan_access || {};
+  const sessionPlan = currentNormalizedSession?.subscription?.plan_access || {};
+  const planLabel = cleanText(snapshot.plan_label || sessionPlan.plan_label || summary.account_snapshot?.plan || currentNormalizedSession?.subscription?.plan || 'Founder Beta') || 'Founder Beta';
+  const normalized = planLabel.toLowerCase();
+  const isPro = typeof snapshot.is_pro === 'boolean' ? snapshot.is_pro : (typeof sessionPlan.is_pro === 'boolean' ? sessionPlan.is_pro : normalized.includes('pro'));
+  return {
+    plan_label: planLabel,
+    is_pro: isPro,
+    posting_limit: numberOrZero(snapshot.posting_limit || sessionPlan.posting_limit || summary.account_snapshot?.posting_limit),
+    upgrade_target: cleanText(snapshot.upgrade_target || (isPro ? 'Pro' : (normalized.includes('founder') ? 'Founder Pro' : 'Pro')))
+  };
+}
+
+function openPremiumPreviewModal(context = 'overview') {
+  const preview = dashboardSummary?.premium_preview || {};
+  const prompts = Array.isArray(dashboardSummary?.upgrade_prompts) ? dashboardSummary.upgrade_prompts : [];
+  const matching = prompts.filter((item) => !context || item.placement === context);
+  const promptCopy = matching.length
+    ? matching.map((item) => `• ${cleanText(item.title)} — ${cleanText(item.copy)}`).join('\n\n')
+    : 'Upgrade prompts will appear here as usage and traction build.';
+  const bullets = Array.isArray(preview.bullets) ? preview.bullets : [];
+  const body = [cleanText(preview.subheadline), bullets.length ? bullets.map((item) => `• ${item}`).join('\n') : '', '', promptCopy].filter(Boolean).join('\n\n');
+  openReadCopyModal({
+    title: cleanText(preview.headline || 'Premium Preview'),
+    subtitle: 'Read the upgrade path inside the dashboard first. Copy only if you want to reuse the positioning elsewhere.',
+    eyebrow: 'Monetization Layer',
+    body
+  });
+}
+
+function renderMonetizationPanels() {
+  const summary = dashboardSummary || {};
+  const planAccess = getPlanAccessSnapshot();
+  const prompts = Array.isArray(summary.upgrade_prompts) ? summary.upgrade_prompts : [];
+  const reasons = Array.isArray(summary.upgrade_reasons) ? summary.upgrade_reasons : [];
+  const lockedModules = Array.isArray(summary.locked_modules) ? summary.locked_modules : [];
+  const premiumPreview = summary.premium_preview || {};
+
+  const renderPromptBlock = (placement) => {
+    const matched = prompts.filter((item) => item.placement === placement);
+    if (!matched.length) {
+      return `<div><strong>${escapeHtml(planAccess.plan_label)}</strong> ${planAccess.is_pro ? 'is already active.' : 'currently includes the core dashboard and posting stack.'}</div>`;
+    }
+    return matched.map((item) => `
+      <div>
+        <div class="mini">${escapeHtml(item.title || 'Upgrade Trigger')}</div>
+        <div>${escapeHtml(item.copy || '')}</div>
+      </div>
+    `).join('');
+  };
+
+  const overviewPanel = document.getElementById('overviewUpgradePanel');
+  if (overviewPanel) {
+    overviewPanel.innerHTML = `${renderPromptBlock('overview')}
+      <div class="upgrade-reason-list">${reasons.slice(0, 2).map((item) => `<div>• ${escapeHtml(cleanText(item))}</div>`).join('') || '<div>• Keep using the core workflow until the next upgrade trigger appears.</div>'}</div>`;
+  }
+
+  const analyticsPanel = document.getElementById('analyticsUpgradePanel');
+  if (analyticsPanel) {
+    analyticsPanel.innerHTML = `${renderPromptBlock('analytics')}
+      <div><strong>${escapeHtml(cleanText(premiumPreview.headline || 'Premium Preview'))}</strong></div>
+      <div>${Array.isArray(premiumPreview.bullets) ? premiumPreview.bullets.map((item) => `• ${escapeHtml(cleanText(item))}`).join('<br/>') : ''}</div>`;
+  }
+
+  const toolsPanel = document.getElementById('toolsUpgradePanel');
+  if (toolsPanel) {
+    const locked = lockedModules.filter((item) => !item.unlocked).slice(0, 4);
+    toolsPanel.innerHTML = `${renderPromptBlock('tools')}
+      <div class="upgrade-reason-list">${locked.length ? locked.map((item) => `<div>• <strong>${escapeHtml(item.title)}</strong> — ${escapeHtml(cleanText(item.teaser || item.reason || 'Premium module'))}</div>`).join('') : '<div>• Premium tools are already active on this plan.</div>'}</div>`;
+  }
+
+  const bindButton = (id, placement) => {
+    const btn = document.getElementById(id);
+    if (!btn || btn.dataset.boundUpgrade === 'true') return;
+    btn.dataset.boundUpgrade = 'true';
+    btn.addEventListener('click', () => openPremiumPreviewModal(placement));
+  };
+  bindButton('overviewUpgradeBtn', 'overview');
+  bindButton('analyticsUpgradeBtn', 'analytics');
+  bindButton('toolsUpgradeBtn', 'tools');
+
+  document.querySelectorAll('.tool-tile').forEach((tile) => {
+    const requiredPlan = cleanText(tile.getAttribute('data-required-plan') || '').toLowerCase();
+    const isLocked = requiredPlan === 'pro' && !planAccess.is_pro;
+    tile.classList.toggle('is-locked-plan', isLocked);
+    const statusEl = tile.querySelector('.tool-status');
+    if (statusEl && requiredPlan === 'pro') {
+      statusEl.className = `tool-status ${planAccess.is_pro ? 'live' : 'pro'}`;
+      statusEl.textContent = planAccess.is_pro ? 'Live Now' : 'Pro';
+    }
+    if (isLocked) {
+      tile.setAttribute('title', `${tile.querySelector('h3')?.textContent || 'Module'} unlocks with ${planAccess.upgrade_target}.`);
+    }
+  });
+}
+
+function getActionLabel(actionType) {
+  switch (clean(actionType).toLowerCase()) {
+    case "promote_now": return "Promote";
+    case "relisted": return "Repost";
+    case "needs_price_review": return "Review Price";
+    case "approved": return "Mark Reviewed";
+    case "dismissed": return "Dismiss";
+    default: return "Act Now";
+  }
+}
+function getActionPayload(actionType) {
+  switch (clean(actionType).toLowerCase()) {
+    case "promote_now": return "promote_now";
+    case "relisted": return "relisted";
+    case "needs_price_review": return "needs_price_review";
+    case "dismissed": return "dismissed";
+    default: return "approved";
+  }
+}
+function getSnoozedActionIds() {
+  try { return JSON.parse(localStorage.getItem("elevate_action_center_snoozed") || "[]"); } catch { return []; }
+}
+function setSnoozedActionIds(ids) {
+  try { localStorage.setItem("elevate_action_center_snoozed", JSON.stringify(ids)); } catch {}
+}
+function snoozeActionItem(listingId) {
+  const ids = new Set(getSnoozedActionIds());
+  ids.add(String(listingId || ""));
+  setSnoozedActionIds(Array.from(ids));
+  renderPrioritiesPanels();
+}
+async function executeActionCenterItem(item) {
+  if (!item?.id) return;
+  try {
+    await markListingAction(item.id, getActionPayload(item.action_type || item.status || item.lifecycle_status));
+    await refreshDashboardState(true);
+  } catch (error) {
+    console.warn("execute action center item warning", error);
+  }
+}
+function renderActionCenterList(targetId, items, emptyText) {
+  const wrap = document.getElementById(targetId);
+  if (!wrap) return;
+  const snoozed = new Set(getSnoozedActionIds());
+  const visible = (Array.isArray(items) ? items : []).filter((item) => !snoozed.has(String(item.id || "")));
+  if (!visible.length) {
+    wrap.innerHTML = `<div class="listing-empty">${escapeHtml(emptyText)}</div>`;
     return;
   }
-  window.__ELEVATE_DASHBOARD_PHASE4_LOADER__ = true;
+  wrap.innerHTML = `<div class="action-center-list">${visible.map((item) => `
+    <div class="action-center-item">
+      <div class="action-center-item-head">
+        <div>
+          <div class="action-center-item-title">${escapeHtml(item.title || "Listing")}</div>
+          <div class="action-center-item-meta">${escapeHtml(item.subtitle || "")}</div>
+        </div>
+        <div class="badge ${item.priority === "opportunity" ? "active" : "warn"}">${escapeHtml(item.priority === "opportunity" ? "Opportunity" : "Needs Action")}</div>
+      </div>
+      <div class="action-center-item-copy">${escapeHtml(item.reason || item.recommended_action || "Review this listing.")}</div>
+      <div class="action-center-item-actions">
+        <button class="action-btn" type="button" onclick='executeActionCenterItemById("${escapeJs(String(item.id || ""))}", "${escapeJs(String(item.action_type || ""))}")'>${escapeHtml(getActionLabel(item.action_type))}</button>
+        <button class="action-btn secondary" type="button" onclick='openListingDetail("${escapeJs(String(item.id || ""))}")'>Inspect</button>
+        <button class="action-btn secondary" type="button" onclick='snoozeActionItem("${escapeJs(String(item.id || ""))}")'>Snooze</button>
+      </div>
+    </div>`).join("")}</div>`;
+}
 
-  const NS = (window.ElevateDashboard = window.ElevateDashboard || {});
-  NS.version = "phase4-loader-v2";
-  NS.modules = NS.modules || {};
-  NS.events = NS.events || new EventTarget();
+async function executeActionCenterItemById(listingId, actionType) {
+  if (!listingId) return;
+  try {
+    await markListingAction(listingId, getActionPayload(actionType));
+    await refreshDashboardState(true);
+  } catch (error) {
+    console.warn("execute action center item warning", error);
+  }
+}
 
-  const MODULES = [
-    "/dashboard-state.js?v=20260406p12a",
-    "/dashboard-ui.js?v=20260406p12a",
-    "/dashboard-api.js?v=20260406p12a",
-    "/dashboard-overview.js?v=20260406p12a",
-    "/dashboard-listings.js?v=20260406p12a",
-    "/dashboard-profile.js?v=20260406p12a",
-    "/dashboard-tools.js?v=20260406p12a",
-    "/dashboard-analytics.js?v=20260406p12a",
-    "/dashboard-affiliate.js?v=20260406p12a",
-    "/dashboard-billing.js?v=20260406p12a",
-    "/dashboard-legacy.js?v=20260406p12a",
-    "/dashboard-phase4-boot.js?v=20260406p12a",
-    "/dashboard-bootstrap.js?v=20260406p12a"
+
+let bootStages = Array.isArray(globalThis.bootStages) ? globalThis.bootStages : [];
+let supabaseClient = globalThis.supabaseClient || null;
+let currentUser = globalThis.currentUser || null;
+let currentProfile = globalThis.currentProfile || null;
+let currentAccountData = globalThis.currentAccountData || null;
+let currentNormalizedSession = globalThis.currentNormalizedSession || null;
+let dashboardSummary = globalThis.dashboardSummary || null;
+let SYSTEM_STATE = globalThis.SYSTEM_STATE || null;
+
+globalThis.bootStages = bootStages;
+globalThis.supabaseClient = supabaseClient;
+globalThis.currentUser = currentUser;
+globalThis.currentProfile = currentProfile;
+globalThis.currentAccountData = currentAccountData;
+globalThis.currentNormalizedSession = currentNormalizedSession;
+globalThis.dashboardSummary = dashboardSummary;
+globalThis.SYSTEM_STATE = SYSTEM_STATE;
+
+function getSummaryProfileSnapshot() {
+  return dashboardSummary?.profile_snapshot || dashboardSummary?.account_snapshot || {};
+}
+
+function readLocalProfileSnapshot() {
+  const keys = [
+    'ea_dashboard_profile_v1',
+    'elevate_profile_snapshot',
+    'ea_profile_snapshot',
+    'ea_user_profile',
+    'ea_account_profile'
   ];
+  for (const key of keys) {
+    try {
+      const raw = localStorage.getItem(key);
+      if (!raw) continue;
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed === 'object') return parsed;
+    } catch (error) {
+      console.warn('readLocalProfileSnapshot warning:', error);
+    }
+  }
+  return {};
+}
 
-  function loadScriptSequentially(index = 0) {
-    if (index >= MODULES.length) return Promise.resolve();
+function readFormProfileSnapshot() {
+  const ids = ['full_name','dealership','city','province','phone','license_number','listing_location','dealer_phone','dealer_email','compliance_mode','dealer_website','inventory_url','scanner_type','software_license_key'];
+  const out = {};
+  ids.forEach((id) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    out[id] = clean(el.value || '');
+  });
+  return out;
+}
 
-    const src = MODULES[index];
-    return new Promise((resolve, reject) => {
-      const existing = Array.from(document.scripts).find((s) => s.src && s.src.includes(src.split("?")[0]));
-      if (existing) {
-        resolve();
+function normalizeProvinceCode(value) {
+  const raw = clean(value).toUpperCase();
+  if (!raw) return '';
+  if (raw === 'ALBERTA' || raw === 'AB / ALBERTA' || raw.startsWith('AB /')) return 'AB';
+  if (raw === 'BRITISH COLUMBIA' || raw === 'BC / BRITISH COLUMBIA' || raw.startsWith('BC /')) return 'BC';
+  if (raw.startsWith('AB')) return 'AB';
+  if (raw.startsWith('BC')) return 'BC';
+  return raw;
+}
+
+function normalizeComplianceModeValue(value) {
+  const normalized = normalizeProvinceCode(value);
+  if (normalized === 'AB' || normalized === 'BC') return normalized;
+  return clean(value).toUpperCase();
+}
+
+function isMeaningfulValue(value) {
+  return clean(value) !== '';
+}
+
+function mergeProfileSources(...sources) {
+  const merged = {};
+  for (const source of sources) {
+    if (!source || typeof source !== 'object') continue;
+    for (const [key, value] of Object.entries(source)) {
+      if (isMeaningfulValue(value)) merged[key] = value;
+    }
+  }
+  return merged;
+}
+
+function applySystemStateToForm(profile = null) {
+  const data = profile || SYSTEM_STATE?.profile || {};
+  [
+    'full_name','dealership','city','province','phone','license_number','listing_location',
+    'dealer_phone','dealer_email','compliance_mode','dealer_website','inventory_url',
+    'scanner_type','software_license_key'
+  ].forEach((fieldId) => {
+    const nextValue = data[fieldId] ?? '';
+    if (isMeaningfulValue(nextValue) || ['province','compliance_mode'].includes(fieldId)) {
+      setFieldValue(fieldId, nextValue);
+    }
+  });
+}
+
+function setSystemStateFromSources(profileOverride = null, sessionOverride = null) {
+  const mergedProfile = mergeProfileSources(
+    getSummaryProfileSnapshot(),
+    readLocalProfileSnapshot(),
+    currentProfile || {},
+    profileOverride || {}
+  );
+  const nextSession = sessionOverride || currentNormalizedSession || buildFallbackSessionFromLocalState();
+  SYSTEM_STATE = buildSystemState(mergedProfile, nextSession);
+  window.__EA_SYSTEM_STATE = SYSTEM_STATE;
+  return SYSTEM_STATE;
+}
+
+function getSystemState(profileOverride = null, sessionOverride = null) {
+  if (profileOverride || sessionOverride || !SYSTEM_STATE) {
+    return setSystemStateFromSources(profileOverride, sessionOverride);
+  }
+  return SYSTEM_STATE;
+}
+
+function firstNonEmpty(...values) {
+  for (const value of values) {
+    const cleaned = clean(value);
+    if (cleaned) return cleaned;
+  }
+  return '';
+}
+
+function buildSystemState(overrideProfile = null, overrideSession = null) {
+  const summaryProfile = getSummaryProfileSnapshot();
+  const storedProfile = readLocalProfileSnapshot();
+  const formProfile = readFormProfileSnapshot();
+  const session = overrideSession || currentNormalizedSession || {};
+  const profile = overrideProfile || currentProfile || {};
+  const sessionProfile = session?.profile || {};
+  const dealership = session?.dealership || {};
+  const subscription = getCanonicalSubscriptionState(session);
+
+  const province = normalizeProvinceCode(firstNonEmpty(
+    profile.province,
+    formProfile.province,
+    sessionProfile.province,
+    dealership.province,
+    storedProfile.province,
+    summaryProfile.province
+  ));
+
+  const complianceMode = normalizeComplianceModeValue(firstNonEmpty(
+    profile.compliance_mode,
+    formProfile.compliance_mode,
+    sessionProfile.compliance_mode,
+    storedProfile.compliance_mode,
+    summaryProfile.compliance_mode,
+    province
+  ));
+  const normalizedProvince = province || ((complianceMode === 'AB' || complianceMode === 'BC') ? complianceMode : '');
+
+  const canonicalProfile = {
+    ...summaryProfile,
+    ...storedProfile,
+    ...sessionProfile,
+    ...profile,
+    ...formProfile,
+    full_name: firstNonEmpty(
+      profile.full_name,
+      formProfile.full_name,
+      sessionProfile.full_name,
+      sessionProfile.salesperson_name,
+      storedProfile.full_name,
+      storedProfile.salesperson_name,
+      summaryProfile.full_name,
+      summaryProfile.salesperson_name,
+      currentUser?.user_metadata?.full_name,
+      currentUser?.email
+    ),
+    dealership: firstNonEmpty(
+      profile.dealership,
+      formProfile.dealership,
+      profile.dealer_name,
+      sessionProfile.dealership,
+      sessionProfile.dealer_name,
+      dealership.name,
+      dealership.dealer_name,
+      storedProfile.dealership,
+      storedProfile.dealer_name,
+      summaryProfile.dealership,
+      summaryProfile.dealer_name
+    ),
+    city: firstNonEmpty(
+      profile.city,
+      formProfile.city,
+      sessionProfile.city,
+      storedProfile.city,
+      summaryProfile.city
+    ),
+    province: normalizedProvince,
+    phone: firstNonEmpty(
+      profile.phone,
+      formProfile.phone,
+      sessionProfile.phone,
+      storedProfile.phone,
+      summaryProfile.phone
+    ),
+    license_number: firstNonEmpty(
+      profile.license_number,
+      formProfile.license_number,
+      sessionProfile.license_number,
+      storedProfile.license_number,
+      summaryProfile.license_number
+    ),
+    listing_location: firstNonEmpty(
+      profile.listing_location,
+      formProfile.listing_location,
+      sessionProfile.listing_location,
+      storedProfile.listing_location,
+      summaryProfile.listing_location,
+      profile.city,
+      formProfile.city,
+      sessionProfile.city,
+      storedProfile.city,
+      summaryProfile.city
+    ),
+    dealer_phone: firstNonEmpty(
+      profile.dealer_phone,
+      formProfile.dealer_phone,
+      sessionProfile.dealer_phone,
+      dealership.phone,
+      storedProfile.dealer_phone,
+      summaryProfile.dealer_phone
+    ),
+    dealer_email: firstNonEmpty(
+      profile.dealer_email,
+      formProfile.dealer_email,
+      sessionProfile.dealer_email,
+      dealership.email,
+      storedProfile.dealer_email,
+      summaryProfile.dealer_email
+    ),
+    compliance_mode: complianceMode,
+    dealer_website: firstNonEmpty(
+      profile.dealer_website,
+      formProfile.dealer_website,
+      sessionProfile.dealer_website,
+      dealership.website,
+      storedProfile.dealer_website,
+      summaryProfile.dealer_website
+    ),
+    inventory_url: firstNonEmpty(
+      profile.inventory_url,
+      formProfile.inventory_url,
+      sessionProfile.inventory_url,
+      dealership.inventory_url,
+      storedProfile.inventory_url,
+      summaryProfile.inventory_url
+    ),
+    scanner_type: firstNonEmpty(
+      profile.scanner_type,
+      formProfile.scanner_type,
+      sessionProfile.scanner_type,
+      session?.scanner_config?.scanner_type,
+      dealership.scanner_type,
+      storedProfile.scanner_type,
+      summaryProfile.scanner_type
+    ),
+    software_license_key: firstNonEmpty(
+      profile.software_license_key,
+      formProfile.software_license_key,
+      session?.subscription?.license_key,
+      storedProfile.software_license_key,
+      summaryProfile.software_license_key
+    )
+  };
+
+  canonicalProfile.salesperson_name = canonicalProfile.full_name;
+  canonicalProfile.dealer_name = canonicalProfile.dealership;
+
+  const setup = dashboardSummary?.setup_status || {};
+  const systemState = {
+    summary: dashboardSummary || {},
+    profile: canonicalProfile,
+    session,
+    subscription,
+    setup: {
+      ...setup,
+      dealer_website_present: Boolean(setup.dealer_website_present || canonicalProfile.dealer_website),
+      inventory_url_present: Boolean(setup.inventory_url_present || canonicalProfile.inventory_url),
+      scanner_type_present: Boolean(setup.scanner_type_present || canonicalProfile.scanner_type),
+      listing_location_present: Boolean(setup.listing_location_present || canonicalProfile.listing_location),
+      compliance_mode_present: Boolean(setup.compliance_mode_present || canonicalProfile.compliance_mode || canonicalProfile.province),
+      full_name_present: Boolean(setup.full_name_present || canonicalProfile.full_name),
+      dealership_present: Boolean(setup.dealership_present || canonicalProfile.dealership)
+    },
+    compliance: {
+      province: canonicalProfile.province,
+      mode: canonicalProfile.compliance_mode,
+      license_number: canonicalProfile.license_number,
+      dealer_contact: firstNonEmpty(canonicalProfile.dealer_phone, canonicalProfile.phone, canonicalProfile.dealer_email)
+    }
+  };
+  window.__EA_SYSTEM_STATE = systemState;
+  return systemState;
+}
+
+function getCanonicalProfileState(overrideProfile = null, overrideSession = null) {
+  return getSystemState(overrideProfile, overrideSession).profile;
+}
+
+function getCanonicalSubscriptionState(overrideSession = null) {
+  const session = overrideSession || currentNormalizedSession || {};
+  const subscription = session?.subscription || {};
+  const snapshot = dashboardSummary?.account_snapshot || {};
+  const planAccess = dashboardSummary?.plan_access || {};
+  const email = clean(currentUser?.email || session?.user?.email || snapshot?.email || '').toLowerCase();
+  const forceTestingAccess = email === 'damian044@icloud.com';
+  const plan = clean(subscription.plan || subscription.normalized_plan || snapshot.plan || planAccess.plan_label || 'Founder Beta') || 'Founder Beta';
+  const status = clean(subscription.normalized_status || subscription.status || snapshot.status || (snapshot.active ? 'active' : 'inactive')) || 'inactive';
+  const baseLimit = Math.max(
+    numberOrZero(subscription.posting_limit || subscription.daily_posting_limit),
+    numberOrZero(snapshot.base_posting_limit),
+    numberOrZero(snapshot.posting_limit),
+    numberOrZero(planAccess.posting_limit)
+  );
+  const used = Math.max(
+    numberOrZero(subscription.posts_today),
+    numberOrZero(snapshot.posts_today ?? snapshot.posts_used_today),
+    numberOrZero(dashboardSummary?.posts_today)
+  );
+  const remaining = Math.max(
+    numberOrZero(subscription.posts_remaining),
+    numberOrZero(snapshot.posts_remaining),
+    Math.max(baseLimit - used, 0)
+  );
+  const active = Boolean(
+    forceTestingAccess ||
+    subscription.access_granted === true ||
+    subscription.active === true ||
+    snapshot.access_granted === true ||
+    snapshot.active === true ||
+    status.toLowerCase() === 'active'
+  );
+  return {
+    ...snapshot,
+    ...subscription,
+    plan,
+    normalized_plan: plan,
+    status,
+    normalized_status: status,
+    active,
+    access_granted: active,
+    posting_limit: forceTestingAccess ? Math.max(25, baseLimit) : baseLimit,
+    posts_today: used,
+    posts_remaining: forceTestingAccess ? Math.max(0, Math.max(25, baseLimit) - used) : remaining,
+    license_key: clean(subscription.license_key || snapshot.software_license_key || '')
+  };
+}
+
+function rerenderCanonicalPanels() {
+  const canonicalSession = currentNormalizedSession || buildFallbackSessionFromLocalState();
+  const systemState = getSystemState(currentProfile, canonicalSession);
+  const canonicalProfile = systemState.profile;
+  renderProfileSummary(canonicalProfile);
+  populateComplianceSummary(canonicalProfile);
+  renderAccessState(canonicalSession);
+  renderExtensionControl(canonicalSession, canonicalProfile);
+  updateSetupStates(canonicalProfile, canonicalSession);
+  renderSetupWorkspace(canonicalProfile, canonicalSession);
+  renderComplianceWorkspace(canonicalProfile, canonicalSession);
+  renderToolsWorkspace(canonicalProfile, canonicalSession);
+  applySystemStateToForm(canonicalProfile);
+  persistProfileSnapshots(buildExtensionProfileSnapshot(canonicalSession, canonicalProfile, currentUser), canonicalSession);
+}
+
+let currentReadCopyText = "";
+let selectedToolModule = null;
+let currentListingDetail = null;
+
+async function getAuthAccessToken() {
+  try {
+    if (supabaseClient?.auth?.getSession) {
+      const { data } = await supabaseClient.auth.getSession();
+      return data?.session?.access_token || "";
+    }
+  } catch (error) {
+    console.warn("getAuthAccessToken warning:", error);
+  }
+  return "";
+}
+
+async function buildAuthHeaders(extraHeaders = {}) {
+  const headers = { ...extraHeaders, "x-elevate-client": "dashboard" };
+  const token = await getAuthAccessToken();
+  if (token) headers.Authorization = `Bearer ${token}`;
+  return headers;
+}
+
+async function apiFetch(url, options = {}) {
+  const headers = await buildAuthHeaders(options.headers || {});
+  const timeoutMs = Number(options.timeoutMs || 20000);
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(new Error(`Request timeout after ${timeoutMs}ms`)), timeoutMs);
+  let response;
+  try {
+    response = await fetch(url, { ...options, headers, signal: options.signal || controller.signal });
+  } finally {
+    clearTimeout(timeoutId);
+  }
+  if (response.status === 401) {
+    setBootStatus("Session expired. Redirecting to login...");
+    setTimeout(() => redirectToLogin(), 500);
+  }
+  return response;
+}
+function sleep(ms = 0) { return new Promise((resolve) => setTimeout(resolve, ms)); }
+function withTimeout(promise, label = "operation", timeoutMs = 20000) {
+  let timer = null;
+  return Promise.race([
+    promise,
+    new Promise((_, reject) => {
+      timer = setTimeout(() => reject(new Error(`${label} timed out after ${timeoutMs}ms`)), timeoutMs);
+    })
+  ]).finally(() => {
+    if (timer) clearTimeout(timer);
+  });
+}
+
+async function parseApiJson(response) {
+  const rawText = await response.text();
+  try {
+    return JSON.parse(rawText || '{}');
+  } catch (error) {
+    const preview = cleanText(rawText).slice(0, 180);
+    throw new Error(preview || `Non-JSON API response (${response.status})`);
+  }
+}
+
+async function parseJsonWithDebug(response) {
+  const rawText = await response.text();
+  try {
+    return { ok: true, data: JSON.parse(rawText || '{}'), rawText };
+  } catch {
+    return { ok: false, data: null, rawText };
+  }
+}
+
+function openReadCopyModal({ title = "Read in Dashboard", subtitle = "Read this in the dashboard first, then copy only if needed.", eyebrow = "Dashboard Script", body = "" } = {}) {
+  const modal = document.getElementById("readCopyModal");
+  if (!modal) return;
+  currentReadCopyText = String(body || "");
+  const titleEl = document.getElementById("readCopyModalTitle");
+  const subtitleEl = document.getElementById("readCopyModalSubtitle");
+  const eyebrowEl = document.getElementById("readCopyModalEyebrow");
+  const bodyEl = document.getElementById("readCopyModalBody");
+  if (titleEl) titleEl.textContent = title;
+  if (subtitleEl) subtitleEl.textContent = subtitle;
+  if (eyebrowEl) eyebrowEl.textContent = eyebrow;
+  if (bodyEl) bodyEl.textContent = currentReadCopyText;
+  modal.classList.add("open");
+  modal.setAttribute("aria-hidden", "false");
+}
+function closeReadCopyModal() {
+  const modal = document.getElementById("readCopyModal");
+  if (!modal) return;
+  modal.classList.remove("open");
+  modal.setAttribute("aria-hidden", "true");
+}
+
+
+async function redeemCreditActionRequest(actionKey, quantity = 1) {
+  const response = await apiFetch("/api/redeem-credit-action", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ action: actionKey, quantity })
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok || data.success === false) {
+    throw new Error(cleanText(data.error || "Unable to redeem credit action."));
+  }
+  return data;
+}
+
+function bindCreditActionButtons() {
+  document.querySelectorAll("[data-credit-action]").forEach((button) => {
+    if (button.dataset.boundCreditAction === "true") return;
+    button.dataset.boundCreditAction = "true";
+    button.addEventListener("click", async () => {
+      const actionKey = cleanText(button.getAttribute("data-credit-action"));
+      if (!actionKey) return;
+      const original = button.textContent;
+      try {
+        button.disabled = true;
+        button.textContent = "Applying...";
+        const result = await redeemCreditActionRequest(actionKey, 1);
+        const statusEl = document.getElementById("creditActionStatus");
+        if (statusEl) statusEl.textContent = `${cleanText(result.action?.title || "Action applied")}: -${numberOrZero(result.amount_spent)} credits, +${numberOrZero(result.grants_posts)} post today.`;
+        await refreshDashboardData?.();
+      } catch (error) {
+        const statusEl = document.getElementById("creditActionStatus");
+        if (statusEl) statusEl.textContent = cleanText(error.message || "Unable to redeem credit action.");
+      } finally {
+        button.disabled = false;
+        button.textContent = original;
+      }
+    });
+  });
+}
+
+let dashboardListings = Array.isArray(globalThis.dashboardListings) ? globalThis.dashboardListings : [];
+let filteredListings = Array.isArray(globalThis.filteredListings) ? globalThis.filteredListings : [];
+let dashboardListingsMeta = globalThis.dashboardListingsMeta || { total: 0, source_counts: { user_listings: 0, listings: 0, merged: 0 }, used_summary_fallback: false, source: "api", request_id: "", warnings: [] };
+let dashboardListingsDiagnostics = globalThis.dashboardListingsDiagnostics || { raw_rows: 0, normalized_rows: 0, dropped_rows: 0 };
+let listingQuickFilter = globalThis.listingQuickFilter || "all";
+
+globalThis.dashboardListings = dashboardListings;
+globalThis.filteredListings = filteredListings;
+globalThis.dashboardListingsMeta = dashboardListingsMeta;
+globalThis.dashboardListingsDiagnostics = dashboardListingsDiagnostics;
+globalThis.listingQuickFilter = listingQuickFilter;
+
+document.addEventListener("DOMContentLoaded", async () => {
+  try {
+    setBootStatus("Booting dashboard...");
+
+    if (!window.supabase || !window.supabase.createClient) {
+      setBootStatus("Supabase library missing.");
+      return;
+    }
+
+    supabaseClient =
+      window.supabaseClient ||
+      window.supabase.createClient(
+        window.__ELEVATE_SUPABASE_URL,
+        window.__ELEVATE_SUPABASE_ANON_KEY
+      );
+
+    if (!supabaseClient) {
+      setBootStatus("Supabase client unavailable.");
+      return;
+    }
+
+    bindDashboardUI();
+
+    pushBootStage("Session", "Checking login session...");
+    const {
+      data: { session },
+      error: sessionError
+    } = await withTimeout(supabaseClient.auth.getSession(), "auth.getSession");
+
+    if (sessionError) {
+      console.error("Session error:", sessionError);
+      setBootStatus("Session error.");
+      return;
+    }
+
+    if (!session || !session.user) {
+      redirectToLogin();
+      return;
+    }
+
+    currentUser = session.user;
+    renderUserBasics(currentUser);
+
+    pushBootStage("User", "Syncing account record...");
+    await withTimeout(syncUserIfNeeded(currentUser), "syncUserIfNeeded");
+
+    pushBootStage("Profile", "Loading saved dealer profile...");
+    await withTimeout(loadProfile(currentUser.id), "loadProfile");
+
+    pushBootStage("Workspace", "Loading billing, extension state, metrics, and listings...");
+    await withTimeout(refreshDashboardState(true), "refreshDashboardState", 30000);
+
+    pushBootStage("Extension", "Pushing live profile sync to extension...");
+    await withTimeout(pushExtensionProfileSync(), "pushExtensionProfileSync");
+
+    showSection("overview");
+    setBootStatus("Dashboard ready.");
+  } catch (error) {
+    console.error("Dashboard boot failed:", error);
+    setBootStatus(`Dashboard failed to load: ${error.message || "Unknown error"}`);
+  }
+});
+
+function bindDashboardUI() {
+  document.querySelectorAll("[data-section]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const sectionId = button.getAttribute("data-section");
+      showSection(sectionId);
+    });
+  });
+
+
+const closeReadCopyModalBtn = document.getElementById("closeReadCopyModalBtn");
+if (closeReadCopyModalBtn) closeReadCopyModalBtn.addEventListener("click", closeReadCopyModal);
+const readCopyModal = document.getElementById("readCopyModal");
+if (readCopyModal) {
+  readCopyModal.addEventListener("click", (event) => {
+    if (event.target === readCopyModal) closeReadCopyModal();
+  });
+}
+const copyReadCopyModalBtn = document.getElementById("copyReadCopyModalBtn");
+if (copyReadCopyModalBtn) {
+  copyReadCopyModalBtn.addEventListener("click", async () => {
+    if (!currentReadCopyText) return;
+    try {
+      await navigator.clipboard.writeText(currentReadCopyText);
+      setBootStatus("Text copied.");
+    } catch (error) {
+      console.error("read copy modal clipboard error:", error);
+      setBootStatus("Could not copy text.");
+    }
+  });
+}
+
+const closeListingDetailModalBtn = document.getElementById('closeListingDetailModalBtn');
+if (closeListingDetailModalBtn) closeListingDetailModalBtn.addEventListener('click', closeListingDetailModal);
+const listingDetailModal = document.getElementById('listingDetailModal');
+if (listingDetailModal) {
+  listingDetailModal.addEventListener('click', (event) => {
+    if (event.target === listingDetailModal) closeListingDetailModal();
+  });
+}
+const toolModuleFilter = document.getElementById('toolModuleFilter');
+if (toolModuleFilter) toolModuleFilter.addEventListener('change', applyToolModuleFilters);
+const toolStateFilter = document.getElementById('toolStateFilter');
+if (toolStateFilter) toolStateFilter.addEventListener('change', applyToolModuleFilters);
+document.querySelectorAll('.tool-tile').forEach((tile) => {
+  tile.addEventListener('click', () => {
+    const requiredPlan = cleanText(tile.getAttribute('data-required-plan') || '').toLowerCase();
+    if (requiredPlan === 'pro' && !getPlanAccessSnapshot().is_pro) {
+      openPremiumPreviewModal('tools');
+    }
+    selectedToolModule = {
+      title: cleanText(tile.querySelector('h3')?.textContent || 'Module'),
+      description: cleanText(tile.querySelector('p')?.textContent || ''),
+      group: cleanText(tile.getAttribute('data-module-group') || ''),
+      state: cleanText(tile.getAttribute('data-module-state') || '')
+    };
+    renderToolModuleDetail();
+  });
+});
+
+  const saveProfileBtn = document.getElementById("saveProfileBtn");
+  if (saveProfileBtn) {
+    saveProfileBtn.addEventListener("click", async (event) => {
+      event.preventDefault();
+      await onSaveProfilePressed();
+    });
+  }
+
+  document.addEventListener('click', (event) => {
+    const jumpBtn = event.target.closest('.setup-jump-btn');
+    if (jumpBtn) {
+      jumpToSetupField(jumpBtn.getAttribute('data-field-id') || '');
+      return;
+    }
+    const toolsJump = event.target.closest('[data-open-section]');
+    if (toolsJump) {
+      const sectionId = toolsJump.getAttribute('data-open-section');
+      const fieldId = toolsJump.getAttribute('data-focus-field') || '';
+      if (sectionId) showSection(sectionId);
+      if (fieldId) jumpToSetupField(fieldId);
+    }
+  });
+
+  const logoutBtn = document.getElementById("logoutBtn");
+  if (logoutBtn) {
+    logoutBtn.addEventListener("click", async () => {
+      await signOutUser();
+    });
+  }
+
+  const refreshAccessBtn = document.getElementById("refreshAccessBtn");
+  if (refreshAccessBtn) {
+    refreshAccessBtn.addEventListener("click", async () => {
+      if (!currentUser) return;
+      await refreshDashboardState(true);
+      await pushExtensionProfileSync();
+    });
+  }
+
+  const refreshExtensionStateBtn = document.getElementById("refreshExtensionStateBtn");
+  if (refreshExtensionStateBtn) {
+    refreshExtensionStateBtn.addEventListener("click", async () => {
+      if (!currentUser) return;
+      await loadAccountData(currentUser, true);
+      await pushExtensionProfileSync();
+      setStatus("extensionActionStatus", "Extension state refreshed.");
+    });
+  }
+
+  const downloadExtensionBtn = document.getElementById("downloadExtensionBtn");
+  if (downloadExtensionBtn) {
+    downloadExtensionBtn.addEventListener("click", async () => {
+      const target = await resolveExtensionDownloadUrl();
+      window.open(target, "_blank");
+      setStatus(
+        "extensionActionStatus",
+        target === EXTENSION_DOWNLOAD_URL
+          ? "Opening hosted extension download..."
+          : "Hosted extension file missing. Opening GitHub fallback..."
+      );
+    });
+  }
+
+  const openMarketplaceBtn = document.getElementById("openMarketplaceBtn");
+  if (openMarketplaceBtn) {
+    openMarketplaceBtn.addEventListener("click", () => {
+      window.open("https://www.facebook.com/marketplace/create/vehicle", "_blank");
+    });
+  }
+
+  const openInventoryBtn = document.getElementById("openInventoryBtn");
+  if (openInventoryBtn) {
+    openInventoryBtn.addEventListener("click", () => {
+      const inventoryUrl =
+        getFieldValue("inventory_url") ||
+        currentProfile?.inventory_url ||
+        currentNormalizedSession?.dealership?.inventory_url ||
+        "";
+
+      if (!inventoryUrl) {
+        setStatus("extensionActionStatus", "No inventory URL saved yet.");
         return;
       }
 
-      const script = document.createElement("script");
-      script.src = src;
-      script.async = false;
-      script.onload = () => resolve();
-      script.onerror = () => reject(new Error(`Failed to load ${src}`));
-      document.head.appendChild(script);
-    }).then(() => loadScriptSequentially(index + 1));
+      window.open(normalizeUrlInput(inventoryUrl), "_blank");
+      setStatus("extensionActionStatus", "Opening inventory URL...");
+    });
   }
+
+
+const copySetupStepsBtn = document.getElementById("copySetupStepsBtn");
+if (copySetupStepsBtn) {
+  copySetupStepsBtn.addEventListener("click", () => {
+    openReadCopyModal({
+      title: "Setup Steps",
+      subtitle: "Read the setup flow here, then copy only if you need to send it elsewhere.",
+      eyebrow: "Tools",
+      body: buildSetupStepsText()
+    });
+    setStatus("extensionActionStatus", "Setup steps opened.");
+  });
+}
+  const copyReferralCodeBtn = document.getElementById("copyReferralCodeBtn");
+  if (copyReferralCodeBtn) {
+    copyReferralCodeBtn.addEventListener("click", async () => {
+      const referral = document.getElementById("referralCodeAffiliate")?.textContent?.trim() || "";
+      if (!referral || referral === "Loading...") return;
+      try {
+        await navigator.clipboard.writeText(referral);
+        setBootStatus("Referral code copied.");
+      } catch (error) {
+        console.error("copyReferralCodeBtn error:", error);
+      }
+    });
+  }
+
+  function getAffiliateCode() {
+    return document.getElementById("referralCodeAffiliate")?.textContent?.trim() || "";
+  }
+  function getAffiliateLink() {
+    const code = getAffiliateCode();
+    return code && code !== "Loading..." ? `${window.location.origin}/signup.html?ref=${encodeURIComponent(code)}` : "";
+  }
+  async function copyAffiliateText(text, successMessage) {
+    if (!text) return;
+    try {
+      await navigator.clipboard.writeText(text);
+      setBootStatus(successMessage);
+    } catch (error) {
+      console.error("affiliate copy error:", error);
+    }
+  }
+
+  const copyReferralLinkBtn = document.getElementById("copyReferralLinkBtn");
+  if (copyReferralLinkBtn) {
+    copyReferralLinkBtn.addEventListener("click", async () => {
+      await copyAffiliateText(getAffiliateLink(), "Referral link copied.");
+    });
+  }
+
+
+const copyAffiliateDMBtn = document.getElementById("copyAffiliateDMBtn");
+if (copyAffiliateDMBtn) {
+  copyAffiliateDMBtn.addEventListener("click", () => {
+    const code = getAffiliateCode() || "[YOUR CODE]";
+    const dm = `I have early access to Elevate Automation. It helps salespeople post inventory faster, stay consistent, and track performance. If you want founder access, use my code ${code}.`;
+    openReadCopyModal({ title: "Affiliate DM Script", subtitle: "Read the message first, then copy from the modal only if you need it.", eyebrow: "Affiliate Center", body: dm });
+  });
+}
+
+const copyAffiliatePitchBtn = document.getElementById("copyAffiliatePitchBtn");
+if (copyAffiliatePitchBtn) {
+  copyAffiliatePitchBtn.addEventListener("click", () => {
+    const code = getAffiliateCode() || "[YOUR CODE]";
+    const pitch = `I’m a founding partner with Elevate Automation. It helps salespeople post inventory faster and manage listing performance more consistently. Use my code ${code} if you want founder access.`;
+    openReadCopyModal({ title: "Affiliate Short Pitch", subtitle: "Read this in-dashboard first so the user does not need Notes just to understand it.", eyebrow: "Affiliate Center", body: pitch });
+  });
+}
+
+const copyAffiliatePostBtn = document.getElementById("copyAffiliatePostBtn");
+if (copyAffiliatePostBtn) {
+  copyAffiliatePostBtn.addEventListener("click", () => {
+    const link = getAffiliateLink() || "[YOUR LINK]";
+    const post = `I’m a founding partner with Elevate Automation. If you post inventory consistently and want a faster way to build Marketplace presence, message me or use this link: ${link}`;
+    openReadCopyModal({ title: "Affiliate Story / Post", subtitle: "Read this in-dashboard first, then copy only if you want to publish it elsewhere.", eyebrow: "Affiliate Center", body: post });
+  });
+}
+
+
+  const openBillingPortalBtn = document.getElementById("openBillingPortalBtn");
+  if (openBillingPortalBtn) {
+    openBillingPortalBtn.addEventListener("click", async () => {
+      try {
+        if (!currentUser?.id) {
+          setStatus("accountStatusBilling", "No logged-in user found.");
+          return;
+        }
+
+        setStatus("accountStatusBilling", "Opening billing portal...");
+
+        const response = await apiFetch("/api/create-billing-portal-session", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            userId: currentUser.id,
+            email: currentUser.email
+          })
+        });
+
+        const parsed = await parseJsonWithDebug(response);
+        const requestId = response.headers.get("x-request-id") || "";
+        const responseMeta = `status=${response.status}${requestId ? ` req=${requestId}` : ""}`;
+
+        if (!parsed.ok) {
+          const preview = cleanText(parsed.rawText).slice(0, 200);
+          console.error("[billing] Non-JSON response:", parsed.rawText);
+          throw new Error(`Server error (non-JSON response, ${responseMeta})${preview ? `: ${preview}` : ""}`);
+        }
+
+        const data = parsed.data || {};
+
+        if (!response.ok) {
+          throw new Error(`${cleanText(data.error || "Could not open billing portal.")} (${responseMeta})`);
+        }
+
+        if (!data.url) {
+          throw new Error("Billing portal URL missing.");
+        }
+
+        window.location.href = data.url;
+      } catch (error) {
+        console.error("Billing portal error:", error);
+        setStatus("accountStatusBilling", error.message || "Could not open billing portal.");
+      }
+    });
+  }
+
+  const refreshBillingBtn = document.getElementById("refreshBillingBtn");
+  if (refreshBillingBtn) {
+    refreshBillingBtn.addEventListener("click", async () => {
+      try {
+        if (!currentUser) return;
+        setStatus("accountStatusBilling", "Refreshing billing data...");
+        await loadAccountData(currentUser, true);
+        await pushExtensionProfileSync();
+        setStatus("accountStatusBilling", "Billing data refreshed.");
+      } catch (error) {
+        console.error("refreshBillingBtn error:", error);
+        setStatus("accountStatusBilling", "Could not refresh billing data.");
+      }
+    });
+  }
+
+  const listingSortSelect = document.getElementById("listingSortSelect");
+  if (listingSortSelect) {
+    listingSortSelect.addEventListener("change", () => {
+      applyListingFiltersAndRender();
+    });
+  }
+
+  const listingSearchInput = document.getElementById("listingSearchInput");
+  if (listingSearchInput) {
+    listingSearchInput.addEventListener("input", () => {
+      applyListingFiltersAndRender();
+    });
+  }
+
+  const refreshListingsBtn = document.getElementById("refreshListingsBtn");
+  if (refreshListingsBtn) {
+    refreshListingsBtn.addEventListener("click", async () => {
+      try {
+        if (!currentUser) return;
+        setStatus("listingGridStatus", "Refreshing listings...");
+        await loadListingDashboardData(true);
+        setStatus("listingGridStatus", "Listings refreshed.");
+      } catch (error) {
+        console.error("refreshListingsBtn error:", error);
+        setStatus("listingGridStatus", "Could not refresh listings.");
+      }
+    });
+  }
+
+  document.querySelectorAll("[data-filter]").forEach((button) => {
+    if (button.dataset.boundListingFilter === "true") return;
+    button.dataset.boundListingFilter = "true";
+    button.addEventListener("click", () => {
+      listingQuickFilter = clean(button.getAttribute("data-filter") || "all").toLowerCase() || "all";
+      document.querySelectorAll("[data-filter]").forEach((other) => {
+        other.classList.toggle("active", other === button);
+      });
+      applyListingFiltersAndRender();
+    });
+  });
+
+  window.addEventListener("resize", debounce(() => {
+    drawActivityChart(buildChartSeries());
+  }, 150));
+}
+
+async function onSaveProfilePressed() {
+  try {
+    setStatus("profileStatus", "Saving profile...");
+
+    if (!currentUser) {
+      setStatus("profileStatus", "No authenticated user found.");
+      return;
+    }
+
+    await submitProfileSave(currentUser);
+    await loadAccountData(currentUser, true);
+    await pushExtensionProfileSync();
+  } catch (error) {
+    console.error("onSaveProfilePressed error:", error);
+    setStatus("profileStatus", `Save failed: ${error.message || "Unknown error"}`);
+  }
+}
+
+async function refreshDashboardState(forceFresh = false) {
+  await loadAccountData(currentUser, forceFresh);
+  await loadListingDashboardData(forceFresh);
+}
+
+async function loadListingDashboardData(forceFresh = false) {
+  try {
+    dashboardSummary = await fetchDashboardSummary(forceFresh);
+    const rawListings = await fetchUserListings(forceFresh);
+
+    dashboardListings = Array.isArray(rawListings)
+      ? rawListings.map(normalizeListingRecord).filter(Boolean)
+      : [];
+    dashboardListingsDiagnostics = {
+      raw_rows: Array.isArray(rawListings) ? rawListings.length : 0,
+      normalized_rows: dashboardListings.length,
+      dropped_rows: Math.max((Array.isArray(rawListings) ? rawListings.length : 0) - dashboardListings.length, 0)
+    };
+
+    if (!dashboardSummary) {
+      dashboardSummary = buildDashboardSummaryFromListings(dashboardListings);
+    } else {
+      dashboardSummary = mergeSummaryWithListings(dashboardSummary, dashboardListings);
+    }
+
+    filteredListings = [...dashboardListings];
+    setSystemStateFromSources(currentProfile, currentNormalizedSession);
+    rerenderCanonicalPanels();
+
+    renderDashboardAnalytics();
+    renderSetupSnapshot();
+    applyListingFiltersAndRender();
+  } catch (error) {
+    console.error("loadListingDashboardData error:", error);
+    dashboardListings = [];
+    dashboardListingsDiagnostics = { raw_rows: 0, normalized_rows: 0, dropped_rows: 0 };
+    dashboardSummary = buildDashboardSummaryFromListings(dashboardListings);
+    filteredListings = [];
+    setSystemStateFromSources(currentProfile, currentNormalizedSession);
+    rerenderCanonicalPanels();
+    renderDashboardAnalytics();
+    renderSetupSnapshot();
+    applyListingFiltersAndRender();
+  }
+}
+
+async function fetchDashboardSummary(forceFresh = false) {
+  try {
+    if (!currentUser?.id) return null;
+
+    const url = new URL("/api/get-dashboard-summary", window.location.origin);
+    url.searchParams.set("userId", currentUser.id);
+    if (currentUser.email) url.searchParams.set("email", currentUser.email);
+    if (forceFresh) url.searchParams.set("_ts", String(Date.now()));
+
+    const response = await apiFetch(url.toString(), {
+      method: "GET",
+      cache: "no-store"
+    });
+
+    if (!response.ok) return null;
+
+    const result = await response.json();
+    return result?.data || result || null;
+  } catch (error) {
+    console.warn("fetchDashboardSummary fallback:", error);
+    return null;
+  }
+}
+
+async function fetchUserListings(forceFresh = false) {
+  dashboardListingsMeta = {
+    total: 0,
+    source_counts: { user_listings: 0, listings: 0, merged: 0 },
+    used_summary_fallback: false,
+    source: "api",
+    request_id: "",
+    warnings: []
+  };
+
+  try {
+    const previewRows = Array.isArray(dashboardSummary?.recent_listings) ? dashboardSummary.recent_listings : [];
+
+    if (!currentUser?.id) {
+      dashboardListingsMeta = {
+        total: previewRows.length,
+        source_counts: { user_listings: 0, listings: 0, merged: previewRows.length },
+        used_summary_fallback: previewRows.length > 0,
+        source: previewRows.length ? "summary_preview" : "api",
+        request_id: "",
+        warnings: []
+      };
+      return previewRows;
+    }
+
+    const url = new URL("/api/get-user-listings", window.location.origin);
+    url.searchParams.set("userId", currentUser.id);
+    if (currentUser.email) url.searchParams.set("email", currentUser.email);
+    url.searchParams.set("limit", "250");
+    if (forceFresh) url.searchParams.set("_ts", String(Date.now()));
+
+    const retryDelays = [0, 1000, 3000, 8000];
+    let response = null;
+    let result = null;
+    let lastStatus = 0;
+    let lastRequestId = "";
+    let lastError = "";
+
+    for (let attempt = 0; attempt < retryDelays.length; attempt += 1) {
+      if (retryDelays[attempt] > 0) await sleep(retryDelays[attempt]);
+      response = await apiFetch(url.toString(), {
+        method: "GET",
+        cache: "no-store"
+      });
+      lastStatus = numberOrZero(response?.status);
+      lastRequestId = clean(response?.headers?.get("x-request-id") || "");
+      const parsed = await parseJsonWithDebug(response);
+      if (parsed.ok) result = parsed.data || {};
+      if (response.ok && parsed.ok) break;
+      lastError = clean(parsed?.data?.error || parsed?.rawText || `Request failed (${lastStatus})`).slice(0, 180);
+      if (attempt < retryDelays.length - 1) {
+        console.warn("fetchUserListings retrying", { attempt: attempt + 1, status: lastStatus, request_id: lastRequestId || parsed?.data?.request_id || "" });
+      }
+    }
+
+    if (!response?.ok || !result) {
+      dashboardListingsMeta = {
+        total: previewRows.length,
+        source_counts: { user_listings: 0, listings: 0, merged: previewRows.length },
+        used_summary_fallback: previewRows.length > 0,
+        source: previewRows.length ? "summary_preview" : "api_error",
+        request_id: lastRequestId || "",
+        warnings: lastError ? [lastError] : []
+      };
+      return previewRows;
+    }
+
+    const rows = result?.data || result?.listings || result || [];
+    const normalizedRows = Array.isArray(rows) ? rows : [];
+    const metaSources = result?.meta?.sources || {};
+    const requestId = clean(result?.request_id || response.headers.get("x-request-id") || "");
+    const warnings = Array.isArray(result?.meta?.warnings) ? result.meta.warnings : [];
+
+    if (!normalizedRows.length && previewRows.length) {
+      dashboardListingsMeta = {
+        total: previewRows.length,
+        source_counts: {
+          user_listings: numberOrZero(metaSources.user_listings),
+          listings: numberOrZero(metaSources.listings),
+          merged: numberOrZero(metaSources.merged || previewRows.length)
+        },
+        used_summary_fallback: true,
+        source: "summary_preview",
+        request_id: requestId,
+        warnings
+      };
+      return previewRows;
+    }
+
+    dashboardListingsMeta = {
+      total: normalizedRows.length,
+      source_counts: {
+        user_listings: numberOrZero(metaSources.user_listings),
+        listings: numberOrZero(metaSources.listings),
+        merged: numberOrZero(metaSources.merged || normalizedRows.length)
+      },
+      used_summary_fallback: false,
+      source: "api",
+      request_id: requestId,
+      warnings
+    };
+
+    return normalizedRows;
+  } catch (error) {
+    console.warn("fetchUserListings fallback:", error);
+    const previewRows = Array.isArray(dashboardSummary?.recent_listings) ? dashboardSummary.recent_listings : [];
+    dashboardListingsMeta = {
+      total: previewRows.length,
+      source_counts: { user_listings: 0, listings: 0, merged: previewRows.length },
+      used_summary_fallback: previewRows.length > 0,
+      source: previewRows.length ? "summary_preview" : "api_exception",
+      request_id: "",
+      warnings: [clean(error?.message || "fetch exception")]
+    };
+    return previewRows;
+  }
+}
+
+function normalizeListingRecord(row) {
+  if (!row || typeof row !== "object") return null;
+
+  const year = numberOrZero(row.year);
+  const make = clean(row.make || "");
+  const model = clean(row.model || "");
+  const trim = clean(row.trim || "");
+  const title =
+    clean(row.title || buildVehicleTitle({ year, make, model, trim })) || "Vehicle Listing";
+
+  const postedAt =
+    row.posted_at ||
+    row.created_at ||
+    row.timestamp ||
+    new Date().toISOString();
+
+  const views = numberOrZero(row.views_count ?? row.views ?? 0);
+  const messages = numberOrZero(row.messages_count ?? row.messages ?? 0);
+  const price = numberOrZero(row.price);
+  const mileage = numberOrZero(row.mileage || row.kilometers || row.km);
+
+  const imageUrl =
+    clean(
+      row.image_url ||
+      row.cover_photo ||
+      row.coverImage ||
+      row.photo ||
+      row.photos?.[0] ||
+      ""
+    ) || placeholderVehicleImage(title);
 
   const status = clean(row.status || "posted").toLowerCase();
   const lifecycleStatus = clean(row.lifecycle_status || row.review_status || "").toLowerCase();
@@ -74,6 +1376,9 @@
     review_bucket: clean(row.review_bucket || ""),
     posted_at: postedAt,
     created_at: row.created_at || postedAt,
+    updated_at: row.updated_at || row.created_at || postedAt,
+    last_seen_at: row.last_seen_at || row.updated_at || row.created_at || postedAt,
+    marketplace_listing_id: clean(row.marketplace_listing_id || row.listing_id || ""),
     views_count: views,
     messages_count: messages,
     popularity_score: (messages * 1000) + (views * 10) + getTimestamp(postedAt) / 100000000,
@@ -105,12 +1410,342 @@ function buildDashboardSummaryFromListings(listings) {
       if (`${itemDate.getFullYear()}-${String(itemDate.getMonth() + 1).padStart(2, "0")}` === monthKey) {
         postsMonth += 1;
       }
-  loadScriptSequentially().catch((error) => {
-    console.error("[Elevate Dashboard] Phase 4 loader error:", error);
-    const status = document.getElementById("bootStatus");
-    if (status) {
-      status.textContent = `Phase 4 loader failed: ${error.message || "Unknown error"}`;
     }
+
+    if (!["sold", "deleted", "inactive"].includes(item.status)) activeListings += 1;
+    totalViews += numberOrZero(item.views_count);
+    totalMessages += numberOrZero(item.messages_count);
+
+    if (item.lifecycle_status === "stale") staleListings += 1;
+    if (item.lifecycle_status === "review_delete" || item.review_bucket === "removedVehicles") reviewDeleteCount += 1;
+    if (item.lifecycle_status === "review_price_update" || item.review_bucket === "priceChanges") reviewPriceChangeCount += 1;
+    if (item.lifecycle_status === "review_new" || item.review_bucket === "newVehicles") reviewNewCount += 1;
+    if (item.weak) weakListings += 1;
+    if (item.needs_action) needsActionCount += 1;
+  }
+
+  const topListing = [...listings]
+    .sort((a, b) => b.popularity_score - a.popularity_score)[0] || null;
+
+  return {
+    posts_today: postsToday,
+    posts_this_month: postsMonth,
+    active_listings: activeListings,
+    total_views: totalViews,
+    total_messages: totalMessages,
+    stale_listings: staleListings,
+    review_delete_count: reviewDeleteCount,
+    review_price_change_count: reviewPriceChangeCount,
+    review_new_count: reviewNewCount,
+    review_queue_count: reviewDeleteCount + reviewPriceChangeCount + reviewNewCount,
+    weak_listings: weakListings,
+    needs_action_count: needsActionCount,
+    top_listing_title: topListing?.title || "None yet"
+  };
+}
+
+
+function computeListingIntelligence(item = {}) {
+  const postedAt = item.posted_at || item.created_at || item.updated_at || null;
+  const ageDays = postedAt ? Math.max(0, Math.floor((Date.now() - getTimestamp(postedAt)) / 86400000)) : 0;
+  const views = numberOrZero(item.views_count);
+  const messages = numberOrZero(item.messages_count);
+  const status = cleanText(item.status || '').toLowerCase();
+  const lifecycle = cleanText(item.lifecycle_status || '').toLowerCase();
+  const bucket = cleanText(item.review_bucket || '').toLowerCase().replace(/[\s_-]+/g, '');
+  const staleLike = status === 'stale' || lifecycle === 'stale' || lifecycle === 'review_delete' || bucket === 'removedvehicles';
+  const likelySold = lifecycle === 'review_delete' || bucket === 'removedvehicles';
+  const promoteNow = !['sold','deleted','inactive'].includes(status) && views >= 20 && messages >= 1;
+  const lowPerformance = !['sold','deleted','inactive'].includes(status) && ageDays >= 7 && views < 5 && messages === 0;
+  const weak = staleLike || lowPerformance;
+  const needsAction = staleLike || lowPerformance || (views >= 20 && messages === 0) || lifecycle === 'review_price_update' || bucket === 'pricechanges';
+  let healthScore = 100 - Math.min(ageDays * 2, 30) + Math.min(messages * 12, 36) + Math.min(views, 20);
+  if (staleLike) healthScore -= 35;
+  if (lowPerformance) healthScore -= 20;
+  healthScore = Math.max(0, Math.min(100, Math.round(healthScore)));
+  let healthLabel = 'Healthy';
+  if (promoteNow) healthLabel = 'High Performer';
+  else if (needsAction) healthLabel = 'Needs Action';
+  else if (weak) healthLabel = 'Weak';
+  let recommendedAction = 'Keep live';
+  if (likelySold) recommendedAction = 'Check if sold or stale';
+  else if (lifecycle === 'review_price_update' || bucket === 'pricechanges' || (views >= 20 && messages === 0)) recommendedAction = 'Review price';
+  else if (bucket === 'newvehicles' || lifecycle === 'review_new') recommendedAction = 'Review new listing';
+  else if (lowPerformance) recommendedAction = 'Refresh title/photos';
+  else if (promoteNow) recommendedAction = 'Promote now';
+  let predictedScore = 50 + Math.min(views, 25) + Math.min(messages * 18, 36) - Math.min(ageDays * 3, 24);
+  if (views >= 20 && messages === 0) predictedScore -= 8;
+  if (weak) predictedScore -= 20;
+  predictedScore = Math.max(0, Math.min(100, Math.round(predictedScore)));
+  const predictedLabel = predictedScore >= 75 ? 'High Performer' : (predictedScore >= 55 ? 'Likely Performer' : (predictedScore < 35 ? 'Low Probability' : 'Uncertain'));
+  const pricingInsight = (views >= 20 && messages === 0) ? 'Price may be limiting conversion.' : (messages >= 2 ? 'Pricing appears competitive.' : (views === 0 && ageDays >= 3 ? 'Listing may need stronger value or visibility.' : 'Pricing signal still developing.'));
+  let contentScore = 60;
+  if (cleanText(item.title).length >= 18) contentScore += 10;
+  if (cleanText(item.stock_number)) contentScore += 5;
+  if (cleanText(item.vin)) contentScore += 5;
+  if (cleanText(item.exterior_color)) contentScore += 5;
+  if (cleanText(item.body_style)) contentScore += 5;
+  if (cleanText(item.fuel_type)) contentScore += 5;
+  if (ageDays >= 7 && views < 5) contentScore -= 10;
+  contentScore = Math.max(0, Math.min(100, Math.round(contentScore)));
+  const contentFeedback = contentScore >= 80 ? 'Listing structure looks strong.' : (contentScore >= 65 ? 'Content is workable but could be tightened.' : 'Listing likely needs a stronger title and better detail signals.');
+  return { age_days: ageDays, likely_sold: likelySold, promote_now: promoteNow, weak, needs_action: needsAction, health_score: healthScore, health_label: healthLabel, recommended_action: recommendedAction, predicted_score: predictedScore, predicted_label: predictedLabel, pricing_insight: pricingInsight, content_score: contentScore, content_feedback: contentFeedback };
+}
+
+function mergeSummaryWithListings(summary, listings) {
+  const computed = buildDashboardSummaryFromListings(listings);
+  const sessionPostsToday = numberOrZero(currentNormalizedSession?.subscription?.posts_today);
+  const snapshotPostsToday = numberOrZero(summary?.account_snapshot?.posts_today ?? summary?.account_snapshot?.posts_used_today);
+  const bestPostsToday = Math.max(
+    numberOrZero(summary.posts_today ?? computed.posts_today),
+    sessionPostsToday,
+    snapshotPostsToday
+  );
+  const planFromSession = cleanText(currentNormalizedSession?.subscription?.plan || "");
+  const planFromPlanAccess = cleanText(summary?.plan_access?.plan_label || "");
+  const planFromSnapshot = cleanText(summary?.account_snapshot?.plan || "");
+  const statusFromSession = cleanText(currentNormalizedSession?.subscription?.status || "");
+  const statusFromSnapshot = cleanText(summary?.account_snapshot?.status || "");
+  const limitFromSession = numberOrZero(currentNormalizedSession?.subscription?.posting_limit);
+  const limitFromPlanAccess = numberOrZero(summary?.plan_access?.posting_limit);
+  const limitFromSnapshot = numberOrZero(summary?.account_snapshot?.posting_limit);
+  const remainingFromSession = numberOrZero(currentNormalizedSession?.subscription?.posts_remaining);
+  const remainingFromSnapshot = numberOrZero(summary?.account_snapshot?.posts_remaining);
+  const setupFromSummary = summary?.setup_status && Object.keys(summary.setup_status || {}).length > 0;
+
+  const canonicalAccess = {
+    plan: planFromSession || planFromPlanAccess || planFromSnapshot || "Founder Beta",
+    status: statusFromSession || statusFromSnapshot || "inactive",
+    posting_limit: limitFromSession || limitFromPlanAccess || limitFromSnapshot || 0,
+    posts_remaining: remainingFromSession || remainingFromSnapshot || 0
+  };
+
+  const stateProvenance = {
+    posts_today: bestPostsToday === snapshotPostsToday && snapshotPostsToday > 0
+      ? "summary.account_snapshot.posts_today"
+      : (bestPostsToday === sessionPostsToday && sessionPostsToday > 0
+        ? "session.subscription.posts_today"
+        : "computed.listings.posts_today"),
+    plan: planFromSession
+      ? "session.subscription.plan"
+      : (planFromPlanAccess ? "summary.plan_access.plan_label" : (planFromSnapshot ? "summary.account_snapshot.plan" : "default")),
+    status: statusFromSession ? "session.subscription.status" : (statusFromSnapshot ? "summary.account_snapshot.status" : "default"),
+    posting_limit: limitFromSession > 0
+      ? "session.subscription.posting_limit"
+      : (limitFromPlanAccess > 0 ? "summary.plan_access.posting_limit" : (limitFromSnapshot > 0 ? "summary.account_snapshot.posting_limit" : "default")),
+    setup_status: setupFromSummary ? "summary.setup_status" : "fallback"
+  };
+
+  return {
+    posts_today: bestPostsToday,
+    posts_this_month: numberOrZero(summary.posts_this_month ?? computed.posts_this_month),
+    active_listings: numberOrZero(summary.active_listings ?? computed.active_listings),
+    total_views: numberOrZero(summary.total_views ?? computed.total_views),
+    total_messages: numberOrZero(summary.total_messages ?? computed.total_messages),
+    stale_listings: numberOrZero(summary.stale_listings ?? computed.stale_listings),
+    review_delete_count: numberOrZero(summary.review_delete_count ?? computed.review_delete_count),
+    review_price_change_count: numberOrZero(summary.review_price_change_count ?? computed.review_price_change_count),
+    review_new_count: numberOrZero(summary.review_new_count ?? computed.review_new_count),
+    review_queue_count: numberOrZero(summary.review_queue_count ?? computed.review_queue_count),
+    weak_listings: numberOrZero(summary.weak_listings ?? computed.weak_listings),
+    needs_action_count: numberOrZero(summary.needs_action_count ?? computed.needs_action_count),
+    queue_count: numberOrZero(summary.queue_count ?? 0),
+    lifecycle_updated_at: clean(summary.lifecycle_updated_at || ""),
+    top_listing_title: clean(summary.top_listing_title || computed.top_listing_title || "None yet"),
+    account_snapshot: summary.account_snapshot || {},
+    setup_status: summary.setup_status || {},
+    canonical_access: canonicalAccess,
+    state_provenance: stateProvenance,
+    manager_access: Boolean(summary.manager_access),
+    action_center: summary.action_center || summary.daily_ops_queues || {},
+    daily_ops_queues: summary.daily_ops_queues || summary.action_center || {},
+    manager_summary: summary.manager_summary || {},
+    manager_recommendations: Array.isArray(summary.manager_recommendations) ? summary.manager_recommendations : [],
+    segment_performance: Array.isArray(summary.segment_performance) ? summary.segment_performance : [],
+    alerts: Array.isArray(summary.alerts) ? summary.alerts : [],
+    scorecards: summary.scorecards || {},
+    intelligence: summary.intelligence || {},
+    affiliate: summary.affiliate || {},
+    activation: summary.activation || {},
+    first_win: summary.first_win || {},
+    growth_actions: summary.growth_actions || {},
+    setup_blockers: Array.isArray(summary.setup_blockers) ? summary.setup_blockers : [],
+    setup_recommendations: Array.isArray(summary.setup_recommendations) ? summary.setup_recommendations : [],
+    revenue_intelligence: summary.revenue_intelligence || {},
+    listing_action_summary: summary.listing_action_summary || {},
+    opportunity_signals: Array.isArray(summary.opportunity_signals) ? summary.opportunity_signals : [],
+    roi_snapshot: summary.roi_snapshot || {},
+    credits: summary.credits || { balance: 0, lifetime_earned: 0, lifetime_spent: 0, recent_earned: 0, recent_events: [] }
+  };
+}
+
+
+function applyToolModuleFilters() {
+  const group = cleanText(document.getElementById('toolModuleFilter')?.value || 'all').toLowerCase();
+  const state = cleanText(document.getElementById('toolStateFilter')?.value || 'all').toLowerCase();
+  document.querySelectorAll('.tool-tile').forEach((tile) => {
+    const matchesGroup = group === 'all' || cleanText(tile.getAttribute('data-module-group')).toLowerCase() === group;
+    const matchesState = state === 'all' || cleanText(tile.getAttribute('data-module-state')).toLowerCase() === state;
+    tile.style.display = matchesGroup && matchesState ? '' : 'none';
+  });
+}
+
+function renderToolModuleDetail() {
+  const panel = document.getElementById('toolModuleDetailPanel');
+  if (!panel) return;
+  const module = selectedToolModule || {
+    title: 'Vehicle Poster',
+    description: 'Inventory scan, queue build, Marketplace fill, and posting engine.',
+    group: 'core',
+    state: 'live'
+  };
+  const stateLabel = module.state === 'live' ? 'Live Now' : module.state === 'beta' ? 'Founder Beta' : module.state === 'planned' ? 'Coming Soon' : module.state === 'pro' ? 'Pro' : 'Locked';
+  const why = module.group === 'core'
+    ? 'This is directly tied to day-one execution and the operator flow.'
+    : module.group === 'pipeline'
+    ? 'This expands the platform into follow-up, lead handling, and repeatable workflows.'
+    : 'This creates retention through insight, growth loops, and portfolio visibility.';
+  panel.innerHTML = `<div><strong>${escapeHtml(module.title)}</strong> <span class="tool-status ${escapeHtml(module.state)}">${escapeHtml(stateLabel)}</span></div><div>${escapeHtml(module.description)}</div><div><strong>Why it matters:</strong> ${escapeHtml(why)}</div><div><strong>When to use:</strong> ${escapeHtml(module.state === 'live' ? 'Use it now inside your current operating flow.' : module.state === 'beta' ? 'Use selectively while it continues to harden.' : module.state === 'planned' ? 'This is part of the near-term expansion roadmap.' : module.state === 'pro' ? 'This module becomes available on higher-access plans.' : 'This remains reserved until supporting layers are complete.')}</div>`;
+}
+
+function openListingDetailModal(listingId) {
+  const item = dashboardListings.find((row) => String(row.id) === String(listingId));
+  if (!item) return;
+  currentListingDetail = item;
+  const modal = document.getElementById('listingDetailModal');
+  const title = document.getElementById('listingDetailTitle');
+  const subtitle = document.getElementById('listingDetailSubtitle');
+  const body = document.getElementById('listingDetailBody');
+  if (!modal || !title || !subtitle || !body) return;
+  title.textContent = buildVehicleTitle(item);
+  subtitle.textContent = `${item.action_bucket_label || 'Low Priority'} • ${item.health_label || 'Healthy'} • ${item.recommended_action || 'Keep live'}`;
+  body.innerHTML = `
+    <div><strong>Health Score:</strong> ${numberOrZero(item.health_score)} • <strong>Predicted:</strong> ${numberOrZero(item.predicted_score)} (${escapeHtml(item.predicted_label || 'Uncertain')})</div>
+    <div><strong>Opportunity Score:</strong> ${numberOrZero(item.opportunity_score)} • <strong>Bucket:</strong> ${escapeHtml(item.action_bucket_label || 'Low Priority')}</div>
+    <div><strong>Post Priority:</strong> ${numberOrZero(item.post_priority)} • <strong>Refresh Priority:</strong> ${numberOrZero(item.refresh_priority)} • <strong>Price Review:</strong> ${numberOrZero(item.price_review_priority)}</div>
+    <div><strong>Views:</strong> ${numberOrZero(item.views_count)} • <strong>Messages:</strong> ${numberOrZero(item.messages_count)} • <strong>Age:</strong> ${numberOrZero(item.age_days)} day(s)</div>
+    <div><strong>Pricing Insight:</strong> ${escapeHtml(item.pricing_insight || 'Pricing signal still developing.')}</div>
+    <div><strong>Content Feedback:</strong> ${escapeHtml(item.content_feedback || 'Listing structure looks strong.')}</div>
+    <div><strong>Compliance:</strong> ${escapeHtml(currentProfile?.compliance_mode || currentNormalizedSession?.compliance?.mode || 'Profile not finished')}</div>
+    <div><strong>Last Sync:</strong> ${escapeHtml(formatRelativeOrDate(item.updated_at || item.posted_at || ''))}</div>`;
+  const primary = document.getElementById('listingDetailPrimaryBtn');
+  const secondary = document.getElementById('listingDetailSecondaryBtn');
+  if (primary) {
+    primary.textContent = item.source_url ? 'Open Source' : 'Log View';
+    primary.onclick = () => item.source_url ? openListingSource(item.id, item.source_url) : trackListingView(item.id);
+  }
+  if (secondary) {
+    secondary.textContent = 'Copy Summary';
+    secondary.onclick = () => copyVehicleSummary(item.id);
+  }
+  modal.classList.add('is-open');
+  modal.setAttribute('aria-hidden', 'false');
+}
+
+function closeListingDetailModal() {
+  const modal = document.getElementById('listingDetailModal');
+  if (!modal) return;
+  modal.classList.remove('is-open');
+  modal.setAttribute('aria-hidden', 'true');
+  currentListingDetail = null;
+}
+
+function renderRevenueActionPanels() {
+  const summary = dashboardSummary || {};
+  const listingActionSummary = summary.listing_action_summary || {};
+  setTextByIdForAll('actionBucketDoNow', String(numberOrZero(listingActionSummary.do_now)));
+  setTextByIdForAll('actionBucketDoToday', String(numberOrZero(listingActionSummary.do_today)));
+  setTextByIdForAll('actionBucketWatch', String(numberOrZero(listingActionSummary.watch)));
+  setTextByIdForAll('actionBucketLow', String(numberOrZero(listingActionSummary.low_priority)));
+  const actionSummary = document.getElementById('actionBucketSummary');
+  if (actionSummary) {
+    const next = (summary.activation?.next_best_actions || [])[0] || 'No urgent action detected right now.';
+    actionSummary.textContent = next;
+  }
+  const revenuePanel = document.getElementById('revenueIntelligencePanel');
+  if (revenuePanel) {
+    const revenue = summary.revenue_intelligence || {};
+    const signals = Array.isArray(summary.opportunity_signals) ? summary.opportunity_signals : [];
+    revenuePanel.innerHTML = `
+      <div><strong>Time Saved Today:</strong> ${numberOrZero(revenue.time_saved_today_minutes)} min</div>
+      <div><strong>Time Saved This Week:</strong> ${numberOrZero(revenue.time_saved_week_minutes)} min</div>
+      <div><strong>Refresh Candidates:</strong> ${numberOrZero(revenue.refresh_candidates)}</div>
+      <div><strong>Price Review Candidates:</strong> ${numberOrZero(revenue.price_review_candidates)}</div>
+      <div><strong>Missed Opportunity Estimate:</strong> ${numberOrZero(revenue.missed_opportunity_estimate)}</div>
+      <div style="margin-top:10px;"><strong>Signals:</strong></div>
+      ${signals.length ? signals.map((item) => `<div>• ${escapeHtml(cleanText(item))}</div>`).join('') : '<div>No major opportunity signals yet.</div>'}`;
+  }
+}
+
+function renderDashboardAnalytics() {
+  setTextByIdForAll("kpiPostsToday", String(numberOrZero(dashboardSummary?.posts_today)));
+  setTextByIdForAll("kpiPostsMonth", String(numberOrZero(dashboardSummary?.posts_this_month)));
+  setTextByIdForAll("kpiActiveListings", String(numberOrZero(dashboardSummary?.active_listings)));
+  setTextByIdForAll("kpiViews", String(numberOrZero(dashboardSummary?.total_views)));
+  setTextByIdForAll("kpiMessages", String(numberOrZero(dashboardSummary?.total_messages)));
+  setTextByIdForAll("kpiPostsRemaining", String(numberOrZero(currentNormalizedSession?.subscription?.posts_remaining ?? dashboardSummary?.account_snapshot?.posts_remaining)));
+  setTextByIdForAll("kpiDailyLimit", String(numberOrZero(currentNormalizedSession?.subscription?.posting_limit ?? dashboardSummary?.account_snapshot?.posting_limit)));
+  renderRevenueActionPanels();
+
+  // lifecycle-ready safe no-op if ids do not exist yet
+  setTextByIdForAll("kpiReviewQueue", String(numberOrZero(dashboardSummary?.review_queue_count)));
+  setTextByIdForAll("kpiStaleListings", String(numberOrZero(dashboardSummary?.stale_listings)));
+  setTextByIdForAll("kpiPriceChanges", String(numberOrZero(dashboardSummary?.review_price_change_count)));
+  setTextByIdForAll("kpiQueuedVehicles", String(numberOrZero(dashboardSummary?.queue_count)));
+  setTextByIdForAll("kpiReviewNew", String(numberOrZero(dashboardSummary?.review_new_count)));
+  setTextByIdForAll("kpiReviewDelete", String(numberOrZero(dashboardSummary?.review_delete_count)));
+  setTextByIdForAll("kpiWeakListings", String(numberOrZero(dashboardSummary?.weak_listings)));
+  setTextByIdForAll("kpiNeedsAction", String(numberOrZero(dashboardSummary?.needs_action_count)));
+
+  renderPrioritiesPanels();
+  renderScorecards();
+  renderIntelligencePanels();
+  renderAffiliateCenter();
+  renderTopListings(dashboardListings);
+  renderRecentActivity(dashboardListings);
+  renderOverviewOperatorPanel();
+  renderAnalyticsHub();
+  renderMonetizationPanels();
+  renderSetupWorkspace();
+  renderComplianceWorkspace();
+  renderToolsWorkspace();
+  drawActivityChart(buildChartSeries());
+}
+
+function updateListingFilterCounts() {
+  const rows = Array.isArray(dashboardListings) ? dashboardListings : [];
+  const countBy = (predicate) => rows.filter(predicate).length;
+  const counts = {
+    all: rows.length,
+    review: countBy((item) => {
+      const lifecycle = clean((item.lifecycle_status || "").toLowerCase());
+      const bucket = clean((item.review_bucket || "").toLowerCase()).replace(/[\s_-]+/g, "");
+      return ["review_delete", "review_price_update", "review_new"].includes(lifecycle) || ["removedvehicles", "pricechanges", "newvehicles"].includes(bucket);
+    }),
+    stale: countBy((item) => {
+      const lifecycle = clean((item.lifecycle_status || "").toLowerCase());
+      const bucket = clean((item.review_bucket || "").toLowerCase()).replace(/[\s_-]+/g, "");
+      const status = clean((item.status || "").toLowerCase());
+      return lifecycle === "stale" || status === "stale" || lifecycle === "review_delete" || bucket === "removedvehicles";
+    }),
+    price: countBy((item) => clean((item.lifecycle_status || "").toLowerCase()) === "review_price_update" || clean((item.review_bucket || "").toLowerCase()).replace(/[\s_-]+/g, "") === "pricechanges"),
+    new: countBy((item) => clean((item.lifecycle_status || "").toLowerCase()) === "review_new" || clean((item.review_bucket || "").toLowerCase()).replace(/[\s_-]+/g, "") === "newvehicles"),
+    weak: countBy((item) => Boolean(item.weak)),
+    needs_action: countBy((item) => Boolean(item.needs_action)),
+    promote: countBy((item) => Boolean(item.promote_now)),
+    likely_sold: countBy((item) => Boolean(item.likely_sold)),
+    active: countBy((item) => {
+      const status = clean((item.status || "").toLowerCase());
+      const lifecycle = clean((item.lifecycle_status || "").toLowerCase());
+      return !["sold", "deleted", "inactive", "stale"].includes(status) && lifecycle !== "review_delete";
+    })
+  };
+
+  document.querySelectorAll("[data-filter]").forEach((button) => {
+    const key = clean(button.getAttribute("data-filter") || "all").toLowerCase();
+    const base = clean(button.textContent || "");
+    const label = base.replace(/\s*\(\d+\)\s*$/, "");
+    button.textContent = `${label} (${numberOrZero(counts[key])})`;
   });
 }
 
@@ -567,6 +2202,28 @@ async function trackListingMessage(listingId) {
   await refreshDashboardData?.();
 }
 
+async function syncListingTraction(listingId) {
+  const item = dashboardListings.find((row) => String(row.id) === String(listingId));
+  if (!item) return;
+  const viewsInput = window.prompt("Sync views count from Facebook/Marketplace", String(numberOrZero(item.views_count)));
+  if (viewsInput == null) return;
+  const messagesInput = window.prompt("Sync messages count from Facebook/Marketplace", String(numberOrZero(item.messages_count)));
+  if (messagesInput == null) return;
+  const views = Math.max(0, numberOrZero(viewsInput));
+  const messages = Math.max(0, numberOrZero(messagesInput));
+  const metadata = {
+    source: "dashboard_manual_sync",
+    source_url: clean(item.source_url || ""),
+    marketplace_listing_id: clean(item.marketplace_listing_id || ""),
+    views_count: views,
+    messages_count: messages
+  };
+  await logListingUsage("listing_view_sync_v2", listingId, metadata);
+  await logListingUsage("listing_message_sync_v2", listingId, metadata);
+  setStatus("listingGridStatus", `Traction synced for ${cleanText(item.title || "listing")} (views ${views}, messages ${messages}).`);
+  await refreshDashboardData?.();
+}
+
 async function openListingSource(listingId, sourceUrl) {
   await logListingUsage("listing_card_opened", listingId, { source: "dashboard_open_source", source_url: sourceUrl });
   if (sourceUrl) window.open(sourceUrl, "_blank");
@@ -678,12 +2335,15 @@ function renderListingsGrid(listings) {
             </div>
           </div>
 
+          <div class="listing-note" style="margin:0 0 12px;color:var(--muted);font-size:12px;"><strong>Last Traction Sync:</strong> ${escapeHtml(formatRelativeOrDate(item.last_seen_at || item.updated_at || item.posted_at))}</div>
+
           <div class="listing-actions">
             <button class="action-btn" type="button" onclick="openListingDetailModal('${escapeJs(item.id)}')">Inspect</button>
             <button class="action-btn" type="button" onclick="markListingAction('${escapeJs(item.id)}','approved')">Approve</button>
             <button class="action-btn" type="button" onclick="markListingSold('${escapeJs(item.id)}')">Mark Sold</button>
             <button class="action-btn" type="button" onclick="trackListingView('${escapeJs(item.id)}')">Log View</button>
             <button class="action-btn" type="button" onclick="trackListingMessage('${escapeJs(item.id)}')">Log Message</button>
+            <button class="action-btn" type="button" onclick="syncListingTraction('${escapeJs(item.id)}')">Sync Traction</button>
             ${
               item.source_url
                 ? `<button class="action-btn" type="button" onclick="openListingSource('${escapeJs(item.id)}','${escapeJs(item.source_url)}')">Open Source</button>`
@@ -2036,10 +3696,203 @@ window.copyVehicleSummary = copyVehicleSummary;
 
 window.trackListingView = trackListingView;
 window.trackListingMessage = trackListingMessage;
+window.syncListingTraction = syncListingTraction;
 window.openListingSource = openListingSource;
 
 window.markListingAction = markListingAction;
 
 window.openListingDetailModal = openListingDetailModal;
 window.showSection = showSection;
+
+function applyPhase3OverviewLayout() {
+  const overview = document.getElementById("overview");
+  if (!overview || overview.dataset.phase3Built === "true") return;
+  overview.dataset.phase3Built = "true";
+
+  try {
+    document.documentElement.style.setProperty("--accent", "#d4af37");
+  } catch {}
+
+  const commandGrid = overview.querySelector(".command-center-grid");
+  const operatorStrip = overview.querySelector(".operator-strip");
+  const overviewCards = Array.from(overview.children);
+
+  const actionGrid = overviewCards.find((el) => el.classList?.contains("grid-2"));
+  const upgradeCard = overview.querySelector(".upgrade-card");
+  const kpiGrid = overviewCards.find((el) => el.classList?.contains("grid-4"));
+  const listingsCard = Array.from(overview.querySelectorAll(".card")).find((card) => card.querySelector("#recentListingsGrid"));
+  const bottomGrid = Array.from(overview.querySelectorAll(".grid-2")).find((grid) => grid.querySelector("#snapshotSetupSummary") || grid.querySelector("#setupReadinessSummary"));
+
+  const shell = document.createElement("div");
+  shell.className = "phase3-overview-shell";
+  shell.innerHTML = `
+    <div class="phase3-toolbar">
+      <div><span class="phase3-section-tag">Operator Focus</span></div>
+      <div class="phase3-segment" id="phase3OverviewSegment">
+        <button type="button" data-mode="core" class="active">Core</button>
+        <button type="button" data-mode="listings">Listings</button>
+        <button type="button" data-mode="secondary">Secondary</button>
+        <button type="button" data-mode="all">All</button>
+      </div>
+    </div>
+  `;
+
+  const coreGroup = document.createElement("div");
+  coreGroup.className = "phase3-overview-group";
+  coreGroup.dataset.group = "core";
+
+  const listingsGroup = document.createElement("div");
+  listingsGroup.className = "phase3-overview-group";
+  listingsGroup.dataset.group = "listings";
+
+  const secondaryGroup = document.createElement("div");
+  secondaryGroup.className = "phase3-overview-group phase3-quiet";
+  secondaryGroup.dataset.group = "secondary";
+
+  overview.prepend(shell);
+  shell.appendChild(coreGroup);
+  shell.appendChild(listingsGroup);
+  shell.appendChild(secondaryGroup);
+
+  [commandGrid, operatorStrip, actionGrid, kpiGrid].filter(Boolean).forEach((el) => coreGroup.appendChild(el));
+  [listingsCard].filter(Boolean).forEach((el) => listingsGroup.appendChild(el));
+
+  if (upgradeCard) {
+    upgradeCard.classList.add("phase3-muted-block");
+    secondaryGroup.appendChild(upgradeCard);
+  }
+
+  if (bottomGrid) {
+    const collapse = document.createElement("div");
+    collapse.className = "phase3-collapse open";
+    collapse.innerHTML = `
+      <div class="phase3-collapse-head">
+        <div>
+          <div class="phase3-section-tag">Secondary Detail</div>
+          <strong>Account Snapshot & Setup Readiness</strong>
+        </div>
+        <div class="subtext">Collapse</div>
+      </div>
+      <div class="phase3-collapse-body"></div>
+    `;
+    const body = collapse.querySelector(".phase3-collapse-body");
+    const inner = document.createElement("div");
+    inner.className = "phase3-secondary-grid";
+    inner.appendChild(bottomGrid);
+    body.appendChild(inner);
+    secondaryGroup.appendChild(collapse);
+    collapse.querySelector(".phase3-collapse-head")?.addEventListener("click", () => {
+      collapse.classList.toggle("open");
+      const sub = collapse.querySelector(".subtext");
+      if (sub) sub.textContent = collapse.classList.contains("open") ? "Collapse" : "Expand";
+    });
+  }
+
+  if (listingsCard) {
+    listingsCard.classList.add("phase3-listings-shell");
+    const head = listingsCard.querySelector(".section-head");
+    if (head) {
+      head.classList.add("phase3-listings-head");
+      const left = head.firstElementChild;
+      if (left && !left.querySelector(".phase3-section-tag")) {
+        const tag = document.createElement("div");
+        tag.className = "phase3-section-tag";
+        tag.textContent = "Live Listings";
+        left.prepend(tag);
+      }
+    }
+  }
+
+  const segment = document.getElementById("phase3OverviewSegment");
+  if (segment) {
+    const buttons = Array.from(segment.querySelectorAll("button"));
+    const groups = {
+      core: [coreGroup],
+      listings: [listingsGroup],
+      secondary: [secondaryGroup],
+      all: [coreGroup, listingsGroup, secondaryGroup]
+    };
+    buttons.forEach((button) => {
+      button.addEventListener("click", () => {
+        buttons.forEach((b) => b.classList.toggle("active", b === button));
+        const mode = button.dataset.mode || "all";
+        [coreGroup, listingsGroup, secondaryGroup].forEach((group) => group.classList.add("phase3-hidden"));
+        (groups[mode] || groups.all).forEach((group) => group.classList.remove("phase3-hidden"));
+      });
+    });
+  }
+}
+
+function injectPhase3DashboardStyles() {
+  if (document.getElementById("phase3-dashboard-styles")) return;
+  const style = document.createElement("style");
+  style.id = "phase3-dashboard-styles";
+  style.textContent = `
+    :root {
+      --accent: #d4af37;
+      --panel-soft: #141414;
+      --panel-deep: #101010;
+      --text-soft: #d6d6d6;
+    }
+    .phase3-overview-shell { display:grid; gap:16px; }
+    .phase3-overview-group { display:grid; gap:16px; }
+    .phase3-overview-group[data-group="secondary"] .card { background: linear-gradient(180deg, rgba(255,255,255,0.018), rgba(255,255,255,0.006)); }
+    .phase3-toolbar { display:flex; gap:10px; flex-wrap:wrap; align-items:center; justify-content:space-between; margin-bottom:8px; }
+    .phase3-segment { display:inline-flex; gap:8px; background:#111; border:1px solid rgba(212,175,55,0.12); border-radius:999px; padding:6px; }
+    .phase3-segment button { appearance:none; border:none; background:transparent; color:#d8d8d8; padding:10px 14px; border-radius:999px; cursor:pointer; font-weight:700; font-size:13px; }
+    .phase3-segment button.active { background:rgba(212,175,55,0.15); color:var(--gold-soft); }
+    .phase3-quiet { opacity:0.96; }
+    .phase3-muted-block .section-head h2, .phase3-muted-block h2 { font-size:20px; }
+    .phase3-muted-block .subtext, .phase3-muted-block .list-block, .phase3-muted-block .status-line { color:var(--text-soft); }
+    .phase3-collapse { border:1px solid rgba(212,175,55,0.10); border-radius:16px; overflow:hidden; background:#111; }
+    .phase3-collapse-head { display:flex; justify-content:space-between; align-items:center; gap:12px; padding:14px 16px; cursor:pointer; background:rgba(255,255,255,0.02); }
+    .phase3-collapse-head strong { font-size:14px; letter-spacing:0.02em; }
+    .phase3-collapse-body { display:none; padding:16px; border-top:1px solid rgba(212,175,55,0.08); }
+    .phase3-collapse.open .phase3-collapse-body { display:block; }
+    .phase3-secondary-grid { display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:16px; }
+    .phase3-section-tag { display:inline-flex; align-items:center; padding:6px 10px; border-radius:999px; background:rgba(212,175,55,0.10); border:1px solid rgba(212,175,55,0.16); color:var(--gold-soft); font-size:11px; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; }
+    .phase3-hidden { display:none !important; }
+    #overview .command-center-grid { grid-template-columns:minmax(0, 1.95fr) minmax(280px, 0.85fr); gap:16px; margin-bottom:16px; }
+    #overview .command-primary, #overview .command-side-card, #overview .mini-stat, #overview .card { border-radius:16px; }
+    #overview .command-primary { padding:24px; }
+    #overview .command-title-row h2 { font-size:30px; max-width:680px; }
+    #overview .command-meta-grid { grid-template-columns:repeat(3, minmax(0, 1fr)); gap:12px; }
+    #overview .command-meta-card { padding:14px; }
+    #overview .command-meta-value { font-size:24px; }
+    #overview .command-side-stack { gap:16px; }
+    #overview .overview-action-grid { gap:10px; }
+    #overview .overview-action-list { gap:8px; }
+    #overview .overview-action-item { padding:12px 14px; border-radius:12px; }
+    #overview .operator-strip { grid-template-columns:repeat(4, minmax(0, 1fr)); gap:12px; margin-bottom:16px; }
+    #overview .mini-stat { min-height:118px; padding:16px; }
+    #overview .mini-stat .stat-value { font-size:24px; }
+    #overview .mini-stat .stat-sub { font-size:12px; }
+    #overview #recentListingsGrid { gap:14px; }
+    #overview .listing-card { border-radius:16px; }
+    #overview .listing-media { height:170px; }
+    #overview .listing-content { gap:10px; padding:14px; }
+    #overview .listing-title { font-size:17px; }
+    #overview .listing-price { font-size:22px; }
+    #overview .listing-actions { gap:8px; }
+    #overview .listing-actions .action-btn { padding:12px 12px; font-size:13px; }
+    @media (max-width: 1280px) {
+      #overview .command-center-grid { grid-template-columns:1fr; }
+      #overview .operator-strip { grid-template-columns:repeat(2, minmax(0, 1fr)); }
+      .phase3-secondary-grid { grid-template-columns:1fr; }
+    }
+    @media (max-width: 760px) {
+      #overview .operator-strip { grid-template-columns:1fr; }
+      .phase3-toolbar { flex-direction:column; align-items:stretch; }
+    }
+  `;
+  document.head.appendChild(style);
+}
+
+function bootstrapPhase3Layout() {
+  injectPhase3DashboardStyles();
+  applyPhase3OverviewLayout();
+}
+
+document.addEventListener("DOMContentLoaded", bootstrapPhase3Layout);
+
 })();
