@@ -46,6 +46,65 @@
     }).then(() => loadScriptSequentially(index + 1));
   }
 
+  const status = clean(row.status || "posted").toLowerCase();
+  const lifecycleStatus = clean(row.lifecycle_status || row.review_status || "").toLowerCase();
+
+  const intelligence = computeListingIntelligence({ ...row, posted_at: postedAt, status, lifecycle_status: lifecycleStatus, views_count: views, messages_count: messages, review_bucket: clean(row.review_bucket || '') });
+  return {
+    id: clean(row.id || row.marketplace_listing_id || row.source_url || cryptoRandomFallback()),
+    user_id: clean(row.user_id || ""),
+    dealership_id: clean(row.dealership_id || ""),
+    vin: clean(row.vin || ""),
+    stock_number: clean(row.stock_number || row.stockNumber || ""),
+    source_url: clean(row.source_url || row.sourceUrl || ""),
+    image_url: imageUrl,
+    year,
+    make,
+    model,
+    trim,
+    vehicle_type: clean(row.vehicle_type || row.vehicleType || ""),
+    body_style: clean(row.body_style || row.bodyStyle || ""),
+    exterior_color: clean(row.exterior_color || row.exteriorColor || row.color || ""),
+    fuel_type: clean(row.fuel_type || row.fuelType || ""),
+    mileage,
+    price,
+    title,
+    status,
+    lifecycle_status: lifecycleStatus,
+    review_bucket: clean(row.review_bucket || ""),
+    posted_at: postedAt,
+    created_at: row.created_at || postedAt,
+    views_count: views,
+    messages_count: messages,
+    popularity_score: (messages * 1000) + (views * 10) + getTimestamp(postedAt) / 100000000,
+    ...intelligence
+  };
+}
+
+function buildDashboardSummaryFromListings(listings) {
+  const now = new Date();
+  const todayKey = toDateKey(now);
+  const monthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+
+  let postsToday = 0;
+  let postsMonth = 0;
+  let activeListings = 0;
+  let totalViews = 0;
+  let totalMessages = 0;
+  let staleListings = 0;
+  let reviewDeleteCount = 0;
+  let reviewPriceChangeCount = 0;
+  let reviewNewCount = 0;
+  let weakListings = 0;
+  let needsActionCount = 0;
+
+  for (const item of listings) {
+    const itemDate = new Date(item.posted_at);
+    if (!Number.isNaN(itemDate.getTime())) {
+      if (toDateKey(itemDate) === todayKey) postsToday += 1;
+      if (`${itemDate.getFullYear()}-${String(itemDate.getMonth() + 1).padStart(2, "0")}` === monthKey) {
+        postsMonth += 1;
+      }
   loadScriptSequentially().catch((error) => {
     console.error("[Elevate Dashboard] Phase 4 loader error:", error);
     const status = document.getElementById("bootStatus");
@@ -53,4 +112,1934 @@
       status.textContent = `Phase 4 loader failed: ${error.message || "Unknown error"}`;
     }
   });
+}
+
+
+
+
+function getSetupChecklist(profile = null, session = null) {
+  const mergedProfile = getCanonicalProfileState(profile, session);
+  const normalizedSession = session || currentNormalizedSession || {};
+  const setup = dashboardSummary?.setup_status || {};
+  const subscription = getCanonicalSubscriptionState(normalizedSession);
+  return [
+    { key: 'full_name', label: 'Salesperson identity', ready: Boolean(setup.salesperson_name_present || mergedProfile.full_name), target: 'full_name' },
+    { key: 'dealership', label: 'Dealership name', ready: Boolean(setup.dealership_name_present || mergedProfile.dealership), target: 'dealership' },
+    { key: 'dealer_website', label: 'Dealer website', ready: Boolean(setup.dealer_website_present || mergedProfile.dealer_website), target: 'dealer_website' },
+    { key: 'inventory_url', label: 'Inventory URL', ready: Boolean(setup.inventory_url_present || mergedProfile.inventory_url), target: 'inventory_url' },
+    { key: 'scanner_type', label: 'Scanner type', ready: Boolean(setup.scanner_type_present || mergedProfile.scanner_type), target: 'scanner_type' },
+    { key: 'listing_location', label: 'Listing location', ready: Boolean(setup.listing_location_present || mergedProfile.listing_location), target: 'listing_location' },
+    { key: 'compliance_mode', label: 'Compliance mode', ready: Boolean(setup.compliance_mode_present || mergedProfile.compliance_mode || mergedProfile.province), target: 'compliance_mode' },
+    { key: 'license_number', label: 'License number', ready: Boolean(mergedProfile.license_number), target: 'license_number' },
+    { key: 'access', label: 'Account access', ready: Boolean(subscription.active), target: null }
+  ];
+}
+
+function jumpToSetupField(fieldId) {
+  showSection('profile');
+  if (!fieldId) return;
+  const el = document.getElementById(fieldId);
+  if (!el) return;
+  requestAnimationFrame(() => {
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    try { el.focus({ preventScroll: true }); } catch {}
+  });
+}
+
+function renderSetupWorkspace(profile = null, session = null) {
+  const systemState = getSystemState(profile, session);
+  applySystemStateToForm(systemState.profile);
+  const checklist = getSetupChecklist(systemState.profile, systemState.session);
+  const readyCount = checklist.filter((item) => item.ready).length;
+  const total = checklist.length;
+  const percent = total ? Math.round((readyCount / total) * 100) : 0;
+  const blockers = checklist.filter((item) => !item.ready && item.key !== 'access');
+  setTextByIdForAll('setupReadinessPercent', `${percent}%`);
+  setTextByIdForAll('setupReadinessSummary', `${readyCount}/${total} setup checkpoints are ready.`);
+  const blockersEl = document.getElementById('setupBlockersList');
+  if (blockersEl) {
+    blockersEl.innerHTML = blockers.length
+      ? blockers.map((item) => `<div class="action-row"><div><strong>${escapeHtml(item.label)}</strong><div class="subtext">Required before the posting flow is truly launch-ready.</div></div><button class="action-btn setup-jump-btn" type="button" data-field-id="${escapeHtml(item.target || '')}">Fix Now</button></div>`).join('')
+      : '<div>No setup blockers remain. This account is ready for the posting flow.</div>';
+  }
+  const nextStepEl = document.getElementById('setupNextStepPanel');
+  if (nextStepEl) {
+    const nextItem = blockers[0] || checklist.find((item) => item.key === 'access' && !item.ready);
+    nextStepEl.innerHTML = nextItem
+      ? `<div><strong>Next step:</strong> ${escapeHtml(nextItem.label)}</div><div class="subtext">Complete this first so the platform has clean dealer routing and compliant output.</div>`
+      : '<div><strong>Setup complete.</strong> Move into Tools to verify posting state or Analytics to watch performance.</div>';
+  }
+}
+
+function buildComplianceFooterPreview(profile) {
+  const lines = [];
+  if (profile.dealership) lines.push(profile.dealership);
+  if (profile.listing_location) lines.push(profile.listing_location);
+  if (profile.dealer_phone || profile.phone) lines.push(profile.dealer_phone || profile.phone);
+  if (profile.dealer_email) lines.push(profile.dealer_email);
+  if ((profile.compliance_mode || profile.province || '').toUpperCase().startsWith('AB')) lines.push('AMVIC Licensed Business. Pricing plus taxes and fees as applicable.');
+  if ((profile.compliance_mode || profile.province || '').toUpperCase().startsWith('BC')) lines.push('Licensed dealer. Pricing and documentation subject to BC dealer requirements.');
+  return lines.filter(Boolean).join('\n') || 'Dealer footer preview will appear here once setup is complete.';
+}
+
+function renderComplianceWorkspace(profile = null, session = null) {
+  const systemState = getSystemState(profile, session);
+  const mergedProfile = systemState.profile;
+  const blockers = [];
+  if (!mergedProfile.province && !mergedProfile.compliance_mode) blockers.push('Province or compliance mode missing');
+  if (!mergedProfile.license_number) blockers.push('License number missing');
+  if (!mergedProfile.dealership) blockers.push('Dealership name missing');
+  if (!mergedProfile.dealer_phone && !mergedProfile.phone) blockers.push('Dealer or salesperson phone missing');
+  const statusEl = document.getElementById('complianceStatusPanel');
+  if (statusEl) {
+    statusEl.innerHTML = blockers.length
+      ? `<div class="status-line warn"><strong>Not ready to publish.</strong> ${escapeHtml(blockers.join(' • '))}</div>`
+      : '<div class="status-line success"><strong>Compliance ready.</strong> Profile data is present for dealer footer and province output.</div>';
+  }
+  const footerEl = document.getElementById('complianceFooterPreview');
+  if (footerEl) footerEl.textContent = buildComplianceFooterPreview(mergedProfile);
+  const descEl = document.getElementById('complianceDescriptionPreview');
+  if (descEl) {
+    const mode = (mergedProfile.compliance_mode || mergedProfile.province || '').toUpperCase();
+  }
+  if (descEl) {
+    const mode = (mergedProfile.compliance_mode || mergedProfile.province || '').toUpperCase();
+    descEl.textContent = mode.startsWith('AB')
+      ? 'AB / Alberta output: include dealership identity, AMVIC framing where required, and pricing language that avoids ambiguous all-in claims.'
+      : mode.startsWith('BC')
+        ? 'BC output: keep dealer identity visible, preserve compliance wording, and ensure listing copy aligns with BC dealer expectations.'
+        : 'Select a compliance mode to preview the output block that will feed Marketplace posting.';
+  }
+  const blockerEl = document.getElementById('complianceBlockersList');
+  if (blockerEl) {
+    blockerEl.innerHTML = blockers.length
+      ? blockers.map((item) => `<div>• ${escapeHtml(item)}</div>`).join('')
+      : '<div>• Province logic present</div><div>• License field present</div><div>• Dealer contact block available</div>';
+  }
+}
+
+function renderToolsWorkspace(profile = null, session = null) {
+  const systemState = getSystemState(profile, session);
+  const mergedProfile = systemState.profile;
+  const subscription = systemState.subscription;
+  const blockers = [];
+  if (!subscription.active) blockers.push('Access inactive');
+  if (!mergedProfile.inventory_url) blockers.push('Inventory URL missing');
+  if (!mergedProfile.scanner_type) blockers.push('Scanner type missing');
+  if (!(mergedProfile.compliance_mode || mergedProfile.province)) blockers.push('Compliance mode missing');
+  const statusEl = document.getElementById('toolsSystemStatusPanel');
+  if (statusEl) {
+    statusEl.innerHTML = blockers.length
+      ? `<div><strong>Ready to Post:</strong> No</div><div class="subtext">${escapeHtml(blockers.join(' • '))}</div>`
+      : '<div><strong>Ready to Post:</strong> Yes</div><div class="subtext">Routing, compliance, and access checks are present for beta operation.</div>';
+  }
+  const nextEl = document.getElementById('toolsNextStepPanel');
+  if (nextEl) {
+    nextEl.innerHTML = blockers.length
+      ? `<div><strong>Next step:</strong> ${escapeHtml(blockers[0])}</div><div class="subtext">Resolve this first, then refresh extension state.</div>`
+      : '<div><strong>Next step:</strong> Open inventory or Marketplace and run the posting flow.</div>';
+  }
+  const countsEl = document.getElementById('moduleCountsPanel');
+  if (countsEl) {
+    const modules = Array.from(document.querySelectorAll('.tool-tile'));
+    const count = (state) => modules.filter((tile) => cleanText(tile.getAttribute('data-module-state')).toLowerCase() === state).length;
+    countsEl.innerHTML = `
+      <div class="sidebar-card"><div class="sidebar-card-label">Active</div><div class="sidebar-card-value">${count('live')}</div></div>
+      <div class="sidebar-card"><div class="sidebar-card-label">Beta</div><div class="sidebar-card-value">${count('beta')}</div></div>
+      <div class="sidebar-card"><div class="sidebar-card-label">Locked / Pro</div><div class="sidebar-card-value">${count('pro') + count('locked')}</div></div>
+      <div class="sidebar-card"><div class="sidebar-card-label">Planned</div><div class="sidebar-card-value">${count('planned')}</div></div>`;
+  }
+}
+
+function renderOverviewOperatorPanel() {
+  const roi = dashboardSummary?.roi_snapshot || {};
+  const accountSnapshot = dashboardSummary?.account_snapshot || {};
+  const setup = dashboardSummary?.setup_status || {};
+  const credits = dashboardSummary?.credits || {};
+  const queues = dashboardSummary?.daily_ops_queues || dashboardSummary?.action_center || {};
+  const details = dashboardSummary?.action_center_details || {};
+
+  const timeSavedToday = numberOrZero(roi.estimated_minutes_saved_today || (numberOrZero(dashboardSummary?.posts_today) * 18));
+  const postsToday = numberOrZero(dashboardSummary?.posts_today);
+  const postingLimit = numberOrZero(
+    currentNormalizedSession?.subscription?.posting_limit ??
+    accountSnapshot?.effective_posting_limit ??
+    accountSnapshot?.posting_limit
+  );
+  const postsRemaining = Math.max(
+    0,
+    numberOrZero(
+      currentNormalizedSession?.subscription?.posts_remaining ??
+      accountSnapshot?.posts_remaining ??
+      (postingLimit > 0 ? postingLimit - postsToday : 0)
+    )
+  );
+  const readyQueue = numberOrZero(dashboardSummary?.queue_count);
+  const reviewQueue = numberOrZero(dashboardSummary?.review_queue_count);
+  const staleListings = numberOrZero(dashboardSummary?.stale_listings);
+  const weakListings = numberOrZero(dashboardSummary?.weak_listings);
+  const needsAction = numberOrZero(dashboardSummary?.needs_action_count);
+  const revenueAttention = reviewQueue + staleListings + weakListings + needsAction;
+  const planName = cleanText(
+    currentNormalizedSession?.subscription?.plan_name ||
+    currentNormalizedSession?.subscription?.plan ||
+    accountSnapshot?.plan_name ||
+    dashboardSummary?.plan_name ||
+    'Founder Beta'
+  );
+  const accessActive = Boolean(
+    currentNormalizedSession?.access?.has_access ??
+    currentNormalizedSession?.subscription?.active ??
+    accountSnapshot?.access_active ??
+    dashboardSummary?.has_access ??
+    true
+  );
+
+  const setupChecks = [
+    { label: 'Dealer website', ready: Boolean(setup.dealer_website_present || currentProfile?.dealer_website || currentNormalizedSession?.dealership?.website) },
+    { label: 'Inventory URL', ready: Boolean(setup.inventory_url_present || currentProfile?.inventory_url || currentNormalizedSession?.dealership?.inventory_url) },
+    { label: 'Scanner type', ready: Boolean(setup.scanner_type_present || currentProfile?.scanner_type || currentNormalizedSession?.scanner_config?.scanner_type || currentNormalizedSession?.dealership?.scanner_type) },
+    { label: 'Listing location', ready: Boolean(setup.listing_location_present || currentProfile?.listing_location || currentNormalizedSession?.profile?.listing_location) },
+    { label: 'Compliance mode', ready: Boolean(setup.compliance_mode_present || currentProfile?.compliance_mode || currentProfile?.province || currentNormalizedSession?.profile?.compliance_mode || currentNormalizedSession?.dealership?.province) },
+    { label: 'Access active', ready: accessActive }
+  ];
+  const setupReadyCount = setupChecks.filter((item) => item.ready).length;
+  const setupPercent = Math.round((setupReadyCount / setupChecks.length) * 100);
+  const setupGaps = Array.isArray(setup.setup_gaps) ? setup.setup_gaps.filter(Boolean) : [];
+
+  setTextByIdForAll('overviewTimeSavedToday', `${timeSavedToday} min`);
+  setTextByIdForAll('overviewPlanChip', planName || 'Founder Beta');
+  setTextByIdForAll('overviewAccessChip', accessActive ? 'Active Access' : 'Access Needs Attention');
+  setTextByIdForAll('commandSetupChip', `Setup ${setupPercent}%`);
+  setTextByIdForAll('commandPostsUsed', `${postsToday} / ${postingLimit || 0}`);
+  setTextByIdForAll('commandReadyQueue', String(readyQueue));
+  setTextByIdForAll('commandRevenueAttention', String(revenueAttention));
+  setTextByIdForAll('commandCreditsBalance', String(numberOrZero(credits.balance)));
+  setTextByIdForAll('commandCreditsEarned', String(numberOrZero(credits.lifetime_earned)));
+  setTextByIdForAll('commandSetupProgress', `${setupPercent}%`);
+
+  const commandCenterSubtext = document.getElementById('commandCenterSubtext');
+  if (commandCenterSubtext) {
+    const opener = accessActive
+      ? `You have ${postsRemaining} post${postsRemaining === 1 ? '' : 's'} left today with ${readyQueue} vehicle${readyQueue === 1 ? '' : 's'} in queue.`
+      : 'Access needs attention before clean extension usage and posting.';
+    const closer = revenueAttention > 0
+      ? `${revenueAttention} listing${revenueAttention === 1 ? '' : 's'} currently need attention or promotion.`
+      : 'No urgent listing pressure right now—focus on output and setup completeness.';
+    commandCenterSubtext.textContent = `${opener} ${closer}`;
+  }
+
+  const overviewActionList = document.getElementById('overviewActionList');
+  if (overviewActionList) {
+    const actionItems = []
+      .concat(Array.isArray(details.today) ? details.today : [])
+      .concat(Array.isArray(details.opportunities) ? details.opportunities.slice(0, 2) : [])
+      .slice(0, 4);
+
+    overviewActionList.innerHTML = actionItems.length
+      ? actionItems.map((item, index) => {
+          const title = cleanText(item?.title || item?.label || `Priority ${index + 1}`);
+          const copy = cleanText(item?.copy || item?.description || item?.reason || '');
+          const actionId = cleanText(item?.id || item?.action || '');
+          const actionBtn = actionId
+            ? `<button class="mini-btn" type="button" onclick="executeActionCenterItemById('${escapeJs(actionId)}')">Run</button>`
+            : '';
+          return `
+            <div class="overview-action-item">
+              <div>
+                <div class="title">${escapeHtml(title)}</div>
+                <div class="sub">${escapeHtml(copy || 'Keep momentum moving on the highest-value task next.')}</div>
+              </div>
+              ${actionBtn}
+            </div>
+          `;
+        }).join('')
+      : `
+        <div class="overview-action-item">
+          <div>
+            <div class="title">No urgent blockers detected</div>
+            <div class="sub">Keep posting, watch traction, and use credits when volume creates leverage.</div>
+          </div>
+        </div>
+      `;
+  }
+
+  const blockers = [];
+  if (!accessActive) blockers.push('Billing or access needs attention.');
+  if (reviewQueue > 0) blockers.push(`${reviewQueue} listing${reviewQueue === 1 ? '' : 's'} waiting for review.`);
+  if (staleListings > 0) blockers.push(`${staleListings} stale listing${staleListings === 1 ? '' : 's'} need refresh.`);
+  if (weakListings > 0) blockers.push(`${weakListings} weak listing${weakListings === 1 ? '' : 's'} need stronger copy or media.`);
+  if (postsRemaining <= 0 && postingLimit > 0) blockers.push('Daily posting limit reached.');
+  if (setupGaps.length) blockers.push(`Setup gaps: ${setupGaps.slice(0, 3).join(', ')}${setupGaps.length > 3 ? '...' : ''}`);
+
+  const blockersEl = document.getElementById('overviewBlockers');
+  if (blockersEl) {
+    const summaryBits = [
+      `<strong>Posts:</strong> ${postsToday}/${postingLimit || 0}`,
+      `<strong>Remaining:</strong> ${postsRemaining}`,
+      `<strong>Ready Queue:</strong> ${readyQueue}`,
+      `<strong>Time Saved:</strong> ${timeSavedToday} min`
+    ];
+    const blockerCopy = blockers.length
+      ? blockers.map((item) => `• ${escapeHtml(item)}`).join(' ')
+      : '• No major blockers right now. Stay in flow and keep the queue moving.';
+    blockersEl.innerHTML = `${summaryBits.join(' &nbsp;•&nbsp; ')}<br>${blockerCopy}`;
+  }
+
+  const setupFill = document.getElementById('commandSetupFill');
+  if (setupFill) {
+    setupFill.style.width = `${setupPercent}%`;
+  }
+
+  const setupSummary = document.getElementById('commandSetupSummary');
+  if (setupSummary) {
+    setupSummary.textContent = setupGaps.length
+      ? `Still missing: ${setupGaps.slice(0, 3).join(' • ')}${setupGaps.length > 3 ? '…' : ''}`
+      : 'Setup is in strong shape for beta usage and compliance flow.';
+  }
+
+  const setupChecklist = document.getElementById('commandSetupChecklist');
+  if (setupChecklist) {
+    setupChecklist.innerHTML = setupChecks.slice(0, 4).map((item) => `
+      <div class="setup-check ${item.ready ? 'good' : 'warn'}">
+        <span>${escapeHtml(item.label)}</span>
+        <strong>${item.ready ? 'Ready' : 'Needs Setup'}</strong>
+      </div>
+    `).join('');
+  }
+
+  const recentEvents = Array.isArray(credits.recent_events) ? credits.recent_events : [];
+  const latestEvent = recentEvents[0] || null;
+  setTextByIdForAll('commandCreditsLatest', latestEvent ? `+${numberOrZero(latestEvent.amount)}` : '—');
+
+  const creditPreview = document.getElementById('overviewCreditPreview');
+  if (creditPreview) {
+    creditPreview.innerHTML = latestEvent
+      ? `<strong>${escapeHtml(cleanText(latestEvent.label || latestEvent.type || 'Credit event'))}</strong><br><span style="color:var(--muted);">${escapeHtml(formatRelativeOrDate(latestEvent.created_at || ''))}</span>`
+      : 'No credit activity yet. Post inventory and activate referral loops to start building balance.';
+  }
+}
+
+
+function renderAnalyticsHub() {
+  const roi = dashboardSummary?.roi_snapshot || {};
+  const credits = dashboardSummary?.credits || {};
+  const postsToday = numberOrZero(dashboardSummary?.posts_today);
+  const postingLimit = numberOrZero(currentNormalizedSession?.subscription?.posting_limit ?? dashboardSummary?.account_snapshot?.posting_limit);
+  const reviewQueue = numberOrZero(dashboardSummary?.review_queue_count);
+  const staleListings = numberOrZero(dashboardSummary?.stale_listings);
+  const weakListings = numberOrZero(dashboardSummary?.weak_listings);
+  const messages = numberOrZero(dashboardSummary?.total_messages);
+  const views = numberOrZero(dashboardSummary?.total_views);
+  const weekMinutes = numberOrZero(roi.estimated_minutes_saved_week || postsToday * 18);
+  const dayMinutes = numberOrZero(roi.estimated_minutes_saved_today || postsToday * 18);
+  const estimatedValue = Number(roi.estimated_value_saved || (((dayMinutes / 60) * 30).toFixed(2)) || 0);
+  const efficiency = postingLimit > 0 ? Math.min(100, Math.round((postsToday / postingLimit) * 100)) : 0;
+
+  setTextByIdForAll("analyticsTimeSavedToday", `${dayMinutes} min`);
+  setTextByIdForAll("analyticsTimeSavedWeek", `${weekMinutes} min`);
+  setTextByIdForAll("analyticsEstimatedValue", formatCurrency(estimatedValue));
+  setTextByIdForAll("analyticsEfficiencyScore", `${efficiency}%`);
+  setTextByIdForAll("kpiCreditsBalance", String(numberOrZero(credits.balance)));
+  setTextByIdForAll("kpiCreditsEarned", String(numberOrZero(credits.lifetime_earned)));
+  setTextByIdForAll("analyticsCreditsBalance", String(numberOrZero(credits.balance)));
+  setTextByIdForAll("analyticsCreditsEarned", String(numberOrZero(credits.lifetime_earned)));
+
+  const systemHealth = document.getElementById("analyticsSystemHealth");
+  if (systemHealth) {
+    systemHealth.innerHTML = [
+      `<div><strong>Review Queue:</strong> ${reviewQueue}</div>`,
+      `<div><strong>Stale Listings:</strong> ${staleListings}</div>`,
+      `<div><strong>Weak Listings:</strong> ${weakListings}</div>`,
+      `<div><strong>Lifecycle Updated:</strong> ${escapeHtml(cleanText(dashboardSummary?.lifecycle_updated_at || dashboardSummary?.account_snapshot?.current_period_end || '—'))}</div>`
+    ].join("");
+  }
+
+  const growthSignals = document.getElementById("analyticsGrowthSignals");
+  if (growthSignals) {
+    growthSignals.innerHTML = [
+      `<div><strong>Posts Today:</strong> ${postsToday}</div>`,
+      `<div><strong>Views:</strong> ${views}</div>`,
+      `<div><strong>Messages:</strong> ${messages}</div>`,
+      `<div><strong>Top Listing:</strong> ${escapeHtml(cleanText(dashboardSummary?.top_listing_title || 'None yet'))}</div>`
+    ].join("");
+  }
+
+  const creditActivity = document.getElementById("analyticsCreditActivity");
+  if (creditActivity) {
+    const events = Array.isArray(credits.recent_events) ? credits.recent_events : [];
+    creditActivity.innerHTML = events.length
+      ? events.map((event) => `<div><strong>+${numberOrZero(event.amount)}</strong> ${escapeHtml(cleanText(event.label || event.type || 'Credit event'))} <span style="color:var(--muted);">• ${escapeHtml(formatRelativeOrDate(event.created_at || ''))}</span></div>`).join('')
+      : '<div>No credit activity yet.</div>';
+  }
+
+  const oppSignals = document.getElementById("analyticsOpportunitySignals");
+  if (oppSignals) {
+    oppSignals.innerHTML = [
+      `<div><strong>Posts Remaining:</strong> ${numberOrZero(currentNormalizedSession?.subscription?.posts_remaining ?? dashboardSummary?.account_snapshot?.posts_remaining)}</div>`,
+      `<div><strong>Queued Vehicles:</strong> ${numberOrZero(dashboardSummary?.queue_count)}</div>`,
+      `<div><strong>Messages Ready For Follow-Up:</strong> ${messages}</div>`,
+      `<div><strong>Promote / Review Opportunities:</strong> ${numberOrZero(dashboardSummary?.needs_action_count)}</div>`
+    ].join("");
+  }
+}
+
+function applyListingFiltersAndRender() {
+  updateListingFilterCounts();
+  const searchTerm = clean((document.getElementById("listingSearchInput")?.value || "").toLowerCase());
+  const sortMode = clean(document.getElementById("listingSortSelect")?.value || "popular");
+
+  let rows = [...dashboardListings];
+
+  if (listingQuickFilter !== "all") {
+    rows = rows.filter((item) => {
+      const lifecycle = clean((item.lifecycle_status || "").toLowerCase());
+      const bucket = clean((item.review_bucket || "").toLowerCase()).replace(/[\s_-]+/g, "");
+      const status = clean((item.status || "").toLowerCase());
+
+      if (listingQuickFilter === "review") return ["review_delete", "review_price_update", "review_new"].includes(lifecycle) || ["removedvehicles", "pricechanges", "newvehicles"].includes(bucket);
+      if (listingQuickFilter === "stale") return lifecycle === "stale" || status === "stale" || lifecycle === "review_delete" || bucket === "removedvehicles";
+      if (listingQuickFilter === "price") return lifecycle === "review_price_update" || bucket === "pricechanges";
+      if (listingQuickFilter === "new") return lifecycle === "review_new" || bucket === "newvehicles";
+      if (listingQuickFilter === "weak") return Boolean(item.weak);
+      if (listingQuickFilter === "needs_action") return Boolean(item.needs_action);
+      if (listingQuickFilter === "promote") return Boolean(item.promote_now);
+      if (listingQuickFilter === "likely_sold") return Boolean(item.likely_sold);
+      if (listingQuickFilter === "active") return !["sold", "deleted", "inactive", "stale"].includes(status) && lifecycle !== "review_delete";
+      return true;
+    });
+  }
+
+  if (searchTerm) {
+    rows = rows.filter((item) => {
+      const haystack = [
+        item.title,
+        item.make,
+        item.model,
+        item.trim,
+        item.vin,
+        item.stock_number,
+        item.body_style,
+        item.lifecycle_status,
+        item.review_bucket
+      ]
+        .join(" ")
+        .toLowerCase();
+
+      return haystack.includes(searchTerm);
+    });
+  }
+
+  rows.sort((a, b) => {
+    if (sortMode === "newest") return getTimestamp(b.posted_at) - getTimestamp(a.posted_at);
+    if (sortMode === "price_high") return numberOrZero(b.price) - numberOrZero(a.price);
+    if (sortMode === "price_low") return numberOrZero(a.price) - numberOrZero(b.price);
+    return numberOrZero(b.popularity_score) - numberOrZero(a.popularity_score);
+  });
+
+  filteredListings = rows;
+  renderListingsGrid(filteredListings);
+}
+
+async function logListingUsage(action, listingId, metadata = {}) {
+  try {
+    const email = clean(window.currentUser?.email || window.currentUserEmail || "").toLowerCase();
+    const userId = clean(window.currentUser?.id || window.currentUserId || "");
+    const response = await apiFetch("/api/log-usage", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action, listing_id: listingId, listingId, email, user_id: userId, userId, metadata })
+    });
+    return await response.json().catch(() => ({}));
+  } catch (error) {
+    console.warn("log listing usage warning", error);
+    return { success: false, error: error.message };
+  }
+}
+
+async function trackListingView(listingId) {
+  await logListingUsage("listing_viewed", listingId, { source: "dashboard_card" });
+  await refreshDashboardData?.();
+}
+
+async function trackListingMessage(listingId) {
+  await logListingUsage("listing_message", listingId, { source: "dashboard_card" });
+  await refreshDashboardData?.();
+}
+
+async function openListingSource(listingId, sourceUrl) {
+  await logListingUsage("listing_card_opened", listingId, { source: "dashboard_open_source", source_url: sourceUrl });
+  if (sourceUrl) window.open(sourceUrl, "_blank");
+  setTimeout(() => { refreshDashboardData?.(); }, 400);
+}
+
+function renderListingDataState(listings = []) {
+  const subtext = document.getElementById("listingDataStatus");
+  const statusEl = document.getElementById("listingGridStatus");
+  const summary = dashboardSummary || {};
+  const activeListings = numberOrZero(summary.active_listings);
+  const counts = dashboardListingsMeta?.source_counts || {};
+  const mergedCount = numberOrZero(dashboardListingsMeta?.total || listings.length);
+  const fallbackUsed = Boolean(dashboardListingsMeta?.used_summary_fallback);
+  const sourceLabel = fallbackUsed ? "summary preview" : "live listing rows";
+  const requestId = clean(dashboardListingsMeta?.request_id || "");
+  const warnings = Array.isArray(dashboardListingsMeta?.warnings) ? dashboardListingsMeta.warnings.filter(Boolean) : [];
+
+  const subtextParts = [
+    `${sourceLabel === "summary preview" ? "Preview Mode" : "Live Mode"} • ${mergedCount} listing${mergedCount === 1 ? "" : "s"} loaded.`,
+    activeListings ? `${activeListings} active tracked.` : "No active tracked listings yet."
+  ];
+  if (fallbackUsed) subtextParts.push("Direct listing rows are still hydrating.");
+  if (fallbackUsed) subtextParts.push("Showing summary-backed preview while direct listing rows hydrate.");
+  if (requestId) subtextParts.push(`Request ID: ${requestId}.`);
+
+  if (subtext) subtext.textContent = subtextParts.join(" ");
+
+  if (statusEl) {
+    if (!listings.length && activeListings > 0) {
+      statusEl.textContent = `Tracked counts exist (${activeListings} active) but detailed listing cards are still hydrating. Refresh listings or trigger another backend sync after the next post/scan.`;
+      return;
+    }
+
+      statusEl.textContent = [
+        `${mergedCount} listing${mergedCount === 1 ? "" : "s"} loaded.`,
+        `Rows: user_listings ${numberOrZero(counts.user_listings)} • listings ${numberOrZero(counts.listings)} • merged ${numberOrZero(counts.merged || mergedCount)}.`,
+        `Normalize: raw ${numberOrZero(dashboardListingsDiagnostics.raw_rows)} • rendered ${numberOrZero(dashboardListingsDiagnostics.normalized_rows)} • dropped ${numberOrZero(dashboardListingsDiagnostics.dropped_rows)}.`,
+        warnings.length ? `Warnings: ${cleanText(warnings[0])}.` : "",
+        requestId ? `Request ID: ${requestId}.` : "",
+        summary.lifecycle_updated_at ? `Last lifecycle sync: ${cleanText(summary.lifecycle_updated_at)}.` : ""
+      ].filter(Boolean).join(" ");
+    statusEl.textContent = [
+      `${mergedCount} listing${mergedCount === 1 ? "" : "s"} loaded.`,
+      `Rows: user_listings ${numberOrZero(counts.user_listings)} • listings ${numberOrZero(counts.listings)} • merged ${numberOrZero(counts.merged || mergedCount)}.`,
+      `Normalize: raw ${numberOrZero(dashboardListingsDiagnostics.raw_rows)} • rendered ${numberOrZero(dashboardListingsDiagnostics.normalized_rows)} • dropped ${numberOrZero(dashboardListingsDiagnostics.dropped_rows)}.`,
+      summary.lifecycle_updated_at ? `Last lifecycle sync: ${cleanText(summary.lifecycle_updated_at)}.` : ""
+    ].filter(Boolean).join(" ");
+  }
+}
+
+function renderListingsGrid(listings) {
+  const grid = document.getElementById("recentListingsGrid");
+  if (!grid) return;
+
+  if (!Array.isArray(listings) || !listings.length) {
+    const activeTracked = numberOrZero(dashboardSummary?.active_listings);
+    grid.innerHTML = `<div class="listing-empty">${activeTracked > 0 ? `Tracked listing counts exist (${activeTracked} active), but detailed cards have not hydrated yet. Refresh listings after the next sync or post commit.` : `No listings available yet. As posts get registered, vehicle cards will appear here.`}</div>`;
+    renderListingDataState([]);
+    return;
+  }
+
+  const html = listings.map((item) => {
+    return `
+      <article class="listing-card">
+        <div class="listing-media">
+          <img src="${escapeHtml(item.image_url)}" alt="${escapeHtml(item.title)}" loading="lazy" onerror="this.src='${escapeHtml(placeholderVehicleImage(item.title))}'" />
+          <div class="listing-badge">${renderBadgeHtml(item.status, item.lifecycle_status)}</div>
+        </div>
+
+        <div class="listing-content">
+          <div>
+            <div class="listing-title">${escapeHtml(item.title)}</div>
+            <div class="listing-sub">${escapeHtml(buildListingSubtitle(item))}</div>
+          </div>
+
+          <div class="listing-price">${formatCurrency(item.price)}</div>
+          <div class="status-line">${escapeHtml(item.health_label || 'Healthy')} • ${escapeHtml(item.recommended_action || 'Keep live')}</div>
+
+          <div class="listing-specs">
+            <div class="spec-chip">
+              <div class="spec-chip-label">Mileage</div>
+              <div class="spec-chip-value">${formatMileage(item.mileage)}</div>
+            </div>
+            <div class="spec-chip">
+              <div class="spec-chip-label">Color</div>
+              <div class="spec-chip-value">${escapeHtml(item.exterior_color || "Not set")}</div>
+            </div>
+            <div class="spec-chip">
+              <div class="spec-chip-label">Fuel</div>
+              <div class="spec-chip-value">${escapeHtml(item.fuel_type || "Not set")}</div>
+            </div>
+          </div>
+
+          <div class="listing-note" style="margin:0 0 12px;color:var(--muted);font-size:12px;"><strong>Bucket:</strong> ${escapeHtml(item.action_bucket_label || 'Low Priority')} • <strong>Opportunity:</strong> ${numberOrZero(item.opportunity_score)}<br/><strong>Recommended:</strong> ${escapeHtml(item.recommended_action || 'Keep live')}<br/><strong>Pricing:</strong> ${escapeHtml(item.pricing_insight || 'Pricing signal still developing.')}<br/><strong>Content:</strong> ${escapeHtml(item.content_feedback || 'Listing structure looks strong.')}</div>
+
+          <div class="listing-metrics">
+            <div class="metric-pill">
+              <div class="metric-pill-label">Views</div>
+              <div class="metric-pill-value">${numberOrZero(item.views_count)}</div>
+            </div>
+            <div class="metric-pill">
+              <div class="metric-pill-label">Messages</div>
+              <div class="metric-pill-value">${numberOrZero(item.messages_count)}</div>
+            </div>
+            <div class="metric-pill">
+              <div class="metric-pill-label">Posted</div>
+              <div class="metric-pill-value">${formatShortDate(item.posted_at)}</div>
+            </div>
+          </div>
+
+          <div class="listing-actions">
+            <button class="action-btn" type="button" onclick="openListingDetailModal('${escapeJs(item.id)}')">Inspect</button>
+            <button class="action-btn" type="button" onclick="markListingAction('${escapeJs(item.id)}','approved')">Approve</button>
+            <button class="action-btn" type="button" onclick="markListingSold('${escapeJs(item.id)}')">Mark Sold</button>
+            <button class="action-btn" type="button" onclick="trackListingView('${escapeJs(item.id)}')">Log View</button>
+            <button class="action-btn" type="button" onclick="trackListingMessage('${escapeJs(item.id)}')">Log Message</button>
+            ${
+              item.source_url
+                ? `<button class="action-btn" type="button" onclick="openListingSource('${escapeJs(item.id)}','${escapeJs(item.source_url)}')">Open Source</button>`
+                : `<button class="action-btn" type="button" onclick="copyVehicleSummary('${escapeJs(item.id)}')">Copy Summary</button>`
+            }
+          </div>
+        </div>
+      </article>
+    `;
+  }).join("");
+
+  grid.innerHTML = html;
+  renderListingDataState(listings);
+}
+
+
+function renderAffiliateCenter() {
+  const affiliate = dashboardSummary?.affiliate || {};
+  const referralCode = cleanText(affiliate.referral_code || document.getElementById("referralCodeAffiliate")?.textContent || "Not assigned yet") || "Not assigned yet";
+  setTextByIdForAll("referralCodeAffiliate", referralCode);
+  setTextByIdForAll("affiliatePartnerType", cleanText(affiliate.partner_type || "Founding Partner"));
+  setTextByIdForAll("affiliateDirectCommission", `${numberOrZero(affiliate.direct_commission_percent || 20)}% recurring`);
+  setTextByIdForAll("affiliateTierOverride", `${numberOrZero(affiliate.second_level_override_percent || 5)}% second level`);
+  setTextByIdForAll("affiliatePayoutStatus", cleanText(affiliate.payout_status || "Manual founder-stage payouts"));
+  setTextByIdForAll("affiliateCommissionEarned", formatCurrency(affiliate.commission_earned || 0));
+  setTextByIdForAll("affiliatePendingPayout", formatCurrency(affiliate.pending_payout || 0));
+  setTextByIdForAll("affiliateTotalReferrals", String(numberOrZero(affiliate.total_referrals)));
+  setTextByIdForAll("affiliateActiveReferrals", String(numberOrZero(affiliate.active_referrals)));
+  setTextByIdForAll("affiliateEstimatedMRR", formatCurrency(affiliate.estimated_mrr_commission || 0));
+  setTextByIdForAll("affiliatePaidOutAllTime", formatCurrency(affiliate.paid_out_all_time || 0));
+  setTextByIdForAll("affiliateInvitedCount", String(numberOrZero(affiliate.invited_referrals ?? affiliate.total_referrals)));
+  setTextByIdForAll("affiliateSignedUpCount", String(numberOrZero(affiliate.signed_up_referrals ?? affiliate.total_referrals)));
+  setTextByIdForAll("affiliatePayingCount", String(numberOrZero(affiliate.paying_referrals ?? affiliate.active_referrals)));
+  setTextByIdForAll("affiliateChurnedCount", String(numberOrZero(affiliate.churned_referrals)));
+
+  const recentWrap = document.getElementById('affiliateRecentReferrals');
+  if (recentWrap) {
+    const rows = Array.isArray(affiliate.recent_referrals) ? affiliate.recent_referrals : [];
+    recentWrap.innerHTML = rows.length
+      ? rows.map((row) => `<div><strong>${escapeHtml(cleanText(row.name || row.email || 'Referral'))}</strong> • ${escapeHtml(cleanText(row.status || 'signed_up'))} • ${escapeHtml(cleanText(row.plan || 'Starter'))}<br><span style="color:var(--muted)">${escapeHtml(cleanText(row.email || ''))} • ${formatCurrency(row.estimated_commission || 0)} est.</span></div>`).join('')
+      : '<div>No referrals tracked yet.</div>';
+  }
+
+  const actionsWrap = document.getElementById('affiliateRecommendedActions');
+  if (actionsWrap) {
+    const actions = Array.isArray(affiliate.recommended_actions) ? affiliate.recommended_actions : [];
+    actionsWrap.innerHTML = actions.length
+      ? actions.map((item) => `<div>• ${escapeHtml(cleanText(item))}</div>`).join('')
+      : '<div>No actions yet.</div>';
+  }
+}
+
+function renderPrioritiesPanels() {
+  const queues = dashboardSummary?.daily_ops_queues || dashboardSummary?.action_center || {};
+  const details = dashboardSummary?.action_center_details || {};
+  const prioritiesEl = document.getElementById('todaysPrioritiesPanel');
+  if (prioritiesEl) {
+    const topLine = [
+      `<div><strong>Today:</strong> ${numberOrZero(dashboardSummary?.posts_today)} posts • ${numberOrZero(dashboardSummary?.total_views)} views • ${numberOrZero(dashboardSummary?.total_messages)} messages</div>`,
+      `<div><strong>Queue:</strong> ${numberOrZero(dashboardSummary?.queue_count)} ready • <strong>Needs Attention:</strong> ${numberOrZero(dashboardSummary?.needs_action_count)} • <strong>Opportunities:</strong> ${numberOrZero(queues.promote_today)}</div>`
+    ].join('');
+    prioritiesEl.innerHTML = `${topLine}<div class="section-collapsible"></div>`;
+    renderActionCenterList('todaysPrioritiesPanel', details.today, 'No urgent actions right now. Keep posting and monitoring traction.');
+  }
+  renderActionCenterList('alertsPanel', details.needs_attention, 'No critical items need intervention right now.');
+  renderActionCenterList('opportunitiesPanel', details.opportunities, 'No clear opportunities detected yet.');
+  const managerSection = document.getElementById('managerInsightsSection');
+  const managerEnabled = Boolean(dashboardSummary?.manager_access);
+  if (managerSection) managerSection.style.display = managerEnabled ? '' : 'none';
+  if (managerEnabled) {
+    setTextByIdForAll('managerLiveInventory', String(numberOrZero(dashboardSummary?.manager_summary?.live_inventory)));
+    setTextByIdForAll('managerViewToMessageRate', `${numberOrZero(dashboardSummary?.manager_summary?.view_to_message_rate)}%`);
+    const segEl = document.getElementById('managerTopSegments');
+    if (segEl) {
+      const segs = Array.isArray(dashboardSummary?.segment_performance) ? dashboardSummary.segment_performance : [];
+      segEl.innerHTML = segs.length ? segs.map((seg) => `<div><strong>${escapeHtml(seg.key || 'Segment')}:</strong> ${numberOrZero(seg.listings)} listings • ${numberOrZero(seg.views)} views • ${numberOrZero(seg.messages)} messages</div>`).join('') : '<div>No segment data yet.</div>';
+    }
+    const recEl = document.getElementById('managerRecommendations');
+    if (recEl) {
+      const recs = Array.isArray(dashboardSummary?.manager_recommendations) ? dashboardSummary.manager_recommendations : [];
+      recEl.innerHTML = recs.length ? recs.map((item) => `<div>• ${escapeHtml(item)}</div>`).join('') : '<div>No recommendations yet.</div>';
+    }
+  }
+}
+
+
+function renderAlertsPanel() {
+  const wrap = document.getElementById('alertsPanel');
+  if (!wrap) return;
+  const alerts = Array.isArray(dashboardSummary?.alerts) ? dashboardSummary.alerts : [];
+  if (!alerts.length) { wrap.innerHTML = '<div>No active alerts right now.</div>'; return; }
+  wrap.innerHTML = alerts.map((alert) => `<div><strong>${escapeHtml(alert.title || 'Alert')}:</strong> ${escapeHtml(alert.message || '')}</div>`).join('');
+}
+
+function renderScorecards() {
+  const dailyWrap = document.getElementById('dailyScorecardPanel');
+  const weeklyWrap = document.getElementById('weeklyScorecardPanel');
+  const daily = dashboardSummary?.scorecards?.daily || {};
+  const weekly = dashboardSummary?.scorecards?.weekly || {};
+  if (dailyWrap) {
+    dailyWrap.innerHTML = [`<div><strong>Posts:</strong> ${numberOrZero(daily.posts_today)}</div>`,`<div><strong>Views Est:</strong> ${numberOrZero(daily.views_today_est)}</div>`,`<div><strong>Messages Est:</strong> ${numberOrZero(daily.messages_today_est)}</div>`,`<div><strong>Weak Listings:</strong> ${numberOrZero(daily.weak_listings)}</div>`,`<div><strong>Completion Score:</strong> ${numberOrZero(daily.completion_score)}%</div>`].join('');
+  }
+  if (weeklyWrap) {
+    weeklyWrap.innerHTML = [`<div><strong>7-Day Views:</strong> ${numberOrZero(weekly.views_7d)}</div>`,`<div><strong>7-Day Messages:</strong> ${numberOrZero(weekly.messages_7d)}</div>`,`<div><strong>Views Delta:</strong> ${numberOrZero(weekly.views_delta)}</div>`,`<div><strong>Messages Delta:</strong> ${numberOrZero(weekly.messages_delta)}</div>`,`<div><strong>Activity Delta:</strong> ${numberOrZero(weekly.activity_delta)}</div>`].join('');
+  }
+}
+
+function renderIntelligencePanels() {
+  const intelWrap = document.getElementById('intelligencePanel');
+  const oppWrap = document.getElementById('opportunitiesPanel');
+  const intelligence = dashboardSummary?.intelligence || {};
+  if (intelWrap) {
+    const top = Array.isArray(intelligence.top_segments) ? intelligence.top_segments.slice(0, 4) : [];
+    const weak = Array.isArray(intelligence.weak_segments) ? intelligence.weak_segments.slice(0, 3) : [];
+    const blocks = [];
+    if (top.length) blocks.push(`<div><strong>Top Segments</strong></div>${top.map((seg) => `<div>${escapeHtml(seg.key || 'Segment')} • ${numberOrZero(seg.listings)} listings • ${numberOrZero(seg.messages)} messages</div>`).join('')}`);
+    if (weak.length) blocks.push(`<div style="margin-top:10px;"><strong>Watch Segments</strong></div>${weak.map((seg) => `<div>${escapeHtml(seg.key || 'Segment')} • weak ${numberOrZero(seg.weak)} • conv ${numberOrZero(seg.conversion_rate)}%</div>`).join('')}`);
+    intelWrap.innerHTML = blocks.length ? blocks.join('') : '<div>Intelligence is still building as more listing data comes in.</div>';
+  }
+  if (oppWrap) {
+    const opps = Array.isArray(intelligence.opportunities) ? intelligence.opportunities.slice(0, 5) : [];
+    oppWrap.innerHTML = opps.length ? opps.map((seg) => `<div><strong>${escapeHtml(seg.key || 'Segment')}</strong> • ${numberOrZero(seg.views)} views • ${numberOrZero(seg.messages)} messages • ${numberOrZero(seg.conversion_rate)}% conversion</div>`).join('') : '<div>No opportunity clusters detected yet.</div>';
+  }
+}
+
+async function markListingAction(listingId, status) {
+  try {
+    await apiFetch('/api/update-listing-status', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ listingId, status })
+    });
+    await refreshDashboardData?.();
+  } catch (error) {
+    console.warn('mark listing action warning', error);
+  }
+}
+
+function renderTopListings(listings) {
+  const wrap = document.getElementById("topListings");
+  if (!wrap) return;
+
+  const ranked = [...listings]
+    .sort((a, b) => numberOrZero(b.popularity_score) - numberOrZero(a.popularity_score))
+    .slice(0, 4);
+
+  if (!ranked.length) {
+    wrap.innerHTML = `<div class="listing-empty">No listings yet.</div>`;
+    return;
+  }
+
+  wrap.innerHTML = ranked.map((item, index) => {
+    return `
+      <div class="top-list-item">
+        <div class="top-rank">${index + 1}</div>
+        <div class="top-thumb">
+          <img src="${escapeHtml(item.image_url)}" alt="${escapeHtml(item.title)}" loading="lazy" onerror="this.src='${escapeHtml(placeholderVehicleImage(item.title))}'" />
+        </div>
+        <div class="top-info">
+          <div class="top-title">${escapeHtml(item.title)}</div>
+          <div class="top-sub">${escapeHtml(formatCurrency(item.price))} • ${escapeHtml(formatMileage(item.mileage))}</div>
+        </div>
+        <div class="top-metrics">
+          <div>👁 ${numberOrZero(item.views_count)}</div>
+          <div>💬 ${numberOrZero(item.messages_count)}</div>
+        </div>
+      </div>
+    `;
+  }).join("");
+}
+
+function renderRecentActivity(listings) {
+  const wrap = document.getElementById("recentActivityFeed");
+  if (!wrap) return;
+
+  const rows = [...listings]
+    .sort((a, b) => getTimestamp(b.posted_at) - getTimestamp(a.posted_at))
+    .slice(0, 6);
+
+  if (!rows.length) {
+    wrap.innerHTML = `<div class="listing-empty">No activity yet.</div>`;
+    return;
+  }
+
+  wrap.innerHTML = rows.map((item) => {
+    return `
+      <div class="activity-item">
+        <div>
+          <div class="activity-item-title">${escapeHtml(item.title)}</div>
+          <div class="activity-item-sub">
+            ${escapeHtml(item.lifecycle_status || item.status || "posted")} • ${escapeHtml(item.stock_number || item.vin || "No stock/VIN")} • ${escapeHtml(formatCurrency(item.price))}
+          </div>
+        </div>
+        <div class="activity-item-time">${escapeHtml(formatRelativeOrDate(item.posted_at))}</div>
+      </div>
+    `;
+  }).join("");
+}
+
+function buildChartSeries() {
+  const now = new Date();
+  const days = [];
+
+  for (let i = 6; i >= 0; i -= 1) {
+    const d = new Date(now);
+    d.setDate(now.getDate() - i);
+    days.push({
+      key: toDateKey(d),
+      label: d.toLocaleDateString(undefined, { weekday: "short" }),
+      posts: 0,
+      views: 0
+    });
+  }
+
+  const map = new Map(days.map((d) => [d.key, d]));
+
+  for (const item of dashboardListings) {
+    const key = toDateKey(item.posted_at);
+    if (!map.has(key)) continue;
+    const bucket = map.get(key);
+    bucket.posts += 1;
+    bucket.views += numberOrZero(item.views_count);
+  }
+
+  const labelsWrap = document.getElementById("graphXLabels");
+  if (labelsWrap) {
+    labelsWrap.innerHTML = days.map((d) => `<div>${escapeHtml(d.label)}</div>`).join("");
+  }
+
+  return days;
+}
+
+function drawActivityChart(series) {
+  const canvas = document.getElementById("activityChart");
+  if (!canvas) return;
+
+  const wrap = canvas.parentElement;
+  const rect = wrap.getBoundingClientRect();
+  const dpr = window.devicePixelRatio || 1;
+
+  const width = Math.max(300, Math.floor(rect.width));
+  const height = Math.max(180, Math.floor(rect.height));
+
+  canvas.width = width * dpr;
+  canvas.height = height * dpr;
+  canvas.style.width = `${width}px`;
+  canvas.style.height = `${height}px`;
+
+  const ctx = canvas.getContext("2d");
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, width, height);
+
+  if (!Array.isArray(series) || !series.length) return;
+
+  const padding = { top: 18, right: 18, bottom: 18, left: 18 };
+  const chartWidth = width - padding.left - padding.right;
+  const chartHeight = height - padding.top - padding.bottom;
+
+  const maxPosts = Math.max(1, ...series.map((d) => numberOrZero(d.posts)));
+  const maxViews = Math.max(1, ...series.map((d) => numberOrZero(d.views)));
+  const maxValue = Math.max(maxPosts, maxViews);
+
+  const xStep = chartWidth / Math.max(1, series.length - 1);
+
+  ctx.strokeStyle = "rgba(255,255,255,0.06)";
+  ctx.lineWidth = 1;
+  for (let i = 0; i <= 4; i += 1) {
+    const y = padding.top + (chartHeight / 4) * i;
+    ctx.beginPath();
+    ctx.moveTo(padding.left, y);
+    ctx.lineTo(width - padding.right, y);
+    ctx.stroke();
+  }
+
+  const pointsPosts = series.map((d, index) => {
+    const x = padding.left + (index * xStep);
+    const y = padding.top + chartHeight - ((numberOrZero(d.posts) / maxValue) * chartHeight);
+    return { x, y };
+  });
+
+  const pointsViews = series.map((d, index) => {
+    const x = padding.left + (index * xStep);
+    const y = padding.top + chartHeight - ((numberOrZero(d.views) / maxValue) * chartHeight);
+    return { x, y };
+  });
+
+  ctx.fillStyle = "rgba(212, 175, 55, 0.10)";
+  ctx.beginPath();
+  ctx.moveTo(pointsViews[0].x, padding.top + chartHeight);
+  pointsViews.forEach((p) => ctx.lineTo(p.x, p.y));
+  ctx.lineTo(pointsViews[pointsViews.length - 1].x, padding.top + chartHeight);
+  ctx.closePath();
+  ctx.fill();
+
+  ctx.strokeStyle = "rgba(243, 221, 176, 0.78)";
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  pointsViews.forEach((p, index) => {
+    if (index === 0) ctx.moveTo(p.x, p.y);
+    else ctx.lineTo(p.x, p.y);
+  });
+  ctx.stroke();
+
+  ctx.strokeStyle = "#d4af37";
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  pointsPosts.forEach((p, index) => {
+    if (index === 0) ctx.moveTo(p.x, p.y);
+    else ctx.lineTo(p.x, p.y);
+  });
+  ctx.stroke();
+
+  ctx.fillStyle = "#d4af37";
+  pointsPosts.forEach((p) => {
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, 4, 0, Math.PI * 2);
+    ctx.fill();
+  });
+}
+
+async function pushExtensionProfileSync() {
+  try {
+    if (!currentUser) return;
+
+    const normalized = currentNormalizedSession || buildFallbackSessionFromLocalState();
+    const profileSnapshot = buildExtensionProfileSnapshot(normalized, currentProfile, currentUser);
+
+    persistProfileSnapshots(profileSnapshot, normalized);
+
+    window.postMessage({
+      type: "ELEVATE_PROFILE_SYNC",
+      payload: normalized
+    }, "*");
+
+    window.postMessage({
+      type: "ELEVATE_PROFILE_SNAPSHOT",
+      payload: profileSnapshot
+    }, "*");
+
+    setStatus("extensionActionStatus", "Dealer profile sync pushed to extension.");
+  } catch (error) {
+    console.error("pushExtensionProfileSync error:", error);
+    setStatus("extensionActionStatus", "Failed to push profile sync.");
+  }
+}
+
+function showSection(sectionId) {
+  const sections = document.querySelectorAll(".dashboard-section");
+  const navButtons = document.querySelectorAll("[data-section]");
+
+  sections.forEach((section) => {
+    section.style.display = section.id === sectionId ? "block" : "none";
+  });
+
+  navButtons.forEach((button) => {
+    const isActive = button.getAttribute("data-section") === sectionId;
+    button.classList.toggle("active", isActive);
+  });
+
+  const titleMap = {
+    overview: "Elevate Operator Console",
+    profile: "Setup",
+    extension: "Tools",
+    compliance: "Compliance",
+    affiliate: "Partners",
+    billing: "Billing",
+    tools: "Analytics"
+  };
+
+  const pageTitle = document.getElementById("dashboardPageTitle");
+  if (pageTitle) pageTitle.textContent = titleMap[sectionId] || "Dashboard";
+}
+
+function renderUserBasics(user) {
+  setTextForAll(".user-email", user.email || "");
+  setTextForAll(".user-id", user.id || "");
+
+  const welcomeText = document.getElementById("welcomeText");
+  if (welcomeText) {
+    welcomeText.textContent = `Welcome${user.email ? `, ${user.email}` : ""}`;
+  }
+}
+
+async function loadProfile(userId) {
+  try {
+    setStatus("profileStatus", "Loading profile...");
+
+    const response = await apiFetch(`/api/profile?id=${encodeURIComponent(userId)}${currentUser?.email ? `&email=${encodeURIComponent(currentUser.email)}` : ""}`, {
+      method: "GET",
+      cache: "no-store"
+    });
+
+    const result = await parseApiJson(response).catch(() => ({}));
+
+    if (!response.ok) {
+      throw new Error(cleanText(result?.error || "Failed to load profile."));
+    }
+
+    const profileData = result?.data || result?.profile || null;
+
+    if (!profileData) {
+      currentProfile = mergeProfileSources(readLocalProfileSnapshot(), getSummaryProfileSnapshot());
+      setSystemStateFromSources(currentProfile, currentNormalizedSession);
+      applySystemStateToForm(SYSTEM_STATE?.profile);
+      rerenderCanonicalPanels();
+      setStatus("profileStatus", isMeaningfulValue(currentProfile?.full_name || currentProfile?.dealership || currentProfile?.inventory_url) ? "Using saved local profile snapshot." : "No profile loaded yet.");
+      return;
+    }
+
+    currentProfile = mergeProfileSources(profileData);
+    const canonicalAfterLoad = setSystemStateFromSources(currentProfile, currentNormalizedSession || buildFallbackSessionFromLocalState()).profile;
+    applySystemStateToForm(canonicalAfterLoad);
+
+    rerenderCanonicalPanels();
+    setStatus("profileStatus", "Profile loaded.");
+  } catch (error) {
+    console.error("loadProfile error:", error);
+    setStatus("profileStatus", "Failed to load profile.");
+  }
+}
+
+async function submitProfileSave(user) {
+  try {
+    const payload = {
+      id: user.id,
+      email: user.email || "",
+      full_name: getFieldValue("full_name"),
+      dealership: getFieldValue("dealership"),
+      city: getFieldValue("city"),
+      province: getFieldValue("province"),
+      phone: getFieldValue("phone"),
+      license_number: getFieldValue("license_number"),
+      listing_location: getFieldValue("listing_location"),
+      dealer_phone: getFieldValue("dealer_phone"),
+      dealer_email: getFieldValue("dealer_email"),
+      compliance_mode: getFieldValue("compliance_mode"),
+      dealer_website: normalizeUrlInput(getFieldValue("dealer_website")),
+      inventory_url: normalizeUrlInput(getFieldValue("inventory_url")),
+      scanner_type: getFieldValue("scanner_type")
+    };
+
+    const response = await apiFetch("/api/profile", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(payload)
+    });
+
+    const result = await parseApiJson(response);
+
+    if (!response.ok || result?.ok === false) {
+      setStatus("profileStatus", `Save failed: ${result?.detail || result?.error || result?.message || "Unknown error"}`);
+      return;
+    }
+
+    currentProfile = mergeProfileSources(result.data || result.profile || payload);
+    const canonicalAfterSave = setSystemStateFromSources(currentProfile, currentNormalizedSession || buildFallbackSessionFromLocalState()).profile;
+    applySystemStateToForm(canonicalAfterSave);
+
+    persistProfileSnapshots(buildExtensionProfileSnapshot(currentNormalizedSession || buildFallbackSessionFromLocalState(), canonicalAfterSave, currentUser), currentNormalizedSession || buildFallbackSessionFromLocalState());
+    await refreshDashboardState(true);
+    setSystemStateFromSources(currentProfile, currentNormalizedSession);
+    rerenderCanonicalPanels();
+    setStatus("profileStatus", "Profile saved successfully.");
+  } catch (error) {
+    console.error("submitProfileSave error:", error);
+    setStatus("profileStatus", `Failed to save profile: ${error.message || "Unknown error"}`);
+  }
+}
+
+function renderProfileSummary(profile) {
+  const summaryEl = document.getElementById("profileSummary");
+  if (!summaryEl) return;
+
+  const merged = getCanonicalProfileState(profile);
+
+  if (!merged.full_name && !merged.dealership && !merged.inventory_url && !merged.compliance_mode) {
+    summaryEl.innerHTML = `
+      <div><strong>Name:</strong> Not set</div>
+      <div><strong>Dealership:</strong> Not set</div>
+      <div><strong>City:</strong> Not set</div>
+      <div><strong>Province:</strong> Not set</div>
+      <div><strong>Phone:</strong> Not set</div>
+      <div><strong>Compliance License Number:</strong> Not set</div>
+      <div><strong>Default Listing Location:</strong> Not set</div>
+      <div><strong>Dealer Phone:</strong> Not set</div>
+      <div><strong>Dealer Email:</strong> Not set</div>
+      <div><strong>Compliance Mode:</strong> Not set</div>
+      <div><strong>Dealer Website:</strong> Not set</div>
+      <div><strong>Inventory URL:</strong> Not set</div>
+      <div><strong>Scanner Type:</strong> Not set</div>
+      <div><strong>Software License Key:</strong> Auto-assignment pending</div>
+    `;
+    return;
+  }
+
+  summaryEl.innerHTML = `
+    <div><strong>Name:</strong> ${escapeHtml(merged.full_name || "Not set")}</div>
+    <div><strong>Dealership:</strong> ${escapeHtml(merged.dealership || "Not set")}</div>
+    <div><strong>City:</strong> ${escapeHtml(merged.city || "Not set")}</div>
+    <div><strong>Province:</strong> ${escapeHtml(merged.province || "Not set")}</div>
+    <div><strong>Phone:</strong> ${escapeHtml(merged.phone || "Not set")}</div>
+    <div><strong>Compliance License Number:</strong> ${escapeHtml(merged.license_number || "Not set")}</div>
+    <div><strong>Default Listing Location:</strong> ${escapeHtml(merged.listing_location || "Not set")}</div>
+    <div><strong>Dealer Phone:</strong> ${escapeHtml(merged.dealer_phone || "Not set")}</div>
+    <div><strong>Dealer Email:</strong> ${escapeHtml(merged.dealer_email || "Not set")}</div>
+    <div><strong>Compliance Mode:</strong> ${escapeHtml(merged.compliance_mode || merged.province || "Not set")}</div>
+    <div><strong>Dealer Website:</strong> ${escapeHtml(merged.dealer_website || "Not set")}</div>
+    <div><strong>Inventory URL:</strong> ${escapeHtml(merged.inventory_url || "Not set")}</div>
+    <div><strong>Scanner Type:</strong> ${escapeHtml(merged.scanner_type || "Not set")}</div>
+    <div><strong>Software License Key:</strong> ${escapeHtml(merged.software_license_key || "Auto-assignment pending")}</div>
+  `;
+}
+
+function populateComplianceSummary(profile) {
+  const canonical = getCanonicalProfileState(profile);
+  setTextByIdForAll("complianceProvinceDisplay", canonical.province || "Not set");
+  setTextByIdForAll("complianceModeDisplay", canonical.compliance_mode || canonical.province || "Not set");
+  setTextByIdForAll("complianceLicenseDisplay", canonical.license_number || "Not set");
+
+  const contactBits = [
+    canonical.dealer_phone || canonical.phone || null,
+    canonical.dealer_email || null
+  ].filter(Boolean);
+
+  setTextByIdForAll("complianceDealerContactDisplay", contactBits.length ? contactBits.join(" • ") : "Not set");
+}
+
+async function loadAccountData(user, forceFresh = false) {
+  try {
+    setStatus("accountStatus", "Loading account data...");
+    setStatus("accountStatusBilling", "Loading account data...");
+    setStatus("extensionActionStatus", "Loading extension state...");
+
+    let result = null;
+    let extensionStateError = "";
+
+    try {
+      const url = new URL("/api/extension-state", window.location.origin);
+      url.searchParams.set("email", user.email || "");
+      if (window.location.hostname) {
+        url.searchParams.set("hostname", window.location.hostname);
+      }
+      if (forceFresh) {
+        url.searchParams.set("_ts", String(Date.now()));
+      }
+
+      const response = await apiFetch(url.toString(), {
+        cache: "no-store"
+      });
+
+      if (!response.ok) {
+        extensionStateError = `extension-state ${response.status}`;
+        console.warn("[dashboard] extension-state unavailable:", response.status);
+        setStatus("extensionActionStatus", "Extension state unavailable. Using saved account summary.");
+      } else {
+        result = await response.json().catch(() => null);
+      }
+    } catch (innerError) {
+      extensionStateError = innerError?.message || String(innerError);
+      console.warn("[dashboard] extension-state request failed:", innerError);
+      setStatus("extensionActionStatus", "Extension state unavailable. Using saved account summary.");
+    }
+
+    if (result) {
+      currentAccountData = result || null;
+      currentNormalizedSession = normalizeExtensionStateResponse(result, currentUser, currentProfile);
+    } else {
+      currentAccountData = null;
+      currentNormalizedSession = buildFallbackSessionFromLocalState();
+    }
+
+    setSystemStateFromSources(currentProfile, currentNormalizedSession);
+    rerenderCanonicalPanels();
+
+    const extensionLoaded = Boolean(result);
+    setStatus("accountStatus", extensionLoaded ? "Account data loaded." : "Account data loaded from dashboard summary.");
+    setStatus("accountStatusBilling", extensionLoaded ? "Account data loaded." : "Account data loaded from dashboard summary.");
+    if (!extensionLoaded && extensionStateError) {
+      console.warn("[dashboard] proceeding without extension-state:", extensionStateError);
+    } else {
+      setStatus("extensionActionStatus", "Extension state loaded.");
+    }
+
+    const licenseKey = currentNormalizedSession?.subscription?.license_key || "Auto-assignment pending";
+    setTextByIdForAll("licenseKeyDisplay", licenseKey);
+    setTextByIdForAll("licenseKeyDisplayBilling", licenseKey);
+
+    const referral =
+      result?.referral_code ||
+      result?.session?.referral_code ||
+      "Not assigned yet";
+    setTextByIdForAll("referralCode", referral);
+    setTextByIdForAll("referralCodeAffiliate", referral);
+
+    const summaryPlan = cleanText(dashboardSummary?.plan_access?.plan_label || dashboardSummary?.account_snapshot?.plan || "");
+    const summaryStatus = cleanText(dashboardSummary?.account_snapshot?.status || "");
+    const effectivePlanLabel = cleanText(currentNormalizedSession?.subscription?.plan || summaryPlan || "Founder Beta");
+    const effectiveStatusLabel = cleanText(currentNormalizedSession?.subscription?.status || summaryStatus || "inactive");
+    setTextByIdForAll("planNameBilling", effectivePlanLabel);
+    setTextByIdForAll("subscriptionStatusBilling", effectiveStatusLabel);
+    setTextByIdForAll("affiliateDirectCommission", "20% recurring");
+    setTextByIdForAll("affiliateTierOverride", "5% second level");
+    setTextByIdForAll("affiliatePartnerType", "Founding Partner");
+    setTextByIdForAll("affiliatePayoutStatus", "Manual founder-stage payouts");
+    setTextByIdForAll("affiliatePendingPayout", "$0.00");
+
+    const summarySnapshot = dashboardSummary?.account_snapshot || {};
+    const access = Boolean(
+      currentNormalizedSession?.subscription?.access_granted ??
+      currentNormalizedSession?.subscription?.active ??
+      summarySnapshot?.access_granted ??
+      summarySnapshot?.active ??
+      false
+    );
+    setTextByIdForAll("accessBadgeBilling", access ? "Active Access" : "Inactive Access");
+    document.querySelectorAll("#accessBadgeBilling").forEach((el) => {
+      el.classList.remove("active", "inactive", "warn");
+      el.classList.add(access ? "active" : "inactive");
+    });
+
+    const softwareLicenseInput = document.getElementById("software_license_key");
+    if (softwareLicenseInput) {
+      softwareLicenseInput.value = currentNormalizedSession?.subscription?.license_key || "";
+      softwareLicenseInput.placeholder = currentNormalizedSession?.subscription?.license_key
+        ? ""
+        : "Auto-assignment pending";
+    }
+
+    if (currentProfile) {
+      currentProfile.software_license_key = currentNormalizedSession?.subscription?.license_key || "";
+      rerenderCanonicalPanels();
+    }
+  } catch (error) {
+    console.error("loadAccountData error:", error);
+    currentAccountData = null;
+    currentNormalizedSession = buildFallbackSessionFromLocalState();
+    setSystemStateFromSources(currentProfile, currentNormalizedSession);
+    rerenderCanonicalPanels();
+    setStatus("accountStatus", "Failed to load extension-state. Using dashboard summary.");
+    setStatus("accountStatusBilling", "Failed to load extension-state. Using dashboard summary.");
+    setStatus("extensionActionStatus", "Extension state unavailable. Using saved account summary.");
+  }
+}
+
+function normalizeExtensionStateResponse(result, user, profile) {
+  const raw = result?.session ? result.session : result;
+
+  const subscription = raw?.subscription || {};
+  const dealership = raw?.dealership || {};
+  const scannerConfig = raw?.scanner_config || {};
+  const profileData = raw?.profile || {};
+  const rawUser = raw?.user || {};
+
+  const mergedProfile = {
+    ...(profile || {}),
+    ...(profileData || {})
+  };
+
+  const fullName = clean(
+    mergedProfile.full_name ||
+    mergedProfile.salesperson_name ||
+    rawUser.full_name ||
+    rawUser.name ||
+    ""
+  );
+
+  const dealerName = clean(
+    mergedProfile.dealership ||
+    mergedProfile.dealer_name ||
+    dealership.name ||
+    dealership.dealer_name ||
+    ""
+  );
+
+  const rawStatus = clean(subscription.normalized_status || subscription.status || (subscription.active ? "active" : "inactive")) || "inactive";
+  const hardNegative = ["canceled", "cancelled", "unpaid", "past_due", "expired", "suspended"].includes(rawStatus.toLowerCase());
+  const setupReady = Boolean(
+    raw?.meta?.setup_ready ||
+    (
+      fullName &&
+      clean(dealership.inventory_url || mergedProfile.inventory_url || "") &&
+      rawUser?.active !== false &&
+      dealership?.active !== false
+    )
+  );
+  const founderBridgePlan = ["founder beta", "no plan", ""].includes(clean(subscription.plan || subscription.plan_name || "").toLowerCase());
+  const normalizedActive = Boolean(
+    subscription.active ||
+    subscription.status === "active" ||
+    subscription.status === "trialing" ||
+    (setupReady && founderBridgePlan && !hardNegative)
+  );
+  const normalizedPlan = clean(subscription.normalized_plan || subscription.plan || subscription.plan_name || "");
+  const normalizedSubscription = {
+    active: normalizedActive,
+    access_granted: normalizedActive,
+    status: clean(rawStatus || (normalizedActive ? "active" : "inactive")) || (normalizedActive ? "active" : "inactive"),
+    normalized_status: clean(rawStatus || (normalizedActive ? "active" : "inactive")) || (normalizedActive ? "active" : "inactive"),
+    plan: clean(
+      (normalizedActive && (!normalizedPlan || normalizedPlan === "No Plan"))
+        ? "Founder Beta"
+        : (normalizedPlan || "Founder Beta")
+    ) || "Founder Beta",
+    normalized_plan: clean(
+      (normalizedActive && (!normalizedPlan || normalizedPlan === "No Plan"))
+        ? "Founder Beta"
+        : (normalizedPlan || "Founder Beta")
+    ) || "Founder Beta",
+    license_key: clean(subscription.license_key || subscription.software_license_key || ""),
+    posting_limit: Number(subscription.posting_limit || subscription.daily_posting_limit || 0),
+    posts_today: Number(subscription.posts_today || 0),
+    posts_remaining: Number(
+      subscription.posts_remaining ??
+      Math.max(Number(subscription.posting_limit || 0) - Number(subscription.posts_today || 0), 0)
+    )
+  };
+
+  return {
+    user: {
+      id: user?.id || rawUser?.id || "",
+      email: user?.email || rawUser?.email || "",
+      full_name: fullName || ""
+    },
+    subscription: normalizedSubscription,
+    dealership: {
+      name: dealerName || "",
+      dealer_name: dealerName || "",
+      website: clean(dealership.website || mergedProfile.dealer_website || ""),
+      inventory_url: clean(dealership.inventory_url || mergedProfile.inventory_url || ""),
+      province: clean(dealership.province || mergedProfile.province || ""),
+      scanner_type: clean(dealership.scanner_type || mergedProfile.scanner_type || ""),
+      phone: clean(dealership.phone || mergedProfile.dealer_phone || ""),
+      email: clean(dealership.email || mergedProfile.dealer_email || "")
+    },
+    scanner_config: {
+      scanner_type: clean(scannerConfig.scanner_type || mergedProfile.scanner_type || "")
+    },
+    profile: {
+      full_name: fullName || "",
+      salesperson_name: fullName || "",
+      dealer_name: dealerName || "",
+      dealership: dealerName || "",
+      phone: clean(mergedProfile.phone || ""),
+      dealer_phone: clean(mergedProfile.dealer_phone || dealership.phone || ""),
+      email: clean(user?.email || rawUser?.email || mergedProfile.email || ""),
+      dealer_email: clean(mergedProfile.dealer_email || dealership.email || ""),
+      city: clean(mergedProfile.city || ""),
+      province: clean(mergedProfile.province || dealership.province || ""),
+      listing_location: clean(profileData.listing_location || mergedProfile.listing_location || ""),
+      compliance_mode: clean(profileData.compliance_mode || mergedProfile.compliance_mode || mergedProfile.province || ""),
+      license_number: clean(mergedProfile.license_number || ""),
+      dealer_website: clean(mergedProfile.dealer_website || dealership.website || ""),
+      inventory_url: clean(mergedProfile.inventory_url || dealership.inventory_url || ""),
+      scanner_type: clean(mergedProfile.scanner_type || scannerConfig.scanner_type || dealership.scanner_type || "")
+    }
+  };
+}
+
+function buildFallbackSessionFromLocalState() {
+  const summaryProfile = getSummaryProfileSnapshot();
+  const fullName = clean(currentProfile?.full_name || summaryProfile.full_name || summaryProfile.salesperson_name || "");
+  const dealerName = clean(currentProfile?.dealership || currentProfile?.dealer_name || summaryProfile.dealership || summaryProfile.dealer_name || "");
+  const snapshot = dashboardSummary?.account_snapshot || {};
+  const dashboardEmail = clean(currentUser?.email || snapshot.email || "").toLowerCase();
+  const forceTestingAccess = dashboardEmail === "damian044@icloud.com";
+  const snapshotPlan = clean(snapshot.plan || "Founder Beta") || "Founder Beta";
+  const configuredLimit = Number(snapshot.posting_limit || snapshot.daily_posting_limit || 0);
+  const snapshotLimit = forceTestingAccess ? Math.max(configuredLimit, 25) : configuredLimit;
+  const snapshotUsed = Number(snapshot.posts_today ?? snapshot.posts_used_today ?? dashboardSummary?.posts_today ?? 0);
+  const snapshotRemaining = Number(snapshot.posts_remaining ?? Math.max(snapshotLimit - snapshotUsed, 0));
+  const snapshotActive = Boolean(
+    forceTestingAccess ||
+    snapshot.access_granted === true ||
+    snapshot.active === true ||
+    clean(snapshot.status).toLowerCase() === "active" ||
+    snapshotLimit > 0
+  );
+  const snapshotStatus = clean(snapshot.status || (snapshotActive ? "active" : "inactive")) || (snapshotActive ? "active" : "inactive");
+
+  return {
+    user: {
+      id: currentUser?.id || "",
+      email: currentUser?.email || "",
+      full_name: fullName || ""
+    },
+    subscription: {
+      active: snapshotActive,
+      access_granted: snapshotActive,
+      status: snapshotStatus,
+      normalized_status: snapshotStatus,
+      plan: snapshotPlan,
+      normalized_plan: snapshotPlan,
+      license_key: currentProfile?.software_license_key || summaryProfile.software_license_key || "",
+      posting_limit: snapshotLimit,
+      daily_posting_limit: snapshotLimit,
+      posts_today: snapshotUsed,
+      posts_remaining: snapshotRemaining
+    },
+    dealership: {
+      name: dealerName || "",
+      dealer_name: dealerName || "",
+      website: currentProfile?.dealer_website || summaryProfile.dealer_website || "",
+      inventory_url: currentProfile?.inventory_url || summaryProfile.inventory_url || "",
+      province: currentProfile?.province || summaryProfile.province || "",
+      scanner_type: currentProfile?.scanner_type || summaryProfile.scanner_type || "",
+      phone: currentProfile?.dealer_phone || summaryProfile.dealer_phone || "",
+      email: currentProfile?.dealer_email || summaryProfile.dealer_email || ""
+    },
+    scanner_config: {
+      scanner_type: currentProfile?.scanner_type || summaryProfile.scanner_type || ""
+    },
+    profile: {
+      full_name: fullName || "",
+      salesperson_name: fullName || "",
+      dealer_name: dealerName || "",
+      dealership: dealerName || "",
+      phone: currentProfile?.phone || summaryProfile.phone || "",
+      dealer_phone: currentProfile?.dealer_phone || summaryProfile.dealer_phone || "",
+      email: currentUser?.email || "",
+      dealer_email: currentProfile?.dealer_email || summaryProfile.dealer_email || "",
+      city: currentProfile?.city || summaryProfile.city || "",
+      province: currentProfile?.province || summaryProfile.province || "",
+      listing_location: currentProfile?.listing_location || summaryProfile.listing_location || "",
+      compliance_mode: currentProfile?.compliance_mode || currentProfile?.province || summaryProfile.compliance_mode || summaryProfile.province || "",
+      license_number: currentProfile?.license_number || summaryProfile.license_number || "",
+      dealer_website: currentProfile?.dealer_website || summaryProfile.dealer_website || "",
+      inventory_url: currentProfile?.inventory_url || summaryProfile.inventory_url || "",
+      scanner_type: currentProfile?.scanner_type || summaryProfile.scanner_type || ""
+    }
+  };
+}
+
+function buildExtensionProfileSnapshot(session, profile, user) {
+  const fallback = buildFallbackSessionFromLocalState();
+  const s = session || fallback || {};
+  const p = profile || currentProfile || {};
+
+  const fullName = clean(
+    s?.profile?.full_name ||
+    s?.profile?.salesperson_name ||
+    s?.user?.full_name ||
+    p?.full_name ||
+    ""
+  );
+
+  const dealerName = clean(
+    s?.profile?.dealer_name ||
+    s?.profile?.dealership ||
+    s?.dealership?.dealer_name ||
+    s?.dealership?.name ||
+    p?.dealership ||
+    p?.dealer_name ||
+    ""
+  );
+
+  return {
+    full_name: fullName || "",
+    salesperson_name: fullName || "",
+    dealer_name: dealerName || "",
+    dealership: dealerName || "",
+    phone: clean(s?.profile?.phone || p?.phone || ""),
+    email: clean(s?.profile?.email || user?.email || ""),
+    dealer_phone: clean(s?.profile?.dealer_phone || s?.dealership?.phone || p?.dealer_phone || ""),
+    dealer_email: clean(s?.profile?.dealer_email || s?.dealership?.email || p?.dealer_email || ""),
+    city: clean(s?.profile?.city || p?.city || ""),
+    province: clean(s?.profile?.province || s?.dealership?.province || p?.province || ""),
+    listing_location: clean(s?.profile?.listing_location || p?.listing_location || ""),
+    compliance_mode: clean(s?.profile?.compliance_mode || p?.compliance_mode || p?.province || ""),
+    license_number: clean(s?.profile?.license_number || p?.license_number || ""),
+    dealer_website: clean(s?.profile?.dealer_website || s?.dealership?.website || p?.dealer_website || ""),
+    inventory_url: clean(s?.profile?.inventory_url || s?.dealership?.inventory_url || p?.inventory_url || ""),
+    scanner_type: clean(s?.profile?.scanner_type || s?.scanner_config?.scanner_type || s?.dealership?.scanner_type || p?.scanner_type || ""),
+    software_license_key: clean(s?.subscription?.license_key || p?.software_license_key || "")
+  };
+}
+
+function persistProfileSnapshots(profileSnapshot, session) {
+  try {
+    const safeProfile = profileSnapshot || {};
+    const safeSession = session || buildFallbackSessionFromLocalState();
+
+    localStorage.setItem("ea_dashboard_profile_v1", JSON.stringify(safeProfile));
+    localStorage.setItem("elevate_profile_snapshot", JSON.stringify(safeProfile));
+    localStorage.setItem("ea_profile_snapshot", JSON.stringify(safeProfile));
+    localStorage.setItem("ea_user_profile", JSON.stringify(safeProfile));
+    localStorage.setItem("ea_account_profile", JSON.stringify(safeProfile));
+    localStorage.setItem("elevate_session_snapshot", JSON.stringify(safeSession));
+  } catch (error) {
+    console.warn("persistProfileSnapshots localStorage warning:", error);
+  }
+}
+
+function renderSetupSnapshot() {
+  const snapshot = dashboardSummary?.account_snapshot || {};
+  const setup = dashboardSummary?.setup_status || {};
+  const canonicalAccess = dashboardSummary?.canonical_access || {};
+  const provenance = dashboardSummary?.state_provenance || {};
+  const canonicalProfile = getCanonicalProfileState();
+  const subscription = getCanonicalSubscriptionState();
+
+  setTextByIdForAll("snapshotPostingLimit", String(Math.max(numberOrZero(canonicalAccess.posting_limit), numberOrZero(snapshot.posting_limit), numberOrZero(subscription.posting_limit))));
+  setTextByIdForAll("snapshotPostsRemaining", String(Math.max(numberOrZero(canonicalAccess.posts_remaining), numberOrZero(snapshot.posts_remaining), numberOrZero(currentNormalizedSession?.subscription?.posts_remaining))));
+  setTextByIdForAll("snapshotPostsUsed", String(Math.max(numberOrZero(snapshot.posts_today ?? snapshot.posts_used_today), numberOrZero(currentNormalizedSession?.subscription?.posts_today), numberOrZero(dashboardSummary?.posts_today))));
+  setTextByIdForAll("snapshotBillingSource", clean(currentNormalizedSession?.subscription?.billing_source || snapshot.billing_source || "subscriptions/users") || "subscriptions/users");
+  setTextByIdForAll("snapshotCurrentPeriodEnd", formatShortDate(snapshot.current_period_end || currentNormalizedSession?.subscription?.current_period_end || ""));
+  setTextByIdForAll("snapshotProfileComplete", setup.profile_complete ? "Ready" : "Needs setup");
+
+  // lifecycle-ready safe no-op ids
+  setTextByIdForAll("snapshotReviewQueueCount", String(numberOrZero(dashboardSummary?.review_queue_count)));
+  setTextByIdForAll("snapshotStaleListings", String(numberOrZero(dashboardSummary?.stale_listings)));
+  setTextByIdForAll("snapshotPriceChanges", String(numberOrZero(dashboardSummary?.review_price_change_count)));
+  setTextByIdForAll("snapshotQueuedVehicles", String(numberOrZero(dashboardSummary?.queue_count)));
+  setTextByIdForAll("snapshotLifecycleUpdatedAt", formatShortDate(dashboardSummary?.lifecycle_updated_at || ""));
+
+  const summaryBits = Array.isArray(setup.setup_gaps) && setup.setup_gaps.length
+    ? setup.setup_gaps
+    : [
+        setup.salesperson_name_present ? null : "salesperson name missing",
+        setup.dealership_name_present ? null : "dealership missing",
+        setup.inventory_url_present ? null : "inventory URL missing",
+        setup.compliance_mode_present ? null : "compliance mode missing"
+      ].filter(Boolean);
+
+  const sourceBits = [
+    provenance.plan ? `plan=${provenance.plan}` : "",
+    provenance.posting_limit ? `limit=${provenance.posting_limit}` : "",
+    provenance.setup_status ? `setup=${provenance.setup_status}` : ""
+  ].filter(Boolean);
+  setStatus(
+    "snapshotSetupSummary",
+    `${summaryBits.length ? `Setup gaps: ${summaryBits.join(" • ")}` : "Account setup looks complete for beta use."}${sourceBits.length ? ` (sources: ${sourceBits.join(" | ")})` : ""}`
+  );
+}
+
+function renderAccessState(session) {
+  const subscription = getCanonicalSubscriptionState(session);
+
+  setTextByIdForAll("accessBadge", subscription.active ? "Active Access" : "Inactive Access");
+  setTextByIdForAll("planName", subscription.plan || "Founder Beta");
+  setTextByIdForAll("subscriptionStatus", subscription.status || (subscription.active ? "active" : "inactive"));
+
+  document.querySelectorAll("#accessBadge").forEach((el) => {
+    el.classList.remove("active", "inactive", "warn");
+    el.classList.add(subscription.active ? "active" : "inactive");
+  });
+}
+
+function renderExtensionControl(session, profile) {
+  const mergedProfile = getCanonicalProfileState(profile, session);
+  const subscription = getCanonicalSubscriptionState(session);
+  const dealerWebsite = mergedProfile.dealer_website || "Not set";
+  const inventoryUrl = mergedProfile.inventory_url || "Not set";
+  const scannerType = mergedProfile.scanner_type || "Not set";
+  const listingLocation = mergedProfile.listing_location || "Not set";
+  const complianceMode = mergedProfile.compliance_mode || mergedProfile.province || "Not set";
+
+  setTextByIdForAll("extensionRemainingPosts", String(numberOrZero(subscription.posts_remaining)));
+  setTextByIdForAll("extensionScannerType", scannerType);
+  setTextByIdForAll("extensionDealerWebsite", dealerWebsite);
+  setTextByIdForAll("extensionInventoryUrl", inventoryUrl);
+  setTextByIdForAll("extensionListingLocation", listingLocation);
+  setTextByIdForAll("extensionComplianceMode", complianceMode);
+  setTextByIdForAll("extensionPlan", subscription.plan || "Founder Beta");
+  setTextByIdForAll("extensionPostsUsed", String(numberOrZero(subscription.posts_today)));
+  setTextByIdForAll("extensionPostLimit", String(numberOrZero(subscription.posting_limit)));
+  const postingUsageFound = Boolean(dashboardSummary?.ingest_debug?.posting_usage_row_found);
+  const postingUsageUpdatedAt = cleanText(dashboardSummary?.ingest_debug?.posting_usage_updated_at);
+  const syncStatusText = postingUsageFound
+    ? `Backend sync live${postingUsageUpdatedAt ? ` • ${new Date(postingUsageUpdatedAt).toLocaleString()}` : ""}`
+    : "No committed post sync yet";
+  setTextByIdForAll("extensionSyncStatus", syncStatusText);
+  setTextByIdForAll("extensionCommittedRows", String(numberOrZero(dashboardSummary?.ingest_debug?.listing_rows_found)));
+  setTextByIdForAll("extensionViewsTracked", String(numberOrZero(dashboardSummary?.total_views)));
+  setTextByIdForAll("extensionMessagesTracked", String(numberOrZero(dashboardSummary?.total_messages)));
+  setTextByIdForAll("extensionReviewQueue", String(numberOrZero(dashboardSummary?.review_queue_count)));
+  setTextByIdForAll("extensionStaleListings", String(numberOrZero(dashboardSummary?.stale_listings)));
+
+  const accessText = !subscription.active
+    ? "Inactive Access"
+    : numberOrZero(subscription.posts_remaining) <= 0
+      ? "Limit Reached"
+      : "Active Access";
+
+  setTextByIdForAll("extensionAccessState", accessText);
+}
+
+function updateSetupStates(profile, session) {
+  const systemState = buildSystemState(profile, session);
+  const setup = systemState.setup || {};
+  const mergedProfile = systemState.profile;
+  const subscription = systemState.subscription;
+
+  const websiteReady = Boolean(setup.dealer_website_present || mergedProfile.dealer_website);
+  const inventoryReady = Boolean(setup.inventory_url_present || mergedProfile.inventory_url);
+  const scannerReady = Boolean(setup.scanner_type_present || mergedProfile.scanner_type);
+  const listingReady = Boolean(setup.listing_location_present || mergedProfile.listing_location);
+  const complianceReady = Boolean(setup.compliance_mode_present || mergedProfile.compliance_mode || mergedProfile.province);
+  const accessReady = Boolean(subscription.active);
+
+  setSetupState("setupDealerWebsite", websiteReady);
+  setSetupState("setupInventoryUrl", inventoryReady);
+  setSetupState("setupScannerType", scannerReady);
+  setSetupState("setupListingLocation", listingReady);
+  setSetupState("setupComplianceMode", complianceReady);
+  setSetupState("setupAccess", accessReady);
+
+  setSetupState("extSetupDealerWebsite", websiteReady);
+  setSetupState("extSetupInventoryUrl", inventoryReady);
+  setSetupState("extSetupScannerType", scannerReady);
+  setSetupState("extSetupListingLocation", listingReady);
+  setSetupState("extSetupComplianceMode", complianceReady);
+  setSetupState("extSetupAccess", accessReady);
+}
+
+function setSetupState(id, isGood) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.textContent = isGood ? "Ready" : "Needs Setup";
+  el.classList.remove("good", "warn");
+  el.classList.add(isGood ? "good" : "warn");
+}
+
+function buildSetupStepsText() {
+  const profile = getCanonicalProfileState();
+  const session = currentNormalizedSession || buildFallbackSessionFromLocalState();
+  const subscription = getCanonicalSubscriptionState(session);
+
+  return [
+    "Elevate Automation Setup",
+    "",
+    `Access: ${subscription.active ? "Active" : "Inactive"}`,
+    `Plan: ${subscription.plan || "Founder Beta"}`,
+    `Dealer Website: ${profile.dealer_website || "Not set"}`,
+    `Inventory URL: ${profile.inventory_url || "Not set"}`,
+    `Scanner Type: ${profile.scanner_type || "Not set"}`,
+    `Listing Location: ${profile.listing_location || "Not set"}`,
+    `Compliance Mode: ${profile.compliance_mode || profile.province || "Not set"}`,
+    "",
+    "Steps:",
+    "1. Install or reload the Elevate Automation extension.",
+    "2. Refresh extension access in the dashboard.",
+    "3. Open your saved inventory URL.",
+    "4. Run scan and queue a vehicle.",
+    "5. Open Facebook Marketplace vehicle creation.",
+    "6. Load next queued vehicle and run autofill."
+  ].join("\n");
+}
+
+async function syncUserIfNeeded(user) {
+  try {
+    await apiFetch("/api/sync-user", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        id: user.id,
+        email: user.email || ""
+      })
+    });
+  } catch (error) {
+    console.warn("syncUserIfNeeded warning:", error);
+  }
+}
+
+async function signOutUser() {
+  try {
+    if (!supabaseClient) return;
+    await supabaseClient.auth.signOut();
+    redirectToLogin();
+  } catch (error) {
+    console.error("signOutUser error:", error);
+    alert("Failed to sign out.");
+  }
+}
+
+function redirectToLogin() {
+  window.location.href = "/login.html";
+}
+
+async function markListingSold(listingId) {
+  try {
+    const row = dashboardListings.find((item) => item.id === listingId);
+    if (!row) return;
+
+    row.status = "sold";
+
+    const response = await apiFetch("/api/update-listing-status", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        listingId,
+        status: "sold",
+        userId: currentUser?.id || "",
+        email: currentUser?.email || ""
+      })
+    });
+
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({}));
+      throw new Error(data.error || "Could not update listing status.");
+    }
+
+    await loadListingDashboardData(true);
+    setStatus("listingGridStatus", "Listing marked sold.");
+  } catch (error) {
+    console.error("markListingSold error:", error);
+    setStatus("listingGridStatus", error.message || "Could not mark listing sold.");
+  }
+}
+
+function copyVehicleSummary(listingId) {
+  const row = dashboardListings.find((item) => item.id === listingId);
+  if (!row) return;
+
+  const text = [
+    row.title,
+    `Price: ${formatCurrency(row.price)}`,
+    `Mileage: ${formatMileage(row.mileage)}`,
+    `VIN: ${row.vin || "Not set"}`,
+    `Stock: ${row.stock_number || "Not set"}`,
+    `Posted: ${formatShortDate(row.posted_at)}`,
+    `Lifecycle: ${row.lifecycle_status || row.status || "posted"}`
+  ].join("\n");
+
+  navigator.clipboard.writeText(text)
+    .then(() => setStatus("listingGridStatus", "Vehicle summary copied."))
+    .catch(() => setStatus("listingGridStatus", "Could not copy vehicle summary."));
+}
+
+function getFieldValue(id) {
+  const el = document.getElementById(id);
+  if (!el) return "";
+  return (el.value || "").trim();
+}
+
+function setFieldValue(id, value) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  let nextValue = value || "";
+  if (id === 'province') nextValue = normalizeProvinceCode(nextValue);
+  if (id === 'compliance_mode') nextValue = normalizeComplianceModeValue(nextValue);
+  el.value = nextValue;
+}
+
+function setStatus(id, text) {
+  document.querySelectorAll(`#${id}`).forEach((el) => {
+    el.textContent = text || "";
+  });
+}
+
+function pushBootStage(stage, detail) {
+  const line = `${stage}: ${detail}`;
+  bootStages.push(line);
+  bootStages = bootStages.slice(-5);
+  setBootStatus(bootStages.join("  |  "));
+}
+
+async function resolveExtensionDownloadUrl() {
+  try {
+    const response = await fetch(EXTENSION_DOWNLOAD_URL, { method: "HEAD", cache: "no-store" });
+    if (response.ok) return EXTENSION_DOWNLOAD_URL;
+  } catch (error) {
+    console.warn("resolveExtensionDownloadUrl fallback:", error);
+  }
+  return EXTENSION_FALLBACK_URL;
+}
+
+function setBootStatus(text) {
+  const el = document.getElementById("bootStatus");
+  if (el) el.textContent = text || "";
+}
+
+function setTextForAll(selector, text) {
+  document.querySelectorAll(selector).forEach((el) => {
+    el.textContent = text || "";
+  });
+}
+
+function setTextByIdForAll(id, text) {
+  document.querySelectorAll(`#${id}`).forEach((el) => {
+    el.textContent = text || "";
+  });
+}
+
+function normalizeUrlInput(value) {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+  if (raw.startsWith("http://") || raw.startsWith("https://")) return raw;
+  return `https://${raw}`;
+}
+
+function formatCurrency(value) {
+  const n = numberOrZero(value);
+  if (!n) return "$0";
+  try {
+    return new Intl.NumberFormat("en-CA", {
+      style: "currency",
+      currency: "CAD",
+      maximumFractionDigits: 0
+    }).format(n);
+  } catch {
+    return `$${n.toLocaleString()}`;
+  }
+}
+
+function formatMileage(value) {
+  const n = numberOrZero(value);
+  if (!n) return "Not set";
+  return `${n.toLocaleString()} km`;
+}
+
+function buildVehicleTitle(item) {
+  return [item.year || "", item.make || "", item.model || "", item.trim || ""]
+    .filter(Boolean)
+    .join(" ")
+    .trim();
+}
+
+function buildListingSubtitle(item) {
+  const parts = [];
+  if (item.stock_number) parts.push(`Stock ${item.stock_number}`);
+  if (item.vin) parts.push(`VIN ${item.vin}`);
+  if (item.body_style) parts.push(item.body_style);
+  if (item.lifecycle_status) parts.push(item.lifecycle_status);
+  return parts.join(" • ") || "Vehicle details";
+}
+
+function renderBadgeHtml(status, lifecycleStatus = "") {
+  const normalized = clean(status || "posted").toLowerCase();
+  const lifecycle = clean(lifecycleStatus || "").toLowerCase();
+
+  if (lifecycle === "stale") {
+    return `<span class="badge warn">Stale</span>`;
+  }
+  if (lifecycle === "review_delete") {
+    return `<span class="badge warn">Review Delete</span>`;
+  }
+  if (lifecycle === "review_price_update") {
+    return `<span class="badge warn">Review Price</span>`;
+  }
+  if (lifecycle === "review_new") {
+    return `<span class="badge active">Review New</span>`;
+  }
+
+  let badgeClass = "warn";
+  let badgeText = normalized || "posted";
+
+  if (normalized === "active" || normalized === "posted") {
+    badgeClass = "active";
+    badgeText = normalized === "posted" ? "Posted" : "Active";
+  } else if (normalized === "sold") {
+    badgeClass = "sold";
+    badgeText = "Sold";
+  } else if (normalized === "inactive" || normalized === "failed" || normalized === "deleted") {
+    badgeClass = "inactive";
+  }
+
+  return `<span class="badge ${badgeClass}">${escapeHtml(badgeText)}</span>`;
+}
+
+function formatShortDate(value) {
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return "—";
+  return d.toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric"
+  });
+}
+
+function formatRelativeOrDate(value) {
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return "—";
+
+  const diffMs = Date.now() - d.getTime();
+  const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+
+  if (diffHours < 1) return "Just now";
+  if (diffHours < 24) return `${diffHours}h ago`;
+
+  const diffDays = Math.floor(diffHours / 24);
+  if (diffDays < 7) return `${diffDays}d ago`;
+
+  return formatShortDate(value);
+}
+
+function toDateKey(value) {
+  const d = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(d.getTime())) return "";
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+function getTimestamp(value) {
+  const d = new Date(value);
+  return Number.isNaN(d.getTime()) ? 0 : d.getTime();
+}
+
+function numberOrZero(value) {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : 0;
+}
+
+function placeholderVehicleImage(label) {
+  const text = encodeURIComponent(clean(label || "Vehicle"));
+  return `https://placehold.co/800x500/111111/d4af37?text=${text}`;
+}
+
+function escapeHtml(str) {
+  return String(str || "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+
+function escapeJs(str) {
+  return String(str || "")
+    .replaceAll("\\", "\\\\")
+    .replaceAll("'", "\\'")
+    .replaceAll('"', '\\"');
+}
+
+function clean(value) {
+  return String(value || "").replace(/\s+/g, " ").trim();
+}
+
+function debounce(fn, wait = 150) {
+  let timeout = null;
+  return (...args) => {
+    clearTimeout(timeout);
+    timeout = setTimeout(() => fn(...args), wait);
+  };
+}
+
+function cryptoRandomFallback() {
+  try {
+    return crypto.randomUUID();
+  } catch {
+    return `id_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  }
+}
+
+window.markListingSold = markListingSold;
+window.copyVehicleSummary = copyVehicleSummary;
+
+window.trackListingView = trackListingView;
+window.trackListingMessage = trackListingMessage;
+window.openListingSource = openListingSource;
+
+window.markListingAction = markListingAction;
+
+window.openListingDetailModal = openListingDetailModal;
+window.showSection = showSection;
 })();

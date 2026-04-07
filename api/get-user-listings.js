@@ -537,6 +537,8 @@ export default async function handler(req, res) {
           user_ids_considered: identity.user_ids.length,
           emails_considered: identity.emails.length
         },
+        sources: { user_listings: userRows.length, listings: legacyRows.length, merged: mergedMap.size },
+        backfill: { enabled: shouldBackfill, user_listings_updated: userBackfill.updated, listings_updated: legacyBackfill.updated }
         sources: {
           user_listings: userRows.length,
           listings: legacyRows.length,
