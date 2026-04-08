@@ -4,10 +4,9 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Elevate Operator Console</title>
+  <title>Elevate Automation Dashboard</title>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <link rel="stylesheet" href="/dashboard-phase3-1-compression.css?v=20260408p31" />
 
   <style>
     * {
@@ -1555,8 +1554,8 @@
       <div class="main-inner">
       <div class="main-header">
         <div id="bootStatus"></div>
-        <h1 id="dashboardPageTitle">Elevate Operator Console</h1>
-        <div id="welcomeText" class="subtext">Loading operator console...</div>
+        <h1 id="dashboardPageTitle">Founder Beta Dashboard</h1>
+        <div id="welcomeText" class="subtext">Loading dashboard...</div>
       </div>
 
       <!-- OVERVIEW -->
@@ -1656,7 +1655,7 @@
           </div>
         </div>
 
-        <div class="operator-strip">
+        <div id="overviewOperatorStrip" class="operator-strip">
           <div class="mini-stat">
             <div class="stat-label">Posts Remaining</div>
             <div id="kpiPostsRemaining" class="stat-value">0</div>
@@ -1688,11 +1687,11 @@
             <div class="stat-sub">Current reward balance</div>
           </div>
         </div>
-<div class="grid-2" style="margin-bottom:20px;">
+<div id="overviewPriorityGrid" class="grid-2" style="margin-bottom:20px;">
           <div class="card">
             <div class="section-head">
               <div>
-                <h2>Listing Action Center</h2>
+                <h2>Priority Engine</h2>
                 <div class="subtext">Revenue-priority buckets for what to do now, today, or later.</div>
               </div>
             </div>
@@ -1719,7 +1718,7 @@
         </div>
 
 
-        <div class="card upgrade-card" style="margin-bottom:20px;">
+        <div id="overviewUpgradeCard" class="card upgrade-card" style="margin-bottom:20px;">
           <div class="section-head">
             <div>
               <div class="module-group-label">Upgrade Trigger</div>
@@ -1733,7 +1732,7 @@
           </div>
         </div>
 
-        <div class="grid-4">
+        <div id="overviewPerformanceGrid" class="grid-4">
           <div class="card kpi-card">
             <div class="stat-label">Active Listings</div>
             <div id="kpiActiveListings" class="stat-value">0</div>
@@ -1756,7 +1755,7 @@
           </div>
         </div>
 
-        <div class="card">
+        <div id="overviewListingsCard" class="card">
           <div class="section-head">
             <div>
               <h2>Recent Listings</h2>
@@ -1799,7 +1798,7 @@
           <div id="listingGridStatus" class="status-line"></div>
         </div>
 
-        <div class="grid-2">
+        <div id="overviewAccountGrid" class="grid-2">
           <div class="card">
             <h2>Account Snapshot</h2>
             <div class="list-block">
@@ -1859,7 +1858,7 @@
 <!-- PROFILE -->
       <section id="profile" class="dashboard-section">
         <div class="card">
-          <h2>Setup & Dealer Identity</h2>
+          <h2>Profile & Dealer Setup</h2>
           <p>
             Save the data that powers listing defaults, salesperson identity, compliance output,
             and extension-linked dealer routing.
@@ -1983,7 +1982,7 @@
         </div>
         <div class="grid-2">
           <div class="card">
-            <h2>Operator Tools</h2>
+            <h2>Tools</h2>
             <div class="list-block">
               <div><strong>Access State:</strong> <span id="extensionAccessState">Loading.</span></div>
               <div><strong>Current Plan:</strong> <span id="extensionPlan">Loading.</span></div>
@@ -2232,7 +2231,7 @@
       <section id="billing" class="dashboard-section">
         <div class="grid-2">
           <div class="card">
-            <h2>Plan & Access</h2>
+            <h2>Billing & Access</h2>
             <div class="list-block">
               <div><strong>Access:</strong> <span id="accessBadgeBilling" class="badge">Loading...</span></div>
               <div><strong>Plan:</strong> <span id="planNameBilling">Loading...</span></div>
@@ -2369,58 +2368,95 @@
 
 <script>
 (function(){
-  function collapseBootTelemetryIfReady() {
-    const panel = document.getElementById('eaBootPanel');
-    if (!panel) return;
+  function applyOverviewHierarchyPass() {
+    const overview = document.getElementById('overview');
+    if (!overview || overview.dataset.eaPhase32Applied === 'true') return;
 
-    const badge = document.getElementById('eaBootBadge');
-    const title = document.getElementById('eaBootTitle');
-    const detail = document.getElementById('eaBootDetail');
-    const stages = document.getElementById('eaBootStages');
+    const commandCenter = overview.querySelector('.command-center-grid');
+    const operatorStrip = document.getElementById('overviewOperatorStrip') || overview.querySelector('.operator-strip');
+    const listingsCard = document.getElementById('overviewListingsCard');
+    const priorityGrid = document.getElementById('overviewPriorityGrid');
+    const performanceGrid = document.getElementById('overviewPerformanceGrid');
+    const accountGrid = document.getElementById('overviewAccountGrid');
+    const upgradeCard = document.getElementById('overviewUpgradeCard');
 
-    const badgeText = String((badge && badge.textContent) || '').toLowerCase();
-    const titleText = String((title && title.textContent) || '').toLowerCase();
-    const detailText = String((detail && detail.textContent) || '').toLowerCase();
+    if (!commandCenter || !operatorStrip || !listingsCard || !priorityGrid || !accountGrid || !upgradeCard) return;
 
-    const ready = badgeText.includes('ready') ||
-                  titleText.includes('dashboard hydrated') ||
-                  detailText.includes('workspace is visible') ||
-                  detailText.includes('dashboard became usable');
+    let flow = document.getElementById('overviewFlow');
+    if (!flow) {
+      flow = document.createElement('div');
+      flow.id = 'overviewFlow';
+      flow.className = 'phase32-flow';
+      operatorStrip.insertAdjacentElement('afterend', flow);
+    }
 
-    if (!ready) return;
+    let execution = document.getElementById('overviewExecutionZone');
+    if (!execution) {
+      execution = document.createElement('div');
+      execution.id = 'overviewExecutionZone';
+      execution.className = 'phase32-zone phase32-execution-zone';
+      flow.appendChild(execution);
+    }
 
-    panel.setAttribute('data-ea-collapsed', 'true');
-    panel.classList.add('ea-boot-collapsed');
+    let intelligence = document.getElementById('overviewIntelligenceZone');
+    if (!intelligence) {
+      intelligence = document.createElement('div');
+      intelligence.id = 'overviewIntelligenceZone';
+      intelligence.className = 'phase32-zone phase32-intelligence-zone';
+      flow.appendChild(intelligence);
+    }
 
-    if (detail) detail.textContent = 'System ready';
-    if (stages) stages.style.display = 'none';
+    let context = document.getElementById('overviewContextZone');
+    if (!context) {
+      context = document.createElement('div');
+      context.id = 'overviewContextZone';
+      context.className = 'phase32-zone phase32-context-zone';
+      flow.appendChild(context);
+    }
 
-    panel.querySelectorAll('button').forEach((btn) => {
-      btn.style.display = 'none';
-    });
+    execution.appendChild(listingsCard);
+    intelligence.appendChild(priorityGrid);
+    if (performanceGrid) intelligence.appendChild(performanceGrid);
+    context.appendChild(accountGrid);
+    context.appendChild(upgradeCard);
+
+    listingsCard.setAttribute('data-phase32-promoted', 'true');
+    priorityGrid.setAttribute('data-phase32-priority', 'true');
+    upgradeCard.setAttribute('data-phase32-downgraded', 'true');
+    overview.dataset.eaPhase32Applied = 'true';
   }
 
-  const observer = new MutationObserver(() => collapseBootTelemetryIfReady());
+  function applyToolsHierarchyPass() {
+    const section = document.getElementById('extension');
+    if (!section || section.dataset.eaPhase32Tools === 'true') return;
 
-  function startWatcher() {
-    observer.observe(document.body, {
-      childList: true,
-      subtree: true,
-      attributes: true,
-      characterData: true
+    const cards = Array.from(section.querySelectorAll(':scope > .grid-2 > .card, :scope > .card'));
+    cards.forEach((card) => {
+      const title = String(card.querySelector('h2')?.textContent || '').toLowerCase();
+      if (title.includes('posting readiness')) card.setAttribute('data-tools-zone', 'control');
+      else if (title.includes('module state mix')) card.setAttribute('data-tools-zone', 'system');
+      else if (title.includes('operator tools')) card.setAttribute('data-tools-zone', 'control');
+      else if (title.includes('extension setup status')) card.setAttribute('data-tools-zone', 'system');
+      else if (title.includes('platform stack')) card.setAttribute('data-tools-zone', 'modules');
+      else if (title.includes('tool unlock path')) card.setAttribute('data-tools-zone', 'premium');
     });
+    section.dataset.eaPhase32Tools = 'true';
+  }
 
-    setTimeout(collapseBootTelemetryIfReady, 1200);
-    setTimeout(collapseBootTelemetryIfReady, 2500);
-    setTimeout(collapseBootTelemetryIfReady, 4500);
-    setTimeout(collapseBootTelemetryIfReady, 7000);
+  function run() {
+    applyOverviewHierarchyPass();
+    applyToolsHierarchyPass();
   }
 
   if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', startWatcher, { once: true });
+    document.addEventListener('DOMContentLoaded', run, { once: true });
   } else {
-    startWatcher();
+    run();
   }
+
+  setTimeout(run, 800);
+  setTimeout(run, 2200);
+  setTimeout(run, 4200);
 })();
 </script>
 
