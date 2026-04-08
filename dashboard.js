@@ -6,7 +6,7 @@
   window.__ELEVATE_DASHBOARD_PHASE4_LOADER__ = true;
 
   const NS = (window.ElevateDashboard = window.ElevateDashboard || {});
-  NS.version = "phase4-loader-v2";
+  NS.version = "phase4-loader-v3";
   NS.modules = NS.modules || {};
   NS.events = NS.events || new EventTarget();
 
@@ -25,6 +25,45 @@
     "/dashboard-phase4-boot.js?v=20260406p12a",
     "/dashboard-bootstrap.js?v=20260406p12a"
   ];
+
+  function installLateDOMContentLoadedCompat() {
+    if (window.__ELEVATE_LATE_DOMCONTENTLOADED_COMPAT__) return;
+    window.__ELEVATE_LATE_DOMCONTENTLOADED_COMPAT__ = true;
+
+    const originalAddEventListener = document.addEventListener.bind(document);
+
+    document.addEventListener = function (type, listener, options) {
+      if (
+        type === "DOMContentLoaded" &&
+        typeof listener === "function" &&
+        document.readyState !== "loading"
+      ) {
+        try {
+          queueMicrotask(() => {
+            try {
+              listener.call(document, new Event("DOMContentLoaded"));
+            } catch (error) {
+              console.error("[Elevate Dashboard] Late DOMContentLoaded listener failed:", error);
+            }
+          });
+        } catch (error) {
+          setTimeout(() => {
+            try {
+              listener.call(document, new Event("DOMContentLoaded"));
+            } catch (innerError) {
+              console.error("[Elevate Dashboard] Late DOMContentLoaded listener failed:", innerError);
+            }
+          }, 0);
+        }
+
+        if (options && typeof options === "object" && options.once) {
+          return;
+        }
+      }
+
+      return originalAddEventListener(type, listener, options);
+    };
+  }
 
   function loadScriptSequentially(index = 0) {
     if (index >= MODULES.length) return Promise.resolve();
@@ -45,6 +84,8 @@
       document.head.appendChild(script);
     }).then(() => loadScriptSequentially(index + 1));
   }
+
+  installLateDOMContentLoadedCompat();
 
   loadScriptSequentially().catch((error) => {
     console.error("[Elevate Dashboard] Phase 4 loader error:", error);
