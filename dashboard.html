@@ -4,9 +4,10 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Elevate Automation Dashboard</title>
+  <title>Elevate Operator Console</title>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <link rel="stylesheet" href="/dashboard-ui-upgrades.css?v=20260408p1p2" />
 
   <style>
     * {
@@ -1554,8 +1555,8 @@
       <div class="main-inner">
       <div class="main-header">
         <div id="bootStatus"></div>
-        <h1 id="dashboardPageTitle">Founder Beta Dashboard</h1>
-        <div id="welcomeText" class="subtext">Loading dashboard...</div>
+        <h1 id="dashboardPageTitle">Elevate Operator Console</h1>
+        <div id="welcomeText" class="subtext">Loading operator console...</div>
       </div>
 
       <!-- OVERVIEW -->
@@ -1858,7 +1859,7 @@
 <!-- PROFILE -->
       <section id="profile" class="dashboard-section">
         <div class="card">
-          <h2>Profile & Dealer Setup</h2>
+          <h2>Setup & Dealer Identity</h2>
           <p>
             Save the data that powers listing defaults, salesperson identity, compliance output,
             and extension-linked dealer routing.
@@ -1982,7 +1983,7 @@
         </div>
         <div class="grid-2">
           <div class="card">
-            <h2>Tools</h2>
+            <h2>Operator Tools</h2>
             <div class="list-block">
               <div><strong>Access State:</strong> <span id="extensionAccessState">Loading.</span></div>
               <div><strong>Current Plan:</strong> <span id="extensionPlan">Loading.</span></div>
@@ -2231,7 +2232,7 @@
       <section id="billing" class="dashboard-section">
         <div class="grid-2">
           <div class="card">
-            <h2>Billing & Access</h2>
+            <h2>Plan & Access</h2>
             <div class="list-block">
               <div><strong>Access:</strong> <span id="accessBadgeBilling" class="badge">Loading...</span></div>
               <div><strong>Plan:</strong> <span id="planNameBilling">Loading...</span></div>
