@@ -89,12 +89,27 @@
   function getIndicators() {
     const userEmailText = clean(qs('.user-email')?.textContent || '');
     const welcomeText = clean(document.getElementById('welcomeText')?.textContent || '');
+    const hasUser = Boolean(window.currentUser?.id) || Boolean(userEmailText && !/loading/i.test(userEmailText));
+    const hasSession = Boolean(window.currentNormalizedSession?.subscription || window.currentAccountData);
+    const hasSummary = Boolean(window.dashboardSummary && typeof window.dashboardSummary === 'object');
+    const hasListings = Array.isArray(window.dashboardListings) && window.dashboardListings.length > 0;
+    const activeSectionVisible = Array.from(document.querySelectorAll('.dashboard-section')).some((section) => {
+      return section.style.display === 'block' || !section.classList.contains('dashboard-section-hidden');
+    });
+    const shellLoading = !(
+      hasUser &&
+      hasSession &&
+      hasSummary &&
+      (hasListings || activeSectionVisible)
+    ) && (/loading/i.test(userEmailText) || /loading dashboard/i.test(welcomeText));
+
     return {
-      shellLoading: /loading/i.test(userEmailText) || /loading dashboard/i.test(welcomeText),
-      hasUser: Boolean(window.currentUser?.id) || (userEmailText && !/loading/i.test(userEmailText)),
-      hasSession: Boolean(window.currentNormalizedSession?.subscription || window.currentAccountData),
-      hasSummary: Boolean(window.dashboardSummary && typeof window.dashboardSummary === 'object'),
-      hasListings: Array.isArray(window.dashboardListings) && window.dashboardListings.length > 0
+      shellLoading,
+      hasUser,
+      hasSession,
+      hasSummary,
+      hasListings,
+      activeSectionVisible
     };
   }
 
@@ -144,7 +159,7 @@
         maybeRenderPhase5();
       }
 
-      if (!indicators.shellLoading && indicators.hasUser && indicators.hasSummary && indicators.hasSession) {
+      if ((indicators.hasUser && indicators.hasSummary && indicators.hasSession && (indicators.hasListings || indicators.activeSectionVisible)) || !indicators.shellLoading) {
         pushStage('Ready', 'Core dashboard hydration completed.');
         updatePanel('ready', 'Dashboard hydrated', indicators.hasListings ? 'Workspace, summary, and listings are available.' : 'Workspace and summary are available. Listings may still be hydrating.');
         clearInterval(intervalId);
