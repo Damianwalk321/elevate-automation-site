@@ -2,6 +2,10 @@
   const NS = (window.ElevateDashboard = window.ElevateDashboard || {});
   if (NS.modules?.state) return;
 
+  if (!(NS.events instanceof EventTarget)) {
+    NS.events = new EventTarget();
+  }
+
   const store = {
     booted: false,
     user: null,
@@ -30,7 +34,11 @@
       ref = ref[key];
     }
     ref[keys[0]] = value;
-    NS.events.dispatchEvent(new CustomEvent("state:set", { detail: { path, value } }));
+
+    if (NS.events && typeof NS.events.dispatchEvent === "function") {
+      NS.events.dispatchEvent(new CustomEvent("state:set", { detail: { path, value } }));
+    }
+
     return value;
   }
 
