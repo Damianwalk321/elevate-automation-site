@@ -61,6 +61,11 @@
       color: #111111;
     }
 
+    button[disabled] {
+      opacity: 0.7;
+      cursor: default;
+    }
+
     a {
       color: #d4af37;
       text-decoration: none;
@@ -82,7 +87,7 @@
     <form id="loginForm">
       <input id="email" type="email" placeholder="Email" required />
       <input id="password" type="password" placeholder="Password" required />
-      <button type="submit">Login</button>
+      <button id="loginBtn" type="submit">Login</button>
     </form>
 
     <p id="message"></p>
@@ -95,17 +100,53 @@
   <script src="/js/auth.js"></script>
 
   <script>
-    document.addEventListener("DOMContentLoaded", function () {
+    document.addEventListener("DOMContentLoaded", async function () {
       const form = document.getElementById("loginForm");
       const message = document.getElementById("message");
+      const loginBtn = document.getElementById("loginBtn");
+      let isSubmitting = false;
+      let redirected = false;
+
+      function redirectToDashboard(reasonText) {
+        if (redirected) return;
+        redirected = true;
+        message.textContent = reasonText || "Opening dashboard...";
+        window.location.replace("/dashboard.html");
+      }
+
+      async function checkExistingSession() {
+        try {
+          if (!window.supabaseClient?.auth?.getSession) return;
+          const { data, error } = await window.supabaseClient.auth.getSession();
+          if (error) return;
+          if (data?.session?.user) {
+            redirectToDashboard("Existing session found. Opening dashboard...");
+          }
+        } catch (error) {
+          console.warn("login session check warning:", error);
+        }
+      }
+
+      await checkExistingSession();
+
+      if (window.supabaseClient?.auth?.onAuthStateChange) {
+        window.supabaseClient.auth.onAuthStateChange((event, session) => {
+          if (session?.user && (event === "SIGNED_IN" || event === "INITIAL_SESSION" || event === "TOKEN_REFRESHED")) {
+            redirectToDashboard("Session active. Opening dashboard...");
+          }
+        });
+      }
 
       form.addEventListener("submit", async function (e) {
         e.preventDefault();
+        if (isSubmitting || redirected) return;
 
         const email = document.getElementById("email").value.trim();
         const password = document.getElementById("password").value;
 
         message.textContent = "Logging in...";
+        isSubmitting = true;
+        loginBtn.disabled = true;
 
         try {
           if (typeof window.signInWithEmail !== "function") {
@@ -113,10 +154,12 @@
           }
 
           await window.signInWithEmail(email, password);
-          window.location.href = "/dashboard.html";
+          redirectToDashboard("Login successful. Opening dashboard...");
         } catch (err) {
           console.error("Login error:", err);
           message.textContent = err.message || "Login failed.";
+          isSubmitting = false;
+          loginBtn.disabled = false;
         }
       });
     });
