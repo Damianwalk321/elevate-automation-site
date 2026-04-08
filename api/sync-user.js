@@ -17,7 +17,6 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  // Resolve user from Bearer token
   const authHeader = req.headers.authorization || '';
   if (!authHeader.startsWith('Bearer ')) {
     return res.status(401).json({ error: 'Missing auth token' });
@@ -34,17 +33,92 @@ export default async function handler(req, res) {
   const authUid = user.id;
 
   try {
-    // Upsert into users table
-    const { error: userError } = await supabase
-      .from('users')
-      .upsert({
-        auth_user_id: authUid,
-        email,
-        updated_at: new Date().toISOString(),
-      }, { onConflict: 'auth_user_id' });
+    // Resolve or create the users row without tripping unique constraints on email/auth_user_id.
+    let userRow = null;
 
-    if (userError) {
-      console.error('[sync-user] users upsert error:', userError.message);
+    const { data: byAuthUser, error: byAuthError } = await supabase
+      .from('users')
+      .select('id, auth_user_id, email')
+      .eq('auth_user_id', authUid)
+      .maybeSingle();
+
+    if (byAuthError) {
+      console.error('[sync-user] users lookup by auth_user_id error:', byAuthError.message);
+    }
+
+    if (byAuthUser) {
+      userRow = byAuthUser;
+
+      const { error: updateByAuthError } = await supabase
+        .from('users')
+        .update({
+          email,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', byAuthUser.id);
+
+      if (updateByAuthError) {
+        console.error('[sync-user] users update-by-auth error:', updateByAuthError.message);
+      }
+    } else if (email) {
+      const { data: byEmailUser, error: byEmailError } = await supabase
+        .from('users')
+        .select('id, auth_user_id, email')
+        .eq('email', email)
+        .maybeSingle();
+
+      if (byEmailError) {
+        console.error('[sync-user] users lookup by email error:', byEmailError.message);
+      }
+
+      if (byEmailUser) {
+        userRow = byEmailUser;
+
+        const { error: updateByEmailError } = await supabase
+          .from('users')
+          .update({
+            auth_user_id: authUid,
+            email,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', byEmailUser.id);
+
+        if (updateByEmailError) {
+          console.error('[sync-user] users update-by-email error:', updateByEmailError.message);
+        }
+      }
+    }
+
+    if (!userRow) {
+      const { data: insertedUser, error: insertUserError } = await supabase
+        .from('users')
+        .insert({
+          auth_user_id: authUid,
+          email,
+          updated_at: new Date().toISOString(),
+        })
+        .select('id, auth_user_id, email')
+        .single();
+
+      if (insertUserError) {
+        console.error('[sync-user] users insert error:', insertUserError.message);
+      } else {
+        userRow = insertedUser;
+      }
+    }
+
+    if (!userRow) {
+      const { data: fallbackUser, error: fallbackUserError } = await supabase
+        .from('users')
+        .select('id, auth_user_id, email')
+        .or(`auth_user_id.eq.${authUid}${email ? `,email.eq.${email}` : ''}`)
+        .maybeSingle();
+
+      if (fallbackUserError) {
+        console.error('[sync-user] users fallback lookup error:', fallbackUserError.message);
+      } else {
+        userRow = fallbackUser;
+      }
     }
 
     // Ensure profile row exists (don't overwrite existing data)
@@ -65,26 +139,32 @@ export default async function handler(req, res) {
     }
 
     // Ensure subscription row exists
-    const { data: existingSub } = await supabase
-      .from('subscriptions')
-      .select('id')
-      .eq('user_id', (await supabase.from('users').select('id').eq('auth_user_id', authUid).maybeSingle()).data?.id)
-      .maybeSingle();
+    let existingSub = null;
+    if (userRow?.id) {
+      const { data: subRow, error: subError } = await supabase
+        .from('subscriptions')
+        .select('id')
+        .eq('user_id', userRow.id)
+        .maybeSingle();
 
-    // Load user's users.id
-    const { data: userRow } = await supabase
-      .from('users')
-      .select('id')
-      .eq('auth_user_id', authUid)
-      .maybeSingle();
+      if (subError) {
+        console.error('[sync-user] subscriptions lookup error:', subError.message);
+      } else {
+        existingSub = subRow;
+      }
+    }
 
-    if (userRow && !existingSub) {
-      await supabase.from('subscriptions').insert({
+    if (userRow?.id && !existingSub) {
+      const { error: insertSubError } = await supabase.from('subscriptions').insert({
         user_id: userRow.id,
         email,
         subscription_status: 'none',
         is_active: false,
       });
+
+      if (insertSubError && insertSubError.code !== '23505') {
+        console.error('[sync-user] subscriptions insert error:', insertSubError.message);
+      }
     }
 
     return res.status(200).json({ success: true, userId: authUid });
