@@ -6,7 +6,7 @@
   window.__ELEVATE_DASHBOARD_PHASE4_LOADER__ = true;
 
   const NS = (window.ElevateDashboard = window.ElevateDashboard || {});
-  NS.version = "phase4-loader-v3";
+  NS.version = "phase4-loader-v4";
   NS.modules = NS.modules || {};
   NS.events = NS.events || new EventTarget();
 
@@ -65,6 +65,80 @@
     };
   }
 
+  function installSummaryFallbackShim() {
+    if (window.__ELEVATE_SUMMARY_FALLBACK_SHIM__) return;
+    window.__ELEVATE_SUMMARY_FALLBACK_SHIM__ = true;
+
+    const originalFetch = window.fetch.bind(window);
+    const SUMMARY_TIMEOUT_MS = 3500;
+
+    function isDashboardSummaryRequest(input) {
+      const raw = typeof input === "string" ? input : (input && input.url) ? input.url : "";
+      return typeof raw === "string" && raw.includes("/api/get-dashboard-summary");
+    }
+
+    function buildFallbackResponse() {
+      const body = JSON.stringify({
+        success: true,
+        data: {},
+        meta: {
+          fallback: "summary_timeout"
+        }
+      });
+
+      return new Response(body, {
+        status: 200,
+        headers: {
+          "Content-Type": "application/json",
+          "x-elevate-summary-fallback": "timeout"
+        }
+      });
+    }
+
+    window.fetch = async function (input, init) {
+      if (!isDashboardSummaryRequest(input)) {
+        return originalFetch(input, init);
+      }
+
+      let timeoutId = null;
+      try {
+        return await Promise.race([
+          originalFetch(input, init),
+          new Promise((resolve) => {
+            timeoutId = setTimeout(() => {
+              console.warn("[Elevate Dashboard] get-dashboard-summary timed out; using fallback payload.");
+              resolve(buildFallbackResponse());
+            }, SUMMARY_TIMEOUT_MS);
+          })
+        ]);
+      } catch (error) {
+        console.warn("[Elevate Dashboard] get-dashboard-summary failed; using fallback payload.", error);
+        return buildFallbackResponse();
+      } finally {
+        if (timeoutId) clearTimeout(timeoutId);
+      }
+    };
+  }
+
+  function installFirstPaintSafetyNet() {
+    if (window.__ELEVATE_FIRST_PAINT_SAFETY_NET__) return;
+    window.__ELEVATE_FIRST_PAINT_SAFETY_NET__ = true;
+
+    setTimeout(() => {
+      try {
+        if (typeof window.showSection === "function") {
+          window.showSection("overview");
+        }
+        const status = document.getElementById("bootStatus");
+        if (status && /loading|booting/i.test(String(status.textContent || ""))) {
+          status.textContent = "Loading dashboard data in background...";
+        }
+      } catch (error) {
+        console.warn("[Elevate Dashboard] First-paint safety net warning:", error);
+      }
+    }, 2500);
+  }
+
   function loadScriptSequentially(index = 0) {
     if (index >= MODULES.length) return Promise.resolve();
 
@@ -86,6 +160,8 @@
   }
 
   installLateDOMContentLoadedCompat();
+  installSummaryFallbackShim();
+  installFirstPaintSafetyNet();
 
   loadScriptSequentially().catch((error) => {
     console.error("[Elevate Dashboard] Phase 4 loader error:", error);
