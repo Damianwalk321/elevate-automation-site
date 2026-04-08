@@ -15,6 +15,12 @@
     return String(value || '').replace(/\s+/g, ' ').trim();
   }
 
+  function ensureBootstrapState() {
+    NS.bootstrapState = NS.bootstrapState && typeof NS.bootstrapState === 'object' ? NS.bootstrapState : {};
+    if (!Array.isArray(NS.bootstrapState.stages)) NS.bootstrapState.stages = [];
+    return NS.bootstrapState;
+  }
+
   function injectStyles() {
     if (document.getElementById('ea-boot-panel-styles')) return;
     const style = document.createElement('style');
@@ -73,10 +79,10 @@
   }
 
   function pushStage(label, detail = '') {
-    NS.bootstrapState = NS.bootstrapState || { stages: [] };
+    const state = ensureBootstrapState();
     const line = detail ? label + ': ' + detail : label;
-    NS.bootstrapState.stages.push(line);
-    renderStages(NS.bootstrapState.stages);
+    state.stages.push(line);
+    renderStages(state.stages);
     updatePanel('running', label, detail);
   }
 
@@ -93,12 +99,12 @@
   }
 
   function triggerLegacyHydration(reason = 'bootstrap') {
-    NS.bootstrapState = NS.bootstrapState || {};
+    const state = ensureBootstrapState();
     const now = Date.now();
-    if (NS.bootstrapState.lastTriggerAt && reason !== 'manual_retry' && now - NS.bootstrapState.lastTriggerAt < 1200) {
+    if (state.lastTriggerAt && reason !== 'manual_retry' && now - state.lastTriggerAt < 1200) {
       return;
     }
-    NS.bootstrapState.lastTriggerAt = now;
+    state.lastTriggerAt = now;
     pushStage('Hydration', 'Dispatching legacy DOMContentLoaded (' + reason + ').');
     document.dispatchEvent(new Event('DOMContentLoaded', { bubbles: true, cancelable: true }));
   }
@@ -156,9 +162,9 @@
   }
 
   function boot() {
-    if (NS.bootstrapState?.started) return;
-    NS.bootstrapState = NS.bootstrapState || {};
-    NS.bootstrapState.started = true;
+    const state = ensureBootstrapState();
+    if (state.started) return;
+    state.started = true;
     startWatch();
   }
 
