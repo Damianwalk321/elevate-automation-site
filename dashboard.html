@@ -7,7 +7,7 @@
   <title>Elevate Operator Console</title>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <link rel="stylesheet" href="/dashboard-phase3-polish.css?v=20260408p3" />
+  <link rel="stylesheet" href="/dashboard-phase3-1-compression.css?v=20260408p31" />
 
   <style>
     * {
@@ -2368,57 +2368,59 @@
 <script src="/js/supabase-client.js?v=20260401h"></script>
 
 <script>
-(function () {
-  function clean(value) {
-    return String(value || "").replace(/\s+/g, " ").trim().toLowerCase();
-  }
-
-  function dashboardLooksUsable() {
-    var email = document.querySelector(".user-email");
-    var emailText = clean(email ? email.textContent : "");
-    var listings = document.getElementById("recentListingsGrid");
-    var overview = document.getElementById("overview");
-    var hasUser = !!(emailText && emailText.indexOf("loading") === -1);
-    var hasListings = !!(listings && listings.children && listings.children.length > 0);
-    var overviewVisible = !!(overview && (overview.style.display === "block" || getComputedStyle(overview).display !== "none"));
-    return hasUser && (hasListings || overviewVisible);
-  }
-
-  function collapseBootTelemetry() {
-    var panel = document.getElementById("eaBootPanel");
-    var badge = document.getElementById("eaBootBadge");
+(function(){
+  function collapseBootTelemetryIfReady() {
+    const panel = document.getElementById('eaBootPanel');
     if (!panel) return;
-    var badgeReady = badge && clean(badge.textContent) === "ready";
-    if (badgeReady || dashboardLooksUsable()) {
-      document.body.setAttribute("data-ea-ready", "true");
-      panel.classList.add("ea-boot-collapsed");
-      var detail = document.getElementById("eaBootDetail");
-      if (detail && !detail.dataset.polished) {
-        detail.dataset.polished = "true";
-        detail.textContent = "Startup complete. Debug telemetry collapsed.";
-      }
-    }
+
+    const badge = document.getElementById('eaBootBadge');
+    const title = document.getElementById('eaBootTitle');
+    const detail = document.getElementById('eaBootDetail');
+    const stages = document.getElementById('eaBootStages');
+
+    const badgeText = String((badge && badge.textContent) || '').toLowerCase();
+    const titleText = String((title && title.textContent) || '').toLowerCase();
+    const detailText = String((detail && detail.textContent) || '').toLowerCase();
+
+    const ready = badgeText.includes('ready') ||
+                  titleText.includes('dashboard hydrated') ||
+                  detailText.includes('workspace is visible') ||
+                  detailText.includes('dashboard became usable');
+
+    if (!ready) return;
+
+    panel.setAttribute('data-ea-collapsed', 'true');
+    panel.classList.add('ea-boot-collapsed');
+
+    if (detail) detail.textContent = 'System ready';
+    if (stages) stages.style.display = 'none';
+
+    panel.querySelectorAll('button').forEach((btn) => {
+      btn.style.display = 'none';
+    });
   }
 
-  document.addEventListener("DOMContentLoaded", function () {
-    setTimeout(collapseBootTelemetry, 1200);
-    setTimeout(collapseBootTelemetry, 2600);
-    setTimeout(collapseBootTelemetry, 5000);
+  const observer = new MutationObserver(() => collapseBootTelemetryIfReady());
 
-    var observer = new MutationObserver(function () {
-      collapseBootTelemetry();
-    });
-
-    observer.observe(document.documentElement, {
+  function startWatcher() {
+    observer.observe(document.body, {
       childList: true,
       subtree: true,
-      characterData: true,
       attributes: true,
-      attributeFilter: ["class", "style", "data-ea-dashboard-ready"]
+      characterData: true
     });
 
-    setTimeout(function () { observer.disconnect(); }, 15000);
-  });
+    setTimeout(collapseBootTelemetryIfReady, 1200);
+    setTimeout(collapseBootTelemetryIfReady, 2500);
+    setTimeout(collapseBootTelemetryIfReady, 4500);
+    setTimeout(collapseBootTelemetryIfReady, 7000);
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', startWatcher, { once: true });
+  } else {
+    startWatcher();
+  }
 })();
 </script>
 
