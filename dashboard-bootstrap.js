@@ -2,8 +2,8 @@
   const NS = (window.ElevateDashboard = window.ElevateDashboard || {});
   if (NS.modules?.bootstrap) return;
 
-  const RETRY_TIMEOUT_MS = 15000;
-  const POLL_MS = 600;
+  const RETRY_TIMEOUT_MS = 12000;
+  const POLL_MS = 500;
 
   const CSS = '\n    .ea-boot-panel {\n      margin: 12px 0 18px;\n      padding: 14px 16px;\n      border: 1px solid rgba(212,175,55,0.14);\n      border-radius: 14px;\n      background: rgba(255,255,255,0.02);\n      display: grid;\n      gap: 8px;\n    }\n    .ea-boot-panel-head {\n      display: flex;\n      justify-content: space-between;\n      align-items: center;\n      gap: 12px;\n      flex-wrap: wrap;\n    }\n    .ea-boot-eyebrow {\n      color: #d4af37;\n      font-size: 11px;\n      font-weight: 700;\n      letter-spacing: 0.12em;\n      text-transform: uppercase;\n    }\n    .ea-boot-badge {\n      display: inline-flex;\n      align-items: center;\n      min-height: 28px;\n      padding: 0 10px;\n      border-radius: 999px;\n      font-size: 11px;\n      font-weight: 700;\n      border: 1px solid rgba(255,255,255,0.08);\n      background: #171717;\n      color: #f4f4f4;\n    }\n    .ea-boot-badge.running { color: #f3ddb0; border-color: rgba(212,175,55,0.18); }\n    .ea-boot-badge.ready { color: #9de8a8; border-color: rgba(157,232,168,0.22); }\n    .ea-boot-badge.error { color: #ffb4b4; border-color: rgba(255,180,180,0.2); }\n    .ea-boot-title { font-size: 14px; font-weight: 700; }\n    .ea-boot-detail { font-size: 13px; color: #b8b8b8; line-height: 1.5; }\n    .ea-boot-stage-list { display: grid; gap: 6px; }\n    .ea-boot-stage-item { font-size: 12px; color: #d6d6d6; }\n    .ea-boot-actions { display: flex; gap: 8px; flex-wrap: wrap; }\n    .ea-boot-actions button {\n      appearance: none;\n      border: 1px solid rgba(255,255,255,0.08);\n      background: #1a1a1a;\n      color: #f2f2f2;\n      border-radius: 10px;\n      padding: 10px 12px;\n      cursor: pointer;\n      font-size: 12px;\n    }\n  ';
 
@@ -45,7 +45,12 @@
     const retryBtn = document.getElementById('eaBootRetryBtn');
     if (retryBtn && retryBtn.dataset.bound !== 'true') {
       retryBtn.dataset.bound = 'true';
-      retryBtn.addEventListener('click', () => triggerLegacyHydration('manual_retry'));
+      retryBtn.addEventListener('click', () => {
+        const state = ensureBootstrapState();
+        state.manualRetryAt = Date.now();
+        updatePanel('running', 'Retry requested', 'Reloading startup observers.');
+        window.location.reload();
+      });
     }
 
     const reloadBtn = document.getElementById('eaBootReloadBtn');
@@ -75,7 +80,7 @@
     if (titleEl) titleEl.textContent = title || 'Boot status';
     if (detailEl) detailEl.textContent = detail || '';
     const bootStatus = document.getElementById('bootStatus');
-    if (bootStatus) bootStatus.textContent = detail || title || '';
+    if (bootStatus && !bootStatus.textContent) bootStatus.textContent = detail || title || '';
   }
 
   function pushStage(label, detail = '') {
@@ -92,36 +97,25 @@
     const hasUser = Boolean(window.currentUser?.id) || Boolean(userEmailText && !/loading/i.test(userEmailText));
     const hasSession = Boolean(window.currentNormalizedSession?.subscription || window.currentAccountData);
     const hasSummary = Boolean(window.dashboardSummary && typeof window.dashboardSummary === 'object');
-    const hasListings = Array.isArray(window.dashboardListings) && window.dashboardListings.length > 0;
-    const activeSectionVisible = Array.from(document.querySelectorAll('.dashboard-section')).some((section) => {
-      return section.style.display === 'block' || !section.classList.contains('dashboard-section-hidden');
-    });
-    const shellLoading = !(
-      hasUser &&
-      hasSession &&
-      hasSummary &&
-      (hasListings || activeSectionVisible)
-    ) && (/loading/i.test(userEmailText) || /loading dashboard/i.test(welcomeText));
+    const listingsReady = Array.isArray(window.dashboardListings);
+    const activeSectionVisible = Array.from(document.querySelectorAll('.dashboard-section')).some((section) => section.style.display === 'block');
+    const visibleDashboardContent = Boolean(
+      document.getElementById('recentListingsGrid')?.children?.length ||
+      document.getElementById('overview')?.textContent?.includes('Operate the highest') ||
+      activeSectionVisible
+    );
+    const bootStatusText = clean(document.getElementById('bootStatus')?.textContent || '');
+    const shellLoading = /loading/i.test(userEmailText) || /loading dashboard/i.test(welcomeText) || /booting dashboard/i.test(bootStatusText);
 
     return {
-      shellLoading,
       hasUser,
       hasSession,
       hasSummary,
-      hasListings,
-      activeSectionVisible
+      listingsReady,
+      activeSectionVisible,
+      visibleDashboardContent,
+      shellLoading
     };
-  }
-
-  function triggerLegacyHydration(reason = 'bootstrap') {
-    const state = ensureBootstrapState();
-    const now = Date.now();
-    if (state.lastTriggerAt && reason !== 'manual_retry' && now - state.lastTriggerAt < 1200) {
-      return;
-    }
-    state.lastTriggerAt = now;
-    pushStage('Hydration', 'Dispatching legacy DOMContentLoaded (' + reason + ').');
-    document.dispatchEvent(new Event('DOMContentLoaded', { bubbles: true, cancelable: true }));
   }
 
   function maybeRenderPhase5() {
@@ -134,18 +128,13 @@
 
   function startWatch() {
     ensurePanel();
-    pushStage('Bootstrap', 'Watching shell hydration and data readiness.');
+    pushStage('Bootstrap', 'Watching startup without forcing legacy re-hydration.');
 
     const startedAt = Date.now();
-    let hydrationTriggered = false;
+    let readyCount = 0;
 
     const tick = () => {
       const indicators = getIndicators();
-
-      if (!hydrationTriggered && indicators.shellLoading) {
-        hydrationTriggered = true;
-        triggerLegacyHydration('shell_loading_detected');
-      }
 
       if (indicators.hasUser && !indicators.hasSummary) {
         updatePanel('running', 'User resolved', 'Waiting for dashboard summary and workspace hydration.');
@@ -159,15 +148,27 @@
         maybeRenderPhase5();
       }
 
-      if ((indicators.hasUser && indicators.hasSummary && indicators.hasSession && (indicators.hasListings || indicators.activeSectionVisible)) || !indicators.shellLoading) {
+      const readyNow = indicators.hasUser && indicators.hasSession && indicators.hasSummary && (indicators.listingsReady || indicators.visibleDashboardContent || indicators.activeSectionVisible);
+      if (readyNow) {
+        readyCount += 1;
+      } else {
+        readyCount = 0;
+      }
+
+      if (readyCount >= 2) {
         pushStage('Ready', 'Core dashboard hydration completed.');
-        updatePanel('ready', 'Dashboard hydrated', indicators.hasListings ? 'Workspace, summary, and listings are available.' : 'Workspace and summary are available. Listings may still be hydrating.');
+        updatePanel('ready', 'Dashboard hydrated', indicators.visibleDashboardContent ? 'Workspace is visible and interactive.' : 'Workspace, summary, and session are present.');
         clearInterval(intervalId);
         return;
       }
 
       if (Date.now() - startedAt > RETRY_TIMEOUT_MS) {
-        updatePanel('error', 'Bootstrap stalled', 'Shell is still partially loaded. Use Retry bootstrap, then refresh if needed.');
+        if (indicators.visibleDashboardContent || (indicators.hasUser && indicators.hasSession && indicators.hasSummary)) {
+          pushStage('Ready', 'Dashboard is usable; telemetry timeout ignored.');
+          updatePanel('ready', 'Dashboard hydrated', 'Startup telemetry finished after the dashboard became usable.');
+        } else {
+          updatePanel('error', 'Bootstrap stalled', 'Dashboard shell is up, but core hydration still looks incomplete. Reload if it stays stuck.');
+        }
         clearInterval(intervalId);
       }
     };
