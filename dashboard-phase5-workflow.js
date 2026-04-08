@@ -59,6 +59,20 @@
     return "salesperson";
   }
 
+  function setWorkflowStateSilently(path, value) {
+    const store = NS.state?.store;
+    if (!store || !path) return value;
+    const keys = String(path).split(".");
+    let ref = store;
+    while (keys.length > 1) {
+      const key = keys.shift();
+      ref[key] = ref[key] || {};
+      ref = ref[key];
+    }
+    ref[keys[0]] = value;
+    return value;
+  }
+
   function buildWorkflowTasks() {
     const summary = window.dashboardSummary || {};
     const actionDetails = summary.action_center_details || {};
@@ -167,8 +181,11 @@
       return (score[b.priority] || 0) - (score[a.priority] || 0);
     });
 
-    if (NS.state?.set) NS.state.set("workflow.tasks", ordered);
-    if (NS.state?.set) NS.state.set("workflow.role", inferRole(summary));
+    setWorkflowStateSilently("workflow.tasks", ordered);
+    const currentRole = NS.state?.get?.("workflow.role", "");
+    if (!currentRole) {
+      setWorkflowStateSilently("workflow.role", inferRole(summary));
+    }
     return ordered;
   }
 
