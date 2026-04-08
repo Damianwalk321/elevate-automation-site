@@ -1,0 +1,112 @@
+/* Elevate Operator Console — Phase 3.2 Hierarchy Pass */
+
+.phase32-flow{
+  display:grid;
+  gap:16px;
+}
+
+.phase32-zone{
+  display:grid;
+  gap:16px;
+}
+
+#overviewListingsCard[data-phase32-promoted="true"]{
+  border-color: rgba(212,175,55,0.22) !important;
+  background:
+    radial-gradient(circle at top right, rgba(212,175,55,0.06), transparent 28%),
+    linear-gradient(180deg, rgba(255,255,255,0.018), rgba(255,255,255,0.008)),
+    var(--panel) !important;
+}
+
+#overviewListingsCard[data-phase32-promoted="true"] .section-head{
+  margin-bottom: 12px !important;
+}
+
+#overviewListingsCard[data-phase32-promoted="true"] .toolbar{
+  align-items: center;
+}
+
+#overviewPriorityGrid[data-phase32-priority="true"] .card h2{
+  font-size: 20px !important;
+}
+
+#overviewPriorityGrid[data-phase32-priority="true"] .card{
+  background: linear-gradient(180deg, rgba(255,255,255,0.015), rgba(255,255,255,0.008)) !important;
+}
+
+#overviewPerformanceGrid{
+  margin-top: -2px;
+}
+
+#overviewPerformanceGrid .card{
+  background: rgba(255,255,255,0.012) !important;
+}
+
+#overviewUpgradeCard[data-phase32-downgraded="true"]{
+  opacity: 0.92;
+  border-color: rgba(212,175,55,0.12) !important;
+}
+
+#overviewUpgradeCard[data-phase32-downgraded="true"] .section-head h2{
+  font-size: 20px !important;
+}
+
+#overviewAccountGrid{
+  align-items: start;
+}
+
+#overviewAccountGrid .card:first-child{
+  background: linear-gradient(180deg, rgba(255,255,255,0.014), rgba(255,255,255,0.006));
+}
+
+#overviewAccountGrid .card:last-child{
+  background: linear-gradient(180deg, rgba(255,255,255,0.018), rgba(255,255,255,0.01));
+}
+
+/* Tools hierarchy */
+#extension [data-tools-zone="control"]{
+  border-color: rgba(212,175,55,0.18) !important;
+}
+
+#extension [data-tools-zone="system"]{
+  background: linear-gradient(180deg, rgba(255,255,255,0.014), rgba(255,255,255,0.006)) !important;
+}
+
+#extension [data-tools-zone="modules"]{
+  border-color: rgba(255,255,255,0.07) !important;
+}
+
+#extension [data-tools-zone="premium"]{
+  opacity: 0.95;
+}
+
+#extension [data-tools-zone="control"] .module-group-label::after{
+  content: " • Control";
+  color: var(--gold-soft);
+  letter-spacing: .08em;
+}
+
+#extension [data-tools-zone="system"] .module-group-label::after{
+  content: " • State";
+  color: #cfcfcf;
+  letter-spacing: .08em;
+}
+
+#extension [data-tools-zone="modules"] .module-group-label::after{
+  content: " • Modules";
+  color: #cfcfcf;
+  letter-spacing: .08em;
+}
+
+#extension [data-tools-zone="premium"] .module-group-label::after{
+  content: " • Premium";
+  color: var(--gold-soft);
+  letter-spacing: .08em;
+}
+
+@media (max-width: 980px){
+  .phase32-flow,
+  .phase32-zone{
+    gap:14px;
+  }
+}
