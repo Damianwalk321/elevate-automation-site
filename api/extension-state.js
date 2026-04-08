@@ -27,6 +27,51 @@ function resolveActiveState(subscription = {}, forcedAccess = false) {
   );
 }
 
+async function resolveIdentity(authUid, email) {
+  const normalizedEmail = normalizeEmail(email);
+  const candidateIds = new Set([clean(authUid)].filter(Boolean));
+
+  let userRow = null;
+
+  if (authUid) {
+    const { data } = await supabase
+      .from('users')
+      .select('id,auth_user_id,email,created_at')
+      .eq('auth_user_id', authUid)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (data) {
+      userRow = data;
+      if (clean(data.id)) candidateIds.add(clean(data.id));
+      if (clean(data.auth_user_id)) candidateIds.add(clean(data.auth_user_id));
+      if (normalizeEmail(data.email)) email = data.email;
+    }
+  }
+
+  if (!userRow && normalizedEmail) {
+    const { data } = await supabase
+      .from('users')
+      .select('id,auth_user_id,email,created_at')
+      .ilike('email', normalizedEmail)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (data) {
+      userRow = data;
+      if (clean(data.id)) candidateIds.add(clean(data.id));
+      if (clean(data.auth_user_id)) candidateIds.add(clean(data.auth_user_id));
+      if (normalizeEmail(data.email)) email = data.email;
+    }
+  }
+
+  return {
+    userRow,
+    normalizedEmail: normalizeEmail(email),
+    candidateIds: Array.from(candidateIds)
+  };
+}
+
 export default async function handler(req, res) {
   if (req.method === 'OPTIONS') {
     return res.status(200).set(CORS).end();
@@ -57,36 +102,84 @@ export default async function handler(req, res) {
   }
 
   try {
-    let profileQuery = supabase.from('profiles').select('*');
-    profileQuery = authUid
-      ? profileQuery.eq('id', authUid)
-      : profileQuery.ilike('email', email);
-    const { data: profile, error: profileError } = await profileQuery.maybeSingle();
-    if (profileError) throw profileError;
+    const identity = await resolveIdentity(authUid, email);
+    const normalizedEmail = identity.normalizedEmail;
+    const candidateIds = identity.candidateIds;
+    const internalUserId = clean(identity.userRow?.id || '');
 
-    let subQuery = supabase
-      .from('subscriptions')
-      .select('subscription_status, plan_type, daily_posting_limit, bridge_access, access_active, is_active, trial_end, current_period_end, software_license_key, license_key')
-      .order('created_at', { ascending: false })
-      .limit(1);
-    subQuery = authUid
-      ? subQuery.eq('user_id', authUid)
-      : subQuery.ilike('email', email);
-    const { data: subscription, error: subError } = await subQuery.maybeSingle();
-    if (subError) throw subError;
+    let profile = null;
+    if (authUid) {
+      const { data } = await supabase.from('profiles').select('*').eq('id', authUid).maybeSingle();
+      profile = data || null;
+    }
+    if (!profile && normalizedEmail) {
+      const { data } = await supabase.from('profiles').select('*').ilike('email', normalizedEmail).maybeSingle();
+      profile = data || null;
+    }
+
+    let subscription = null;
+    if (internalUserId) {
+      const { data } = await supabase
+        .from('subscriptions')
+        .select('subscription_status, plan_type, daily_posting_limit, bridge_access, access_active, is_active, trial_end, current_period_end, software_license_key, license_key, created_at')
+        .eq('user_id', internalUserId)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      subscription = data || null;
+    }
+    if (!subscription && candidateIds.length) {
+      const { data } = await supabase
+        .from('subscriptions')
+        .select('subscription_status, plan_type, daily_posting_limit, bridge_access, access_active, is_active, trial_end, current_period_end, software_license_key, license_key, created_at')
+        .in('user_id', candidateIds)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      subscription = data || null;
+    }
+    if (!subscription && normalizedEmail) {
+      const { data } = await supabase
+        .from('subscriptions')
+        .select('subscription_status, plan_type, daily_posting_limit, bridge_access, access_active, is_active, trial_end, current_period_end, software_license_key, license_key, created_at')
+        .ilike('email', normalizedEmail)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      subscription = data || null;
+    }
 
     const today = new Date().toISOString().slice(0, 10);
-    let usageQuery = supabase
-      .from('posting_usage')
-      .select('posts_today, posts_used, used_today, date_key')
-      .eq('date_key', today);
-    usageQuery = authUid
-      ? usageQuery.eq('user_id', authUid)
-      : usageQuery.ilike('email', email);
-    const { data: usage, error: usageError } = await usageQuery.maybeSingle();
-    if (usageError) throw usageError;
+    let usage = null;
+    if (internalUserId) {
+      const { data } = await supabase
+        .from('posting_usage')
+        .select('posts_today, posts_used, used_today, date_key')
+        .eq('date_key', today)
+        .eq('user_id', internalUserId)
+        .maybeSingle();
+      usage = data || null;
+    }
+    if (!usage && candidateIds.length) {
+      const { data } = await supabase
+        .from('posting_usage')
+        .select('posts_today, posts_used, used_today, date_key')
+        .eq('date_key', today)
+        .in('user_id', candidateIds)
+        .maybeSingle();
+      usage = data || null;
+    }
+    if (!usage && normalizedEmail) {
+      const { data } = await supabase
+        .from('posting_usage')
+        .select('posts_today, posts_used, used_today, date_key')
+        .eq('date_key', today)
+        .ilike('email', normalizedEmail)
+        .maybeSingle();
+      usage = data || null;
+    }
 
-    const forcedAccess = ACCESS_OVERRIDE_EMAILS.has(normalizeEmail(email));
+    const forcedAccess = ACCESS_OVERRIDE_EMAILS.has(normalizedEmail);
     const active = resolveActiveState(subscription || {}, forcedAccess);
     const normalizedStatus = forcedAccess ? 'active' : clean(subscription?.subscription_status || 'none');
     const normalizedPlan = forcedAccess ? 'Pro' : clean(subscription?.plan_type || 'Beta');
@@ -106,6 +199,12 @@ export default async function handler(req, res) {
         website: clean(profile?.dealer_website || ''),
         province: clean(profile?.province || ''),
         scanner_type: clean(profile?.scanner_type || '')
+      },
+      identity: {
+        auth_user_id: clean(authUid || ''),
+        internal_user_id: internalUserId,
+        email: normalizedEmail,
+        candidate_user_ids: candidateIds
       },
       subscription: {
         status: normalizedStatus,
