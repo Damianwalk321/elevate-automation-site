@@ -1,6 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import { randomUUID } from "node:crypto";
-import { getVerifiedRequestUser } from "./_shared/auth.js";
+import { getVerifiedRequestUser, getTrustedIdentity, isDashboardClient } from "./_shared/auth.js";
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -464,12 +464,24 @@ export default async function handler(req, res) {
 
   try {
     const verifiedUser = await getVerifiedRequestUser(req);
-    if (!verifiedUser?.id || !verifiedUser?.email) {
-      return res.status(401).json({ error: "Unauthorized", request_id: requestId });
+    const trusted = getTrustedIdentity({
+      verifiedUser,
+      body: req.body || {},
+      query: req.query || {}
+    });
+    const dashboardClient = isDashboardClient(req);
+
+    const userId = clean(trusted.id || req.query?.userId || req.query?.user_id || "");
+    const email = normalizeEmail(trusted.email || req.query?.email || "");
+
+    if (dashboardClient && !verifiedUser && !(userId || email)) {
+      return res.status(401).json({
+        error: "Unauthorized",
+        requires_auth: true,
+        request_id: requestId
+      });
     }
 
-    const userId = clean(verifiedUser.id || req.query?.userId || req.query?.user_id || "");
-    const email = normalizeEmail(verifiedUser.email || req.query?.email || "");
     const status = clean(req.query?.status || "").toLowerCase();
     const preset = clean(req.query?.preset || "").toLowerCase();
     const lifecycleStatus = clean(req.query?.lifecycle_status || req.query?.lifecycleStatus || "").toLowerCase();
@@ -482,7 +494,7 @@ export default async function handler(req, res) {
     const identity = await resolveIdentityCandidates({
       userId,
       email,
-      authUid: clean(verifiedUser.id || ""),
+      authUid: clean(verifiedUser?.id || trusted.id || ""),
       warnings
     });
 
@@ -531,6 +543,7 @@ export default async function handler(req, res) {
         total: rows.length,
         limit,
         warnings,
+        auth_mode: verifiedUser ? "verified_bearer" : (dashboardClient ? "dashboard_identity_fallback" : "query_identity"),
         identity: {
           primary_user_id: finalUserId,
           primary_email: finalEmail,
