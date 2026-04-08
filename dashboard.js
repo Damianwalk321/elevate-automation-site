@@ -6,7 +6,7 @@
   window.__ELEVATE_DASHBOARD_PHASE4_LOADER__ = true;
 
   const NS = (window.ElevateDashboard = window.ElevateDashboard || {});
-  NS.version = "phase4-loader-v4";
+  NS.version = "phase4-loader-v5";
   NS.modules = NS.modules || {};
   NS.events = NS.events || new EventTarget();
 
@@ -65,38 +65,58 @@
     };
   }
 
-  function installSummaryFallbackShim() {
-    if (window.__ELEVATE_SUMMARY_FALLBACK_SHIM__) return;
-    window.__ELEVATE_SUMMARY_FALLBACK_SHIM__ = true;
+  function installBlockingApiFallbacks() {
+    if (window.__ELEVATE_BLOCKING_API_FALLBACKS__) return;
+    window.__ELEVATE_BLOCKING_API_FALLBACKS__ = true;
 
     const originalFetch = window.fetch.bind(window);
-    const SUMMARY_TIMEOUT_MS = 3500;
+    const TIMEOUTS = {
+      "/api/get-dashboard-summary": 2500,
+      "/api/get-user-listings": 2500
+    };
 
-    function isDashboardSummaryRequest(input) {
-      const raw = typeof input === "string" ? input : (input && input.url) ? input.url : "";
-      return typeof raw === "string" && raw.includes("/api/get-dashboard-summary");
+    function getUrl(input) {
+      return typeof input === "string" ? input : (input && input.url) ? input.url : "";
     }
 
-    function buildFallbackResponse() {
-      const body = JSON.stringify({
-        success: true,
-        data: {},
-        meta: {
-          fallback: "summary_timeout"
-        }
-      });
+    function matchPath(url) {
+      return Object.keys(TIMEOUTS).find((path) => url.includes(path)) || "";
+    }
 
-      return new Response(body, {
+    function jsonResponse(payload, headers = {}) {
+      return new Response(JSON.stringify(payload), {
         status: 200,
-        headers: {
-          "Content-Type": "application/json",
-          "x-elevate-summary-fallback": "timeout"
-        }
+        headers: { "Content-Type": "application/json", ...headers }
       });
+    }
+
+    function fallbackPayloadFor(path) {
+      if (path.includes("/api/get-dashboard-summary")) {
+        return jsonResponse({
+          success: true,
+          data: {},
+          meta: { fallback: "timeout_summary" }
+        }, { "x-elevate-fallback": "summary-timeout" });
+      }
+
+      if (path.includes("/api/get-user-listings")) {
+        return jsonResponse({
+          success: true,
+          data: [],
+          meta: {
+            warnings: ["listings_timeout_fallback"],
+            sources: { user_listings: 0, listings: 0, merged: 0 }
+          }
+        }, { "x-elevate-fallback": "listings-timeout" });
+      }
+
+      return jsonResponse({ success: true, data: {} }, { "x-elevate-fallback": "generic-timeout" });
     }
 
     window.fetch = async function (input, init) {
-      if (!isDashboardSummaryRequest(input)) {
+      const url = getUrl(input);
+      const matchedPath = matchPath(url);
+      if (!matchedPath) {
         return originalFetch(input, init);
       }
 
@@ -106,37 +126,42 @@
           originalFetch(input, init),
           new Promise((resolve) => {
             timeoutId = setTimeout(() => {
-              console.warn("[Elevate Dashboard] get-dashboard-summary timed out; using fallback payload.");
-              resolve(buildFallbackResponse());
-            }, SUMMARY_TIMEOUT_MS);
+              console.warn(`[Elevate Dashboard] ${matchedPath} timed out; using fallback payload.`);
+              resolve(fallbackPayloadFor(matchedPath));
+            }, TIMEOUTS[matchedPath]);
           })
         ]);
       } catch (error) {
-        console.warn("[Elevate Dashboard] get-dashboard-summary failed; using fallback payload.", error);
-        return buildFallbackResponse();
+        console.warn(`[Elevate Dashboard] ${matchedPath} failed; using fallback payload.`, error);
+        return fallbackPayloadFor(matchedPath);
       } finally {
         if (timeoutId) clearTimeout(timeoutId);
       }
     };
   }
 
-  function installFirstPaintSafetyNet() {
-    if (window.__ELEVATE_FIRST_PAINT_SAFETY_NET__) return;
-    window.__ELEVATE_FIRST_PAINT_SAFETY_NET__ = true;
+  function installNonBlockingFirstPaint() {
+    if (window.__ELEVATE_NONBLOCKING_FIRST_PAINT__) return;
+    window.__ELEVATE_NONBLOCKING_FIRST_PAINT__ = true;
 
-    setTimeout(() => {
+    function revealOverview() {
       try {
         if (typeof window.showSection === "function") {
           window.showSection("overview");
         }
-        const status = document.getElementById("bootStatus");
-        if (status && /loading|booting/i.test(String(status.textContent || ""))) {
-          status.textContent = "Loading dashboard data in background...";
+        const boot = document.getElementById("bootStatus");
+        if (boot && /loading|booting/i.test(String(boot.textContent || ""))) {
+          boot.textContent = "Loading dashboard data in background...";
         }
+        document.body.setAttribute("data-ea-first-paint", "true");
       } catch (error) {
-        console.warn("[Elevate Dashboard] First-paint safety net warning:", error);
+        console.warn("[Elevate Dashboard] first-paint reveal warning:", error);
       }
-    }, 2500);
+    }
+
+    setTimeout(revealOverview, 1200);
+    setTimeout(revealOverview, 2400);
+    setTimeout(revealOverview, 4200);
   }
 
   function loadScriptSequentially(index = 0) {
@@ -160,8 +185,8 @@
   }
 
   installLateDOMContentLoadedCompat();
-  installSummaryFallbackShim();
-  installFirstPaintSafetyNet();
+  installBlockingApiFallbacks();
+  installNonBlockingFirstPaint();
 
   loadScriptSequentially().catch((error) => {
     console.error("[Elevate Dashboard] Phase 4 loader error:", error);
