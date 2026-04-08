@@ -7,7 +7,7 @@
   <title>Elevate Operator Console</title>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <link rel="stylesheet" href="/dashboard-ui-upgrades.css?v=20260408p1p2" />
+  <link rel="stylesheet" href="/dashboard-phase3-polish.css?v=20260408p3" />
 
   <style>
     * {
@@ -2366,6 +2366,62 @@
 </div>
 
 <script src="/js/supabase-client.js?v=20260401h"></script>
+
+<script>
+(function () {
+  function clean(value) {
+    return String(value || "").replace(/\s+/g, " ").trim().toLowerCase();
+  }
+
+  function dashboardLooksUsable() {
+    var email = document.querySelector(".user-email");
+    var emailText = clean(email ? email.textContent : "");
+    var listings = document.getElementById("recentListingsGrid");
+    var overview = document.getElementById("overview");
+    var hasUser = !!(emailText && emailText.indexOf("loading") === -1);
+    var hasListings = !!(listings && listings.children && listings.children.length > 0);
+    var overviewVisible = !!(overview && (overview.style.display === "block" || getComputedStyle(overview).display !== "none"));
+    return hasUser && (hasListings || overviewVisible);
+  }
+
+  function collapseBootTelemetry() {
+    var panel = document.getElementById("eaBootPanel");
+    var badge = document.getElementById("eaBootBadge");
+    if (!panel) return;
+    var badgeReady = badge && clean(badge.textContent) === "ready";
+    if (badgeReady || dashboardLooksUsable()) {
+      document.body.setAttribute("data-ea-ready", "true");
+      panel.classList.add("ea-boot-collapsed");
+      var detail = document.getElementById("eaBootDetail");
+      if (detail && !detail.dataset.polished) {
+        detail.dataset.polished = "true";
+        detail.textContent = "Startup complete. Debug telemetry collapsed.";
+      }
+    }
+  }
+
+  document.addEventListener("DOMContentLoaded", function () {
+    setTimeout(collapseBootTelemetry, 1200);
+    setTimeout(collapseBootTelemetry, 2600);
+    setTimeout(collapseBootTelemetry, 5000);
+
+    var observer = new MutationObserver(function () {
+      collapseBootTelemetry();
+    });
+
+    observer.observe(document.documentElement, {
+      childList: true,
+      subtree: true,
+      characterData: true,
+      attributes: true,
+      attributeFilter: ["class", "style", "data-ea-dashboard-ready"]
+    });
+
+    setTimeout(function () { observer.disconnect(); }, 15000);
+  });
+})();
+</script>
+
 <script src="/dashboard.js?v=20260401h"></script>
 </body>
 </html>
