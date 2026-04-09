@@ -4,82 +4,215 @@
   if (NS.modules?.analytics) return;
 
   const CSS = `
-    .i-analytics-shell{display:grid;gap:16px}
-    .i-analytics-card,.i-analytics-hero{border:1px solid rgba(212,175,55,.12);border-radius:16px;padding:18px;background:linear-gradient(180deg,rgba(255,255,255,.018),rgba(255,255,255,.006))}
-    .i-analytics-hero-grid{display:grid;grid-template-columns:1.4fr repeat(3,minmax(0,1fr));gap:12px}
-    .i-a-title{font-size:28px;line-height:1.05;margin:0 0 8px}.i-a-copy{color:#d6d6d6;line-height:1.55;font-size:14px}
-    .i-a-list{display:grid;gap:10px;margin-top:12px}
-    .i-a-item{display:flex;justify-content:space-between;gap:12px;align-items:flex-start;padding:14px;border-radius:14px;background:#161616;border:1px solid rgba(255,255,255,.05)}
-    .i-a-meta{color:#a9a9a9;font-size:13px;line-height:1.5}
-    .i-action-controls{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}
-    .i-mini-btn{appearance:none;border:1px solid rgba(255,255,255,.08);background:#1a1a1a;color:#f2f2f2;border-radius:10px;padding:8px 10px;cursor:pointer;font-size:12px}
-    .i-pill{display:inline-flex;align-items:center;min-height:28px;padding:0 10px;border-radius:999px;font-size:11px;font-weight:700;border:1px solid rgba(255,255,255,.08);background:#171717}
-    .i-pill.done{color:#9de8a8;border-color:rgba(157,232,168,.22)} .i-pill.in_progress{color:#f3ddb0;border-color:rgba(212,175,55,.22)}
-    .i-pill.blocked{color:#ffb4b4;border-color:rgba(255,180,180,.22)} .i-pill.snoozed{color:#c8c8ff;border-color:rgba(200,200,255,.20)}
-    .i-collapse{border:1px solid rgba(212,175,55,.10);border-radius:16px;overflow:hidden;background:#111}
-    .i-collapse-head{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:14px 16px;cursor:pointer;background:rgba(255,255,255,.02)}
-    .i-collapse-body{display:none;padding:16px;border-top:1px solid rgba(212,175,55,.08)} .i-collapse.open .i-collapse-body{display:block}
-    @media (max-width:1200px){.i-analytics-hero-grid{grid-template-columns:1fr 1fr}}
-    @media (max-width:760px){.i-analytics-hero-grid{grid-template-columns:1fr}.i-a-title{font-size:24px}}
+    .a-track-shell{display:grid;gap:16px;margin-bottom:20px}
+    .a-track-hero,.a-track-card{border:1px solid rgba(212,175,55,.12);border-radius:16px;padding:18px;background:linear-gradient(180deg,rgba(255,255,255,.018),rgba(255,255,255,.006))}
+    .a-track-hero-grid{display:grid;grid-template-columns:1.45fr repeat(3,minmax(0,1fr));gap:12px}
+    .a-track-title{font-size:28px;line-height:1.05;margin:0 0 8px}
+    .a-track-copy{color:#d6d6d6;line-height:1.55;font-size:14px}
+    .a-track-value{font-size:28px;line-height:1;font-weight:800;color:#f3ddb0;margin-bottom:8px}
+    .a-track-list{display:grid;gap:10px}
+    .a-track-item{display:flex;justify-content:space-between;gap:12px;align-items:flex-start;padding:14px;border-radius:14px;background:#161616;border:1px solid rgba(255,255,255,.05)}
+    .a-track-item strong{display:block;margin-bottom:6px}
+    .a-track-meta{color:#a9a9a9;font-size:13px;line-height:1.5}
+    .a-track-actions{display:grid;gap:10px;justify-items:end}
+    .a-pill{display:inline-flex;align-items:center;min-height:28px;padding:0 10px;border-radius:999px;font-size:11px;font-weight:700;border:1px solid rgba(255,255,255,.08);background:#171717}
+    .a-pill.revenue{color:#f3ddb0;border-color:rgba(212,175,55,.22)}
+    .a-pill.growth{color:#9de8a8;border-color:rgba(157,232,168,.22)}
+    .a-pill.cleanup{color:#cfd8ff;border-color:rgba(207,216,255,.2)}
+    .a-track-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+    .a-track-row{display:flex;justify-content:space-between;gap:12px;align-items:center;padding:12px 14px;border-radius:14px;background:#161616;border:1px solid rgba(255,255,255,.05)}
+    .a-track-row .muted{color:#a9a9a9;font-size:12px}
+    .a-track-empty{padding:18px;border-radius:16px;border:1px dashed rgba(212,175,55,.18);color:#a9a9a9;background:#111;text-align:center}
+    @media (max-width:1200px){.a-track-hero-grid,.a-track-grid{grid-template-columns:1fr 1fr}}
+    @media (max-width:760px){.a-track-hero-grid,.a-track-grid{grid-template-columns:1fr}.a-track-title{font-size:24px}}
   `;
-  function ensureStyle(){ if(document.getElementById('bundle-i-analytics-style')) return; const s=document.createElement('style'); s.id='bundle-i-analytics-style'; s.textContent=CSS; document.head.appendChild(s); }
-  function txt(id){ return String(document.getElementById(id)?.textContent || '').replace(/\s+/g,' ').trim(); }
-  function num(v){ const m=String(v||'').replace(/,/g,'').match(/-?\d+(\.\d+)?/); return m?Number(m[0]):0; }
-  function pill(status){ return `<span class="i-pill ${status || 'open'}">${(status || 'open').replace('_',' ')}</span>`; }
-  function controls(id, title, section, openSection, focusId){
-    const action = NS.workflowMemory?.getAction(id, { title, section }) || { status:'open' };
-    return `<div data-workflow-id="${id}" data-workflow-title="${title}" data-workflow-section="${section}">
-      <div style="display:grid;gap:10px;justify-items:end;">${pill(action.status)}
-        <div class="i-action-controls">
-          <button class="i-mini-btn" type="button" data-workflow-set="in_progress">Start</button>
-          <button class="i-mini-btn" type="button" data-workflow-set="done">Done</button>
-          <button class="i-mini-btn" type="button" data-workflow-set="snoozed">Snooze</button>
-          <button class="i-mini-btn" type="button" data-workflow-set="blocked">Blocked</button>
-          <button class="action-btn" type="button" data-open-section="${openSection}" data-focus-field="${focusId || ''}">Open</button>
+
+  function ensureStyle() {
+    if (document.getElementById("bundle-a-analytics-style")) return;
+    const s = document.createElement("style");
+    s.id = "bundle-a-analytics-style";
+    s.textContent = CSS;
+    document.head.appendChild(s);
+  }
+
+  function text(id) {
+    return String(document.getElementById(id)?.textContent || "").replace(/\s+/g, " ").trim();
+  }
+
+  function openSection(sectionId, focusId) {
+    try {
+      if (typeof window.showSection === "function") window.showSection(sectionId);
+    } catch {}
+    if (focusId) {
+      setTimeout(() => document.getElementById(focusId)?.scrollIntoView({ behavior: "smooth", block: "center" }), 200);
+    }
+  }
+
+  function renderLeaders(list = [], kind = "views") {
+    if (!list.length) return `<div class="a-track-empty">No ${kind} leaders tracked yet.</div>`;
+    return list.map((item, idx) => `
+      <div class="a-track-row">
+        <div>
+          <strong>${idx + 1}. ${item.title || "Untitled listing"}</strong>
+          <div class="muted">${item.price || "No price"} • ${item.health_state || "unknown"}</div>
+        </div>
+        <div style="text-align:right">
+          <div>${kind === "messages" ? Number(item.messages || 0) : Number(item.views || 0)}</div>
+          <div class="muted">${kind === "messages" ? "messages" : "views"}</div>
         </div>
       </div>
-    </div>`;
+    `).join("");
   }
-  function buildActions(){
-    const weak=num(txt('kpiWeakListings'));
-    const needs=num(txt('kpiNeedsAction'));
-    const capacity=num(txt('kpiPostsRemaining'));
-    const views=num(txt('kpiViews'));
-    const messages=num(txt('kpiMessages'));
-    const actions=[];
-    if(needs>0) actions.push({id:'analytics.resolve_intervention', title:`Resolve ${needs} intervention item${needs===1?'':'s'}`, copy:'Close the highest-risk listing items first to keep your pipeline clean.', section:'tools', focus:'listingSearchInput'});
-    if(weak>0) actions.push({id:'analytics.rescue_weak', title:`Rescue ${weak} weak performer${weak===1?'':'s'}`, copy:'Review price, copy, and media on listings that are losing leverage.', section:'tools', focus:'listingSearchInput'});
-    if(views>0 && messages===0) actions.push({id:'analytics.review_conversion', title:'Review conversion gap', copy:'Traction exists, but messages are weak. Adjust CTA, pricing, or positioning.', section:'overview', focus:'listingSearchInput'});
-    if(capacity>0) actions.push({id:'analytics.use_capacity', title:`Use ${capacity} remaining post slot${capacity===1?'':'s'}`, copy:'Unused daily capacity is still idle leverage.', section:'extension', focus:null});
-    if(!actions.length) actions.push({id:'analytics.push_output', title:'System stable — push output', copy:'Analytics is quiet. Use queue and live posting rhythm to keep compounding.', section:'extension', focus:null});
-    return actions.slice(0,5);
-  }
-  function render(){
-    const section=document.getElementById('tools'); if(!section || !NS.workflowMemory) return; ensureStyle();
-    let shell=document.getElementById('bundleIAnalyticsShell'); if(!shell){ shell=document.createElement('div'); shell.id='bundleIAnalyticsShell'; shell.className='i-analytics-shell'; section.prepend(shell); }
-    const actions=buildActions();
-    let hero=document.getElementById('bundleIAnalyticsHero'); if(!hero){ hero=document.createElement('div'); hero.id='bundleIAnalyticsHero'; hero.className='i-analytics-hero'; shell.appendChild(hero); }
-    hero.innerHTML=`<div class="i-analytics-hero-grid"><div class="i-analytics-card"><div class="g-eyebrow">Completion Loop</div><h2 class="i-a-title">Analytics actions now persist and build a real execution record.</h2><div class="i-a-copy">Use workflow statuses on listing actions so rescue, review, and capacity tasks survive refresh and return with context.</div></div><div class="i-analytics-card"><div class="stat-label">Weak Listings</div><div class="stat-value" style="font-size:24px">${txt('kpiWeakListings') || '0'}</div><div class="stat-sub">Listings that need intervention.</div></div><div class="i-analytics-card"><div class="stat-label">Needs Action</div><div class="stat-value" style="font-size:24px">${txt('kpiNeedsAction') || '0'}</div><div class="stat-sub">Current pressure already in the system.</div></div><div class="i-analytics-card"><div class="stat-label">Remaining Capacity</div><div class="stat-value" style="font-size:24px">${txt('kpiPostsRemaining') || '0'}</div><div class="stat-sub">Still available to deploy today.</div></div></div>`;
-    let queue=document.getElementById('bundleIAnalyticsQueue'); if(!queue){ queue=document.createElement('div'); queue.id='bundleIAnalyticsQueue'; queue.className='i-analytics-card'; shell.appendChild(queue); }
-    queue.innerHTML=`<div class="section-head"><div><div class="g-eyebrow">Listing Workflow Queue</div><h2 style="margin-top:6px;">Persistent listing actions</h2><div class="subtext">Mark listing work in progress, complete it, snooze it, or block it with state that survives return visits.</div></div></div><div class="i-a-list">${actions.map(item=>`<div class="i-a-item"><div><strong>${item.title}</strong><div class="i-a-meta">${item.copy}</div></div>${controls(item.id,item.title,item.section,item.section,item.focus)}</div>`).join('')}</div>`;
-    NS.workflowMemory.wireButtons(queue);
-    queue.querySelectorAll('[data-open-section]').forEach(btn=>{
-      if(btn.dataset.boundI==='true') return; btn.dataset.boundI='true';
-      btn.addEventListener('click',()=>{
-        const sectionId=btn.getAttribute('data-open-section'); const focusId=btn.getAttribute('data-focus-field');
-        if(typeof window.showSection==='function') window.showSection(sectionId);
-        if(focusId) setTimeout(()=>document.getElementById(focusId)?.scrollIntoView({behavior:'smooth', block:'center'}),220);
+
+  function render() {
+    const section = document.getElementById("tools");
+    if (!section || !NS.state?.get) return;
+    ensureStyle();
+
+    const analytics = NS.state.get("analytics", {});
+    const summary = analytics.tracking_summary || {};
+    const leaders = analytics.leaders || {};
+    const actionQueue = Array.isArray(analytics.action_queue) ? analytics.action_queue : [];
+
+    let shell = document.getElementById("bundleATrackingShell");
+    if (!shell) {
+      shell = document.createElement("div");
+      shell.id = "bundleATrackingShell";
+      shell.className = "a-track-shell";
+      section.prepend(shell);
+    }
+
+    let hero = document.getElementById("bundleATrackingHero");
+    if (!hero) {
+      hero = document.createElement("div");
+      hero.id = "bundleATrackingHero";
+      hero.className = "a-track-hero";
+      shell.appendChild(hero);
+    }
+
+    hero.innerHTML = `
+      <div class="a-track-hero-grid">
+        <div class="a-track-card">
+          <div class="g-eyebrow">Tracking Foundation</div>
+          <h2 class="a-track-title">Analytics now starts from listing-level view and message truth.</h2>
+          <div class="a-track-copy">This bundle creates the foundation for real listing intelligence: tracked views, tracked messages, listing registry groundwork, and action-led analytics based on those signals.</div>
+        </div>
+        <div class="a-track-card">
+          <div class="stat-label">Tracked Listings</div>
+          <div class="a-track-value">${summary.total_listings || 0}</div>
+          <div class="stat-sub">Listings currently represented in the local registry.</div>
+        </div>
+        <div class="a-track-card">
+          <div class="stat-label">Tracked Views</div>
+          <div class="a-track-value">${summary.tracked_views || 0}</div>
+          <div class="stat-sub">Current visible view signal in tracked listings.</div>
+        </div>
+        <div class="a-track-card">
+          <div class="stat-label">Tracked Messages</div>
+          <div class="a-track-value">${summary.tracked_messages || 0}</div>
+          <div class="stat-sub">Current visible message signal in tracked listings.</div>
+        </div>
+      </div>
+    `;
+
+    let actionCard = document.getElementById("bundleATrackingQueue");
+    if (!actionCard) {
+      actionCard = document.createElement("div");
+      actionCard.id = "bundleATrackingQueue";
+      actionCard.className = "a-track-card";
+      shell.appendChild(actionCard);
+    }
+
+    actionCard.innerHTML = `
+      <div class="section-head">
+        <div>
+          <div class="g-eyebrow">Analytics Reform V1</div>
+          <h2 style="margin-top:6px;">Action queue from tracked signals</h2>
+          <div class="subtext">This queue is now based on tracked listing patterns like traction without conversion, weak conversion, and message leaders.</div>
+        </div>
+      </div>
+      <div class="a-track-list">
+        ${actionQueue.length ? actionQueue.map((item, idx) => `
+          <div class="a-track-item">
+            <div>
+              <strong>${idx + 1}. ${item.title}</strong>
+              <div class="a-track-meta">${item.copy}</div>
+            </div>
+            <div class="a-track-actions">
+              <span class="a-pill ${item.tone || "growth"}">${item.tone || "growth"}</span>
+              <button class="action-btn" type="button" data-a-track-open="${item.section || "tools"}" data-a-track-focus="${item.focus || ""}">Open</button>
+            </div>
+          </div>
+        `).join("") : `<div class="a-track-empty">Action queue will populate as tracked signals grow.</div>`}
+      </div>
+    `;
+
+    actionCard.querySelectorAll("[data-a-track-open]").forEach((button) => {
+      if (button.dataset.boundA === "true") return;
+      button.dataset.boundA = "true";
+      button.addEventListener("click", () => {
+        openSection(button.getAttribute("data-a-track-open"), button.getAttribute("data-a-track-focus"));
       });
     });
 
-    const lower=Array.from(section.children).filter(el=>el!==shell && !shell.contains(el));
-    let collapse=document.getElementById('bundleIAnalyticsSecondary');
-    if(!collapse){ collapse=document.createElement('div'); collapse.id='bundleIAnalyticsSecondary'; collapse.className='i-collapse'; collapse.innerHTML=`<div class="i-collapse-head"><div><div class="g-eyebrow">Quiet Mode</div><strong>Charts, scorecards, and supporting diagnostics</strong></div><div class="subtext" id="bundleIAnalyticsState">Expand</div></div><div class="i-collapse-body"></div>`; shell.appendChild(collapse); collapse.querySelector('.i-collapse-head').addEventListener('click',()=>{ collapse.classList.toggle('open'); const t=collapse.querySelector('#bundleIAnalyticsState'); if(t) t.textContent=collapse.classList.contains('open')?'Collapse':'Expand';}); }
-    const body=collapse.querySelector('.i-collapse-body'); lower.forEach(el=>{ if(body && !body.contains(el)) body.appendChild(el); });
+    let leadersCard = document.getElementById("bundleATrackingLeaders");
+    if (!leadersCard) {
+      leadersCard = document.createElement("div");
+      leadersCard.id = "bundleATrackingLeaders";
+      leadersCard.className = "a-track-grid";
+      shell.appendChild(leadersCard);
+    }
+
+    leadersCard.innerHTML = `
+      <div class="a-track-card">
+        <div class="section-head">
+          <div>
+            <div class="g-eyebrow">Message Leaders</div>
+            <h2 style="margin-top:6px;">Listings with strongest reply signal</h2>
+          </div>
+        </div>
+        <div class="a-track-list">${renderLeaders(leaders.message_leaders || [], "messages")}</div>
+      </div>
+      <div class="a-track-card">
+        <div class="section-head">
+          <div>
+            <div class="g-eyebrow">View Leaders</div>
+            <h2 style="margin-top:6px;">Listings with strongest reach signal</h2>
+          </div>
+        </div>
+        <div class="a-track-list">${renderLeaders(leaders.view_leaders || [], "views")}</div>
+      </div>
+    `;
   }
-  NS.analytics={ renderBundleI: render };
-  NS.modules = NS.modules || {}; NS.modules.analytics = true;
-  const boot=()=>{ render(); setTimeout(render,1200); setTimeout(render,3200); };
-  window.addEventListener('elevate:workflow-updated', ()=>render());
-  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded', boot, {once:true}); else boot();
+
+  NS.analytics = {
+    renderBundleA: render
+  };
+
+  NS.modules = NS.modules || {};
+  NS.modules.analytics = true;
+
+  const boot = () => {
+    render();
+    setTimeout(render, 1200);
+    setTimeout(render, 3200);
+  };
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", boot, { once: true });
+  } else {
+    boot();
+  }
+
+  if (NS.events && !NS.__bundleATrackingStateListener) {
+    NS.__bundleATrackingStateListener = true;
+    NS.events.addEventListener("state:set", (event) => {
+      const path = String(event?.detail?.path || "");
+      if (path.startsWith("analytics") || path.startsWith("listingRegistry")) {
+        render();
+      }
+    });
+  }
+
+  window.addEventListener("elevate:tracking-refreshed", render);
 })();
