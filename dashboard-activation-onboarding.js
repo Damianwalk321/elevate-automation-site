@@ -40,7 +40,6 @@
 
   function buildState() {
     const setupPercent = parsePercent(text('commandSetupProgress') || text('setupReadinessPercent') || text('commandSetupChip'));
-    const postsRemaining = text('kpiPostsRemaining') || text('snapshotPostsRemaining') || '0';
     const credits = text('kpiCreditsBalance') || text('commandCreditsBalance') || '0';
     const queue = text('kpiQueuedVehicles') || '0';
 
@@ -64,16 +63,7 @@
       !checks[5].ok ? { label: 'Refresh account access', section: 'extension', focus: null } :
       { label: 'Post your first vehicle', section: 'extension', focus: null };
 
-    return {
-      setupPercent,
-      postsRemaining,
-      credits,
-      queue,
-      checks,
-      completeCount,
-      firstPostReady,
-      nextAction
-    };
+    return { setupPercent, credits, queue, checks, completeCount, firstPostReady, nextAction };
   }
 
   function render() {
