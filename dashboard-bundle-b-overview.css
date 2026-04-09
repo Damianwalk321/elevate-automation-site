@@ -1,0 +1,217 @@
+/* Bundle B — Overview Cleanup + Activation Promotion */
+
+:root{
+  --bundleb-line: rgba(212,175,55,0.14);
+  --bundleb-line-strong: rgba(212,175,55,0.24);
+  --bundleb-soft: rgba(255,255,255,0.03);
+}
+
+#bootStatus{
+  min-height: 14px !important;
+  font-size: 11px !important;
+  opacity: .74 !important;
+}
+
+#overview .command-center-grid{
+  margin-bottom: 12px !important;
+  gap: 14px !important;
+}
+
+#overview .command-primary{
+  padding: 20px !important;
+}
+
+#overview .command-title-row{
+  margin-bottom: 12px !important;
+}
+
+#overview .command-title-row h2{
+  font-size: 28px !important;
+  max-width: 620px !important;
+}
+
+#overview .command-meta-grid{
+  gap: 10px !important;
+  margin-bottom: 12px !important;
+}
+
+#overview .command-meta-card{
+  padding: 12px !important;
+}
+
+#overview .command-meta-value{
+  font-size: 22px !important;
+}
+
+#overview .overview-action-list{
+  gap: 8px !important;
+  margin-bottom: 10px !important;
+}
+
+#overview .overview-action-item{
+  padding: 10px 12px !important;
+}
+
+#overview .command-side-card{
+  padding: 18px !important;
+}
+
+#overview .command-side-card h2{
+  font-size: 20px !important;
+}
+
+#overview .spotlight-balance{
+  font-size: 34px !important;
+}
+
+#overview .credits-activity-preview{
+  min-height: 56px !important;
+  padding: 12px !important;
+}
+
+#overview .activation-shell{
+  order: 1;
+  margin: 0 0 14px !important;
+}
+
+#overview .activation-grid:first-child .activation-card:first-child{
+  border-color: rgba(212,175,55,0.24);
+  background:
+    radial-gradient(circle at top right, rgba(212,175,55,0.12), transparent 24%),
+    linear-gradient(180deg, rgba(255,255,255,0.024), rgba(255,255,255,0.010)),
+    var(--panel);
+}
+
+#overview .activation-grid:first-child .activation-card:first-child .activation-title-row h2{
+  font-size: 26px;
+}
+
+#overview .activation-grid:first-child .activation-card:first-child::after{
+  content: "Start Here";
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 28px;
+  padding: 0 10px;
+  border-radius: 999px;
+  background: rgba(212,175,55,0.12);
+  border: 1px solid rgba(212,175,55,0.18);
+  color: var(--gold-soft);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  position: absolute;
+  top: 16px;
+  right: 16px;
+}
+
+#overview .activation-grid:first-child .activation-card:first-child{
+  position: relative;
+}
+
+#overview .activation-grid:last-child{
+  grid-template-columns: minmax(0,1fr) !important;
+}
+
+#overview .activation-help-grid{
+  grid-template-columns: repeat(3,minmax(0,1fr));
+}
+
+#overview .operator-strip{
+  margin-bottom: 12px !important;
+  gap: 10px !important;
+}
+
+#overview .mini-stat{
+  min-height: 100px !important;
+  padding: 14px !important;
+}
+
+#overview .mini-stat .stat-value{
+  font-size: 21px !important;
+}
+
+#overview .mini-stat .stat-sub{
+  font-size: 11px !important;
+  line-height: 1.35 !important;
+}
+
+#overview #overviewListingsCard{
+  border-color: rgba(212,175,55,0.20) !important;
+}
+
+#overview #overviewListingsCard .section-head{
+  margin-bottom: 10px !important;
+}
+
+#overview .listing-grid{
+  gap: 12px !important;
+}
+
+#overview .listing-card{
+  border-radius: 14px !important;
+}
+
+#overview .listing-media{
+  height: 156px !important;
+}
+
+#overview .listing-content{
+  padding: 12px !important;
+  gap: 8px !important;
+}
+
+#overview .listing-title{
+  font-size: 16px !important;
+}
+
+#overview .listing-price{
+  font-size: 21px !important;
+}
+
+#overview .listing-specs,
+#overview .listing-metrics{
+  gap: 8px !important;
+}
+
+#overview .spec-chip,
+#overview .metric-pill{
+  padding: 8px !important;
+  border-radius: 10px !important;
+}
+
+#overview .listing-actions{
+  gap: 8px !important;
+}
+
+#overview .listing-actions .action-btn{
+  padding: 10px 10px !important;
+  font-size: 11px !important;
+}
+
+#overview #overviewPriorityGrid,
+#overview #overviewPerformanceGrid,
+#overview #overviewAccountGrid,
+#overview #overviewUpgradeCard{
+  margin-top: 0 !important;
+}
+
+#overview #overviewUpgradeCard{
+  opacity: .92;
+}
+
+#overview #overviewUpgradeCard .subtext,
+#overview #overviewUpgradePanel{
+  color: #d6d6d6 !important;
+}
+
+#overview .card .subtext{
+  color: #b8b8b8;
+}
+
+@media (max-width: 1180px){
+  #overview .activation-help-grid{
+    grid-template-columns: 1fr;
+  }
+}
