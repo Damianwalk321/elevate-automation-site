@@ -7,7 +7,7 @@
     NS.events = new EventTarget();
   }
 
-  const STORAGE_KEY = "elevate.dashboard.state.v2";
+  const STORAGE_KEY = "elevate.dashboard.state.v3";
 
   function clone(value) {
     try { return JSON.parse(JSON.stringify(value)); } catch { return value; }
@@ -23,6 +23,7 @@
       listings: [],
       filteredListings: [],
       listingRegistry: {},
+      listingEvents: [],
       analytics: {
         tracking_summary: {},
         action_queue: [],
@@ -34,11 +35,13 @@
           weak_conversion: [],
           fresh_traction: [],
           needs_refresh: [],
-          price_attention: []
+          price_attention: [],
+          cooling_off: [],
+          recovered: []
         }
       },
       tracking: {
-        source: "bundle_b_registry",
+        source: "bundle_c_events",
         last_rebuild_at: null
       },
       ui: {
@@ -67,7 +70,8 @@
           }
         },
         tracking: { ...base.tracking, ...(parsed.tracking || {}) },
-        listingRegistry: parsed.listingRegistry || {}
+        listingRegistry: parsed.listingRegistry || {},
+        listingEvents: Array.isArray(parsed.listingEvents) ? parsed.listingEvents : []
       };
     } catch {
       return base;
@@ -124,6 +128,25 @@
     return [title, price, image].filter(Boolean).join("|") || `listing_${Date.now()}`;
   }
 
+  function appendListingEvent(event = {}, options = {}) {
+    const events = Array.isArray(get("listingEvents", [])) ? get("listingEvents", []) : [];
+    const next = {
+      id: event.id || `evt_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+      listing_id: event.listing_id || "",
+      type: event.type || "listing_updated",
+      timestamp: event.timestamp || new Date().toISOString(),
+      meta: clone(event.meta || {})
+    };
+    events.push(next);
+    while (events.length > 500) events.shift();
+    set("listingEvents", events, options);
+    return next;
+  }
+
+  function getListingEvents(listingId) {
+    return (get("listingEvents", []) || []).filter((evt) => evt.listing_id === listingId);
+  }
+
   function upsertListing(item = {}, options = {}) {
     const registry = get("listingRegistry", {});
     const id = canonicalListingId(item);
@@ -134,7 +157,8 @@
     const messages = Number(item.messages ?? existing.messages ?? 0);
     const previousViews = Number(existing.views || 0);
     const previousMessages = Number(existing.messages || 0);
-    const previousPrice = String(existing.price || "");
+    const previousPrice = String(existing.current_price || existing.price || "");
+    const incomingPrice = String(item.price || existing.current_price || existing.price || "");
 
     const next = {
       ...existing,
@@ -146,14 +170,47 @@
       last_seen_at: item.last_seen_at || now,
       last_view_at: views > previousViews ? now : (existing.last_view_at || null),
       last_message_at: messages > previousMessages ? now : (existing.last_message_at || null),
-      previous_price: previousPrice && previousPrice !== String(item.price || previousPrice) ? previousPrice : (existing.previous_price || ""),
-      current_price: String(item.price || existing.current_price || existing.price || ""),
+      previous_price: previousPrice && previousPrice !== incomingPrice ? previousPrice : (existing.previous_price || ""),
+      current_price: incomingPrice,
+      status: item.status || existing.status || "active",
       updated_at: now
     };
 
     registry[id] = next;
     set("listingRegistry", registry, { silent: options.silent, skipPersist: options.skipPersist });
+
+    if (!options.skipEvents) {
+      if (!existing.id) {
+        appendListingEvent({ listing_id: id, type: "listing_seen", meta: { title: next.title || "" } }, { silent: true });
+      }
+      if (views > previousViews) {
+        appendListingEvent({ listing_id: id, type: "view_update", meta: { from: previousViews, to: views, delta: views - previousViews } }, { silent: true });
+      }
+      if (messages > previousMessages) {
+        appendListingEvent({ listing_id: id, type: "message_update", meta: { from: previousMessages, to: messages, delta: messages - previousMessages } }, { silent: true });
+      }
+      if (previousPrice && incomingPrice && previousPrice !== incomingPrice) {
+        appendListingEvent({ listing_id: id, type: "price_changed", meta: { from: previousPrice, to: incomingPrice } }, { silent: true });
+      }
+    }
+
+    if (!options.skipPersist) persist();
     return next;
+  }
+
+  function markMissingListingsRemoved(currentIds = [], options = {}) {
+    const registry = get("listingRegistry", {});
+    const now = new Date().toISOString();
+    Object.values(registry).forEach((item) => {
+      if (item && item.id && !currentIds.includes(item.id) && String(item.status || "").toLowerCase() !== "removed") {
+        registry[item.id] = { ...item, status: "removed", removed_at: now, updated_at: now };
+        if (!options.skipEvents) {
+          appendListingEvent({ listing_id: item.id, type: "listing_removed", meta: { title: item.title || "" } }, { silent: true });
+        }
+      }
+    });
+    set("listingRegistry", registry, { silent: true, skipPersist: options.skipPersist });
+    return registry;
   }
 
   function rebuildFilteredListings() {
@@ -175,7 +232,9 @@
         weak_conversion: payload.leaders?.weak_conversion || [],
         fresh_traction: payload.leaders?.fresh_traction || [],
         needs_refresh: payload.leaders?.needs_refresh || [],
-        price_attention: payload.leaders?.price_attention || []
+        price_attention: payload.leaders?.price_attention || [],
+        cooling_off: payload.leaders?.cooling_off || [],
+        recovered: payload.leaders?.recovered || []
       }
     };
     set("analytics", next, options);
@@ -189,9 +248,12 @@
     merge,
     persist,
     upsertListing,
+    markMissingListingsRemoved,
     rebuildFilteredListings,
     setAnalytics,
-    canonicalListingId
+    canonicalListingId,
+    appendListingEvent,
+    getListingEvents
   };
 
   NS.modules = NS.modules || {};
