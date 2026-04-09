@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -9,6 +8,7 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <link rel="stylesheet" href="/dashboard-activation-onboarding.css?v=20260409bA" />
   <link rel="stylesheet" href="/dashboard-bundle-b-overview.css?v=20260409bB" />
+  <link rel="stylesheet" href="/dashboard-bundle-c-overview.css?v=20260409cC" />
 
   <style>
     * {
@@ -919,7 +919,6 @@
       pointer-events: none;
     }
 
-
     .command-center-grid {
       display: grid;
       grid-template-columns: minmax(0, 1.85fr) minmax(320px, 0.95fr);
@@ -1141,7 +1140,6 @@
       color: var(--gold-soft);
     }
 
-
     @media (max-width: 1480px) {
       .command-center-grid {
         grid-template-columns: 1fr;
@@ -1256,269 +1254,267 @@
     .action-center-item-copy{font-size:13px;color:var(--text);line-height:1.55}
     .action-center-item-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
 
-  .section-collapsible{margin-top:14px}
-  .modal-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.72);display:none;align-items:center;justify-content:center;padding:20px;z-index:1200}
-  .modal-backdrop.open{display:flex}
-  .modal-card{width:min(760px,100%);background:var(--panel);border:1px solid var(--line);border-radius:20px;padding:22px;box-shadow:0 30px 60px rgba(0,0,0,.45)}
-  .modal-head{display:flex;justify-content:space-between;gap:16px;align-items:flex-start;margin-bottom:14px}
-  .modal-copy{white-space:pre-wrap;line-height:1.65;background:var(--panel-2);border:1px solid var(--line);border-radius:16px;padding:16px;max-height:52vh;overflow:auto}
-  .module-toolbar{display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:16px}
-  .module-group-label{font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--accent)}
+    .section-collapsible{margin-top:14px}
+    .modal-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.72);display:none;align-items:center;justify-content:center;padding:20px;z-index:1200}
+    .modal-backdrop.open{display:flex}
+    .modal-card{width:min(760px,100%);background:var(--panel);border:1px solid var(--line);border-radius:20px;padding:22px;box-shadow:0 30px 60px rgba(0,0,0,.45)}
+    .modal-head{display:flex;justify-content:space-between;gap:16px;align-items:flex-start;margin-bottom:14px}
+    .modal-copy{white-space:pre-wrap;line-height:1.65;background:var(--panel-2);border:1px solid var(--line);border-radius:16px;padding:16px;max-height:52vh;overflow:auto}
+    .module-toolbar{display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:16px}
+    .module-group-label{display:flex;font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--accent)}
 
-/* Phase 3 streamline layer */
-:root {
-  --accent: #d4af37;
-  --panel-soft: #141414;
-  --panel-deep: #101010;
-  --text-soft: #d6d6d6;
-}
+    :root {
+      --accent: #d4af37;
+      --panel-soft: #141414;
+      --panel-deep: #101010;
+      --text-soft: #d6d6d6;
+    }
 
-.main-header {
-  gap: 8px;
-  margin-bottom: 20px;
-}
-.main-header h1 {
-  font-size: 28px;
-}
-#bootStatus {
-  min-height: 16px;
-  font-size: 12px;
-  opacity: 0.85;
-}
+    .main-header {
+      gap: 8px;
+      margin-bottom: 20px;
+    }
+    .main-header h1 {
+      font-size: 28px;
+    }
+    #bootStatus {
+      min-height: 16px;
+      font-size: 12px;
+      opacity: 0.85;
+    }
 
-#overview .command-center-grid {
-  grid-template-columns: minmax(0, 1.95fr) minmax(280px, 0.85fr);
-  gap: 16px;
-  margin-bottom: 16px;
-}
-#overview .command-primary,
-#overview .command-side-card,
-#overview .mini-stat,
-#overview .card {
-  border-radius: 16px;
-}
-#overview .command-primary {
-  padding: 24px;
-}
-#overview .command-title-row h2 {
-  font-size: 30px;
-  max-width: 680px;
-}
-#overview .command-meta-grid {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 12px;
-}
-#overview .command-meta-card {
-  padding: 14px;
-}
-#overview .command-meta-value {
-  font-size: 24px;
-}
-#overview .command-side-stack {
-  gap: 16px;
-}
-#overview .overview-action-grid {
-  gap: 10px;
-}
-#overview .overview-action-list {
-  gap: 8px;
-}
-#overview .overview-action-item {
-  padding: 12px 14px;
-  border-radius: 12px;
-}
+    #overview .command-center-grid {
+      grid-template-columns: minmax(0, 1.95fr) minmax(280px, 0.85fr);
+      gap: 16px;
+      margin-bottom: 16px;
+    }
+    #overview .command-primary,
+    #overview .command-side-card,
+    #overview .mini-stat,
+    #overview .card {
+      border-radius: 16px;
+    }
+    #overview .command-primary {
+      padding: 24px;
+    }
+    #overview .command-title-row h2 {
+      font-size: 30px;
+      max-width: 680px;
+    }
+    #overview .command-meta-grid {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 12px;
+    }
+    #overview .command-meta-card {
+      padding: 14px;
+    }
+    #overview .command-meta-value {
+      font-size: 24px;
+    }
+    #overview .command-side-stack {
+      gap: 16px;
+    }
+    #overview .overview-action-grid {
+      gap: 10px;
+    }
+    #overview .overview-action-list {
+      gap: 8px;
+    }
+    #overview .overview-action-item {
+      padding: 12px 14px;
+      border-radius: 12px;
+    }
 
-#overview .operator-strip {
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 12px;
-  margin-bottom: 16px;
-}
-#overview .mini-stat {
-  min-height: 118px;
-  padding: 16px;
-}
-#overview .mini-stat .stat-value {
-  font-size: 24px;
-}
-#overview .mini-stat .stat-sub {
-  font-size: 12px;
-}
+    #overview .operator-strip {
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+    #overview .mini-stat {
+      min-height: 118px;
+      padding: 16px;
+    }
+    #overview .mini-stat .stat-value {
+      font-size: 24px;
+    }
+    #overview .mini-stat .stat-sub {
+      font-size: 12px;
+    }
 
-.phase3-overview-shell {
-  display: grid;
-  gap: 16px;
-}
+    .phase3-overview-shell {
+      display: grid;
+      gap: 16px;
+    }
 
-.phase3-overview-group {
-  display: grid;
-  gap: 16px;
-}
+    .phase3-overview-group {
+      display: grid;
+      gap: 16px;
+    }
 
-.phase3-overview-group[data-group="secondary"] .card {
-  background: linear-gradient(180deg, rgba(255,255,255,0.018), rgba(255,255,255,0.006));
-}
+    .phase3-overview-group[data-group="secondary"] .card {
+      background: linear-gradient(180deg, rgba(255,255,255,0.018), rgba(255,255,255,0.006));
+    }
 
-.phase3-toolbar {
-  display: flex;
-  gap: 10px;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 8px;
-}
-.phase3-segment {
-  display: inline-flex;
-  gap: 8px;
-  background: #111;
-  border: 1px solid rgba(212,175,55,0.12);
-  border-radius: 999px;
-  padding: 6px;
-}
-.phase3-segment button {
-  appearance: none;
-  border: none;
-  background: transparent;
-  color: #d8d8d8;
-  padding: 10px 14px;
-  border-radius: 999px;
-  cursor: pointer;
-  font-weight: 700;
-  font-size: 13px;
-}
-.phase3-segment button.active {
-  background: rgba(212,175,55,0.15);
-  color: var(--gold-soft);
-}
+    .phase3-toolbar {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 8px;
+    }
+    .phase3-segment {
+      display: inline-flex;
+      gap: 8px;
+      background: #111;
+      border: 1px solid rgba(212,175,55,0.12);
+      border-radius: 999px;
+      padding: 6px;
+    }
+    .phase3-segment button {
+      appearance: none;
+      border: none;
+      background: transparent;
+      color: #d8d8d8;
+      padding: 10px 14px;
+      border-radius: 999px;
+      cursor: pointer;
+      font-weight: 700;
+      font-size: 13px;
+    }
+    .phase3-segment button.active {
+      background: rgba(212,175,55,0.15);
+      color: var(--gold-soft);
+    }
 
-.phase3-quiet {
-  opacity: 0.96;
-}
-.phase3-muted-block .section-head h2,
-.phase3-muted-block h2 {
-  font-size: 20px;
-}
-.phase3-muted-block .subtext,
-.phase3-muted-block .list-block,
-.phase3-muted-block .status-line {
-  color: var(--text-soft);
-}
+    .phase3-quiet {
+      opacity: 0.96;
+    }
+    .phase3-muted-block .section-head h2,
+    .phase3-muted-block h2 {
+      font-size: 20px;
+    }
+    .phase3-muted-block .subtext,
+    .phase3-muted-block .list-block,
+    .phase3-muted-block .status-line {
+      color: var(--text-soft);
+    }
 
-.phase3-collapse {
-  border: 1px solid rgba(212,175,55,0.10);
-  border-radius: 16px;
-  overflow: hidden;
-  background: #111;
-}
-.phase3-collapse-head {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 12px;
-  padding: 14px 16px;
-  cursor: pointer;
-  background: rgba(255,255,255,0.02);
-}
-.phase3-collapse-head strong {
-  font-size: 14px;
-  letter-spacing: 0.02em;
-}
-.phase3-collapse-body {
-  display: none;
-  padding: 16px;
-  border-top: 1px solid rgba(212,175,55,0.08);
-}
-.phase3-collapse.open .phase3-collapse-body {
-  display: block;
-}
+    .phase3-collapse {
+      border: 1px solid rgba(212,175,55,0.10);
+      border-radius: 16px;
+      overflow: hidden;
+      background: #111;
+    }
+    .phase3-collapse-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      padding: 14px 16px;
+      cursor: pointer;
+      background: rgba(255,255,255,0.02);
+    }
+    .phase3-collapse-head strong {
+      font-size: 14px;
+      letter-spacing: 0.02em;
+    }
+    .phase3-collapse-body {
+      display: none;
+      padding: 16px;
+      border-top: 1px solid rgba(212,175,55,0.08);
+    }
+    .phase3-collapse.open .phase3-collapse-body {
+      display: block;
+    }
 
-.phase3-listings-shell {
-  display: grid;
-  gap: 14px;
-}
-.phase3-listings-head {
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
-  align-items: center;
-  flex-wrap: wrap;
-}
-.phase3-listings-head .subtext {
-  max-width: 700px;
-}
-#overview #recentListingsGrid {
-  gap: 14px;
-}
-#overview .listing-card {
-  border-radius: 16px;
-}
-#overview .listing-media {
-  height: 170px;
-}
-#overview .listing-content {
-  gap: 10px;
-  padding: 14px;
-}
-#overview .listing-title {
-  font-size: 17px;
-}
-#overview .listing-price {
-  font-size: 22px;
-}
-#overview .listing-actions {
-  gap: 8px;
-}
-#overview .listing-actions .action-btn {
-  padding: 12px 12px;
-  font-size: 13px;
-}
+    .phase3-listings-shell {
+      display: grid;
+      gap: 14px;
+    }
+    .phase3-listings-head {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+    .phase3-listings-head .subtext {
+      max-width: 700px;
+    }
+    #overview #recentListingsGrid {
+      gap: 14px;
+    }
+    #overview .listing-card {
+      border-radius: 16px;
+    }
+    #overview .listing-media {
+      height: 170px;
+    }
+    #overview .listing-content {
+      gap: 10px;
+      padding: 14px;
+    }
+    #overview .listing-title {
+      font-size: 17px;
+    }
+    #overview .listing-price {
+      font-size: 22px;
+    }
+    #overview .listing-actions {
+      gap: 8px;
+    }
+    #overview .listing-actions .action-btn {
+      padding: 12px 12px;
+      font-size: 13px;
+    }
 
-.phase3-secondary-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 16px;
-}
+    .phase3-secondary-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 16px;
+    }
 
-.phase3-section-tag {
-  display: inline-flex;
-  align-items: center;
-  padding: 6px 10px;
-  border-radius: 999px;
-  background: rgba(212,175,55,0.10);
-  border: 1px solid rgba(212,175,55,0.16);
-  color: var(--gold-soft);
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
+    .phase3-section-tag {
+      display: inline-flex;
+      align-items: center;
+      padding: 6px 10px;
+      border-radius: 999px;
+      background: rgba(212,175,55,0.10);
+      border: 1px solid rgba(212,175,55,0.16);
+      color: var(--gold-soft);
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
 
-.phase3-hidden {
-  display: none !important;
-}
+    .phase3-hidden {
+      display: none !important;
+    }
 
-@media (max-width: 1280px) {
-  #overview .command-center-grid {
-    grid-template-columns: 1fr;
-  }
-  #overview .operator-strip {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-  .phase3-secondary-grid {
-    grid-template-columns: 1fr;
-  }
-}
+    @media (max-width: 1280px) {
+      #overview .command-center-grid {
+        grid-template-columns: 1fr;
+      }
+      #overview .operator-strip {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+      .phase3-secondary-grid {
+        grid-template-columns: 1fr;
+      }
+    }
 
-@media (max-width: 760px) {
-  #overview .operator-strip {
-    grid-template-columns: 1fr;
-  }
-  .phase3-toolbar {
-    flex-direction: column;
-    align-items: stretch;
-  }
-}
-
-</style>
+    @media (max-width: 760px) {
+      #overview .operator-strip {
+        grid-template-columns: 1fr;
+      }
+      .phase3-toolbar {
+        flex-direction: column;
+        align-items: stretch;
+      }
+    }
+  </style>
 </head>
 <body>
   <div class="app-shell">
@@ -1560,9 +1556,7 @@
         <div id="welcomeText" class="subtext">Loading operator console...</div>
       </div>
 
-      <!-- OVERVIEW -->
-
-<section id="overview" class="dashboard-section">
+      <section id="overview" class="dashboard-section">
         <div class="command-center-grid">
           <div class="card command-primary">
             <div class="command-panel-eyebrow">Command Center</div>
@@ -1689,7 +1683,8 @@
             <div class="stat-sub">Current reward balance</div>
           </div>
         </div>
-<div id="overviewPriorityGrid" class="grid-2" style="margin-bottom:20px;">
+
+        <div id="overviewPriorityGrid" class="grid-2" style="margin-bottom:20px;">
           <div class="card">
             <div class="section-head">
               <div>
@@ -1718,7 +1713,6 @@
             </div>
           </div>
         </div>
-
 
         <div id="overviewUpgradeCard" class="card upgrade-card" style="margin-bottom:20px;">
           <div class="section-head">
@@ -1856,8 +1850,6 @@
         </div>
       </section>
 
-      <!-- PROFILE -->
-<!-- PROFILE -->
       <section id="profile" class="dashboard-section">
         <div class="card">
           <h2>Setup & Dealer Identity</h2>
@@ -1871,17 +1863,14 @@
               <label for="full_name">Full Name</label>
               <input id="full_name" type="text" placeholder="Damian Walker" />
             </div>
-
             <div class="field">
               <label for="dealership">Dealership / Company</label>
               <input id="dealership" type="text" placeholder="Sean Sargent Toyota" />
             </div>
-
             <div class="field">
               <label for="city">City</label>
               <input id="city" type="text" placeholder="Grande Prairie" />
             </div>
-
             <div class="field">
               <label for="province">Province</label>
               <select id="province">
@@ -1890,32 +1879,26 @@
                 <option value="BC">British Columbia</option>
               </select>
             </div>
-
             <div class="field">
               <label for="phone">Your Phone</label>
               <input id="phone" type="text" placeholder="780-000-0000" />
             </div>
-
             <div class="field">
               <label for="license_number">Salesperson / Dealer License Number</label>
               <input id="license_number" type="text" placeholder="License number" />
             </div>
-
             <div class="field">
               <label for="listing_location">Default Listing Location</label>
               <input id="listing_location" type="text" placeholder="Grande Prairie, Alberta" />
             </div>
-
             <div class="field">
               <label for="dealer_phone">Dealer Phone</label>
               <input id="dealer_phone" type="text" placeholder="Dealer main line" />
             </div>
-
             <div class="field">
               <label for="dealer_email">Dealer Email</label>
               <input id="dealer_email" type="email" placeholder="dealer@email.com" />
             </div>
-
             <div class="field">
               <label for="compliance_mode">Compliance Mode</label>
               <select id="compliance_mode">
@@ -1924,17 +1907,14 @@
                 <option value="BC">BC / British Columbia</option>
               </select>
             </div>
-
             <div class="field field-full">
               <label for="dealer_website">Dealer Website</label>
               <input id="dealer_website" type="url" placeholder="https://www.yourdealer.com" />
             </div>
-
             <div class="field field-full">
               <label for="inventory_url">Inventory URL</label>
               <input id="inventory_url" type="url" placeholder="https://www.yourdealer.com/new-inventory" />
             </div>
-
             <div class="field">
               <label for="scanner_type">Scanner Type</label>
               <select id="scanner_type">
@@ -1945,7 +1925,6 @@
                 <option value="hybrid">Hybrid</option>
               </select>
             </div>
-
             <div class="field">
               <label for="software_license_key">Software License Key</label>
               <input id="software_license_key" type="text" placeholder="Auto-assignment pending" readonly />
@@ -1958,12 +1937,10 @@
           </div>
 
           <div id="profileStatus" class="status-line"></div>
-
           <div id="profileSummary" class="profile-summary"></div>
         </div>
       </section>
 
-      <!-- EXTENSION -->
       <section id="extension" class="dashboard-section">
         <div class="grid-2" style="margin-bottom:20px;">
           <div class="card">
@@ -2018,122 +1995,97 @@
           <div class="card">
             <h2>Extension Setup Status</h2>
             <div class="setup-grid">
-              <div class="setup-item">
-                <div class="setup-item-label">Account access active</div>
-                <div id="extSetupAccess" class="setup-state warn">Checking</div>
+              <div class="setup-item"><div class="setup-item-label">Account access active</div><div id="extSetupAccess" class="setup-state warn">Checking</div></div>
+              <div class="setup-item"><div class="setup-item-label">Dealer website connected</div><div id="extSetupDealerWebsite" class="setup-state warn">Checking</div></div>
+              <div class="setup-item"><div class="setup-item-label">Inventory URL connected</div><div id="extSetupInventoryUrl" class="setup-state warn">Checking</div></div>
+              <div class="setup-item"><div class="setup-item-label">Scanner type selected</div><div id="extSetupScannerType" class="setup-state warn">Checking</div></div>
+              <div class="setup-item"><div class="setup-item-label">Listing location ready</div><div id="extSetupListingLocation" class="setup-state warn">Checking</div></div>
+              <div class="setup-item"><div class="setup-item-label">Compliance mode ready</div><div id="extSetupComplianceMode" class="setup-state warn">Checking</div></div>
+            </div>
+            <div class="subtext" style="margin-top:14px;">Use this as the single operator panel before posting: verify access, verify live counts, refresh backend state, then open inventory or Marketplace.</div>
+          </div>
+        </div>
+
+        <div class="card upgrade-card" style="margin-top:20px; margin-bottom:20px;">
+          <div class="section-head">
+            <div>
+              <div class="module-group-label">Premium Access</div>
+              <h2 style="margin-top:6px;">Tool Unlock Path</h2>
+              <div class="subtext">See what is included now, what opens with Pro, and why it matters.</div>
+            </div>
+            <button id="toolsUpgradeBtn" class="action-btn" type="button">Compare Access</button>
+          </div>
+          <div id="toolsUpgradePanel" class="upgrade-copy"><div>Loading premium tool access...</div></div>
+        </div>
+
+        <div class="card" style="margin-top:20px;">
+          <div class="module-toolbar">
+            <div>
+              <div class="module-group-label">Tools & Modules</div>
+              <h2 style="margin-top:6px;">Platform Stack</h2>
+              <div class="subtext">Filter the live stack, beta modules, and planned systems without cluttering overview.</div>
+            </div>
+            <div class="tool-state-filter-row">
+              <div>
+                <label for="toolModuleFilter" class="subtext">Module Group</label><br/>
+                <select id="toolModuleFilter">
+                  <option value="all">All Modules</option>
+                  <option value="core">Core Tools</option>
+                  <option value="pipeline">Pipeline & Follow-Up</option>
+                  <option value="growth">Growth & Analytics</option>
+                </select>
               </div>
-              <div class="setup-item">
-                <div class="setup-item-label">Dealer website connected</div>
-                <div id="extSetupDealerWebsite" class="setup-state warn">Checking</div>
-              </div>
-              <div class="setup-item">
-                <div class="setup-item-label">Inventory URL connected</div>
-                <div id="extSetupInventoryUrl" class="setup-state warn">Checking</div>
-              </div>
-              <div class="setup-item">
-                <div class="setup-item-label">Scanner type selected</div>
-                <div id="extSetupScannerType" class="setup-state warn">Checking</div>
-              </div>
-              <div class="setup-item">
-                <div class="setup-item-label">Listing location ready</div>
-                <div id="extSetupListingLocation" class="setup-state warn">Checking</div>
-              </div>
-              <div class="setup-item">
-                <div class="setup-item-label">Compliance mode ready</div>
-                <div id="extSetupComplianceMode" class="setup-state warn">Checking</div>
+              <div>
+                <label for="toolStateFilter" class="subtext">State</label><br/>
+                <select id="toolStateFilter">
+                  <option value="all">All States</option>
+                  <option value="live">Live Now</option>
+                  <option value="beta">Founder Beta</option>
+                  <option value="planned">Coming Soon</option>
+                  <option value="pro">Pro</option>
+                  <option value="locked">Locked</option>
+                </select>
               </div>
             </div>
-
-
-      <div class="subtext" style="margin-top:14px;">
-        Use this as the single operator panel before posting: verify access, verify live counts,
-        refresh backend state, then open inventory or Marketplace.
-      </div>
-    </div>
-  </div>
-
-
-  <div class="card upgrade-card" style="margin-top:20px; margin-bottom:20px;">
-    <div class="section-head">
-      <div>
-        <div class="module-group-label">Premium Access</div>
-        <h2 style="margin-top:6px;">Tool Unlock Path</h2>
-        <div class="subtext">See what is included now, what opens with Pro, and why it matters.</div>
-      </div>
-      <button id="toolsUpgradeBtn" class="action-btn" type="button">Compare Access</button>
-    </div>
-    <div id="toolsUpgradePanel" class="upgrade-copy"><div>Loading premium tool access...</div></div>
-  </div>
-
-  <div class="card" style="margin-top:20px;">
-    <div class="module-toolbar">
-      <div>
-        <div class="module-group-label">Tools & Modules</div>
-        <h2 style="margin-top:6px;">Platform Stack</h2>
-        <div class="subtext">Filter the live stack, beta modules, and planned systems without cluttering overview.</div>
-      </div>
-      <div class="tool-state-filter-row">
-        <div>
-          <label for="toolModuleFilter" class="subtext">Module Group</label><br/>
-          <select id="toolModuleFilter">
-            <option value="all">All Modules</option>
-            <option value="core">Core Tools</option>
-            <option value="pipeline">Pipeline & Follow-Up</option>
-            <option value="growth">Growth & Analytics</option>
-          </select>
+          </div>
+          <div class="tool-state-legend" style="margin-bottom:16px;">
+            <span class="tool-status live">Live Now</span>
+            <span class="tool-status beta">Founder Beta</span>
+            <span class="tool-status planned">Coming Soon</span>
+            <span class="tool-status pro">Pro</span>
+            <span class="tool-status locked">Locked</span>
+          </div>
+          <div class="tools-grid" id="toolsModuleGrid">
+            <div class="tool-tile" data-module-group="core" data-module-state="live"><h3>Vehicle Poster</h3><p>Inventory scan, queue build, Marketplace fill, and posting engine.</p><div class="tool-status live">Live Now</div></div>
+            <div class="tool-tile" data-module-group="core" data-module-state="live"><h3>Dealer Scanner Routing</h3><p>Dealer website, inventory URL, and scanner type stored per account.</p><div class="tool-status live">Live Now</div></div>
+            <div class="tool-tile" data-module-group="core" data-module-state="live"><h3>Compliance Engine</h3><p>AB / BC output blocks powered by saved profile data.</p><div class="tool-status live">Live Now</div></div>
+            <div class="tool-tile" data-module-group="core" data-module-state="beta"><h3>Posting Limits</h3><p>Daily plan enforcement, account truth, and register-post state moving toward hard lock reliability.</p><div class="tool-status beta">Founder Beta</div></div>
+            <div class="tool-tile" data-module-group="pipeline" data-module-state="pro" data-required-plan="pro"><h3>CRM</h3><p>Lead memory, pipeline tracking, and follow-up visibility for reps and managers.</p><div class="tool-status planned">Coming Soon</div></div>
+            <div class="tool-tile" data-module-group="pipeline" data-module-state="pro" data-required-plan="pro"><h3>Automation</h3><p>Workflow triggers for reminders, stale listing actions, and follow-up execution.</p><div class="tool-status planned">Coming Soon</div></div>
+            <div class="tool-tile" data-module-group="pipeline" data-module-state="pro" data-required-plan="pro"><h3>Mass SMS</h3><p>Outbound campaign engine for inventory, appointments, and reactivation.</p><div class="tool-status planned">Coming Soon</div></div>
+            <div class="tool-tile" data-module-group="pipeline" data-module-state="pro" data-required-plan="pro"><h3>Scheduler</h3><p>Booking, cadence, and timed action control inside one operator flow.</p><div class="tool-status pro">Pro</div></div>
+            <div class="tool-tile" data-module-group="growth" data-module-state="live"><h3>Analytics</h3><p>Time saved, efficiency, traction, and revenue-facing opportunity signals.</p><div class="tool-status live">Live Now</div></div>
+            <div class="tool-tile" data-module-group="growth" data-module-state="live"><h3>Affiliate Center</h3><p>Referral economics, scripts, payout visibility, and partner growth tools.</p><div class="tool-status live">Live Now</div></div>
+            <div class="tool-tile" data-module-group="growth" data-module-state="beta"><h3>AI Content</h3><p>Caption, title, and listing improvement support for faster execution.</p><div class="tool-status beta">Founder Beta</div></div>
+            <div class="tool-tile" data-module-group="growth" data-module-state="pro" data-required-plan="pro"><h3>Market Intelligence</h3><p>VIN-level learning, pricing feedback, and priority recommendations.</p><div class="tool-status pro">Pro</div></div>
+            <div class="tool-tile" data-module-group="pipeline" data-module-state="planned"><h3>Follow-Up Engine</h3><p>Message memory, lead prompts, and daily follow-up execution stack.</p><div class="tool-status planned">Coming Soon</div></div>
+            <div class="tool-tile" data-module-group="growth" data-module-state="planned"><h3>Distribution Hub</h3><p>Marketplace first, then groups and social channel expansion from one operator surface.</p><div class="tool-status planned">Coming Soon</div></div>
+            <div class="tool-tile" data-module-group="growth" data-module-state="beta"><h3>Action Center</h3><p>Revenue-first queue for stale, weak, price-change, and promote-now decisions.</p><div class="tool-status beta">Founder Beta</div></div>
+          </div>
+          <div class="card" style="margin-top:20px;">
+            <div class="section-head">
+              <div>
+                <h2>Module Detail</h2>
+                <div class="subtext">Click a module tile to see why it matters and where it fits.</div>
+              </div>
+            </div>
+            <div id="toolModuleDetailPanel" class="list-block">
+              <div>Select a module to view more detail.</div>
+            </div>
+          </div>
         </div>
-        <div>
-          <label for="toolStateFilter" class="subtext">State</label><br/>
-          <select id="toolStateFilter">
-            <option value="all">All States</option>
-            <option value="live">Live Now</option>
-            <option value="beta">Founder Beta</option>
-            <option value="planned">Coming Soon</option>
-            <option value="pro">Pro</option>
-            <option value="locked">Locked</option>
-          </select>
-        </div>
-      </div>
-    </div>
-    <div class="tool-state-legend" style="margin-bottom:16px;">
-      <span class="tool-status live">Live Now</span>
-      <span class="tool-status beta">Founder Beta</span>
-      <span class="tool-status planned">Coming Soon</span>
-      <span class="tool-status pro">Pro</span>
-      <span class="tool-status locked">Locked</span>
-    </div>
-    <div class="tools-grid" id="toolsModuleGrid">
-      <div class="tool-tile" data-module-group="core" data-module-state="live"><h3>Vehicle Poster</h3><p>Inventory scan, queue build, Marketplace fill, and posting engine.</p><div class="tool-status live">Live Now</div></div>
-      <div class="tool-tile" data-module-group="core" data-module-state="live"><h3>Dealer Scanner Routing</h3><p>Dealer website, inventory URL, and scanner type stored per account.</p><div class="tool-status live">Live Now</div></div>
-      <div class="tool-tile" data-module-group="core" data-module-state="live"><h3>Compliance Engine</h3><p>AB / BC output blocks powered by saved profile data.</p><div class="tool-status live">Live Now</div></div>
-      <div class="tool-tile" data-module-group="core" data-module-state="beta"><h3>Posting Limits</h3><p>Daily plan enforcement, account truth, and register-post state moving toward hard lock reliability.</p><div class="tool-status beta">Founder Beta</div></div>
-      <div class="tool-tile" data-module-group="pipeline" data-module-state="pro" data-required-plan="pro"><h3>CRM</h3><p>Lead memory, pipeline tracking, and follow-up visibility for reps and managers.</p><div class="tool-status planned">Coming Soon</div></div>
-      <div class="tool-tile" data-module-group="pipeline" data-module-state="pro" data-required-plan="pro"><h3>Automation</h3><p>Workflow triggers for reminders, stale listing actions, and follow-up execution.</p><div class="tool-status planned">Coming Soon</div></div>
-      <div class="tool-tile" data-module-group="pipeline" data-module-state="pro" data-required-plan="pro"><h3>Mass SMS</h3><p>Outbound campaign engine for inventory, appointments, and reactivation.</p><div class="tool-status planned">Coming Soon</div></div>
-      <div class="tool-tile" data-module-group="pipeline" data-module-state="pro" data-required-plan="pro"><h3>Scheduler</h3><p>Booking, cadence, and timed action control inside one operator flow.</p><div class="tool-status pro">Pro</div></div>
-      <div class="tool-tile" data-module-group="growth" data-module-state="live"><h3>Analytics</h3><p>Time saved, efficiency, traction, and revenue-facing opportunity signals.</p><div class="tool-status live">Live Now</div></div>
-      <div class="tool-tile" data-module-group="growth" data-module-state="live"><h3>Affiliate Center</h3><p>Referral economics, scripts, payout visibility, and partner growth tools.</p><div class="tool-status live">Live Now</div></div>
-      <div class="tool-tile" data-module-group="growth" data-module-state="beta"><h3>AI Content</h3><p>Caption, title, and listing improvement support for faster execution.</p><div class="tool-status beta">Founder Beta</div></div>
-      <div class="tool-tile" data-module-group="growth" data-module-state="pro" data-required-plan="pro"><h3>Market Intelligence</h3><p>VIN-level learning, pricing feedback, and priority recommendations.</p><div class="tool-status pro">Pro</div></div>
-      <div class="tool-tile" data-module-group="pipeline" data-module-state="planned"><h3>Follow-Up Engine</h3><p>Message memory, lead prompts, and daily follow-up execution stack.</p><div class="tool-status planned">Coming Soon</div></div>
-      <div class="tool-tile" data-module-group="growth" data-module-state="planned"><h3>Distribution Hub</h3><p>Marketplace first, then groups and social channel expansion from one operator surface.</p><div class="tool-status planned">Coming Soon</div></div>
-      <div class="tool-tile" data-module-group="growth" data-module-state="beta"><h3>Action Center</h3><p>Revenue-first queue for stale, weak, price-change, and promote-now decisions.</p><div class="tool-status beta">Founder Beta</div></div>
-    </div>
-    <div class="card" style="margin-top:20px;">
-      <div class="section-head">
-        <div>
-          <h2>Module Detail</h2>
-          <div class="subtext">Click a module tile to see why it matters and where it fits.</div>
-        </div>
-      </div>
-      <div id="toolModuleDetailPanel" class="list-block">
-        <div>Select a module to view more detail.</div>
-      </div>
-    </div>
-  </div>
-</section>
+      </section>
 
-      <!-- COMPLIANCE -->
       <section id="compliance" class="dashboard-section">
         <div class="grid-2" style="margin-bottom:20px;">
           <div class="card">
@@ -2171,7 +2123,6 @@
         </div>
       </section>
 
-      <!-- AFFILIATE -->
       <section id="affiliate" class="dashboard-section">
         <div class="grid-4">
           <div class="card"><h2>Commission Earned</h2><div class="stat-value" id="affiliateCommissionEarned">$0.00</div><div class="stat-sub">Recurring commission earned so far</div></div>
@@ -2229,7 +2180,6 @@
         </div>
       </section>
 
-      <!-- BILLING -->
       <section id="billing" class="dashboard-section">
         <div class="grid-2">
           <div class="card">
@@ -2240,15 +2190,12 @@
               <div><strong>Status:</strong> <span id="subscriptionStatusBilling">Loading...</span></div>
               <div><strong>Software License Key:</strong> <span id="licenseKeyDisplayBilling">Loading...</span></div>
             </div>
-
             <div id="accountStatusBilling" class="status-line"></div>
-
             <div class="action-grid">
               <button id="openBillingPortalBtn" class="action-btn" type="button">Open Billing Portal</button>
               <button id="refreshBillingBtn" class="action-btn" type="button">Refresh Billing Data</button>
             </div>
           </div>
-
           <div class="card">
             <h2>Extension Unlock Direction</h2>
             <div class="list-block">
@@ -2261,209 +2208,194 @@
         </div>
       </section>
 
-
-<!-- ANALYTICS -->
-<section id="tools" class="dashboard-section">
-  <div class="grid-3" style="margin-bottom:20px;">
-    <div class="card"><div class="stat-label">Time Saved Today</div><div class="stat-value" id="analyticsTimeSavedToday">0 min</div><div class="stat-sub">Estimated posting time reclaimed today</div></div>
-    <div class="card"><div class="stat-label">Time Saved This Week</div><div class="stat-value" id="analyticsTimeSavedWeek">0 min</div><div class="stat-sub">Estimated operator time reclaimed this week</div></div>
-    <div class="card"><div class="stat-label">Estimated Weekly Value</div><div class="stat-value" id="analyticsEstimatedValue">$0</div><div class="stat-sub">Founder-stage ROI estimate from time saved</div></div>
-  </div>
-  <div class="grid-3" style="margin-bottom:20px;">
-    <div class="card"><div class="stat-label">Execution Efficiency</div><div class="stat-value" id="analyticsEfficiencyScore">0%</div><div class="stat-sub">Posts used vs available capacity</div></div>
-    <div class="card"><div class="stat-label">Credits Balance</div><div class="stat-value" id="analyticsCreditsBalance">0</div><div class="stat-sub">Current internal economy balance</div></div>
-    <div class="card"><div class="stat-label">Lifetime Credits Earned</div><div class="stat-value" id="analyticsCreditsEarned">0</div><div class="stat-sub">All-time platform rewards earned</div></div>
-  </div>
-  <div class="card upgrade-card" style="margin-bottom:20px;">
-    <div class="section-head">
-      <div>
-        <div class="module-group-label">Premium Analytics</div>
-        <h2 style="margin-top:6px;">Upgrade Triggers & Premium Insights</h2>
-        <div class="subtext">A cleaner bridge from basic visibility into deeper revenue guidance.</div>
-      </div>
-      <button id="analyticsUpgradeBtn" class="action-btn" type="button">See Premium Preview</button>
-    </div>
-    <div id="analyticsUpgradePanel" class="upgrade-copy"><div>Loading analytics upgrade guidance...</div></div>
-  </div>
-
-  <div class="analytics-shell">
-    <div class="card">
-      <div class="graph-wrap">
-        <div class="graph-meta">
-          <div>
-            <div class="graph-title">7-Day Activity</div>
-            <div class="subtext" style="margin-top:4px;">Posts and traction trend</div>
+      <section id="tools" class="dashboard-section">
+        <div class="grid-3" style="margin-bottom:20px;">
+          <div class="card"><div class="stat-label">Time Saved Today</div><div class="stat-value" id="analyticsTimeSavedToday">0 min</div><div class="stat-sub">Estimated posting time reclaimed today</div></div>
+          <div class="card"><div class="stat-label">Time Saved This Week</div><div class="stat-value" id="analyticsTimeSavedWeek">0 min</div><div class="stat-sub">Estimated operator time reclaimed this week</div></div>
+          <div class="card"><div class="stat-label">Estimated Weekly Value</div><div class="stat-value" id="analyticsEstimatedValue">$0</div><div class="stat-sub">Founder-stage ROI estimate from time saved</div></div>
+        </div>
+        <div class="grid-3" style="margin-bottom:20px;">
+          <div class="card"><div class="stat-label">Execution Efficiency</div><div class="stat-value" id="analyticsEfficiencyScore">0%</div><div class="stat-sub">Posts used vs available capacity</div></div>
+          <div class="card"><div class="stat-label">Credits Balance</div><div class="stat-value" id="analyticsCreditsBalance">0</div><div class="stat-sub">Current internal economy balance</div></div>
+          <div class="card"><div class="stat-label">Lifetime Credits Earned</div><div class="stat-value" id="analyticsCreditsEarned">0</div><div class="stat-sub">All-time platform rewards earned</div></div>
+        </div>
+        <div class="card upgrade-card" style="margin-bottom:20px;">
+          <div class="section-head">
+            <div>
+              <div class="module-group-label">Premium Analytics</div>
+              <h2 style="margin-top:6px;">Upgrade Triggers & Premium Insights</h2>
+              <div class="subtext">A cleaner bridge from basic visibility into deeper revenue guidance.</div>
+            </div>
+            <button id="analyticsUpgradeBtn" class="action-btn" type="button">See Premium Preview</button>
           </div>
-          <div class="graph-legend">
-            <span><span class="legend-dot gold"></span>Posts</span>
-            <span><span class="legend-dot soft"></span>Views</span>
+          <div id="analyticsUpgradePanel" class="upgrade-copy"><div>Loading analytics upgrade guidance...</div></div>
+        </div>
+
+        <div class="analytics-shell">
+          <div class="card">
+            <div class="graph-wrap">
+              <div class="graph-meta">
+                <div>
+                  <div class="graph-title">7-Day Activity</div>
+                  <div class="subtext" style="margin-top:4px;">Posts and traction trend</div>
+                </div>
+                <div class="graph-legend">
+                  <span><span class="legend-dot gold"></span>Posts</span>
+                  <span><span class="legend-dot soft"></span>Views</span>
+                </div>
+              </div>
+              <div class="chart-canvas-wrap"><canvas id="activityChart"></canvas></div>
+              <div id="graphXLabels" class="graph-xlabels"></div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="section-head"><h2>Most Popular</h2><div class="subtext">Messages &gt; Views &gt; Recency</div></div>
+            <div id="topListings" class="top-list"><div class="listing-empty">No listings yet.</div></div>
           </div>
         </div>
-        <div class="chart-canvas-wrap"><canvas id="activityChart"></canvas></div>
-        <div id="graphXLabels" class="graph-xlabels"></div>
-      </div>
-    </div>
-    <div class="card">
-      <div class="section-head"><h2>Most Popular</h2><div class="subtext">Messages &gt; Views &gt; Recency</div></div>
-      <div id="topListings" class="top-list"><div class="listing-empty">No listings yet.</div></div>
-    </div>
-  </div>
-  <div class="grid-3">
-    <div class="card"><div class="section-head"><h2>Needs Attention</h2><div class="subtext">Critical items that need intervention</div></div><div id="alertsPanel" class="list-block"><div>Loading alerts...</div></div></div>
-    <div class="card"><div class="section-head"><h2>Today</h2><div class="subtext">Clean snapshot of today’s operating performance</div></div><div id="dailyScorecardPanel" class="list-block"><div>Loading scorecard...</div></div></div>
-    <div class="card"><div class="section-head"><h2>Weekly Snapshot</h2><div class="subtext">7-day movement and trend context</div></div><div id="weeklyScorecardPanel" class="list-block"><div>Loading scorecard...</div></div></div>
-  </div>
-  <div class="grid-2">
-    <div class="card"><div class="section-head"><h2>Intelligence</h2><div class="subtext">Prediction, pricing, and content opportunity signals</div></div><div id="intelligencePanel" class="list-block"><div>Loading intelligence...</div></div></div>
-    <div class="card"><div class="section-head"><h2>Opportunities</h2><div class="subtext">Segments and listings with upside potential</div></div><div id="opportunitiesPanel" class="list-block"><div>Loading opportunities...</div></div></div>
-  </div>
-  <div class="grid-3">
-    <div class="card"><div class="section-head"><h2>System Health</h2><div class="subtext">Data freshness and lifecycle visibility</div></div><div id="analyticsSystemHealth" class="list-block"><div>Loading system health...</div></div></div>
-    <div class="card"><div class="section-head"><h2>Growth Signals</h2><div class="subtext">What is improving and where to lean in</div></div><div id="analyticsGrowthSignals" class="list-block"><div>Loading growth signals...</div></div></div>
-
-  <div class="card"><div class="section-head"><h2>Credit Actions</h2><div class="subtext">Use credits to unlock more output without leaving the dashboard.</div></div><div id="creditActionPanel" class="list-block"><div>Loading credit actions...</div></div><div id="creditActionStatus" class="subtext" style="margin-top:10px;">Extra post unlocks and future economy actions will appear here.</div></div>
-<div class="card"><div class="section-head"><h2>Credit Activity</h2><div class="subtext">Recent economy events tied to real product actions</div></div><div id="analyticsCreditActivity" class="list-block"><div>Loading credit activity...</div></div></div>
-  </div>
-</section>
-
+        <div class="grid-3">
+          <div class="card"><div class="section-head"><h2>Needs Attention</h2><div class="subtext">Critical items that need intervention</div></div><div id="alertsPanel" class="list-block"><div>Loading alerts...</div></div></div>
+          <div class="card"><div class="section-head"><h2>Today</h2><div class="subtext">Clean snapshot of today’s operating performance</div></div><div id="dailyScorecardPanel" class="list-block"><div>Loading scorecard...</div></div></div>
+          <div class="card"><div class="section-head"><h2>Weekly Snapshot</h2><div class="subtext">7-day movement and trend context</div></div><div id="weeklyScorecardPanel" class="list-block"><div>Loading scorecard...</div></div></div>
+        </div>
+        <div class="grid-2">
+          <div class="card"><div class="section-head"><h2>Intelligence</h2><div class="subtext">Prediction, pricing, and content opportunity signals</div></div><div id="intelligencePanel" class="list-block"><div>Loading intelligence...</div></div></div>
+          <div class="card"><div class="section-head"><h2>Opportunities</h2><div class="subtext">Segments and listings with upside potential</div></div><div id="opportunitiesPanel" class="list-block"><div>Loading opportunities...</div></div></div>
+        </div>
+        <div class="grid-3">
+          <div class="card"><div class="section-head"><h2>System Health</h2><div class="subtext">Data freshness and lifecycle visibility</div></div><div id="analyticsSystemHealth" class="list-block"><div>Loading system health...</div></div></div>
+          <div class="card"><div class="section-head"><h2>Growth Signals</h2><div class="subtext">What is improving and where to lean in</div></div><div id="analyticsGrowthSignals" class="list-block"><div>Loading growth signals...</div></div></div>
+          <div class="card"><div class="section-head"><h2>Credit Actions</h2><div class="subtext">Use credits to unlock more output without leaving the dashboard.</div></div><div id="creditActionPanel" class="list-block"><div>Loading credit actions...</div></div><div id="creditActionStatus" class="subtext" style="margin-top:10px;">Extra post unlocks and future economy actions will appear here.</div></div>
+          <div class="card"><div class="section-head"><h2>Credit Activity</h2><div class="subtext">Recent economy events tied to real product actions</div></div><div id="analyticsCreditActivity" class="list-block"><div>Loading credit activity...</div></div></div>
+        </div>
+      </section>
       </div>
     </main>
   </div>
 
-
-<div id="listingDetailModal" class="modal-backdrop" aria-hidden="true">
-  <div class="modal-card">
-    <div class="section-head">
-      <div>
-        <div class="module-group-label">Listing Control</div>
-        <h2 id="listingDetailTitle" style="margin-top:6px;">Listing Detail</h2>
-        <div class="subtext" id="listingDetailSubtitle">Health, pricing, and next best action.</div>
+  <div id="listingDetailModal" class="modal-backdrop" aria-hidden="true">
+    <div class="modal-card">
+      <div class="section-head">
+        <div>
+          <div class="module-group-label">Listing Control</div>
+          <h2 id="listingDetailTitle" style="margin-top:6px;">Listing Detail</h2>
+          <div class="subtext" id="listingDetailSubtitle">Health, pricing, and next best action.</div>
+        </div>
+        <button id="closeListingDetailModalBtn" class="action-btn" type="button">Close</button>
       </div>
-      <button id="closeListingDetailModalBtn" class="action-btn" type="button">Close</button>
-    </div>
-    <div id="listingDetailBody" class="modal-copy"></div>
-    <div class="action-grid" style="margin-top:14px;">
-      <button id="listingDetailPrimaryBtn" class="btn-primary" type="button">Open Source</button>
-      <button id="listingDetailSecondaryBtn" class="action-btn" type="button">Copy Summary</button>
+      <div id="listingDetailBody" class="modal-copy"></div>
+      <div class="action-grid" style="margin-top:14px;">
+        <button id="listingDetailPrimaryBtn" class="btn-primary" type="button">Open Source</button>
+        <button id="listingDetailSecondaryBtn" class="action-btn" type="button">Copy Summary</button>
+      </div>
     </div>
   </div>
-</div>
 
-<div id="readCopyModal" class="modal-backdrop" aria-hidden="true">
-  <div class="modal-card">
-    <div class="modal-head">
-      <div>
-        <div class="module-group-label" id="readCopyModalEyebrow">Dashboard Script</div>
-        <h2 id="readCopyModalTitle" style="margin-top:6px;">Read in Dashboard</h2>
-        <div class="subtext" id="readCopyModalSubtitle">Read this in the dashboard first, then copy only if needed.</div>
+  <div id="readCopyModal" class="modal-backdrop" aria-hidden="true">
+    <div class="modal-card">
+      <div class="modal-head">
+        <div>
+          <div class="module-group-label" id="readCopyModalEyebrow">Dashboard Script</div>
+          <h2 id="readCopyModalTitle" style="margin-top:6px;">Read in Dashboard</h2>
+          <div class="subtext" id="readCopyModalSubtitle">Read this in the dashboard first, then copy only if needed.</div>
+        </div>
+        <button id="closeReadCopyModalBtn" class="action-btn" type="button">Close</button>
       </div>
-      <button id="closeReadCopyModalBtn" class="action-btn" type="button">Close</button>
-    </div>
-    <div id="readCopyModalBody" class="modal-copy"></div>
-    <div class="action-grid" style="margin-top:16px;">
-      <button id="copyReadCopyModalBtn" class="action-btn" type="button">Copy Text</button>
+      <div id="readCopyModalBody" class="modal-copy"></div>
+      <div class="action-grid" style="margin-top:16px;">
+        <button id="copyReadCopyModalBtn" class="action-btn" type="button">Copy Text</button>
+      </div>
     </div>
   </div>
-</div>
 
-<script src="/js/supabase-client.js?v=20260401h"></script>
-
-<script>
-(function(){
-  function applyOverviewHierarchyPass() {
-    const overview = document.getElementById('overview');
-    if (!overview || overview.dataset.eaPhase32Applied === 'true') return;
-
-    const commandCenter = overview.querySelector('.command-center-grid');
-    const operatorStrip = document.getElementById('overviewOperatorStrip') || overview.querySelector('.operator-strip');
-    const listingsCard = document.getElementById('overviewListingsCard');
-    const priorityGrid = document.getElementById('overviewPriorityGrid');
-    const performanceGrid = document.getElementById('overviewPerformanceGrid');
-    const accountGrid = document.getElementById('overviewAccountGrid');
-    const upgradeCard = document.getElementById('overviewUpgradeCard');
-
-    if (!commandCenter || !operatorStrip || !listingsCard || !priorityGrid || !accountGrid || !upgradeCard) return;
-
-    let flow = document.getElementById('overviewFlow');
-    if (!flow) {
-      flow = document.createElement('div');
-      flow.id = 'overviewFlow';
-      flow.className = 'phase32-flow';
-      operatorStrip.insertAdjacentElement('afterend', flow);
+  <script src="/js/supabase-client.js?v=20260401h"></script>
+  <script>
+  (function(){
+    function applyOverviewHierarchyPass() {
+      const overview = document.getElementById('overview');
+      if (!overview || overview.dataset.eaPhase32Applied === 'true') return;
+      const commandCenter = overview.querySelector('.command-center-grid');
+      const operatorStrip = document.getElementById('overviewOperatorStrip') || overview.querySelector('.operator-strip');
+      const listingsCard = document.getElementById('overviewListingsCard');
+      const priorityGrid = document.getElementById('overviewPriorityGrid');
+      const performanceGrid = document.getElementById('overviewPerformanceGrid');
+      const accountGrid = document.getElementById('overviewAccountGrid');
+      const upgradeCard = document.getElementById('overviewUpgradeCard');
+      if (!commandCenter || !operatorStrip || !listingsCard || !priorityGrid || !accountGrid || !upgradeCard) return;
+      let flow = document.getElementById('overviewFlow');
+      if (!flow) {
+        flow = document.createElement('div');
+        flow.id = 'overviewFlow';
+        flow.className = 'phase32-flow';
+        operatorStrip.insertAdjacentElement('afterend', flow);
+      }
+      let execution = document.getElementById('overviewExecutionZone');
+      if (!execution) {
+        execution = document.createElement('div');
+        execution.id = 'overviewExecutionZone';
+        execution.className = 'phase32-zone phase32-execution-zone';
+        flow.appendChild(execution);
+      }
+      let intelligence = document.getElementById('overviewIntelligenceZone');
+      if (!intelligence) {
+        intelligence = document.createElement('div');
+        intelligence.id = 'overviewIntelligenceZone';
+        intelligence.className = 'phase32-zone phase32-intelligence-zone';
+        flow.appendChild(intelligence);
+      }
+      let context = document.getElementById('overviewContextZone');
+      if (!context) {
+        context = document.createElement('div');
+        context.id = 'overviewContextZone';
+        context.className = 'phase32-zone phase32-context-zone';
+        flow.appendChild(context);
+      }
+      execution.appendChild(listingsCard);
+      intelligence.appendChild(priorityGrid);
+      if (performanceGrid) intelligence.appendChild(performanceGrid);
+      context.appendChild(accountGrid);
+      context.appendChild(upgradeCard);
+      listingsCard.setAttribute('data-phase32-promoted', 'true');
+      priorityGrid.setAttribute('data-phase32-priority', 'true');
+      upgradeCard.setAttribute('data-phase32-downgraded', 'true');
+      overview.dataset.eaPhase32Applied = 'true';
     }
 
-    let execution = document.getElementById('overviewExecutionZone');
-    if (!execution) {
-      execution = document.createElement('div');
-      execution.id = 'overviewExecutionZone';
-      execution.className = 'phase32-zone phase32-execution-zone';
-      flow.appendChild(execution);
+    function applyToolsHierarchyPass() {
+      const section = document.getElementById('extension');
+      if (!section || section.dataset.eaPhase32Tools === 'true') return;
+      const cards = Array.from(section.querySelectorAll(':scope > .grid-2 > .card, :scope > .card'));
+      cards.forEach((card) => {
+        const title = String(card.querySelector('h2')?.textContent || '').toLowerCase();
+        if (title.includes('posting readiness')) card.setAttribute('data-tools-zone', 'control');
+        else if (title.includes('module state mix')) card.setAttribute('data-tools-zone', 'system');
+        else if (title.includes('operator tools')) card.setAttribute('data-tools-zone', 'control');
+        else if (title.includes('extension setup status')) card.setAttribute('data-tools-zone', 'system');
+        else if (title.includes('platform stack')) card.setAttribute('data-tools-zone', 'modules');
+        else if (title.includes('tool unlock path')) card.setAttribute('data-tools-zone', 'premium');
+      });
+      section.dataset.eaPhase32Tools = 'true';
     }
 
-    let intelligence = document.getElementById('overviewIntelligenceZone');
-    if (!intelligence) {
-      intelligence = document.createElement('div');
-      intelligence.id = 'overviewIntelligenceZone';
-      intelligence.className = 'phase32-zone phase32-intelligence-zone';
-      flow.appendChild(intelligence);
+    function run() {
+      applyOverviewHierarchyPass();
+      applyToolsHierarchyPass();
     }
 
-    let context = document.getElementById('overviewContextZone');
-    if (!context) {
-      context = document.createElement('div');
-      context.id = 'overviewContextZone';
-      context.className = 'phase32-zone phase32-context-zone';
-      flow.appendChild(context);
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', run, { once: true });
+    } else {
+      run();
     }
+    setTimeout(run, 800);
+    setTimeout(run, 2200);
+    setTimeout(run, 4200);
+  })();
+  </script>
 
-    execution.appendChild(listingsCard);
-    intelligence.appendChild(priorityGrid);
-    if (performanceGrid) intelligence.appendChild(performanceGrid);
-    context.appendChild(accountGrid);
-    context.appendChild(upgradeCard);
-
-    listingsCard.setAttribute('data-phase32-promoted', 'true');
-    priorityGrid.setAttribute('data-phase32-priority', 'true');
-    upgradeCard.setAttribute('data-phase32-downgraded', 'true');
-    overview.dataset.eaPhase32Applied = 'true';
-  }
-
-  function applyToolsHierarchyPass() {
-    const section = document.getElementById('extension');
-    if (!section || section.dataset.eaPhase32Tools === 'true') return;
-
-    const cards = Array.from(section.querySelectorAll(':scope > .grid-2 > .card, :scope > .card'));
-    cards.forEach((card) => {
-      const title = String(card.querySelector('h2')?.textContent || '').toLowerCase();
-      if (title.includes('posting readiness')) card.setAttribute('data-tools-zone', 'control');
-      else if (title.includes('module state mix')) card.setAttribute('data-tools-zone', 'system');
-      else if (title.includes('operator tools')) card.setAttribute('data-tools-zone', 'control');
-      else if (title.includes('extension setup status')) card.setAttribute('data-tools-zone', 'system');
-      else if (title.includes('platform stack')) card.setAttribute('data-tools-zone', 'modules');
-      else if (title.includes('tool unlock path')) card.setAttribute('data-tools-zone', 'premium');
-    });
-    section.dataset.eaPhase32Tools = 'true';
-  }
-
-  function run() {
-    applyOverviewHierarchyPass();
-    applyToolsHierarchyPass();
-  }
-
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', run, { once: true });
-  } else {
-    run();
-  }
-
-  setTimeout(run, 800);
-  setTimeout(run, 2200);
-  setTimeout(run, 4200);
-})();
-</script>
-
-<script src="/dashboard-activation-onboarding.js?v=20260409bA"></script>
-<script src="/dashboard-bundle-b-overview.js?v=20260409bB"></script>
-<script src="/dashboard.js?v=20260401h"></script>
+  <script src="/dashboard-activation-onboarding.js?v=20260409bA"></script>
+  <script src="/dashboard-bundle-b-overview.js?v=20260409bB"></script>
+  <script src="/dashboard.js?v=20260401h"></script>
+  <script src="/dashboard-bundle-c-overview.js?v=20260409cC"></script>
 </body>
 </html>
