@@ -1,326 +1,172 @@
 
 (() => {
   const NS = (window.ElevateDashboard = window.ElevateDashboard || {});
-  NS.modules = NS.modules || {};
+  if (NS.modules?.analytics) return;
 
-  const STYLE_ID = "ea-bundle-e-analytics-style";
-
-  function qs(selector, root = document) { return root.querySelector(selector); }
-  function qsa(selector, root = document) { return Array.from(root.querySelectorAll(selector)); }
-  function clean(value) { return String(value || "").replace(/\s+/g, " ").trim(); }
-  function text(id) { return clean(document.getElementById(id)?.textContent || ""); }
-  function numberFromText(value) {
-    const cleaned = clean(value).replace(/,/g, "");
-    const match = cleaned.match(/-?\d+(\.\d+)?/);
-    return match ? Number(match[0]) : 0;
+  function clean(value) {
+    return String(value || "").replace(/\s+/g, " ").trim();
   }
-  function moneyFromText(value) {
-    const cleaned = clean(value).replace(/,/g, "");
-    const match = cleaned.match(/\$?\s*(-?\d+(\.\d+)?)/);
-    return match ? Number(match[1]) : 0;
+  function text(id) {
+    return clean(document.getElementById(id)?.textContent || "");
   }
-  function formatMoney(value) {
-    const n = Number(value || 0);
-    return `$${n.toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
+  function num(id) {
+    const m = text(id).match(/-?\d[\d,]*/);
+    return m ? Number(m[0].replace(/,/g, "")) : 0;
   }
-  function formatCount(value) {
-    return Number(value || 0).toLocaleString();
+  function showSection(name) {
+    try { if (typeof window.showSection === "function") window.showSection(name); } catch {}
   }
 
   function injectStyles() {
-    if (document.getElementById(STYLE_ID)) return;
-    const style = document.createElement("style");
-    style.id = STYLE_ID;
-    style.textContent = `
-      .ea-e-shell{display:grid;gap:18px;margin-bottom:20px}
-      .ea-e-card{background:
-        radial-gradient(circle at top right, rgba(212,175,55,0.10), transparent 28%),
-        linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.006)),
-        var(--panel);
-        border:1px solid rgba(212,175,55,0.14);
-        border-radius:18px;
-        padding:20px;
-        box-shadow:var(--shadow)}
-      .ea-e-head{display:flex;justify-content:space-between;gap:16px;align-items:flex-start;flex-wrap:wrap;margin-bottom:14px}
-      .ea-e-tag{display:inline-flex;align-items:center;padding:6px 10px;border-radius:999px;background:rgba(212,175,55,0.12);border:1px solid rgba(212,175,55,0.20);color:var(--gold-soft);font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase}
-      .ea-e-title{font-size:28px;line-height:1.05;margin:8px 0 8px}
-      .ea-e-sub{color:var(--muted);font-size:14px;line-height:1.55}
-      .ea-e-badge{display:inline-flex;align-items:center;min-height:34px;padding:0 12px;border-radius:999px;border:1px solid rgba(212,175,55,0.20);background:rgba(212,175,55,0.10);color:var(--gold-soft);font-size:12px;font-weight:700}
-      .ea-e-top-grid{display:grid;grid-template-columns:1.45fr .95fr;gap:16px}
-      .ea-e-kpi-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
-      .ea-e-kpi{background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-radius:14px;padding:14px}
-      .ea-e-kpi-label{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--gold);font-weight:700;margin-bottom:8px}
-      .ea-e-kpi-value{font-size:24px;font-weight:800;line-height:1.05}
-      .ea-e-kpi-sub{margin-top:8px;color:var(--muted);font-size:12px;line-height:1.45}
-      .ea-e-action-list{display:grid;gap:10px;margin-top:14px}
-      .ea-e-action-item{display:flex;justify-content:space-between;gap:12px;align-items:flex-start;padding:14px 16px;border-radius:14px;background:#161616;border:1px solid rgba(255,255,255,0.06)}
-      .ea-e-action-item .meta{display:grid;gap:6px}
-      .ea-e-action-item .title{font-size:15px;font-weight:700;line-height:1.25}
-      .ea-e-action-item .copy{font-size:13px;line-height:1.5;color:var(--muted)}
-      .ea-e-rank{min-width:34px;height:34px;border-radius:999px;display:flex;align-items:center;justify-content:center;background:rgba(212,175,55,0.12);border:1px solid rgba(212,175,55,0.18);color:var(--gold-soft);font-weight:700;font-size:13px}
-      .ea-e-chip-row{display:flex;gap:8px;flex-wrap:wrap}
-      .ea-e-chip{display:inline-flex;align-items:center;min-height:30px;padding:0 10px;border-radius:999px;background:#1a1a1a;border:1px solid rgba(255,255,255,0.06);color:#efefef;font-size:11px;font-weight:700}
-      .ea-e-side-list{display:grid;gap:10px}
-      .ea-e-side-item{padding:12px 14px;border-radius:14px;background:#161616;border:1px solid rgba(255,255,255,0.06)}
-      .ea-e-side-item strong{display:block;font-size:13px;margin-bottom:5px}
-      .ea-e-side-item span{display:block;font-size:12px;color:var(--muted);line-height:1.45}
-      .ea-e-demote{opacity:.95}
-      @media (max-width: 1180px){
-        .ea-e-top-grid,.ea-e-kpi-grid{grid-template-columns:1fr}
+    const css = `
+      .ea-analytics-top{
+        display:grid; gap:16px; margin-bottom:20px;
       }
+      .ea-analytics-hero{
+        border:1px solid rgba(212,175,55,0.18); border-radius:18px; background:
+          radial-gradient(circle at top right, rgba(212,175,55,0.10), transparent 26%),
+          linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.008)), #121212;
+        padding:20px;
+      }
+      .ea-analytics-hero-grid{
+        display:grid; grid-template-columns:1.25fr .95fr; gap:16px;
+      }
+      .ea-analytics-prompt-list{display:grid; gap:10px;}
+      .ea-analytics-prompt{
+        border:1px solid rgba(255,255,255,0.05); background:#151515; border-radius:14px; padding:14px;
+      }
+      .ea-analytics-prompt .k{font-size:11px; text-transform:uppercase; letter-spacing:.08em; color:#d4af37; font-weight:700; margin-bottom:6px;}
+      .ea-analytics-prompt strong{display:block; margin-bottom:4px;}
+      .ea-analytics-prompt span{font-size:13px; color:#b8b8b8; line-height:1.5;}
+      @media (max-width: 980px){ .ea-analytics-hero-grid{grid-template-columns:1fr;} }
     `;
-    document.head.appendChild(style);
+    NS.ui?.injectStyleOnce?.("ea-analytics-bundle-e", css);
   }
 
-  function getListings() {
-    const stateListings = Array.isArray(NS.state?.get?.("listings")) ? NS.state.get("listings") : [];
-    if (stateListings.length) return stateListings;
-    return [];
-  }
+  function buildModel() {
+    const postsRemaining = num("kpiPostsRemaining");
+    const reviewQueue = num("kpiReviewQueue");
+    const weakListings = num("kpiWeakListings");
+    const needsAction = num("kpiNeedsAction");
+    const activeListings = num("kpiActiveListings");
+    const views = num("kpiViews");
+    const messages = num("kpiMessages");
+    const timeSaved = num("analyticsTimeSavedWeek") || num("analyticsTimeSavedToday");
+    const revenueAttention = Math.max(reviewQueue + needsAction, weakListings);
+    const efficiency = num("analyticsEfficiencyScore");
+    const opportunities = [];
 
-  function buildActionQueue() {
-    const views = numberFromText(text("kpiViews") || text("analyticsTimeSavedToday"));
-    const messages = numberFromText(text("kpiMessages"));
-    const weak = numberFromText(text("kpiWeakListings"));
-    const review = numberFromText(text("kpiReviewQueue"));
-    const needsAction = numberFromText(text("kpiNeedsAction"));
-    const postsRemaining = numberFromText(text("kpiPostsRemaining") || text("extensionRemainingPosts"));
-    const active = numberFromText(text("kpiActiveListings"));
-    const stale = numberFromText(text("extensionStaleListings"));
-    const queue = numberFromText(text("kpiQueuedVehicles"));
-    const timeSaved = numberFromText(text("analyticsTimeSavedToday"));
+    if (postsRemaining > 0) opportunities.push({ bucket: "Capacity", title: `You still have ${postsRemaining} posting slot${postsRemaining === 1 ? "" : "s"} available`, copy: "Queue more vehicles and use available capacity before the day ends.", action: "Open Overview" });
+    if (weakListings > 0) opportunities.push({ bucket: "Do Now", title: `Weak listing pressure: ${weakListings}`, copy: "Review copy, pricing, and media on underperforming units first.", action: "Review Listings" });
+    if (reviewQueue > 0) opportunities.push({ bucket: "Review", title: `${reviewQueue} listing${reviewQueue === 1 ? "" : "s"} need validation`, copy: "Clear review items before they create stale or low-confidence output.", action: "Open Overview" });
+    if (messages < Math.max(1, Math.floor(views / 20)) && views > 0) opportunities.push({ bucket: "Revenue Move", title: "Views are not converting into enough messages", copy: "Tighten CTA, pricing, and copy on listings with traction but weak response.", action: "Open Overview" });
+    if (!opportunities.length) opportunities.push({ bucket: "Watch", title: "No urgent analytics fires", copy: "Stay focused on posting rhythm, review quality, and partner growth.", action: "Stay In Flow" });
 
-    const actions = [];
-    if (needsAction > 0) {
-      actions.push({
-        title: `Clear ${formatCount(needsAction)} listings needing action`,
-        copy: "These units are already flagged as requiring intervention. Clean these first because they are the closest revenue leaks.",
-        chips: ["Do Now", "Revenue Leak", "Operator"]
-      });
-    }
-    if (review > 0) {
-      actions.push({
-        title: `Review ${formatCount(review)} queued or flagged listings`,
-        copy: "Listings in review are blocking cleaner output. Validate them before adding more listing volume.",
-        chips: ["Do Today", "Review Queue"]
-      });
-    }
-    if (weak > 0) {
-      actions.push({
-        title: `Refresh ${formatCount(weak)} weak performers`,
-        copy: "Weak listings need price, copy, photo, or repost intervention. Treat this as upside recovery rather than passive reporting.",
-        chips: ["Opportunity", "Weak Performer"]
-      });
-    }
-    if (stale > 0) {
-      actions.push({
-        title: `Verify ${formatCount(stale)} stale listings`,
-        copy: "Older units likely need reposting, status review, or sold verification to prevent wasted attention.",
-        chips: ["Opportunity", "Likely Sold"]
-      });
-    }
-    if (postsRemaining > 0 && queue > 0) {
-      actions.push({
-        title: `Use remaining daily capacity`,
-        copy: `You still have posting capacity and ${formatCount(queue)} vehicles queued. Convert idle capacity into more live inventory exposure today.`,
-        chips: ["Leverage", "Capacity"]
-      });
-    }
-    if (active > 0 && views > 0 && messages === 0) {
-      actions.push({
-        title: "Traction without response detected",
-        copy: "Listings are generating views without message conversion. Review pricing, opening hook, and CTA language.",
-        chips: ["Conversion", "Price Review"]
-      });
-    }
-    if (timeSaved > 0) {
-      actions.push({
-        title: "Redeploy saved operator time",
-        copy: "Use reclaimed time for higher-value work: more queue prep, more follow-up, or more partner outreach.",
-        chips: ["Leverage", "Time Saved"]
-      });
-    }
+    let bestMove = opportunities[0];
+    let leak = weakListings > 0 ? "Weak listing quality is the biggest current leak." : reviewQueue > 0 ? "Review queue is slowing operator flow." : "No major leak detected.";
+    let upside = postsRemaining > 0 ? "Unused posting capacity is the clearest upside right now." : activeListings > 0 ? "Improve low performers before expanding volume." : "First live output is still the biggest upside unlock.";
 
-    if (!actions.length) {
-      actions.push({
-        title: "Build the next revenue signal",
-        copy: "Post more inventory, generate traction, and let the dashboard produce stronger action guidance from real activity.",
-        chips: ["Baseline", "Noisy Signal Low"]
-      });
-    }
-
-    return actions.slice(0, 5);
-  }
-
-  function buildInsightList() {
-    const postsRemaining = numberFromText(text("kpiPostsRemaining") || text("extensionRemainingPosts"));
-    const queue = numberFromText(text("kpiQueuedVehicles"));
-    const weak = numberFromText(text("kpiWeakListings"));
-    const active = numberFromText(text("kpiActiveListings"));
-    const messages = numberFromText(text("kpiMessages"));
-    const views = numberFromText(text("kpiViews"));
-
-    const insights = [];
-
-    insights.push({
-      title: postsRemaining > 0 ? "Unused capacity exists" : "Daily capacity is tight",
-      copy: postsRemaining > 0
-        ? `There are still ${formatCount(postsRemaining)} posting slots available today.`
-        : "Posting limit is close to fully used. Focus on quality intervention and response handling."
-    });
-
-    insights.push({
-      title: queue > 0 ? "Inventory is ready to move" : "Queue needs to be built",
-      copy: queue > 0
-        ? `${formatCount(queue)} vehicles are already queued, which supports immediate output.`
-        : "No vehicles are ready right now. Queue quality inventory before seeking more analytics depth."
-    });
-
-    insights.push({
-      title: weak > 0 ? "Underperformance is visible" : "Weak performer count is low",
-      copy: weak > 0
-        ? `${formatCount(weak)} listings need copy, pricing, repost, or media review.`
-        : "No major weak-performer cluster is currently visible from the tracked dashboard signals."
-    });
-
-    insights.push({
-      title: views > 0 ? "Market attention is active" : "Attention signal is still thin",
-      copy: views > 0
-        ? `${formatCount(views)} tracked views across ${formatCount(active)} active listings.`
-        : "More live posts are needed before the market signal becomes reliable."
-    });
-
-    insights.push({
-      title: messages > 0 ? "Conversation signal exists" : "Response conversion needs work",
-      copy: messages > 0
-        ? `${formatCount(messages)} buyer conversations are already in the system.`
-        : "Views without conversations usually point to offer, CTA, or pricing friction."
-    });
-
-    return insights.slice(0, 4);
-  }
-
-  function ensureHeader() {
-    const section = document.getElementById("tools");
-    if (!section) return null;
-    let shell = document.getElementById("analyticsRevenueShell");
-    if (!shell) {
-      shell = document.createElement("div");
-      shell.id = "analyticsRevenueShell";
-      shell.className = "ea-e-shell";
-      section.insertBefore(shell, section.firstElementChild);
-    }
-    return shell;
+    return { postsRemaining, reviewQueue, weakListings, needsAction, activeListings, views, messages, timeSaved, revenueAttention, efficiency, opportunities, bestMove, leak, upside };
   }
 
   function render() {
     injectStyles();
-    const shell = ensureHeader();
-    if (!shell) return;
+    const section = document.getElementById("tools");
+    if (!section) return;
+    const model = buildModel();
 
-    const weak = numberFromText(text("kpiWeakListings"));
-    const review = numberFromText(text("kpiReviewQueue"));
-    const capacity = numberFromText(text("kpiPostsRemaining") || text("extensionRemainingPosts"));
-    const value = moneyFromText(text("analyticsEstimatedValue"));
-    const efficiency = numberFromText(text("analyticsEfficiencyScore"));
-    const actions = buildActionQueue();
-    const insights = buildInsightList();
+    let mount = document.getElementById("eaAnalyticsTop");
+    if (!mount) {
+      mount = document.createElement("div");
+      mount.id = "eaAnalyticsTop";
+      mount.className = "ea-analytics-top";
+      section.insertBefore(mount, section.firstElementChild);
+    }
 
-    shell.innerHTML = `
-      <div class="ea-e-card">
-        <div class="ea-e-head">
+    mount.innerHTML = `
+      <div class="ea-analytics-hero">
+        <div class="section-head">
           <div>
-            <div class="ea-e-tag">Bundle E · Analytics Revenue Mode</div>
-            <div class="ea-e-title">Turn listing data into business action.</div>
-            <div class="ea-e-sub">This surface should tell the operator where the upside is, where the leak is, and what to do next — not just report metrics.</div>
+            <div class="module-group-label">Decision Engine</div>
+            <h2 style="margin-top:6px;">Use analytics to decide what move creates leverage.</h2>
+            <div class="subtext">Metrics matter only when they lead to a revenue move, cleanup move, or capacity move.</div>
           </div>
-          <div class="ea-e-badge">${weak > 0 || review > 0 ? "Action Queue Live" : "Signal Building"}</div>
         </div>
-
-        <div class="ea-e-top-grid">
-          <div>
-            <div class="ea-e-kpi-grid">
-              <div class="ea-e-kpi">
-                <div class="ea-e-kpi-label">Best Next Move</div>
-                <div class="ea-e-kpi-value">${weak > 0 ? "Review Weak" : review > 0 ? "Clear Review" : capacity > 0 ? "Use Capacity" : "Build Signal"}</div>
-                <div class="ea-e-kpi-sub">${actions[0]?.copy || "No clear action yet."}</div>
-              </div>
-              <div class="ea-e-kpi">
-                <div class="ea-e-kpi-label">Revenue Attention</div>
-                <div class="ea-e-kpi-value">${formatCount(Math.max(weak, review))}</div>
-                <div class="ea-e-kpi-sub">Listings or queues needing intervention now.</div>
-              </div>
-              <div class="ea-e-kpi">
-                <div class="ea-e-kpi-label">Remaining Capacity</div>
-                <div class="ea-e-kpi-value">${formatCount(capacity)}</div>
-                <div class="ea-e-kpi-sub">Unused posting output still available today.</div>
-              </div>
-              <div class="ea-e-kpi">
-                <div class="ea-e-kpi-label">Estimated Value</div>
-                <div class="ea-e-kpi-value">${formatMoney(value)}</div>
-                <div class="ea-e-kpi-sub">Current time-saved leverage estimate.</div>
-              </div>
+        <div class="ea-analytics-hero-grid">
+          <div class="ea-analytics-prompt-list">
+            <div class="ea-analytics-prompt">
+              <div class="k">Best Next Move</div>
+              <strong>${model.bestMove.title}</strong>
+              <span>${model.bestMove.copy}</span>
             </div>
-
-            <div class="ea-e-action-list">
-              ${actions.map((item, idx) => `
-                <div class="ea-e-action-item">
-                  <div class="ea-e-rank">${idx + 1}</div>
-                  <div class="meta" style="flex:1;">
-                    <div class="title">${item.title}</div>
-                    <div class="copy">${item.copy}</div>
-                    <div class="ea-e-chip-row">
-                      ${(item.chips || []).map((chip) => `<span class="ea-e-chip">${chip}</span>`).join("")}
-                    </div>
-                  </div>
-                </div>
-              `).join("")}
+            <div class="ea-analytics-prompt">
+              <div class="k">Biggest Leak</div>
+              <strong>${model.leak}</strong>
+              <span>Weak performers, review backlog, and underused capacity are the three current pressure points.</span>
             </div>
           </div>
-
-          <div class="ea-e-side-list">
-            ${insights.map((item) => `
-              <div class="ea-e-side-item">
-                <strong>${item.title}</strong>
-                <span>${item.copy}</span>
-              </div>
-            `).join("")}
-            <div class="ea-e-side-item">
-              <strong>Execution efficiency</strong>
-              <span>${formatCount(efficiency)}% of visible capacity is currently being converted into tracked output.</span>
+          <div class="ea-analytics-prompt-list">
+            <div class="ea-analytics-prompt">
+              <div class="k">Revenue Attention</div>
+              <strong>${model.revenueAttention}</strong>
+              <span>Listings that likely need intervention, refresh, or human review.</span>
+            </div>
+            <div class="ea-analytics-prompt">
+              <div class="k">Best Upside</div>
+              <strong>${model.upside}</strong>
+              <span>${model.postsRemaining > 0 ? "You still have execution room available." : "The next gain likely comes from improving quality, not raw volume."}</span>
             </div>
           </div>
         </div>
       </div>
+
+      <div class="card">
+        <div class="section-head">
+          <div>
+            <div class="module-group-label">Priority Opportunity Queue</div>
+            <h2 style="margin-top:6px;">What analytics says to do next.</h2>
+            <div class="subtext">This ranks capacity, weak listing quality, and conversion friction into a business-action feed.</div>
+          </div>
+        </div>
+        <div class="action-center-list">
+          ${model.opportunities.slice(0, 5).map((item, idx) => `
+            <div class="action-center-item">
+              <div class="action-center-item-head">
+                <div>
+                  <div class="action-center-item-title">${idx + 1}. ${item.title}</div>
+                  <div class="action-center-item-meta">${item.bucket}</div>
+                </div>
+                <span class="badge ${item.bucket === "Revenue Move" || item.bucket === "Capacity" ? "active" : item.bucket === "Watch" ? "warn" : "inactive"}">${item.bucket}</span>
+              </div>
+              <div class="action-center-item-copy">${item.copy}</div>
+              <div class="action-center-item-actions">
+                <button class="action-btn ea-analytics-action" type="button" data-idx="${idx}">${item.action}</button>
+              </div>
+            </div>
+          `).join("")}
+        </div>
+      </div>
     `;
 
-    demoteMetrics();
-  }
-
-  function demoteMetrics() {
-    const cards = qsa('#tools > .grid-3 .card, #tools > .grid-2 .card');
-    cards.forEach((card) => {
-      if (!card.dataset.bundleEDemoted) {
-        card.dataset.bundleEDemoted = "true";
-        card.classList.add("ea-e-demote");
-      }
+    mount.querySelectorAll(".ea-analytics-action").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const item = model.opportunities[Number(btn.dataset.idx)];
+        if (!item) return;
+        if (/overview|review/i.test(item.action)) showSection("overview");
+      });
     });
   }
 
-  function mount() {
+  function boot() {
     render();
-    setTimeout(render, 700);
-    setTimeout(render, 2200);
+    setTimeout(render, 1200);
+    setTimeout(render, 3200);
   }
 
-  NS.analytics = { mount, render };
-  if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", mount, { once: true });
-  } else {
-    mount();
-  }
-  if (NS.events instanceof EventTarget) {
-    NS.events.addEventListener("state:set", () => setTimeout(render, 120));
-  }
+  NS.analytics = { mount() { render(); return true; }, render };
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", boot, { once: true });
+  else boot();
+
+  NS.modules = NS.modules || {};
   NS.modules.analytics = true;
 })();
