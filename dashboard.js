@@ -3,12 +3,11 @@
   window.__ELEVATE_DASHBOARD_PHASE4_LOADER__ = true;
 
   const NS = (window.ElevateDashboard = window.ElevateDashboard || {});
-  NS.version = "phase2-deterministic-load-v1";
+  NS.version = "phase3-canonical-truth-v1";
   NS.modules = NS.modules || {};
   NS.events = NS.events || new EventTarget();
 
   const MODULES = [
-    "/dashboard-phase2-render.js?v=20260411p2a",
     "/dashboard-state.js?v=20260406p12a",
     "/dashboard-ui.js?v=20260406p12a",
     "/dashboard-api.js?v=20260406p12a",
@@ -20,6 +19,7 @@
     "/dashboard-affiliate.js?v=20260406p12a",
     "/dashboard-billing.js?v=20260406p12a",
     "/dashboard-legacy.js?v=20260406p12a",
+    "/dashboard-phase3-canonical.js?v=20260411p3a",
     "/dashboard-phase4-boot.js?v=20260406p12a",
     "/dashboard-bootstrap.js?v=20260406p12a"
   ];
@@ -91,10 +91,8 @@
 
   function userLooksHydrated() {
     const emailText = clean(document.querySelector(".user-email")?.textContent || "");
-    const hasSummary = Boolean(window.dashboardSummary && typeof window.dashboardSummary === "object");
     return Boolean(
       window.currentUser?.id ||
-      hasSummary ||
       (emailText && !/loading/i.test(emailText))
     );
   }
@@ -113,12 +111,11 @@
     if (window.__ELEVATE_CONTROLLED_BOOT_KICK__) return;
     window.__ELEVATE_CONTROLLED_BOOT_KICK__ = true;
 
-    setTimeout(() => {
-      const alreadyReady = document.body?.getAttribute("data-dashboard-ready") === "true";
-      if (!alreadyReady && !userLooksHydrated()) {
-        kickLegacyBoot();
-      }
-    }, 900);
+    [350].forEach((ms) => {
+      setTimeout(() => {
+        if (!userLooksHydrated()) kickLegacyBoot();
+      }, ms);
+    });
   }
 
   function loadScriptSequentially(index = 0) {
@@ -144,18 +141,15 @@
   installLateDOMContentLoadedCompat();
   setLoaderState("loading");
   setFriendlyStatus("Loading your operator workspace...");
-  NS.phase2render?.prepare?.();
 
   loadScriptSequentially()
     .then(() => {
       installControlledBootKick();
       setLoaderState("modules-loaded");
-      NS.phase2render?.watch?.();
     })
     .catch((error) => {
       console.error("[Elevate Dashboard] Loader error:", error);
       setLoaderState("error");
-      NS.phase2render?.markReady?.("error");
       setFriendlyStatus("Workspace load hit an issue. Refresh the page or use Refresh Access.");
     });
 })();
