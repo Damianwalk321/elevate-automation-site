@@ -3,7 +3,7 @@
   window.__ELEVATE_DASHBOARD_PHASE4_LOADER__ = true;
 
   const NS = (window.ElevateDashboard = window.ElevateDashboard || {});
-  NS.version = "phase3-canonical-truth-v1";
+  NS.version = "phase4-readiness-cleanup-v1";
   NS.modules = NS.modules || {};
   NS.events = NS.events || new EventTarget();
 
@@ -19,9 +19,11 @@
     "/dashboard-affiliate.js?v=20260406p12a",
     "/dashboard-billing.js?v=20260406p12a",
     "/dashboard-legacy.js?v=20260406p12a",
-    "/dashboard-phase3-canonical.js?v=20260411p3a",
     "/dashboard-phase4-boot.js?v=20260406p12a",
-    "/dashboard-bootstrap.js?v=20260406p12a"
+    "/dashboard-bootstrap.js?v=20260406p12a",
+    "/dashboard-phase2-render.js?v=20260411p2",
+    "/dashboard-phase3-canonical.js?v=20260411p3",
+    "/dashboard-phase4-readiness.js?v=20260411p4"
   ];
 
   let compatBootTriggered = false;
@@ -111,11 +113,9 @@
     if (window.__ELEVATE_CONTROLLED_BOOT_KICK__) return;
     window.__ELEVATE_CONTROLLED_BOOT_KICK__ = true;
 
-    [350].forEach((ms) => {
-      setTimeout(() => {
-        if (!userLooksHydrated()) kickLegacyBoot();
-      }, ms);
-    });
+    setTimeout(() => {
+      if (!userLooksHydrated()) kickLegacyBoot();
+    }, 600);
   }
 
   function loadScriptSequentially(index = 0) {
