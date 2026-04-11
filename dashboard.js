@@ -3,11 +3,12 @@
   window.__ELEVATE_DASHBOARD_PHASE4_LOADER__ = true;
 
   const NS = (window.ElevateDashboard = window.ElevateDashboard || {});
-  NS.version = "phase1-surface-cleanup-v1";
+  NS.version = "phase2-deterministic-load-v1";
   NS.modules = NS.modules || {};
   NS.events = NS.events || new EventTarget();
 
   const MODULES = [
+    "/dashboard-phase2-render.js?v=20260411p2a",
     "/dashboard-state.js?v=20260406p12a",
     "/dashboard-ui.js?v=20260406p12a",
     "/dashboard-api.js?v=20260406p12a",
@@ -90,8 +91,10 @@
 
   function userLooksHydrated() {
     const emailText = clean(document.querySelector(".user-email")?.textContent || "");
+    const hasSummary = Boolean(window.dashboardSummary && typeof window.dashboardSummary === "object");
     return Boolean(
       window.currentUser?.id ||
+      hasSummary ||
       (emailText && !/loading/i.test(emailText))
     );
   }
@@ -110,11 +113,12 @@
     if (window.__ELEVATE_CONTROLLED_BOOT_KICK__) return;
     window.__ELEVATE_CONTROLLED_BOOT_KICK__ = true;
 
-    [250, 1000].forEach((ms) => {
-      setTimeout(() => {
-        if (!userLooksHydrated()) kickLegacyBoot();
-      }, ms);
-    });
+    setTimeout(() => {
+      const alreadyReady = document.body?.getAttribute("data-dashboard-ready") === "true";
+      if (!alreadyReady && !userLooksHydrated()) {
+        kickLegacyBoot();
+      }
+    }, 900);
   }
 
   function loadScriptSequentially(index = 0) {
@@ -140,15 +144,18 @@
   installLateDOMContentLoadedCompat();
   setLoaderState("loading");
   setFriendlyStatus("Loading your operator workspace...");
+  NS.phase2render?.prepare?.();
 
   loadScriptSequentially()
     .then(() => {
       installControlledBootKick();
       setLoaderState("modules-loaded");
+      NS.phase2render?.watch?.();
     })
     .catch((error) => {
       console.error("[Elevate Dashboard] Loader error:", error);
       setLoaderState("error");
+      NS.phase2render?.markReady?.("error");
       setFriendlyStatus("Workspace load hit an issue. Refresh the page or use Refresh Access.");
     });
 })();

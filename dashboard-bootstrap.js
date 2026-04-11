@@ -3,7 +3,7 @@
   if (NS.modules?.bootstrap) return;
 
   const RETRY_TIMEOUT_MS = 12000;
-  const POLL_MS = 400;
+  const POLL_MS = 350;
 
   function qs(selector, root = document) {
     return root.querySelector(selector);
@@ -82,6 +82,8 @@
 
   function finalizeReady(detailMessage) {
     setWorkspaceState("true");
+    NS.phase2render?.markReady?.("ready");
+
     const bootStatus = document.getElementById("bootStatus");
     if (bootStatus) bootStatus.textContent = "";
 
@@ -97,6 +99,7 @@
   function startWatch() {
     ensureBootstrapState();
     setWorkspaceState("false");
+    NS.phase2render?.prepare?.();
     pushStage("Bootstrap", "Watching startup silently in production mode.");
 
     const startedAt = Date.now();
@@ -140,6 +143,7 @@
           finalizeReady("Workspace ready.");
         } else {
           setWorkspaceState("timeout");
+          NS.phase2render?.markReady?.("timeout");
           setFriendlyStatus("Workspace is taking longer than normal. Refresh Access if needed.");
         }
         clearInterval(intervalId);
