@@ -1,12 +1,9 @@
 (() => {
-  if (window.__ELEVATE_DASHBOARD_PHASE4_LOADER__) {
-    console.warn("[Elevate Dashboard] Phase 4 loader already initialized.");
-    return;
-  }
+  if (window.__ELEVATE_DASHBOARD_PHASE4_LOADER__) return;
   window.__ELEVATE_DASHBOARD_PHASE4_LOADER__ = true;
 
   const NS = (window.ElevateDashboard = window.ElevateDashboard || {});
-  NS.version = "phase4-loader-clean-rollback-v1";
+  NS.version = "phase1-surface-cleanup-v1";
   NS.modules = NS.modules || {};
   NS.events = NS.events || new EventTarget();
 
@@ -30,6 +27,26 @@
 
   function clean(value) {
     return String(value || "").replace(/\s+/g, " ").trim();
+  }
+
+  function setLoaderState(state) {
+    try {
+      document.body?.setAttribute("data-ea-loader", state);
+    } catch {}
+  }
+
+  function setFriendlyStatus(message) {
+    const bootStatus = document.getElementById("bootStatus");
+    if (bootStatus) bootStatus.textContent = "";
+
+    const welcomeText = document.getElementById("welcomeText");
+    if (!welcomeText) return;
+
+    const current = clean(welcomeText.textContent || "");
+    const looksLoading = !current || /loading|booting|starting/i.test(current);
+    if (message && looksLoading) {
+      welcomeText.textContent = message;
+    }
   }
 
   function installLateDOMContentLoadedCompat() {
@@ -79,10 +96,9 @@
     );
   }
 
-  function kickLegacyBoot(reason) {
+  function kickLegacyBoot() {
     if (compatBootTriggered) return;
     compatBootTriggered = true;
-    console.warn("[Elevate Dashboard] Triggering compatibility boot:", reason);
     try {
       document.dispatchEvent(new Event("DOMContentLoaded", { bubbles: true, cancelable: true }));
     } catch (error) {
@@ -94,12 +110,9 @@
     if (window.__ELEVATE_CONTROLLED_BOOT_KICK__) return;
     window.__ELEVATE_CONTROLLED_BOOT_KICK__ = true;
 
-    const checks = [50, 300, 1000, 2500];
-    checks.forEach((ms) => {
+    [250, 1000].forEach((ms) => {
       setTimeout(() => {
-        if (!userLooksHydrated()) {
-          kickLegacyBoot(`post-module-check-${ms}ms`);
-        }
+        if (!userLooksHydrated()) kickLegacyBoot();
       }, ms);
     });
   }
@@ -125,16 +138,17 @@
   }
 
   installLateDOMContentLoadedCompat();
+  setLoaderState("loading");
+  setFriendlyStatus("Loading your operator workspace...");
 
   loadScriptSequentially()
     .then(() => {
       installControlledBootKick();
+      setLoaderState("modules-loaded");
     })
     .catch((error) => {
-      console.error("[Elevate Dashboard] Phase 4 loader error:", error);
-      const status = document.getElementById("bootStatus");
-      if (status) {
-        status.textContent = `Phase 4 loader failed: ${error.message || "Unknown error"}`;
-      }
+      console.error("[Elevate Dashboard] Loader error:", error);
+      setLoaderState("error");
+      setFriendlyStatus("Workspace load hit an issue. Refresh the page or use Refresh Access.");
     });
 })();
