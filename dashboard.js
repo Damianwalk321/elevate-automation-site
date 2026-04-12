@@ -3,7 +3,7 @@
   window.__ELEVATE_DASHBOARD_PHASE18_20_LOADER__ = true;
 
   const NS = (window.ElevateDashboard = window.ElevateDashboard || {});
-  NS.version = "phase21-bundle-v1";
+  NS.version = "phase21-bundle-v1-repair1";
   NS.modules = NS.modules || {};
   NS.events = NS.events || new EventTarget();
 
@@ -47,7 +47,7 @@
     "/dashboard-phase18-commercial-v2.js?v=20260411p18",
     "/dashboard-phase19-language-compression.js?v=20260411p19",
     "/dashboard-phase20-rc-hardening.js?v=20260411p20",
-    "/dashboard-phase21-shell-cleanup.js?v=20260412p21"
+    "/dashboard-phase21-shell-repair.js?v=20260412p21r1"
   ];
 
   let compatBootTriggered = false;
