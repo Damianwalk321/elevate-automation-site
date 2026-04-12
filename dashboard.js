@@ -1,9 +1,9 @@
 (() => {
-  if (window.__ELEVATE_DASHBOARD_PHASE11R_LOADER__) return;
-  window.__ELEVATE_DASHBOARD_PHASE11R_LOADER__ = true;
+  if (window.__ELEVATE_DASHBOARD_PHASE12_LOADER__) return;
+  window.__ELEVATE_DASHBOARD_PHASE12_LOADER__ = true;
 
   const NS = (window.ElevateDashboard = window.ElevateDashboard || {});
-  NS.version = "phase11R-safe-consolidation-v1";
+  NS.version = "phase12-summary-contract-v2";
   NS.modules = NS.modules || {};
   NS.events = NS.events || new EventTarget();
 
@@ -37,7 +37,8 @@
     "/dashboard-phase8R-containment.js?v=20260411p8r",
     "/dashboard-phase9-commercial.js?v=20260411p9",
     "/dashboard-phase10-moat.js?v=20260411p10",
-    "/dashboard-phase11R-safe-consolidation.js?v=20260411p11r"
+    "/dashboard-phase11R-safe-consolidation.js?v=20260411p11r",
+    "/dashboard-phase12-summary.js?v=20260411p12"
   ];
 
   let compatBootTriggered = false;
