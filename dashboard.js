@@ -3,7 +3,7 @@
   window.__ELEVATE_DASHBOARD_PHASE4_LOADER__ = true;
 
   const NS = (window.ElevateDashboard = window.ElevateDashboard || {});
-  NS.version = "phase5.7-layout-compression-v1";
+  NS.version = "phase5.7R-layout-only-v1";
   NS.modules = NS.modules || {};
   NS.events = NS.events || new EventTarget();
 
@@ -31,7 +31,7 @@
     "/dashboard-phase5_4-overview-listings.js?v=20260411p54",
     "/dashboard-phase5_5-overview-sync.js?v=20260411p55",
     "/dashboard-phase5_6-overview-promote.js?v=20260411p56",
-    "/dashboard-phase5_7-layout-compress.js?v=20260411p57"
+    "/dashboard-phase5_7R-layout-only.js?v=20260411p57r"
   ];
 
   let compatBootTriggered = false;
@@ -41,17 +41,23 @@
   }
 
   function setLoaderState(state) {
-    try { document.body?.setAttribute("data-ea-loader", state); } catch {}
+    try {
+      document.body?.setAttribute("data-ea-loader", state);
+    } catch {}
   }
 
   function setFriendlyStatus(message) {
     const bootStatus = document.getElementById("bootStatus");
     if (bootStatus) bootStatus.textContent = "";
+
     const welcomeText = document.getElementById("welcomeText");
     if (!welcomeText) return;
+
     const current = clean(welcomeText.textContent || "");
     const looksLoading = !current || /loading|booting|starting/i.test(current);
-    if (message && looksLoading) welcomeText.textContent = message;
+    if (message && looksLoading) {
+      welcomeText.textContent = message;
+    }
   }
 
   function installLateDOMContentLoadedCompat() {
@@ -59,49 +65,78 @@
     window.__ELEVATE_LATE_DOMCONTENTLOADED_COMPAT__ = true;
 
     const originalAddEventListener = document.addEventListener.bind(document);
+
     document.addEventListener = function (type, listener, options) {
-      if (type === "DOMContentLoaded" && typeof listener === "function" && document.readyState !== "loading") {
+      if (
+        type === "DOMContentLoaded" &&
+        typeof listener === "function" &&
+        document.readyState !== "loading"
+      ) {
         try {
           queueMicrotask(() => {
-            try { listener.call(document, new Event("DOMContentLoaded")); }
-            catch (error) { console.error("[Elevate Dashboard] Late DOMContentLoaded listener failed:", error); }
+            try {
+              listener.call(document, new Event("DOMContentLoaded"));
+            } catch (error) {
+              console.error("[Elevate Dashboard] Late DOMContentLoaded listener failed:", error);
+            }
           });
-        } catch {
+        } catch (error) {
           setTimeout(() => {
-            try { listener.call(document, new Event("DOMContentLoaded")); }
-            catch (innerError) { console.error("[Elevate Dashboard] Late DOMContentLoaded listener failed:", innerError); }
+            try {
+              listener.call(document, new Event("DOMContentLoaded"));
+            } catch (innerError) {
+              console.error("[Elevate Dashboard] Late DOMContentLoaded listener failed:", innerError);
+            }
           }, 0);
         }
-        if (options and typeof options === "object" and options.once) return;
+
+        if (options && typeof options === "object" && options.once) {
+          return;
+        }
       }
+
       return originalAddEventListener(type, listener, options);
     };
   }
 
   function userLooksHydrated() {
     const emailText = clean(document.querySelector(".user-email")?.textContent || "");
-    return Boolean(window.currentUser?.id || (emailText && !/loading/i.test(emailText)));
+    return Boolean(
+      window.currentUser?.id ||
+      (emailText && !/loading/i.test(emailText))
+    );
   }
 
   function kickLegacyBoot() {
     if (compatBootTriggered) return;
     compatBootTriggered = true;
-    try { document.dispatchEvent(new Event("DOMContentLoaded", { bubbles: true, cancelable: true })); }
-    catch (error) { console.error("[Elevate Dashboard] Compatibility boot failed:", error); }
+    try {
+      document.dispatchEvent(new Event("DOMContentLoaded", { bubbles: true, cancelable: true }));
+    } catch (error) {
+      console.error("[Elevate Dashboard] Compatibility boot failed:", error);
+    }
   }
 
   function installControlledBootKick() {
     if (window.__ELEVATE_CONTROLLED_BOOT_KICK__) return;
     window.__ELEVATE_CONTROLLED_BOOT_KICK__ = true;
-    setTimeout(() => { if (!userLooksHydrated()) kickLegacyBoot(); }, 600);
+
+    setTimeout(() => {
+      if (!userLooksHydrated()) kickLegacyBoot();
+    }, 600);
   }
 
   function loadScriptSequentially(index = 0) {
     if (index >= MODULES.length) return Promise.resolve();
+
     const src = MODULES[index];
     return new Promise((resolve, reject) => {
       const existing = Array.from(document.scripts).find((s) => s.src && s.src.includes(src.split("?")[0]));
-      if (existing) return resolve();
+      if (existing) {
+        resolve();
+        return;
+      }
+
       const script = document.createElement("script");
       script.src = src;
       script.async = false;
