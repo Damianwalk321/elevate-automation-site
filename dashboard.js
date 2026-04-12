@@ -1,9 +1,9 @@
 (() => {
-  if (window.__ELEVATE_DASHBOARD_PHASE14_LOADER__) return;
-  window.__ELEVATE_DASHBOARD_PHASE14_LOADER__ = true;
+  if (window.__ELEVATE_DASHBOARD_PHASE15_LOADER__) return;
+  window.__ELEVATE_DASHBOARD_PHASE15_LOADER__ = true;
 
   const NS = (window.ElevateDashboard = window.ElevateDashboard || {});
-  NS.version = "phase14-registry-authority-v1";
+  NS.version = "phase15-attribution-engine-v2";
   NS.modules = NS.modules || {};
   NS.events = NS.events || new EventTarget();
 
@@ -40,7 +40,8 @@
     "/dashboard-phase11R-safe-consolidation.js?v=20260411p11r",
     "/dashboard-phase12-summary.js?v=20260411p12",
     "/dashboard-phase13-entities.js?v=20260411p13",
-    "/dashboard-phase14-registry-authority.js?v=20260411p14"
+    "/dashboard-phase14-registry-authority.js?v=20260411p14",
+    "/dashboard-phase15-attribution-v2.js?v=20260411p15"
   ];
 
   let compatBootTriggered = false;
