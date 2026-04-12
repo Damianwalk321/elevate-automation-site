@@ -3,7 +3,7 @@
   window.__ELEVATE_DASHBOARD_PHASE4_LOADER__ = true;
 
   const NS = (window.ElevateDashboard = window.ElevateDashboard || {});
-  NS.version = "phase5.1-listings-restore-v1";
+  NS.version = "phase5.2-listings-hotfix-v1";
   NS.modules = NS.modules || {};
   NS.events = NS.events || new EventTarget();
 
@@ -26,7 +26,7 @@
     "/dashboard-phase4-readiness.js?v=20260411p4",
     "/dashboard-phase4_2-cleanup.js?v=20260411p42",
     "/dashboard-phase5-command.js?v=20260411p5",
-    "/dashboard-phase5_1-listings-restore.js?v=20260411p51"
+    "/dashboard-phase5_2-hotfix.js?v=20260411p52"
   ];
 
   let compatBootTriggered = false;
