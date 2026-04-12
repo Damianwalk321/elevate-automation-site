@@ -3,7 +3,7 @@
   window.__ELEVATE_DASHBOARD_PHASE4_LOADER__ = true;
 
   const NS = (window.ElevateDashboard = window.ElevateDashboard || {});
-  NS.version = "phase5.4-overview-listings-hydrate-v1";
+  NS.version = "phase5.5-overview-sync-v1";
   NS.modules = NS.modules || {};
   NS.events = NS.events || new EventTarget();
 
@@ -28,7 +28,8 @@
     "/dashboard-phase5-command.js?v=20260411p5",
     "/dashboard-phase5_2-hotfix.js?v=20260411p52",
     "/dashboard-phase5_3-listings-shell.js?v=20260411p53",
-    "/dashboard-phase5_4-overview-listings.js?v=20260411p54"
+    "/dashboard-phase5_4-overview-listings.js?v=20260411p54",
+    "/dashboard-phase5_5-overview-sync.js?v=20260411p55"
   ];
 
   let compatBootTriggered = false;
@@ -54,13 +55,20 @@
   function installLateDOMContentLoadedCompat() {
     if (window.__ELEVATE_LATE_DOMCONTENTLOADED_COMPAT__) return;
     window.__ELEVATE_LATE_DOMCONTENTLOADED_COMPAT__ = true;
+
     const originalAddEventListener = document.addEventListener.bind(document);
     document.addEventListener = function (type, listener, options) {
       if (type === "DOMContentLoaded" && typeof listener === "function" && document.readyState !== "loading") {
         try {
-          queueMicrotask(() => { try { listener.call(document, new Event("DOMContentLoaded")); } catch (error) { console.error("[Elevate Dashboard] Late DOMContentLoaded listener failed:", error); } });
+          queueMicrotask(() => {
+            try { listener.call(document, new Event("DOMContentLoaded")); }
+            catch (error) { console.error("[Elevate Dashboard] Late DOMContentLoaded listener failed:", error); }
+          });
         } catch {
-          setTimeout(() => { try { listener.call(document, new Event("DOMContentLoaded")); } catch (innerError) { console.error("[Elevate Dashboard] Late DOMContentLoaded listener failed:", innerError); } }, 0);
+          setTimeout(() => {
+            try { listener.call(document, new Event("DOMContentLoaded")); }
+            catch (innerError) { console.error("[Elevate Dashboard] Late DOMContentLoaded listener failed:", innerError); }
+          }, 0);
         }
         if (options && typeof options === "object" && options.once) return;
       }
