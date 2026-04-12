@@ -1,9 +1,9 @@
 (() => {
-  if (window.__ELEVATE_DASHBOARD_PHASE17_LOADER__) return;
-  window.__ELEVATE_DASHBOARD_PHASE17_LOADER__ = true;
+  if (window.__ELEVATE_DASHBOARD_PHASE18_20_LOADER__) return;
+  window.__ELEVATE_DASHBOARD_PHASE18_20_LOADER__ = true;
 
   const NS = (window.ElevateDashboard = window.ElevateDashboard || {});
-  NS.version = "phase17-team-dealer-command-v2";
+  NS.version = "phase18-20-bundle-v1";
   NS.modules = NS.modules || {};
   NS.events = NS.events || new EventTarget();
 
@@ -43,7 +43,10 @@
     "/dashboard-phase14-registry-authority.js?v=20260411p14",
     "/dashboard-phase15-attribution-v2.js?v=20260411p15",
     "/dashboard-phase16-optimization-v2.js?v=20260411p16",
-    "/dashboard-phase17-team-command-v2.js?v=20260411p17"
+    "/dashboard-phase17-team-command-v2.js?v=20260411p17",
+    "/dashboard-phase18-commercial-v2.js?v=20260411p18",
+    "/dashboard-phase19-language-compression.js?v=20260411p19",
+    "/dashboard-phase20-rc-hardening.js?v=20260411p20"
   ];
 
   let compatBootTriggered = false;
