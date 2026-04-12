@@ -27,9 +27,7 @@ function storeReferralData(code, source = "direct") {
 
   try {
     const existing = normalizeReferralCode(localStorage.getItem("elevate_referral_code"));
-    if (existing && existing !== normalizedCode) {
-      return;
-    }
+    if (existing && existing !== normalizedCode) return;
     localStorage.setItem("elevate_referral_code", normalizedCode);
     localStorage.setItem("elevate_referral_source", normalizeReferralCode(source) || "direct");
   } catch (error) {
@@ -37,7 +35,7 @@ function storeReferralData(code, source = "direct") {
   }
 }
 
-function showReferralBanner(refCode, source = "direct") {
+function showReferralBanner(refCode) {
   const banner = document.getElementById("referral-banner");
   const display = document.getElementById("referral-code-display");
 
@@ -45,23 +43,26 @@ function showReferralBanner(refCode, source = "direct") {
 
   display.textContent = refCode;
   banner.classList.remove("hidden");
-
-  storeReferralData(refCode, source);
 }
 
 function loadStoredReferralCode() {
-  const queryRef = normalizeReferralCode(getQueryParam("ref") || getQueryParam("referral_code") || getQueryParam("affiliate") || getQueryParam("code"));
+  const queryRef = normalizeReferralCode(
+    getQueryParam("ref") ||
+    getQueryParam("referral_code") ||
+    getQueryParam("affiliate") ||
+    getQueryParam("code")
+  );
   const stored = getStoredReferralData();
 
   if (queryRef) {
     storeReferralData(queryRef, stored.code ? stored.source : "link");
     const locked = getStoredReferralData();
-    showReferralBanner(locked.code, locked.source);
+    showReferralBanner(locked.code);
     return locked.code;
   }
 
   if (stored.code) {
-    showReferralBanner(stored.code, stored.source);
+    showReferralBanner(stored.code);
     return stored.code;
   }
 
@@ -119,7 +120,7 @@ async function startCheckout(planType, userType, accessType) {
     const referralSource = getStoredReferralData().source;
 
     if (!email) {
-      showCheckoutMessage("Please create an account or log in before starting your free trial.", true);
+      showCheckoutMessage("Please create an account or log in before checkout.", true);
       window.location.href = "/login.html";
       return;
     }
@@ -177,15 +178,6 @@ function bindCheckoutButtons() {
 }
 
 function bindStaticPartnerActions() {
-  const partnerEmailButtons = document.querySelectorAll("[data-partner-email]");
-  partnerEmailButtons.forEach((button) => {
-    button.addEventListener("click", () => {
-      const subject = encodeURIComponent("Elevate Automation Team / Partner Inquiry");
-      const body = encodeURIComponent("Name:\nCompany:\nRole:\nProvince:\nTeam size:\nHow I want to use Elevate Automation:\n");
-      window.location.href = `mailto:ElevateGPmarketing@gmail.com?subject=${subject}&body=${body}`;
-    });
-  });
-
   const betaAccessButtons = document.querySelectorAll("[data-beta-access]");
   betaAccessButtons.forEach((button) => {
     button.addEventListener("click", async () => {
