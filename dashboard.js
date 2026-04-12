@@ -3,7 +3,7 @@
   window.__ELEVATE_DASHBOARD_PHASE4_LOADER__ = true;
 
   const NS = (window.ElevateDashboard = window.ElevateDashboard || {});
-  NS.version = "phase5.7R-layout-only-v1";
+  NS.version = "phase6-listing-intelligence-v1";
   NS.modules = NS.modules || {};
   NS.events = NS.events || new EventTarget();
 
@@ -31,7 +31,8 @@
     "/dashboard-phase5_4-overview-listings.js?v=20260411p54",
     "/dashboard-phase5_5-overview-sync.js?v=20260411p55",
     "/dashboard-phase5_6-overview-promote.js?v=20260411p56",
-    "/dashboard-phase5_7R-layout-only.js?v=20260411p57r"
+    "/dashboard-phase5_7R-layout-only.js?v=20260411p57r",
+    "/dashboard-phase6-intelligence.js?v=20260411p6"
   ];
 
   let compatBootTriggered = false;
