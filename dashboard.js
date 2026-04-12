@@ -3,7 +3,7 @@
   window.__ELEVATE_DASHBOARD_PHASE4_LOADER__ = true;
 
   const NS = (window.ElevateDashboard = window.ElevateDashboard || {});
-  NS.version = "phase7-event-attribution-v1";
+  NS.version = "phase8-manager-team-layer-v1";
   NS.modules = NS.modules || {};
   NS.events = NS.events || new EventTarget();
 
@@ -33,7 +33,8 @@
     "/dashboard-phase5_6-overview-promote.js?v=20260411p56",
     "/dashboard-phase5_7R-layout-only.js?v=20260411p57r",
     "/dashboard-phase6-intelligence.js?v=20260411p6",
-    "/dashboard-phase7-events.js?v=20260411p7"
+    "/dashboard-phase7-events.js?v=20260411p7",
+    "/dashboard-phase8-manager.js?v=20260411p8"
   ];
 
   let compatBootTriggered = false;
