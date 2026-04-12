@@ -3,7 +3,7 @@
   window.__ELEVATE_DASHBOARD_PHASE4_LOADER__ = true;
 
   const NS = (window.ElevateDashboard = window.ElevateDashboard || {});
-  NS.version = "phase9-commercial-growth-v1";
+  NS.version = "phase10-moat-features-v1";
   NS.modules = NS.modules || {};
   NS.events = NS.events || new EventTarget();
 
@@ -35,7 +35,8 @@
     "/dashboard-phase6-intelligence.js?v=20260411p6",
     "/dashboard-phase7-events.js?v=20260411p7",
     "/dashboard-phase8R-containment.js?v=20260411p8r",
-    "/dashboard-phase9-commercial.js?v=20260411p9"
+    "/dashboard-phase9-commercial.js?v=20260411p9",
+    "/dashboard-phase10-moat.js?v=20260411p10"
   ];
 
   let compatBootTriggered = false;
