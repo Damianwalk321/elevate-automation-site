@@ -2,7 +2,7 @@
 (() => {
   const NS = (window.ElevateDashboard = window.ElevateDashboard || {});
   const MODULE_KEY = "phase21shell";
-  const STYLE_ID = "ea-phase43-listings-source-truth-shell";
+  const STYLE_ID = "ea-phase5-portfolio-triage-shell";
   const SECTION_LISTINGS = "listings";
   const SECTION_REVIEW = "review_center";
 
@@ -54,6 +54,28 @@
     if (days < 7) return `${days}d ago`;
     return formatShortDate(value);
   }
+  function urgencyLevel(item) {
+    const life = clean(item.lifecycle_status || item.review_bucket || item.status || "").toLowerCase();
+    if (item.likely_sold || life === "review_delete") return "critical";
+    if (item.needs_action || life === "review_price_update") return "high";
+    if (item.weak || life === "review_new" || life === "stale") return "medium";
+    return "normal";
+  }
+  function urgencyLabel(item) {
+    const level = urgencyLevel(item);
+    if (level === "critical") return "Act now";
+    if (level === "high") return "High priority";
+    if (level === "medium") return "Review soon";
+    return "Stable";
+  }
+  function primaryAction(item) {
+    const life = clean(item.lifecycle_status || "").toLowerCase();
+    if (item.likely_sold || life === "review_delete") return "Mark sold or confirm active";
+    if (life === "review_price_update" || /price/i.test(clean(item.pricing_insight || ""))) return "Review price";
+    if (item.weak) return "Refresh positioning";
+    if (item.needs_action) return "Inspect and decide";
+    return "Keep live";
+  }
 
   function normalizeRow(row = {}) {
     const title = clean(row.title || [row.year, row.make, row.model, row.trim].filter(Boolean).join(" ")) || "Vehicle Listing";
@@ -93,11 +115,9 @@
   function rowsFromGlobalState() {
     return shallowCloneRows(window.dashboardListings).filter(Boolean).map(normalizeRow).filter((row) => row.title);
   }
-
   function rowsFromSummaryRecent() {
     return shallowCloneRows(getSummary().recent_listings).filter(Boolean).map(normalizeRow).filter((row) => row.title);
   }
-
   function rowsFromTopListingsDom() {
     const wrap = document.getElementById("topListings");
     if (!wrap) return [];
@@ -121,7 +141,6 @@
       });
     }).filter((row) => row.title);
   }
-
   function inferLifecycleFromText(text) {
     const raw = clean(text).toLowerCase();
     if (/review delete|likely sold|sold/i.test(raw)) return "review_delete";
@@ -130,7 +149,6 @@
     if (/stale/i.test(raw)) return "stale";
     return raw || "active";
   }
-
   function rowsFromOverviewCardsDom() {
     const grid = document.getElementById("recentListingsGrid");
     if (!grid) return [];
@@ -153,7 +171,6 @@
       });
       const stockMatch = sub.match(/Stock\s+([^\s•]+)/i);
       const vinMatch = sub.match(/VIN\s+([^\s•]+)/i);
-
       return normalizeRow({
         id: `overview_${index}_${titleKey(title) || "listing"}`,
         title,
@@ -176,7 +193,6 @@
       });
     }).filter((row) => row.title);
   }
-
   function rowsFromSummaryFallbackKpis() {
     const summary = getSummary();
     const topTitle = clean(summary.top_listing_title || "");
@@ -189,7 +205,6 @@
       popularity_score: 1
     })];
   }
-
   function mergeRowsWithPriority(sourceRows) {
     const map = new Map();
     sourceRows.forEach(({ rows, priority, label }) => {
@@ -205,7 +220,6 @@
     });
     return Array.from(map.values()).map(({ __priority, __source, ...row }) => row);
   }
-
   function resolveCanonicalListings() {
     const globalRows = rowsFromGlobalState();
     const overviewRows = rowsFromOverviewCardsDom();
@@ -249,7 +263,6 @@
     state.listingsSource = source;
     return rows;
   }
-
   function syncCanonicalListings() {
     const rows = resolveCanonicalListings();
     if (rows.length) {
@@ -262,12 +275,10 @@
     }
     return shallowCloneRows(window.dashboardListings || state.listingsCache);
   }
-
   function getListings() {
     const synced = syncCanonicalListings();
     return Array.isArray(synced) ? synced : [];
   }
-
   function getActionDetails() {
     return getSummary().action_center_details || {};
   }
@@ -277,39 +288,75 @@
     const style = document.createElement("style");
     style.id = STYLE_ID;
     style.textContent = `
-      .phase43-shell-note { color: var(--muted); font-size: 13px; line-height: 1.5; }
-      .phase43-jumpbar { display:grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 10px; margin: 14px 0 18px; }
-      .phase43-jumpbar .action-btn { min-height: 48px; }
-      .phase43-section-hero { margin-bottom: 16px; background: linear-gradient(180deg, rgba(255,255,255,.02), rgba(255,255,255,.005)); }
-      .phase43-eyebrow { color: var(--gold); font-size: 12px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; margin-bottom: 8px; }
-      .phase43-toolbar { display:flex; justify-content:space-between; gap:12px; align-items:center; margin-bottom:16px; flex-wrap:wrap; }
-      .phase43-toolbar-left, .phase43-toolbar-right { display:flex; gap:8px; flex-wrap:wrap; }
-      .phase43-toolbar input, .phase43-toolbar select { min-width: 220px; background:#1a1a1a; color:#f5f5f5; border:1px solid rgba(255,255,255,.08); border-radius:12px; padding:12px 14px; }
-      .phase43-listing-card { border-radius: 16px; }
-      .phase43-listing-card .listing-media { height: 170px; }
-      .phase43-listing-card .listing-content { gap: 10px; }
-      .phase43-mini-row { display:grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 10px; margin-bottom: 16px; }
-      .phase43-mini-card { background:#161616; border:1px solid rgba(255,255,255,.06); border-radius:14px; padding:14px; }
-      .phase43-mini-label { color: var(--gold); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; margin-bottom: 6px; font-weight: 700; }
-      .phase43-mini-value { font-size: 22px; font-weight: 800; line-height: 1.1; }
-      .phase43-queue-grid { display:grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap:16px; margin-bottom: 18px; }
-      .phase43-queue { display:grid; gap:10px; }
-      .phase43-queue-item { display:flex; justify-content:space-between; gap:12px; align-items:flex-start; padding:14px; border-radius:14px; background:#161616; border:1px solid rgba(255,255,255,.06); }
-      .phase43-queue-title { font-weight:700; margin-bottom:5px; }
-      .phase43-queue-sub { color: var(--muted); font-size:13px; line-height:1.45; }
-      .phase43-queue-meta { color: var(--gold-soft); font-size:12px; line-height:1.45; margin-top: 6px; }
-      .phase43-overview-compressed .card h2.phase43-primary-hero { font-size: 28px !important; line-height: 1.08 !important; }
-      .phase43-overview-compressed .phase43-onboarding-card { border-color: rgba(212,175,55,.16); }
-      .phase43-review-actions, .phase43-listing-actions { display:grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap:8px; margin-top: 10px; }
-      .phase43-empty { padding: 22px; text-align:center; color: var(--muted); border:1px dashed rgba(212,175,55,.18); border-radius: 14px; background:#111; }
-      .phase43-statusline { color: var(--gold-soft); font-size: 12px; margin: 4px 0 12px; }
+      .phase5-shell-note { color: var(--muted); font-size: 12px; line-height: 1.45; }
+      .phase5-jumpbar { display:grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 10px; margin: 12px 0 16px; }
+      .phase5-jumpbar .action-btn { min-height: 46px; }
+      .phase5-section-hero { margin-bottom: 14px; background: linear-gradient(180deg, rgba(255,255,255,.02), rgba(255,255,255,.005)); }
+      .phase5-eyebrow { color: var(--gold); font-size: 12px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; margin-bottom: 8px; }
+      .phase5-toolbar { display:flex; justify-content:space-between; gap:12px; align-items:center; margin-bottom:14px; flex-wrap:wrap; }
+      .phase5-toolbar-left, .phase5-toolbar-right { display:flex; gap:8px; flex-wrap:wrap; }
+      .phase5-toolbar input, .phase5-toolbar select {
+        min-width: 220px; background:#1a1a1a; color:#f5f5f5; border:1px solid rgba(255,255,255,.08);
+        border-radius:12px; padding:11px 13px;
+      }
+      .phase5-statusline { color: var(--gold-soft); font-size: 12px; margin: 2px 0 10px; }
+      .phase5-listing-card { border-radius: 16px; overflow:hidden; }
+      .phase5-listing-card .listing-media { height: 165px; position: relative; }
+      .phase5-chiprow {
+        position:absolute; left:10px; right:10px; top:10px; display:flex; justify-content:space-between; gap:8px; align-items:flex-start;
+      }
+      .phase5-chipstack { display:flex; gap:6px; flex-wrap:wrap; }
+      .phase5-chip {
+        display:inline-flex; align-items:center; min-height:26px; padding:0 9px; border-radius:999px; font-size:11px; font-weight:700;
+        border:1px solid rgba(255,255,255,.08); background:#101010; color:#f1f1f1;
+      }
+      .phase5-chip.critical { background: rgba(120,20,20,.9); color:#ffd3d3; border-color: rgba(255,120,120,.24); }
+      .phase5-chip.high { background: rgba(212,175,55,.18); color:#f3ddb0; border-color: rgba(212,175,55,.24); }
+      .phase5-chip.medium { background: rgba(80,80,80,.95); color:#f2f2f2; border-color: rgba(255,255,255,.14); }
+      .phase5-cardbody { padding:14px; display:grid; gap:8px; }
+      .phase5-headline { display:grid; gap:4px; }
+      .phase5-title { font-size:18px; font-weight:800; line-height:1.2; }
+      .phase5-sub { color: var(--muted); font-size:12px; line-height:1.45; }
+      .phase5-pricerow { display:flex; justify-content:space-between; align-items:flex-end; gap:10px; }
+      .phase5-price { font-size:24px; font-weight:800; color: var(--gold-soft); line-height:1.1; }
+      .phase5-primaryaction { font-size:12px; font-weight:700; color: var(--gold-soft); text-align:right; }
+      .phase5-metricrow { display:grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap:8px; }
+      .phase5-metric {
+        background:#171717; border:1px solid rgba(255,255,255,.06); border-radius:12px; padding:9px 10px;
+      }
+      .phase5-metric-label { font-size:10px; text-transform:uppercase; letter-spacing:.08em; color:var(--gold); margin-bottom:4px; font-weight:700; }
+      .phase5-metric-value { font-size:13px; font-weight:700; color:#f0f0f0; }
+      .phase5-reason {
+        background: rgba(212,175,55,.06); border:1px solid rgba(212,175,55,.14); border-radius:12px; padding:10px 11px;
+      }
+      .phase5-reason-label { font-size:10px; text-transform:uppercase; letter-spacing:.08em; color:var(--gold); margin-bottom:4px; font-weight:700; }
+      .phase5-reason-copy { font-size:12px; color:#f0e6cc; line-height:1.45; }
+      .phase5-actiongrid { display:grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap:8px; }
+      .phase5-mini-row { display:grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap:10px; margin-bottom: 14px; }
+      .phase5-mini-card { background:#161616; border:1px solid rgba(255,255,255,.06); border-radius:14px; padding:14px; }
+      .phase5-mini-label { color: var(--gold); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; margin-bottom: 6px; font-weight: 700; }
+      .phase5-mini-value { font-size: 22px; font-weight: 800; line-height: 1.1; }
+      .phase5-queue-grid { display:grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap:16px; margin-bottom: 16px; }
+      .phase5-queue { display:grid; gap:10px; }
+      .phase5-queue-item {
+        display:grid; gap:8px; padding:14px; border-radius:14px; background:#161616; border:1px solid rgba(255,255,255,.06);
+      }
+      .phase5-queue-top { display:flex; justify-content:space-between; gap:10px; align-items:flex-start; }
+      .phase5-queue-title { font-weight:800; line-height:1.3; }
+      .phase5-queue-sub { color: var(--muted); font-size:13px; line-height:1.45; }
+      .phase5-queue-meta { display:flex; gap:6px; flex-wrap:wrap; }
+      .phase5-empty { padding: 22px; text-align:center; color: var(--muted); border:1px dashed rgba(212,175,55,.18); border-radius: 14px; background:#111; }
+      .phase5-overview-compressed .phase5-onboarding-card { padding:18px !important; }
+      .phase5-overview-compressed .card h2.phase5-primary-hero { font-size: 24px !important; line-height:1.06 !important; }
+      .phase5-overview-compressed .phase5-onboarding-card .stat-row,
+      .phase5-overview-compressed .phase5-onboarding-card .mini-stat-grid { gap:8px !important; }
       @media (max-width: 1100px) {
-        .phase43-queue-grid, .phase43-mini-row, .phase43-jumpbar, .phase43-review-actions, .phase43-listing-actions { grid-template-columns: 1fr 1fr; }
+        .phase5-queue-grid, .phase5-mini-row, .phase5-jumpbar, .phase5-actiongrid, .phase5-metricrow { grid-template-columns: 1fr 1fr; }
       }
       @media (max-width: 760px) {
-        .phase43-toolbar { flex-direction: column; align-items: stretch; }
-        .phase43-toolbar input, .phase43-toolbar select { min-width: 100%; width: 100%; }
-        .phase43-queue-grid, .phase43-mini-row, .phase43-jumpbar, .phase43-review-actions, .phase43-listing-actions { grid-template-columns: 1fr; }
+        .phase5-toolbar { flex-direction: column; align-items: stretch; }
+        .phase5-toolbar input, .phase5-toolbar select { min-width: 100%; width: 100%; }
+        .phase5-queue-grid, .phase5-mini-row, .phase5-jumpbar, .phase5-actiongrid, .phase5-metricrow { grid-template-columns: 1fr; }
       }
     `;
     document.head.appendChild(style);
@@ -319,7 +366,6 @@
     const nav = qs(".sidebar-nav");
     if (!nav) return;
     const placeBefore = nav.querySelector('[data-section="tools"]') || null;
-
     if (!nav.querySelector(`[data-section="${SECTION_LISTINGS}"]`)) {
       const btn = document.createElement("button");
       btn.className = "nav-btn";
@@ -343,8 +389,8 @@
     section.id = id;
     section.className = "dashboard-section";
     section.innerHTML = `
-      <div class="card phase43-section-hero">
-        <div class="phase43-eyebrow">${title}</div>
+      <div class="card phase5-section-hero">
+        <div class="phase5-eyebrow">${title}</div>
         <h2>${title}</h2>
         <div class="subtext">${subtitle}</div>
       </div>
@@ -360,30 +406,30 @@
       const listings = sectionShell(
         SECTION_LISTINGS,
         "Listings",
-        "Portfolio page fed from the same live listing sources already powering the dashboard."
+        "Cleaner portfolio cards with stronger price, status, and next-action hierarchy."
       );
       listings.insertAdjacentHTML("beforeend", `
-        <div class="phase43-toolbar card">
-          <div class="phase43-toolbar-left">
-            <button class="action-btn active" type="button" data-phase43-filter="all">All</button>
-            <button class="action-btn" type="button" data-phase43-filter="active">Active</button>
-            <button class="action-btn" type="button" data-phase43-filter="review">Review</button>
-            <button class="action-btn" type="button" data-phase43-filter="weak">Weak</button>
-            <button class="action-btn" type="button" data-phase43-filter="likely_sold">Likely Sold</button>
-            <button class="action-btn" type="button" data-phase43-filter="needs_action">Needs Action</button>
+        <div class="phase5-toolbar card">
+          <div class="phase5-toolbar-left">
+            <button class="action-btn active" type="button" data-phase5-filter="all">All</button>
+            <button class="action-btn" type="button" data-phase5-filter="active">Active</button>
+            <button class="action-btn" type="button" data-phase5-filter="review">Review</button>
+            <button class="action-btn" type="button" data-phase5-filter="weak">Weak</button>
+            <button class="action-btn" type="button" data-phase5-filter="likely_sold">Likely Sold</button>
+            <button class="action-btn" type="button" data-phase5-filter="needs_action">Needs Action</button>
           </div>
-          <div class="phase43-toolbar-right">
-            <select id="phase43ListingsSort">
+          <div class="phase5-toolbar-right">
+            <select id="phase5ListingsSort">
               <option value="popular">Sort: Most Popular</option>
               <option value="newest">Sort: Newest</option>
               <option value="price_high">Sort: Price High → Low</option>
               <option value="price_low">Sort: Price Low → High</option>
             </select>
-            <input id="phase43ListingsSearch" type="text" placeholder="Search make, model, VIN, stock..." />
+            <input id="phase5ListingsSearch" type="text" placeholder="Search make, model, VIN, stock..." />
           </div>
         </div>
-        <div id="phase43ListingsStatus" class="phase43-statusline"></div>
-        <div id="phase43ListingsGrid" class="listing-grid"></div>
+        <div id="phase5ListingsStatus" class="phase5-statusline"></div>
+        <div id="phase5ListingsGrid" class="listing-grid"></div>
       `);
       mainInner.appendChild(listings);
     }
@@ -392,29 +438,29 @@
       const review = sectionShell(
         SECTION_REVIEW,
         "Review Center",
-        "Review queues fed from the same canonical listing bridge."
+        "Sharper triage cards with clearer urgency, reason, and next move."
       );
       review.insertAdjacentHTML("beforeend", `
-        <div class="phase43-mini-row">
-          <div class="phase43-mini-card"><div class="phase43-mini-label">Review Queue</div><div id="phase43ReviewQueue" class="phase43-mini-value">0</div></div>
-          <div class="phase43-mini-card"><div class="phase43-mini-label">Likely Sold</div><div id="phase43LikelySold" class="phase43-mini-value">0</div></div>
-          <div class="phase43-mini-card"><div class="phase43-mini-label">Weak Listings</div><div id="phase43WeakListings" class="phase43-mini-value">0</div></div>
-          <div class="phase43-mini-card"><div class="phase43-mini-label">Promote Now</div><div id="phase43PromoteNow" class="phase43-mini-value">0</div></div>
+        <div class="phase5-mini-row">
+          <div class="phase5-mini-card"><div class="phase5-mini-label">Review Queue</div><div id="phase5ReviewQueue" class="phase5-mini-value">0</div></div>
+          <div class="phase5-mini-card"><div class="phase5-mini-label">Likely Sold</div><div id="phase5LikelySold" class="phase5-mini-value">0</div></div>
+          <div class="phase5-mini-card"><div class="phase5-mini-label">Weak Listings</div><div id="phase5WeakListings" class="phase5-mini-value">0</div></div>
+          <div class="phase5-mini-card"><div class="phase5-mini-label">Promote Now</div><div id="phase5PromoteNow" class="phase5-mini-value">0</div></div>
         </div>
-        <div id="phase43ReviewStatus" class="phase43-statusline"></div>
-        <div class="phase43-queue-grid">
-          <div class="card"><div class="section-head"><h2>Needs Attention</h2></div><div id="phase43NeedsAttention" class="phase43-queue"></div></div>
-          <div class="card"><div class="section-head"><h2>Today</h2></div><div id="phase43TodayQueue" class="phase43-queue"></div></div>
-          <div class="card"><div class="section-head"><h2>Opportunities</h2></div><div id="phase43Opportunities" class="phase43-queue"></div></div>
+        <div id="phase5ReviewStatus" class="phase5-statusline"></div>
+        <div class="phase5-queue-grid">
+          <div class="card"><div class="section-head"><h2>Needs Attention</h2></div><div id="phase5NeedsAttention" class="phase5-queue"></div></div>
+          <div class="card"><div class="section-head"><h2>Today</h2></div><div id="phase5TodayQueue" class="phase5-queue"></div></div>
+          <div class="card"><div class="section-head"><h2>Opportunities</h2></div><div id="phase5Opportunities" class="phase5-queue"></div></div>
         </div>
         <div class="card">
           <div class="section-head">
             <div>
-              <h2>Operator Actions</h2>
-              <div class="subtext">Review cards sourced from the same canonical portfolio rows.</div>
+              <h2>Priority Review Cards</h2>
+              <div class="subtext">Triage-first cards using the same canonical portfolio rows.</div>
             </div>
           </div>
-          <div id="phase43ReviewCards" class="listing-grid"></div>
+          <div id="phase5ReviewCards" class="listing-grid"></div>
         </div>
       `);
       mainInner.appendChild(review);
@@ -424,35 +470,32 @@
   function patchOverview() {
     const overview = document.getElementById("overview");
     if (!overview) return;
-    overview.classList.add("phase43-overview-compressed");
-
+    overview.classList.add("phase5-overview-compressed");
     let onboardingCard = null;
     qsa("#overview .card").forEach((card) => {
       const heading = clean(card.querySelector("h2")?.textContent || "");
       if (/complete setup to unlock first-post value|operator snapshot and next actions|action priorities and lifecycle pressure/i.test(heading)) onboardingCard = card;
     });
-
     if (onboardingCard) {
-      onboardingCard.classList.add("phase43-onboarding-card");
+      onboardingCard.classList.add("phase5-onboarding-card");
       const heading = onboardingCard.querySelector("h2");
       if (heading) {
-        heading.textContent = "Operator snapshot and next actions.";
-        heading.classList.add("phase43-primary-hero");
+        heading.textContent = "Operator command center.";
+        heading.classList.add("phase5-primary-hero");
       }
       const firstSub = onboardingCard.querySelector(".subtext, p");
-      if (firstSub) firstSub.textContent = "This page should prioritize action, queue pressure, and listing health first.";
+      if (firstSub) firstSub.textContent = "Keep setup visible, but let live portfolio pressure and next actions lead the page.";
     }
-
-    if (!overview.querySelector("#phase43OverviewJumpbar")) {
+    if (!overview.querySelector("#phase5OverviewJumpbar")) {
       const target = document.getElementById("overviewBlockers") || onboardingCard || overview.firstElementChild;
       const wrap = document.createElement("div");
-      wrap.id = "phase43OverviewJumpbar";
-      wrap.className = "phase43-jumpbar";
+      wrap.id = "phase5OverviewJumpbar";
+      wrap.className = "phase5-jumpbar";
       wrap.innerHTML = `
-        <button class="action-btn" type="button" data-phase43-open="${SECTION_LISTINGS}">Open Listings</button>
-        <button class="action-btn" type="button" data-phase43-open="${SECTION_REVIEW}">Open Review Center</button>
-        <button class="action-btn" type="button" data-phase43-open="extension">Open Tools</button>
-        <button class="action-btn" type="button" data-phase43-open="profile">Open Setup</button>
+        <button class="action-btn" type="button" data-phase5-open="${SECTION_LISTINGS}">Open Listings</button>
+        <button class="action-btn" type="button" data-phase5-open="${SECTION_REVIEW}">Open Review Center</button>
+        <button class="action-btn" type="button" data-phase5-open="extension">Open Tools</button>
+        <button class="action-btn" type="button" data-phase5-open="profile">Open Setup</button>
       `;
       if (target?.insertAdjacentElement) target.insertAdjacentElement("afterend", wrap);
       else overview.prepend(wrap);
@@ -460,8 +503,12 @@
   }
 
   function buildLifecycleBadge(item) {
-    const text = clean(item.lifecycle_status || item.review_bucket || item.status || "active").replace(/_/g, " ");
-    return `<span class="badge warn">${text || "active"}</span>`;
+    const text = clean(item.lifecycle_status || item.review_bucket || item.status || "active").replace(/_/g, " ") || "active";
+    return `<span class="phase5-chip">${text}</span>`;
+  }
+  function buildUrgencyChip(item) {
+    const level = urgencyLevel(item);
+    return `<span class="phase5-chip ${level}">${urgencyLabel(item)}</span>`;
   }
 
   function buildListingCard(item = {}, context = "listings") {
@@ -473,49 +520,64 @@
       item.vin ? `VIN ${clean(item.vin)}` : "",
       clean(item.body_style || "")
     ].filter(Boolean).join(" • ") || "Vehicle details";
+    const reasonCopy = clean(item.recommended_action || item.pricing_insight || item.health_label || "No immediate issue detected.");
+    const nextMove = primaryAction(item);
 
     const actions = context === "review"
       ? `
-        <div class="phase43-review-actions">
-          <button class="action-btn" type="button" data-phase43-open-detail="${id}">Inspect</button>
-          <button class="action-btn" type="button" data-phase43-status="${id}:approved">Approve</button>
-          <button class="action-btn" type="button" data-phase43-status="${id}:sold">Mark Sold</button>
-          <button class="action-btn" type="button" data-phase43-status="${id}:active">Mark Active</button>
-          <button class="action-btn" type="button" data-phase43-open="${SECTION_LISTINGS}">Open Listings</button>
-          <button class="action-btn" type="button" data-phase43-copy="${id}">Copy Summary</button>
+        <div class="phase5-actiongrid">
+          <button class="action-btn" type="button" data-phase5-open-detail="${id}">Inspect</button>
+          <button class="action-btn" type="button" data-phase5-status="${id}:sold">Mark Sold</button>
+          <button class="action-btn" type="button" data-phase5-status="${id}:active">Mark Active</button>
+          <button class="action-btn" type="button" data-phase5-status="${id}:price_review">Review Price</button>
+          <button class="action-btn" type="button" data-phase5-open="${SECTION_LISTINGS}">Open Listings</button>
+          <button class="action-btn" type="button" data-phase5-copy="${id}">Copy Summary</button>
         </div>
       `
       : `
-        <div class="phase43-listing-actions">
-          <button class="action-btn" type="button" data-phase43-open-detail="${id}">Inspect</button>
-          <button class="action-btn" type="button" data-phase43-status="${id}:approved">Approve</button>
-          <button class="action-btn" type="button" data-phase43-status="${id}:sold">Mark Sold</button>
-          <button class="action-btn" type="button" data-phase43-open="${SECTION_REVIEW}">Review</button>
-          <button class="action-btn" type="button" data-phase43-copy="${id}">Copy Summary</button>
-          <button class="action-btn" type="button" data-phase43-open-source="${id}">Open Source</button>
+        <div class="phase5-actiongrid">
+          <button class="action-btn" type="button" data-phase5-open-detail="${id}">Inspect</button>
+          <button class="action-btn" type="button" data-phase5-status="${id}:approved">Approve</button>
+          <button class="action-btn" type="button" data-phase5-status="${id}:sold">Mark Sold</button>
+          <button class="action-btn" type="button" data-phase5-open="${SECTION_REVIEW}">Review</button>
+          <button class="action-btn" type="button" data-phase5-copy="${id}">Copy Summary</button>
+          <button class="action-btn" type="button" data-phase5-open-source="${id}">Open Source</button>
         </div>
       `;
 
     return `
-      <article class="listing-card phase43-listing-card">
+      <article class="listing-card phase5-listing-card">
         <div class="listing-media">
           <img src="${image}" alt="${title}" loading="lazy" onerror="this.src='${placeholderVehicleImage(title)}'" />
-          <div class="listing-badge">${buildLifecycleBadge(item)}</div>
+          <div class="phase5-chiprow">
+            <div class="phase5-chipstack">
+              ${buildLifecycleBadge(item)}
+              ${buildUrgencyChip(item)}
+            </div>
+            <div class="phase5-chipstack">
+              <span class="phase5-chip">${clean(item.health_label || "Tracked")}</span>
+            </div>
+          </div>
         </div>
-        <div class="listing-content">
-          <div>
-            <div class="listing-title">${title}</div>
-            <div class="listing-sub">${subtitle}</div>
+        <div class="phase5-cardbody">
+          <div class="phase5-headline">
+            <div class="phase5-title">${title}</div>
+            <div class="phase5-sub">${subtitle}</div>
           </div>
-          <div class="listing-price">${formatCurrency(item.price)}</div>
-          <div class="phase43-shell-note"><strong>Health:</strong> ${clean(item.health_label || "Healthy")} • <strong>Recommended:</strong> ${clean(item.recommended_action || "Keep live")}</div>
-          <div class="phase43-shell-note"><strong>Pricing:</strong> ${clean(item.pricing_insight || "Pricing signal still developing.")}</div>
-          <div class="listing-metrics">
-            <div class="metric-pill"><div class="metric-pill-label">Views</div><div class="metric-pill-value">${n(item.views_count)}</div></div>
-            <div class="metric-pill"><div class="metric-pill-label">Messages</div><div class="metric-pill-value">${n(item.messages_count)}</div></div>
-            <div class="metric-pill"><div class="metric-pill-label">Age</div><div class="metric-pill-value">${n(item.age_days)}d</div></div>
+          <div class="phase5-pricerow">
+            <div class="phase5-price">${formatCurrency(item.price)}</div>
+            <div class="phase5-primaryaction">Next: ${nextMove}</div>
           </div>
-          <div class="phase43-shell-note"><strong>Last seen:</strong> ${formatRelative(item.last_seen_at || item.updated_at || item.posted_at)}</div>
+          <div class="phase5-metricrow">
+            <div class="phase5-metric"><div class="phase5-metric-label">Views</div><div class="phase5-metric-value">${n(item.views_count)}</div></div>
+            <div class="phase5-metric"><div class="phase5-metric-label">Messages</div><div class="phase5-metric-value">${n(item.messages_count)}</div></div>
+            <div class="phase5-metric"><div class="phase5-metric-label">Age</div><div class="phase5-metric-value">${n(item.age_days)}d</div></div>
+            <div class="phase5-metric"><div class="phase5-metric-label">Last Seen</div><div class="phase5-metric-value">${formatRelative(item.last_seen_at || item.updated_at || item.posted_at)}</div></div>
+          </div>
+          <div class="phase5-reason">
+            <div class="phase5-reason-label">${context === "review" ? "Review reason" : "Portfolio note"}</div>
+            <div class="phase5-reason-copy">${reasonCopy}</div>
+          </div>
           ${actions}
         </div>
       </article>
@@ -526,7 +588,6 @@
     const lifecycle = clean(item.lifecycle_status || "").toLowerCase();
     const bucket = clean(item.review_bucket || "").toLowerCase().replace(/[\s_-]+/g, "");
     const status = clean(item.status || "").toLowerCase();
-
     if (filter === "active") return !["sold", "deleted", "inactive", "stale"].includes(status) && lifecycle !== "review_delete";
     if (filter === "review") return ["review_delete", "review_price_update", "review_new"].includes(lifecycle) || ["removedvehicles", "pricechanges", "newvehicles"].includes(bucket);
     if (filter === "weak") return Boolean(item.weak);
@@ -536,65 +597,53 @@
   }
 
   function renderListingsSection() {
-    const grid = document.getElementById("phase43ListingsGrid");
+    const grid = document.getElementById("phase5ListingsGrid");
     if (!grid) return;
-
     const rowsBase = getListings();
-    const search = clean(document.getElementById("phase43ListingsSearch")?.value || "").toLowerCase();
-    const sortMode = clean(document.getElementById("phase43ListingsSort")?.value || "popular").toLowerCase();
-    const activeFilter = document.querySelector("[data-phase43-filter].active")?.getAttribute("data-phase43-filter") || "all";
-
+    const search = clean(document.getElementById("phase5ListingsSearch")?.value || "").toLowerCase();
+    const sortMode = clean(document.getElementById("phase5ListingsSort")?.value || "popular").toLowerCase();
+    const activeFilter = document.querySelector("[data-phase5-filter].active")?.getAttribute("data-phase5-filter") || "all";
     let rows = [...rowsBase];
     if (activeFilter !== "all") rows = rows.filter((item) => matchesFilter(item, activeFilter));
-    if (search) {
-      rows = rows.filter((item) => [item.title, item.make, item.model, item.vin, item.stock_number].join(" ").toLowerCase().includes(search));
-    }
-
+    if (search) rows = rows.filter((item) => [item.title, item.make, item.model, item.vin, item.stock_number].join(" ").toLowerCase().includes(search));
     rows.sort((a, b) => {
       if (sortMode === "newest") return new Date(b.posted_at || b.updated_at || 0) - new Date(a.posted_at || a.updated_at || 0);
       if (sortMode === "price_high") return n(b.price) - n(a.price);
       if (sortMode === "price_low") return n(a.price) - n(b.price);
       return n(b.popularity_score) - n(a.popularity_score);
     });
-
-    const statusEl = document.getElementById("phase43ListingsStatus");
+    const statusEl = document.getElementById("phase5ListingsStatus");
     if (statusEl) {
-      const sourceName = state.listingsSource || "none";
-      const sourceCopy = sourceName === "global_rows"
-        ? "Live listing rows"
-        : sourceName === "overview_dom"
-          ? "Overview portfolio cards"
-          : sourceName === "summary_recent"
-            ? "Summary recent listings fallback"
-            : sourceName === "top_dom"
-              ? "Top listings fallback"
-              : sourceName === "summary_kpi"
-                ? "Summary KPI fallback"
-                : "Waiting for portfolio source";
+      const sourceCopy = state.listingsSource === "global_rows" ? "Live listing rows"
+        : state.listingsSource === "overview_dom" ? "Overview portfolio cards"
+        : state.listingsSource === "summary_recent" ? "Summary recent listings fallback"
+        : state.listingsSource === "top_dom" ? "Top listings fallback"
+        : state.listingsSource === "summary_kpi" ? "Summary KPI fallback"
+        : "Waiting for portfolio source";
       statusEl.textContent = `${sourceCopy} • ${rowsBase.length} row${rowsBase.length === 1 ? "" : "s"} available`;
     }
-
     grid.innerHTML = rows.length
       ? rows.map((item) => buildListingCard(item, "listings")).join("")
-      : `<div class="phase43-empty">No portfolio rows are available yet. The source-of-truth bridge is still waiting on listing data.</div>`;
+      : `<div class="phase5-empty">No portfolio rows are available yet.</div>`;
   }
 
   function queueHtml(items, emptyText) {
-    if (!Array.isArray(items) || !items.length) return `<div class="phase43-empty">${emptyText}</div>`;
+    if (!Array.isArray(items) || !items.length) return `<div class="phase5-empty">${emptyText}</div>`;
     return items.slice(0, 8).map((item) => {
       const listing = getListings().find((row) => String(row.id) === String(item.id)) || normalizeRow(item);
       return `
-        <div class="phase43-queue-item">
-          <div>
-            <div class="phase43-queue-title">${clean(item.title || listing.title || "Listing")}</div>
-            <div class="phase43-queue-sub">${clean(item.reason || item.recommended_action || listing.recommended_action || "Review required.")}</div>
-            <div class="phase43-queue-meta">
-              ${formatCurrency(listing.price)} • ${n(listing.views_count)} views • ${n(listing.messages_count)} messages
-            </div>
+        <div class="phase5-queue-item">
+          <div class="phase5-queue-top">
+            <div class="phase5-queue-title">${clean(item.title || listing.title || "Listing")}</div>
+            ${buildUrgencyChip(listing)}
           </div>
-          <div>
-            <button class="action-btn" type="button" data-phase43-open-detail="${clean(item.id || listing.id || "")}">Inspect</button>
+          <div class="phase5-queue-sub">${primaryAction(listing)}</div>
+          <div class="phase5-queue-meta">
+            <span class="phase5-chip">${formatCurrency(listing.price)}</span>
+            <span class="phase5-chip">${n(listing.views_count)} views</span>
+            <span class="phase5-chip">${n(listing.messages_count)} msgs</span>
           </div>
+          <button class="action-btn" type="button" data-phase5-open-detail="${clean(item.id || listing.id || "")}">Inspect</button>
         </div>
       `;
     }).join("");
@@ -608,9 +657,15 @@
       ["review_delete", "review_price_update", "review_new", "stale"].includes(clean(item.lifecycle_status).toLowerCase())
     );
     rows.sort((a, b) => {
-      const aw = Number(Boolean(a.likely_sold)) + Number(Boolean(a.needs_action)) + Number(Boolean(a.weak));
-      const bw = Number(Boolean(b.likely_sold)) + Number(Boolean(b.needs_action)) + Number(Boolean(b.weak));
-      return bw - aw || n(b.popularity_score) - n(a.popularity_score);
+      const score = (row) => {
+        let s = 0;
+        if (row.likely_sold) s += 50;
+        if (row.needs_action) s += 30;
+        if (row.weak) s += 20;
+        s += n(row.popularity_score) / 100;
+        return s;
+      };
+      return score(b) - score(a);
     });
     return rows.slice(0, 12);
   }
@@ -618,32 +673,30 @@
   function renderReviewSection() {
     const summary = getSummary();
     const details = getActionDetails();
-
     const setText = (id, value) => {
       const el = document.getElementById(id);
       if (el) el.textContent = String(value);
     };
-    setText("phase43ReviewQueue", n(summary.review_queue_count));
-    setText("phase43LikelySold", n(summary.stale_listings || summary.review_delete_count));
-    setText("phase43WeakListings", n(summary.weak_listings));
-    setText("phase43PromoteNow", n(summary.action_center?.promote_today || 0));
+    setText("phase5ReviewQueue", n(summary.review_queue_count));
+    setText("phase5LikelySold", n(summary.stale_listings || summary.review_delete_count));
+    setText("phase5WeakListings", n(summary.weak_listings));
+    setText("phase5PromoteNow", n(summary.action_center?.promote_today || 0));
 
-    const needs = document.getElementById("phase43NeedsAttention");
-    const today = document.getElementById("phase43TodayQueue");
-    const opp = document.getElementById("phase43Opportunities");
+    const needs = document.getElementById("phase5NeedsAttention");
+    const today = document.getElementById("phase5TodayQueue");
+    const opp = document.getElementById("phase5Opportunities");
     if (needs) needs.innerHTML = queueHtml(details.needs_attention, "No critical items right now.");
     if (today) today.innerHTML = queueHtml(details.today, "No queued actions for today.");
     if (opp) opp.innerHTML = queueHtml(details.opportunities, "No promotion opportunities yet.");
 
-    const cards = document.getElementById("phase43ReviewCards");
+    const cards = document.getElementById("phase5ReviewCards");
     const rows = buildReviewCards();
     if (cards) {
       cards.innerHTML = rows.length
         ? rows.map((item) => buildListingCard(item, "review")).join("")
-        : `<div class="phase43-empty">No review cards are hydrated into this section yet.</div>`;
+        : `<div class="phase5-empty">No review cards are hydrated into this section yet.</div>`;
     }
-
-    const statusEl = document.getElementById("phase43ReviewStatus");
+    const statusEl = document.getElementById("phase5ReviewStatus");
     if (statusEl) {
       statusEl.textContent = `${rows.length} review card${rows.length === 1 ? "" : "s"} hydrated • Portfolio source ${state.listingsSource || "none"}`;
     }
@@ -654,7 +707,6 @@
       button.classList.toggle("active", button.getAttribute("data-section") === sectionId);
     });
   }
-
   function showSectionWithFallback(sectionId) {
     if (!sectionId) return;
     ensureSections();
@@ -666,19 +718,15 @@
       if (isActive) matched = true;
     });
     setActiveNav(sectionId);
-
     const pageTitle = document.getElementById("dashboardPageTitle");
     const titleMap = { listings: "Listings", review_center: "Review Center" };
     if (pageTitle && titleMap[sectionId]) pageTitle.textContent = titleMap[sectionId];
-
     if (matched && NS.state?.set) NS.state.set("ui.activeSection", sectionId);
   }
-
   function patchShowSection() {
-    if (window.__EA_PHASE43_SHOWSECTION_PATCHED__) return;
+    if (window.__EA_PHASE5_SHOWSECTION_PATCHED__) return;
     const original = typeof window.showSection === "function" ? window.showSection : null;
-    window.__EA_PHASE43_SHOWSECTION_PATCHED__ = true;
-
+    window.__EA_PHASE5_SHOWSECTION_PATCHED__ = true;
     window.showSection = function(sectionId) {
       if (sectionId === SECTION_LISTINGS || sectionId === SECTION_REVIEW) {
         showSectionWithFallback(sectionId);
@@ -687,7 +735,6 @@
       }
       if (original) original(sectionId);
       else showSectionWithFallback(sectionId);
-
       const titleMap = { listings: "Listings", review_center: "Review Center" };
       const title = document.getElementById("dashboardPageTitle");
       if (title && titleMap[sectionId]) title.textContent = titleMap[sectionId];
@@ -703,7 +750,7 @@
         await window.markListingAction(id, next);
       }
     } catch (error) {
-      console.warn("phase43 status action warning", error);
+      console.warn("phase5 status action warning", error);
     }
     scheduleRender();
   }
@@ -711,7 +758,6 @@
   function bindNavHotfix() {
     if (state.navBound) return;
     state.navBound = true;
-
     document.addEventListener("click", (event) => {
       const navButton = event.target.closest("[data-section]");
       if (!navButton) return;
@@ -727,76 +773,67 @@
   function bindShellEvents() {
     if (state.shellBound) return;
     state.shellBound = true;
-
     document.addEventListener("click", async (event) => {
-      const open = event.target.closest("[data-phase43-open]");
+      const open = event.target.closest("[data-phase5-open]");
       if (open) {
-        const section = open.getAttribute("data-phase43-open");
+        const section = open.getAttribute("data-phase5-open");
         if (typeof window.showSection === "function") window.showSection(section);
         return;
       }
-
-      const filter = event.target.closest("[data-phase43-filter]");
+      const filter = event.target.closest("[data-phase5-filter]");
       if (filter) {
-        qsa("[data-phase43-filter]").forEach((btn) => btn.classList.toggle("active", btn === filter));
+        qsa("[data-phase5-filter]").forEach((btn) => btn.classList.toggle("active", btn === filter));
         renderListingsSection();
         return;
       }
-
-      const detail = event.target.closest("[data-phase43-open-detail]");
+      const detail = event.target.closest("[data-phase5-open-detail]");
       if (detail) {
-        const id = detail.getAttribute("data-phase43-open-detail");
+        const id = detail.getAttribute("data-phase5-open-detail");
         if (typeof window.openListingDetailModal === "function") window.openListingDetailModal(id);
         return;
       }
-
-      const status = event.target.closest("[data-phase43-status]");
+      const status = event.target.closest("[data-phase5-status]");
       if (status) {
-        const raw = status.getAttribute("data-phase43-status") || "";
+        const raw = status.getAttribute("data-phase5-status") || "";
         const [id, next] = raw.split(":");
         await handleStatus(id, next);
         return;
       }
-
-      const copyBtn = event.target.closest("[data-phase43-copy]");
+      const copyBtn = event.target.closest("[data-phase5-copy]");
       if (copyBtn) {
-        const id = copyBtn.getAttribute("data-phase43-copy");
+        const id = copyBtn.getAttribute("data-phase5-copy");
         if (typeof window.copyVehicleSummary === "function") window.copyVehicleSummary(id);
         return;
       }
-
-      const sourceBtn = event.target.closest("[data-phase43-open-source]");
+      const sourceBtn = event.target.closest("[data-phase5-open-source]");
       if (sourceBtn) {
-        const id = sourceBtn.getAttribute("data-phase43-open-source");
+        const id = sourceBtn.getAttribute("data-phase5-open-source");
         const row = getListings().find((item) => String(item.id) === String(id));
         if (row?.source_url && typeof window.openListingSource === "function") {
           window.openListingSource(id, row.source_url);
         }
       }
     });
-
     document.addEventListener("input", (event) => {
-      if (event.target?.id === "phase43ListingsSearch") renderListingsSection();
+      if (event.target?.id === "phase5ListingsSearch") renderListingsSection();
     });
     document.addEventListener("change", (event) => {
-      if (event.target?.id === "phase43ListingsSort") renderListingsSection();
+      if (event.target?.id === "phase5ListingsSort") renderListingsSection();
     });
   }
 
   function scheduleRender() {
     clearTimeout(state.renderTimer);
     state.renderTimer = setTimeout(() => {
-      try { renderAll(); } catch (error) { console.warn("phase43 render warning", error); }
+      try { renderAll(); } catch (error) { console.warn("phase5 render warning", error); }
     }, 140);
   }
 
   function bindHydrationBridge() {
     if (state.hydrationBound) return;
     state.hydrationBound = true;
-
     const overviewGrid = document.getElementById("recentListingsGrid");
     const topListings = document.getElementById("topListings");
-
     const observeNode = (node) => {
       if (!node) return;
       const observer = new MutationObserver(() => {
@@ -805,13 +842,11 @@
       });
       observer.observe(node, { childList: true, subtree: true });
     };
-
     if (!state.observerBound) {
       observeNode(overviewGrid);
       observeNode(topListings);
       state.observerBound = true;
     }
-
     window.addEventListener("elevate:tracking-refreshed", scheduleRender);
     document.addEventListener("DOMContentLoaded", scheduleRender);
     setTimeout(scheduleRender, 600);
@@ -843,7 +878,6 @@
     setTimeout(renderAll, 1200);
     setTimeout(renderAll, 3200);
   };
-
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", boot, { once: true });
   else boot();
 })();
