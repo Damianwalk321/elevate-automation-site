@@ -3,7 +3,7 @@
   window.__ELEVATE_DASHBOARD_PHASE4_LOADER__ = true;
 
   const NS = (window.ElevateDashboard = window.ElevateDashboard || {});
-  NS.version = "phase8-manager-team-layer-v1";
+  NS.version = "phase8R-manager-containment-v1";
   NS.modules = NS.modules || {};
   NS.events = NS.events || new EventTarget();
 
@@ -34,7 +34,7 @@
     "/dashboard-phase5_7R-layout-only.js?v=20260411p57r",
     "/dashboard-phase6-intelligence.js?v=20260411p6",
     "/dashboard-phase7-events.js?v=20260411p7",
-    "/dashboard-phase8-manager.js?v=20260411p8"
+    "/dashboard-phase8R-containment.js?v=20260411p8r"
   ];
 
   let compatBootTriggered = false;
@@ -50,10 +50,8 @@
   function setFriendlyStatus(message) {
     const bootStatus = document.getElementById("bootStatus");
     if (bootStatus) bootStatus.textContent = "";
-
     const welcomeText = document.getElementById("welcomeText");
     if (!welcomeText) return;
-
     const current = clean(welcomeText.textContent || "");
     const looksLoading = !current || /loading|booting|starting/i.test(current);
     if (message && looksLoading) welcomeText.textContent = message;
@@ -81,10 +79,8 @@
             catch (innerError) { console.error("[Elevate Dashboard] Late DOMContentLoaded listener failed:", innerError); }
           }, 0);
         }
-
         if (options && typeof options === "object" && options.once) return;
       }
-
       return originalAddEventListener(type, listener, options);
     };
   }
