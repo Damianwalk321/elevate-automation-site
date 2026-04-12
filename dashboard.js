@@ -3,7 +3,7 @@
   window.__ELEVATE_DASHBOARD_PHASE18_20_LOADER__ = true;
 
   const NS = (window.ElevateDashboard = window.ElevateDashboard || {});
-  NS.version = "phase21-bundle-v1-repair1";
+  NS.version = "phase22-bundle-v2";
   NS.modules = NS.modules || {};
   NS.events = NS.events || new EventTarget();
 
@@ -15,7 +15,7 @@
     "/dashboard-listings.js?v=20260406p12a",
     "/dashboard-profile.js?v=20260406p12a",
     "/dashboard-tools.js?v=20260406p12a",
-    "/dashboard-analytics.js?v=20260406p12a",
+    "/dashboard-analytics.js?v=20260412p22",
     "/dashboard-affiliate.js?v=20260406p12a",
     "/dashboard-billing.js?v=20260406p12a",
     "/dashboard-legacy.js?v=20260406p12a",
@@ -47,7 +47,7 @@
     "/dashboard-phase18-commercial-v2.js?v=20260411p18",
     "/dashboard-phase19-language-compression.js?v=20260411p19",
     "/dashboard-phase20-rc-hardening.js?v=20260411p20",
-    "/dashboard-phase21-shell-repair.js?v=20260412p21r1"
+    "/dashboard-phase21-shell-repair.js?v=20260412p22"
   ];
 
   let compatBootTriggered = false;
