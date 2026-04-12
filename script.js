@@ -5,7 +5,6 @@ function getQueryParam(name) {
   return params.get(name) || params.get(name.replace(/_/g, "-")) || params.get(name.replace(/-/g, "_"));
 }
 
-
 function normalizeReferralCode(value) {
   return String(value || "").trim();
 }
@@ -29,7 +28,6 @@ function storeReferralData(code, source = "direct") {
   try {
     const existing = normalizeReferralCode(localStorage.getItem("elevate_referral_code"));
     if (existing && existing !== normalizedCode) {
-      // Lock referral once captured to avoid accidental overwrite.
       return;
     }
     localStorage.setItem("elevate_referral_code", normalizedCode);
@@ -102,7 +100,6 @@ async function getLoggedInUserEmail() {
   }
 }
 
-
 async function getAuthAccessTokenForCheckout() {
   try {
     if (window.supabaseClient?.auth?.getSession) {
@@ -122,14 +119,12 @@ async function startCheckout(planType, userType, accessType) {
     const referralSource = getStoredReferralData().source;
 
     if (!email) {
-      showCheckoutMessage("Please create an account or log in before checkout.", true);
+      showCheckoutMessage("Please create an account or log in before starting your free trial.", true);
       window.location.href = "/login.html";
       return;
     }
 
     showCheckoutMessage("Redirecting to secure checkout...");
-
-  const lockedReferral = getStoredReferralData();
 
     const token = await getAuthAccessTokenForCheckout();
     const response = await fetch("/api/create-checkout-session", {
@@ -176,60 +171,8 @@ function bindCheckoutButtons() {
       const planType = button.dataset.planType || "";
       const userType = button.dataset.userType || "";
       const accessType = button.dataset.accessType || "";
-
       await startCheckout(planType, userType, accessType);
     });
-  });
-}
-
-function setElementDisplay(id, show, displayType = "inline-flex") {
-  const el = document.getElementById(id);
-  if (!el) return;
-  el.style.display = show ? displayType : "none";
-}
-
-async function updateAuthAwareUI() {
-  let loggedIn = false;
-
-  try {
-    if (typeof window.getCurrentUser === "function") {
-      const user = await window.getCurrentUser();
-      loggedIn = !!user;
-      if (user?.email) {
-        localStorage.setItem("user_email", user.email);
-      }
-    }
-  } catch (error) {
-    console.error("Auth-aware UI check failed:", error);
-  }
-
-  setElementDisplay("loginNavBtn", !loggedIn, "inline-flex");
-  setElementDisplay("signupNavBtn", !loggedIn, "inline-flex");
-  setElementDisplay("dashboardNavBtn", loggedIn, "inline-flex");
-  setElementDisplay("logoutNavBtn", loggedIn, "inline-flex");
-
-  setElementDisplay("heroSignupBtn", !loggedIn, "inline-flex");
-  setElementDisplay("heroLoginBtn", !loggedIn, "inline-flex");
-  setElementDisplay("heroDashboardBtn", loggedIn, "inline-flex");
-}
-
-function bindLogoutButton() {
-  const logoutBtn = document.getElementById("logoutNavBtn");
-  if (!logoutBtn) return;
-
-  logoutBtn.addEventListener("click", async () => {
-    try {
-      if (typeof window.signOutUser === "function") {
-        await window.signOutUser();
-      } else {
-        localStorage.removeItem("user_email");
-      }
-
-      window.location.href = "/login.html";
-    } catch (error) {
-      console.error("Logout failed:", error);
-      alert(error.message || "Logout failed.");
-    }
   });
 }
 
@@ -237,8 +180,8 @@ function bindStaticPartnerActions() {
   const partnerEmailButtons = document.querySelectorAll("[data-partner-email]");
   partnerEmailButtons.forEach((button) => {
     button.addEventListener("click", () => {
-      const subject = encodeURIComponent("Elevate Automation Partner Inquiry");
-      const body = encodeURIComponent("Name:\nCompany:\nRole:\nProvince:\nHow I can help grow Elevate Automation:\n");
+      const subject = encodeURIComponent("Elevate Automation Team / Partner Inquiry");
+      const body = encodeURIComponent("Name:\nCompany:\nRole:\nProvince:\nTeam size:\nHow I want to use Elevate Automation:\n");
       window.location.href = `mailto:ElevateGPmarketing@gmail.com?subject=${subject}&body=${body}`;
     });
   });
@@ -255,7 +198,5 @@ function bindStaticPartnerActions() {
 document.addEventListener("DOMContentLoaded", async () => {
   loadStoredReferralCode();
   bindCheckoutButtons();
-  bindLogoutButton();
   bindStaticPartnerActions();
-  await updateAuthAwareUI();
 });
