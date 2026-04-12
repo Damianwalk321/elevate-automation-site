@@ -1,9 +1,9 @@
 (() => {
-  if (window.__ELEVATE_DASHBOARD_PHASE12_LOADER__) return;
-  window.__ELEVATE_DASHBOARD_PHASE12_LOADER__ = true;
+  if (window.__ELEVATE_DASHBOARD_PHASE13_LOADER__) return;
+  window.__ELEVATE_DASHBOARD_PHASE13_LOADER__ = true;
 
   const NS = (window.ElevateDashboard = window.ElevateDashboard || {});
-  NS.version = "phase12-summary-contract-v2";
+  NS.version = "phase13-entity-model-v1";
   NS.modules = NS.modules || {};
   NS.events = NS.events || new EventTarget();
 
@@ -38,7 +38,8 @@
     "/dashboard-phase9-commercial.js?v=20260411p9",
     "/dashboard-phase10-moat.js?v=20260411p10",
     "/dashboard-phase11R-safe-consolidation.js?v=20260411p11r",
-    "/dashboard-phase12-summary.js?v=20260411p12"
+    "/dashboard-phase12-summary.js?v=20260411p12",
+    "/dashboard-phase13-entities.js?v=20260411p13"
   ];
 
   let compatBootTriggered = false;
