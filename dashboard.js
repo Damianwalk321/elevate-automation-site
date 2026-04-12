@@ -1,9 +1,9 @@
 (() => {
-  if (window.__ELEVATE_DASHBOARD_PHASE1_STABLE_LOADER__) return;
-  window.__ELEVATE_DASHBOARD_PHASE1_STABLE_LOADER__ = true;
+  if (window.__ELEVATE_DASHBOARD_PHASE18_20_LOADER__) return;
+  window.__ELEVATE_DASHBOARD_PHASE18_20_LOADER__ = true;
 
   const NS = (window.ElevateDashboard = window.ElevateDashboard || {});
-  NS.version = "phase1-stabilization-bundle-v1";
+  NS.version = "phase21-bundle-v1";
   NS.modules = NS.modules || {};
   NS.events = NS.events || new EventTarget();
 
@@ -21,7 +21,7 @@
     "/dashboard-legacy.js?v=20260406p12a",
     "/dashboard-phase4-boot.js?v=20260406p12a",
     "/dashboard-bootstrap.js?v=20260406p12a",
-    "/dashboard-phase2-render.js?v=20260411p2-phase1",
+    "/dashboard-phase2-render.js?v=20260411p2",
     "/dashboard-phase3-canonical.js?v=20260411p3",
     "/dashboard-phase4-readiness.js?v=20260411p4",
     "/dashboard-phase4_2-cleanup.js?v=20260411p42",
@@ -47,8 +47,10 @@
     "/dashboard-phase18-commercial-v2.js?v=20260411p18",
     "/dashboard-phase19-language-compression.js?v=20260411p19",
     "/dashboard-phase20-rc-hardening.js?v=20260411p20",
-    "/dashboard-phase1-stabilizer.js?v=20260411p1"
+    "/dashboard-phase21-shell-cleanup.js?v=20260412p21"
   ];
+
+  let compatBootTriggered = false;
 
   function clean(value) {
     return String(value || "").replace(/\s+/g, " ").trim();
@@ -62,10 +64,10 @@
     const bootStatus = document.getElementById("bootStatus");
     if (bootStatus) bootStatus.textContent = "";
     const welcomeText = document.getElementById("welcomeText");
-    if (!welcomeText || !message) return;
+    if (!welcomeText) return;
     const current = clean(welcomeText.textContent || "");
-    const looksLoading = !current || /loading|booting|starting|workspace is taking longer/i.test(current);
-    if (looksLoading) welcomeText.textContent = message;
+    const looksLoading = !current || /loading|booting|starting/i.test(current);
+    if (message && looksLoading) welcomeText.textContent = message;
   }
 
   function installLateDOMContentLoadedCompat() {
@@ -96,14 +98,30 @@
     };
   }
 
+  function userLooksHydrated() {
+    const emailText = clean(document.querySelector(".user-email")?.textContent || "");
+    return Boolean(window.currentUser?.id || (emailText && !/loading/i.test(emailText)));
+  }
+
+  function kickLegacyBoot() {
+    if (compatBootTriggered) return;
+    compatBootTriggered = true;
+    try { document.dispatchEvent(new Event("DOMContentLoaded", { bubbles: true, cancelable: true })); }
+    catch (error) { console.error("[Elevate Dashboard] Compatibility boot failed:", error); }
+  }
+
+  function installControlledBootKick() {
+    if (window.__ELEVATE_CONTROLLED_BOOT_KICK__) return;
+    window.__ELEVATE_CONTROLLED_BOOT_KICK__ = true;
+    setTimeout(() => { if (!userLooksHydrated()) kickLegacyBoot(); }, 600);
+  }
+
   function loadScriptSequentially(index = 0) {
     if (index >= MODULES.length) return Promise.resolve();
     const src = MODULES[index];
     return new Promise((resolve, reject) => {
-      const plainSrc = src.split("?")[0];
-      const existing = Array.from(document.scripts).find((s) => s.src && s.src.includes(plainSrc));
+      const existing = Array.from(document.scripts).find((s) => s.src && s.src.includes(src.split("?")[0]));
       if (existing) return resolve();
-
       const script = document.createElement("script");
       script.src = src;
       script.async = false;
@@ -119,8 +137,8 @@
 
   loadScriptSequentially()
     .then(() => {
+      installControlledBootKick();
       setLoaderState("modules-loaded");
-      window.dispatchEvent(new CustomEvent("elevate:phase1-loader-complete"));
     })
     .catch((error) => {
       console.error("[Elevate Dashboard] Loader error:", error);
