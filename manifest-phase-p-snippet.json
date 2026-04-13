@@ -1,0 +1,13 @@
+{
+  "content_scripts": [
+    {
+      "matches": [
+        "https://damianwalk321.github.io/*",
+        "https://*.vercel.app/*",
+        "https://elevate-automation-site.vercel.app/*"
+      ],
+      "js": ["phase-p-dashboard-content-sync.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}
