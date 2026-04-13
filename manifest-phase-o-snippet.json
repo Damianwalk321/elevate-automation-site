@@ -1,0 +1,17 @@
+
+{
+  "background": {
+    "service_worker": "elevate-engine.js"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://damianwalk321.github.io/*",
+        "https://*.vercel.app/*",
+        "https://elevate-automation-site.vercel.app/*"
+      ],
+      "js": ["dashboard-account-truth-sync.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}
