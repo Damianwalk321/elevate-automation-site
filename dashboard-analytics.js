@@ -1,4 +1,3 @@
-
 (() => {
   const NS = (window.ElevateDashboard = window.ElevateDashboard || {});
   if (NS.modules?.analytics) return;
@@ -19,6 +18,7 @@
     .ea-pill.tracked{color:#f3ddb0;border-color:rgba(212,175,55,.22)}
     .ea-pill.estimated{color:#ffcfad;border-color:rgba(255,207,173,.22)}
     .ea-pill.critical{color:#ffb4b4;border-color:rgba(255,180,180,.22)}
+    .ea-pill.neutral{color:#d8d8d8;border-color:rgba(255,255,255,.12)}
     .ea-tabbar{display:flex;gap:8px;flex-wrap:wrap}
     .ea-tabbar button{appearance:none;border:1px solid rgba(255,255,255,.08);background:#171717;color:#efefef;border-radius:999px;padding:10px 14px;cursor:pointer;font-weight:700;font-size:13px}
     .ea-tabbar button.active{background:rgba(212,175,55,.15);color:#f3ddb0;border-color:rgba(212,175,55,.24)}
@@ -44,25 +44,29 @@
     .ea-review-item{background:#151515;border:1px solid rgba(255,255,255,.06);border-radius:14px;padding:14px;display:grid;gap:10px}
     .ea-review-reason{font-size:12px;line-height:1.5;color:#cfcfcf;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.05);border-radius:10px;padding:10px}
     .ea-empty{padding:20px;border-radius:14px;border:1px dashed rgba(212,175,55,.16);color:#9d9d9d;text-align:center}
-    @media (max-width:1200px){.ea-analytics-hero-grid,.ea-sync-grid,.ea-review-columns{grid-template-columns:1fr 1fr}.ea-post-grid{grid-template-columns:1fr 1fr}}
-    @media (max-width:760px){.ea-analytics-hero-grid,.ea-sync-grid,.ea-review-columns,.ea-post-grid,.ea-post-kpis,.ea-post-actions{grid-template-columns:1fr}.ea-a-title{font-size:24px}}
+    .ea-review-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-bottom:14px}
+    .ea-review-kpi{background:#121212;border:1px solid rgba(212,175,55,.10);border-radius:14px;padding:14px}
+    .ea-review-kpi strong{display:block;font-size:24px;line-height:1;margin-top:6px}
+    .ea-review-kpi span{display:block;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:#d4af37}
+    @media (max-width:1200px){.ea-analytics-hero-grid,.ea-sync-grid,.ea-review-columns,.ea-review-kpis{grid-template-columns:1fr 1fr}.ea-post-grid{grid-template-columns:1fr 1fr}}
+    @media (max-width:760px){.ea-analytics-hero-grid,.ea-sync-grid,.ea-review-columns,.ea-post-grid,.ea-post-kpis,.ea-post-actions,.ea-review-kpis{grid-template-columns:1fr}.ea-a-title{font-size:24px}}
   `;
 
   function ensureStyle(){
-    if(document.getElementById('ea-analytics-bundle-e-style')) return;
+    if(document.getElementById('ea-analytics-bundle-a-style')) return;
     const s=document.createElement('style');
-    s.id='ea-analytics-bundle-e-style';
+    s.id='ea-analytics-bundle-a-style';
     s.textContent=CSS;
     document.head.appendChild(s);
   }
 
   function get(path, fallback){ return NS.state?.get?.(path, fallback); }
-  function num(value){ const n = Number(value); return Number.isFinite(n) ? n : 0; }
+  function num(value){ const parsed = Number(value); return Number.isFinite(parsed) ? parsed : 0; }
   function clean(value){ return String(value || '').replace(/\s+/g,' ').trim(); }
   function displayPrice(item){
     if (item.display_price_text) return item.display_price_text;
-    const n = num(item.price);
-    return n ? `$${n.toLocaleString()}` : 'Price pending';
+    const value = num(item.price);
+    return value ? `$${value.toLocaleString()}` : 'Price pending';
   }
   function open(section, focusId){
     try{ if(typeof window.showSection==='function') window.showSection(section); }catch{}
@@ -72,8 +76,8 @@
   function getListings(){
     const summaryRows = Array.isArray(window.dashboardSummary?.recent_listings) ? window.dashboardSummary.recent_listings : [];
     const registryRows = Object.values(get('listingRegistry', {}) || {});
-    const source = registryRows.length ? registryRows : summaryRows;
-    return source.map((row) => {
+    const sourceRows = registryRows.length ? registryRows : summaryRows;
+    return sourceRows.map((row) => {
       const views = num(row.views_count ?? row.views);
       const messages = num(row.messages_count ?? row.messages);
       const price = num(row.price);
@@ -82,6 +86,7 @@
       const likelySold = Boolean(row.likely_sold) || /review_delete|removedvehicles/i.test(lifecycle);
       const stale = Boolean(row.weak) || /stale/i.test(clean(row.status || lifecycle));
       const priceReview = /price/i.test(lifecycle) || /price/i.test(recommended) || !Boolean(row.price_resolved ?? true);
+      const health = num(row.health_score ?? row.predicted_score);
       return {
         id: clean(row.id || row.identity_key || row.marketplace_listing_id || row.vin || row.stock_number || row.title),
         identity_key: clean(row.identity_key || ''),
@@ -93,7 +98,7 @@
         display_price_text: clean(row.display_price_text || ''),
         views,
         messages,
-        health_score: num(row.health_score),
+        health_score: health,
         opportunity_score: num(row.opportunity_score),
         price_review_priority: num(row.price_review_priority),
         refresh_priority: num(row.refresh_priority),
@@ -119,10 +124,12 @@
 
   function topLists(listings){
     const byOpportunity = [...listings].sort((a,b) => (b.opportunity_score - a.opportunity_score) || (b.messages - a.messages) || (b.views - a.views));
+    const needsAttention = listings.filter((x) => !x.price_resolved || x.price_review || x.stale).sort((a,b) => (Number(!a.price_resolved) - Number(!b.price_resolved)) || (b.price_review_priority - a.price_review_priority));
     return {
       posts: byOpportunity.slice(0, 12),
       soldStale: listings.filter((x) => x.likely_sold || x.stale).sort((a,b) => (Number(b.likely_sold) - Number(a.likely_sold)) || (b.refresh_priority - a.refresh_priority)).slice(0, 12),
-      priceWatch: listings.filter((x) => x.price_review).sort((a,b) => (b.price_review_priority - a.price_review_priority) || (b.views - a.views)).slice(0, 12)
+      priceWatch: listings.filter((x) => x.price_review).sort((a,b) => (b.price_review_priority - a.price_review_priority) || (b.views - a.views)).slice(0, 12),
+      needsAttention: needsAttention.slice(0, 12)
     };
   }
 
@@ -130,7 +137,7 @@
     const badge = !item.price_resolved ? 'Price Pending' : item.likely_sold ? 'Likely Sold' : item.price_review ? 'Price Watch' : item.stale ? 'Needs Refresh' : (item.status || 'Active');
     const badgeClass = !item.price_resolved ? 'estimated' : item.likely_sold ? 'critical' : (item.price_review ? 'tracked' : (item.stale ? 'estimated' : 'synced'));
     return `
-      <div class="ea-post-card">
+      <div class="ea-post-card" data-client-post-id="${item.id}">
         <div class="ea-post-media">${item.image_url ? `<img src="${item.image_url}" alt="">` : ''}</div>
         <div class="ea-post-content">
           <div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start;">
@@ -148,7 +155,7 @@
           </div>
           <div class="ea-review-reason">${item.recommended_action}${item.pricing_insight ? `<br><br><em>${item.pricing_insight}</em>` : ''}</div>
           <div class="ea-post-actions">
-            <button class="action-btn" type="button" data-ea-open="tools" data-ea-focus="listingSearchInput">Review</button>
+            <button class="action-btn" type="button" data-ea-tab-open="eaAnalyticsTabReview">Open Review Center</button>
             <button class="action-btn" type="button" data-ea-source="${item.source_url}">Open Source</button>
           </div>
         </div>
@@ -159,10 +166,17 @@
   function reviewItem(item, actionLabel){
     const badge = !item.price_resolved ? 'Price unresolved' : item.likely_sold ? 'Likely sold' : item.price_review ? 'Price review' : 'Stale / review';
     const badgeClass = !item.price_resolved ? 'estimated' : item.likely_sold ? 'critical' : (item.price_review ? 'tracked' : 'estimated');
+    const encoded = JSON.stringify({
+      id:item.id,
+      identity_key:item.identity_key,
+      vin:item.vin,
+      stock_number:item.stock_number,
+      source_url:item.source_url,
+      title:item.title,
+      price:item.price
+    }).replace(/'/g,"&#39;");
     return `
-      <div class="ea-review-item" data-review-item='${JSON.stringify({
-        id:item.id, identity_key:item.identity_key, vin:item.vin, stock_number:item.stock_number, source_url:item.source_url, title:item.title
-      }).replace(/'/g,"&#39;")}'>
+      <div class="ea-review-item" data-review-item='${encoded}'>
         <div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start;">
           <div>
             <strong>${item.title}</strong>
@@ -206,10 +220,19 @@
       btn.dataset.boundEaTab = 'true';
       btn.addEventListener('click', () => {
         const target = btn.getAttribute('data-ea-tab');
-        root.querySelectorAll('[data-ea-tab]').forEach((node) => node.classList.toggle('active', node === btn));
-        root.querySelectorAll('.ea-tab-panel').forEach((panel) => panel.classList.toggle('active', panel.id === target));
+        activateTab(root, target);
       });
     });
+    root.querySelectorAll('[data-ea-tab-open]').forEach((btn) => {
+      if (btn.dataset.boundEaTabOpen === 'true') return;
+      btn.dataset.boundEaTabOpen = 'true';
+      btn.addEventListener('click', () => activateTab(root, btn.getAttribute('data-ea-tab-open')));
+    });
+  }
+
+  function activateTab(root, targetId){
+    root.querySelectorAll('[data-ea-tab]').forEach((node) => node.classList.toggle('active', node.getAttribute('data-ea-tab') === targetId));
+    root.querySelectorAll('.ea-tab-panel').forEach((panel) => panel.classList.toggle('active', panel.id === targetId));
   }
 
   function render() {
@@ -237,8 +260,8 @@
     hero.innerHTML = `<div class="ea-analytics-hero-grid">
       <div class="ea-analytics-card">
         <div class="g-eyebrow">Unified Sync</div>
-        <h2 class="ea-a-title">Analytics now keeps both the portfolio view and the client-post workspace in one place.</h2>
-        <div class="ea-a-copy">Bundle E adds explicit unresolved-price visibility and prepares persistent review actions so the operator can trust which rows are solid and which still need intervention.</div>
+        <h2 class="ea-a-title">Analytics now exposes client posts and the review queue directly, instead of hiding everything behind aggregate stats.</h2>
+        <div class="ea-a-copy">Bundle A makes the vehicle-card view obvious, surfaces a dedicated review center lane inside analytics, and keeps pricing/review work closer to the listing cards.</div>
       </div>
       <div class="ea-analytics-card"><div class="stat-label">Sync Source</div><div class="stat-value" style="font-size:24px">${tracking.sync_source || sync.source || 'local_only'}</div><div class="stat-sub">Current ingestion owner.</div></div>
       <div class="ea-analytics-card"><div class="stat-label">Confidence</div><div class="stat-value" style="font-size:24px">${tracking.sync_confidence || sync.confidence || 'local'}</div><div class="stat-sub">Truth quality of this session.</div></div>
@@ -256,9 +279,9 @@
           <div class="subtext">Use this as the trust layer for registry counts, lifecycle buckets, review pressure, and vehicle-level visibility.</div>
         </div>
         <div class="ea-tabbar">
-          <button class="active" type="button" data-ea-tab="eaAnalyticsTabOverview">Analytics Overview</button>
-          <button type="button" data-ea-tab="eaAnalyticsTabPosts">Client Posts</button>
-          <button type="button" data-ea-tab="eaAnalyticsTabReview">Review Workspace</button>
+          <button type="button" data-ea-tab="eaAnalyticsTabOverview">Portfolio View</button>
+          <button class="active" type="button" data-ea-tab="eaAnalyticsTabPosts">Client Posts</button>
+          <button type="button" data-ea-tab="eaAnalyticsTabReview">Review Center</button>
         </div>
       </div>
       <div class="ea-sync-grid" style="margin-bottom:12px;">
@@ -277,7 +300,7 @@
     let tabs = document.getElementById('eaAnalyticsTabs');
     if (!tabs) { tabs = document.createElement('div'); tabs.id='eaAnalyticsTabs'; tabs.className='ea-analytics-card'; shell.appendChild(tabs); }
     tabs.innerHTML = `
-      <div id="eaAnalyticsTabOverview" class="ea-tab-panel active">
+      <div id="eaAnalyticsTabOverview" class="ea-tab-panel">
         <div class="section-head">
           <div>
             <div class="g-eyebrow">Decision Queue</div>
@@ -306,12 +329,16 @@
         </div>
       </div>
 
-      <div id="eaAnalyticsTabPosts" class="ea-tab-panel">
+      <div id="eaAnalyticsTabPosts" class="ea-tab-panel active">
         <div class="section-head">
           <div>
             <div class="g-eyebrow">Client Posts</div>
-            <h2 style="margin-top:6px;">Vehicle-level post visibility inside analytics</h2>
-            <div class="subtext">This gives the client a direct post/listing surface inside analytics instead of charts alone.</div>
+            <h2 style="margin-top:6px;">Vehicle cards inside analytics</h2>
+            <div class="subtext">This is now the primary analytics surface, so the client immediately sees actual posts instead of needing to hunt for them.</div>
+          </div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;">
+            <button class="action-btn" type="button" data-ea-tab-open="eaAnalyticsTabReview">Open Review Center</button>
+            <button class="action-btn" type="button" data-ea-open="overview" data-ea-focus="listingSearchInput">Open Overview Listings</button>
           </div>
         </div>
         <div class="ea-post-grid">
@@ -322,36 +349,40 @@
       <div id="eaAnalyticsTabReview" class="ea-tab-panel">
         <div class="section-head">
           <div>
-            <div class="g-eyebrow">Review Workspace</div>
-            <h2 style="margin-top:6px;">Sold, stale, and price-watch review lanes</h2>
-            <div class="subtext">Bundle E keeps these lanes visible while wiring durable review actions through the API layer.</div>
+            <div class="g-eyebrow">Review Center</div>
+            <h2 style="margin-top:6px;">Sold, stale, price-watch, and action lanes</h2>
+            <div class="subtext">This is the operator-facing review workspace. It keeps likely sold, stale, and pricing pressure visible in one place.</div>
           </div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;">
+            <button class="action-btn" type="button" data-ea-tab-open="eaAnalyticsTabPosts">Back to Client Posts</button>
+            <button class="action-btn" type="button" data-ea-open="overview" data-ea-focus="listingSearchInput">Open Overview Grid</button>
+          </div>
+        </div>
+        <div class="ea-review-kpis">
+          <div class="ea-review-kpi"><span>Needs Attention</span><strong>${lists.needsAttention.length}</strong></div>
+          <div class="ea-review-kpi"><span>Price Watch</span><strong>${lists.priceWatch.length}</strong></div>
+          <div class="ea-review-kpi"><span>Likely Sold / Stale</span><strong>${lists.soldStale.length}</strong></div>
+          <div class="ea-review-kpi"><span>Client Posts</span><strong>${lists.posts.length}</strong></div>
         </div>
         <div class="ea-review-columns">
           <div class="ea-review-col">
-            <div class="ea-review-col-head"><h3>Likely Sold / Stale</h3><span class="ea-pill critical">${lists.soldStale.length}</span></div>
-            ${lists.soldStale.length ? lists.soldStale.map((item) => reviewItem(item, 'Review Status')).join('') : `<div class="ea-empty">No sold or stale items right now.</div>`}
+            <div class="ea-review-col-head"><h3>Needs Attention</h3><span class="ea-pill neutral">${lists.needsAttention.length}</span></div>
+            ${lists.needsAttention.length ? lists.needsAttention.map((item) => reviewItem(item, 'Review Listing')).join('') : `<div class="ea-empty">No needs-attention items right now.</div>`}
           </div>
           <div class="ea-review-col">
             <div class="ea-review-col-head"><h3>Price Watch</h3><span class="ea-pill tracked">${lists.priceWatch.length}</span></div>
             ${lists.priceWatch.length ? lists.priceWatch.map((item) => reviewItem(item, 'Review Price')).join('') : `<div class="ea-empty">No price-watch items right now.</div>`}
           </div>
           <div class="ea-review-col">
-            <div class="ea-review-col-head"><h3>Operator Notes</h3><span class="ea-pill estimated">Workspace</span></div>
-            <div class="ea-review-item">
-              <strong>Why this matters</strong>
-              <div class="ea-review-reason">Unresolved price, stale items, and likely sold rows now live in the same operator review workspace. The next step is persisting those decisions cleanly.</div>
-            </div>
-            <div class="ea-review-item">
-              <strong>Next hardening target</strong>
-              <div class="ea-review-reason">Move these lanes into a more durable lifecycle state machine with explicit resolved outcomes, timestamps, and stronger persistence after refresh.</div>
-            </div>
+            <div class="ea-review-col-head"><h3>Likely Sold / Stale</h3><span class="ea-pill critical">${lists.soldStale.length}</span></div>
+            ${lists.soldStale.length ? lists.soldStale.map((item) => reviewItem(item, 'Review Status')).join('') : `<div class="ea-empty">No sold or stale items right now.</div>`}
           </div>
         </div>
       </div>
     `;
 
     bindButtons(shell);
+    activateTab(shell, 'eaAnalyticsTabPosts');
   }
 
   NS.analytics = { renderBundleAAnalytics: render };
