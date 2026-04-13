@@ -75,7 +75,7 @@
         linear-gradient(180deg, rgba(255,255,255,.02), rgba(255,255,255,.01)),
         #141414 !important;
     }
-    #overview .command-title-row h2{font-size:28px !important; line-height:1.04 !important; max-width:520px !important;}
+    #overview .command-title-row h2{font-size:27px !important; line-height:1.04 !important; max-width:500px !important;}
     #overview .command-meta-card{
       padding:14px !important;
       background:linear-gradient(180deg, rgba(255,255,255,.03), rgba(255,255,255,.012)) !important;
@@ -83,16 +83,10 @@
     #overview .command-meta-value{font-size:24px !important;}
     #overview .overview-chip{min-height:34px !important; font-size:12px !important;}
     #overview .overview-action-item{padding:13px 15px !important; border-radius:14px !important;}
-
-    #overview .operator-strip{
-      grid-template-columns:repeat(4,minmax(0,1fr)) !important;
-      gap:12px !important;
-      margin-bottom:16px !important;
-    }
-    #overview .mini-stat{min-height:118px !important; padding:16px !important;}
+    #overview .operator-strip{grid-template-columns:repeat(4,minmax(0,1fr)) !important; gap:12px !important; margin-bottom:16px !important;}
+    #overview .mini-stat{min-height:116px !important; padding:16px !important;}
     #overview .mini-stat .stat-value{font-size:23px !important;}
     #overview .mini-stat .stat-sub{font-size:12px !important; line-height:1.4 !important;}
-
     #overview .listing-grid{gap:14px !important;}
     #overview .listing-card{
       background:
@@ -139,7 +133,7 @@
       border-radius:999px; padding:10px 14px; cursor:pointer; font-weight:700; font-size:12px;
     }
 
-    .ea-analytics-shell{display:grid;gap:16px;margin-bottom:20px}
+    .ea-operator-shell{display:grid;gap:16px;margin-bottom:20px}
     .ea-analytics-card,.ea-analytics-hero{border:1px solid rgba(212,175,55,.12);border-radius:16px;padding:18px;background:linear-gradient(180deg,rgba(255,255,255,.018),rgba(255,255,255,.006))}
     .ea-analytics-hero-grid{display:grid;grid-template-columns:1.45fr repeat(4,minmax(0,1fr));gap:12px}
     .ea-a-title{font-size:28px;line-height:1.05;margin:0 0 8px}
@@ -155,11 +149,7 @@
     .ea-pill.estimated{color:#ffcfad;border-color:rgba(255,207,173,.22)}
     .ea-pill.critical{color:#ffb4b4;border-color:rgba(255,180,180,.22)}
     .ea-pill.neutral{color:#d8d8d8;border-color:rgba(255,255,255,.12)}
-    .ea-tabbar{display:flex;gap:8px;flex-wrap:wrap}
-    .ea-tabbar button{appearance:none;border:1px solid rgba(255,255,255,.08);background:#171717;color:#efefef;border-radius:999px;padding:10px 14px;cursor:pointer;font-weight:700;font-size:13px}
-    .ea-tabbar button.active{background:rgba(212,175,55,.15);color:#f3ddb0;border-color:rgba(212,175,55,.24)}
-    .ea-tab-panel{display:none}
-    .ea-tab-panel.active{display:block}
+
     .ea-post-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}
     .ea-post-card{background:linear-gradient(180deg,rgba(255,255,255,.01),rgba(255,255,255,0));border:1px solid rgba(212,175,55,.12);border-radius:16px;overflow:hidden}
     .ea-post-media{height:150px;background:#171717;border-bottom:1px solid rgba(255,255,255,.05)}
@@ -175,11 +165,7 @@
     .ea-post-kpi span{display:block;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:#d4af37;margin-bottom:4px}
     .ea-post-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
 
-    .ea-review-surface{
-      display:grid;
-      gap:16px;
-      margin-bottom:20px;
-    }
+    .ea-review-surface{display:grid;gap:16px;margin-bottom:20px}
     .ea-review-surface .ea-analytics-card{
       background:
         radial-gradient(circle at top right, rgba(212,175,55,.10), transparent 26%),
@@ -210,9 +196,9 @@
   `;
 
   function ensureStyle(){
-    if(document.getElementById('ea-analytics-bundle-e-style')) return;
+    if(document.getElementById('ea-analytics-bundle-f-style')) return;
     const s=document.createElement('style');
-    s.id='ea-analytics-bundle-e-style';
+    s.id='ea-analytics-bundle-f-style';
     s.textContent=CSS;
     document.head.appendChild(s);
   }
@@ -256,7 +242,7 @@
     document.querySelectorAll('.section-head .subtext, .card > p, .tool-tile p, .stat-sub').forEach((el) => {
       const t = clean(el.textContent);
       if (!t) return;
-      if (t.length > 85) el.textContent = `${t.slice(0, 79).trim()}…`;
+      if (t.length > 75) el.textContent = `${t.slice(0, 69).trim()}…`;
     });
 
     const buttonMap = new Map([
@@ -282,73 +268,6 @@
     });
   }
 
-  function lockPersonalView(){
-    if (isManagerView()) return;
-
-    // remove manager/dealership leakage
-    const leakagePatterns = [
-      /manager oversight/i,
-      /primary dealership/i,
-      /dealership health/i,
-      /team command/i,
-      /manager summary/i,
-      /primary dealership team/i
-    ];
-
-    const allCards = Array.from(document.querySelectorAll('.card, .sidebar-card, .tool-tile, .mini-stat'));
-    allCards.forEach((node) => {
-      const text = clean(node.textContent || '');
-      if (leakagePatterns.some((p) => p.test(text))) node.classList.add('ea-remove');
-    });
-
-    document.querySelectorAll('[id*="manager"], [class*="manager"], [data-role="manager"]').forEach((el) => {
-      el.classList.add('ea-remove');
-    });
-
-    // overview reduction
-    ['#overviewUpgradeCard', '#overviewPriorityGrid', '#overviewAccountGrid .card:first-child'].forEach((sel) => {
-      const el = document.querySelector(sel);
-      if (el) el.classList.add('ea-remove');
-    });
-
-    // keep only 4 core operator stats
-    const operatorStrip = document.getElementById('overviewOperatorStrip');
-    if (operatorStrip) {
-      Array.from(operatorStrip.children || []).forEach((node, idx) => {
-        if (idx > 3) node.classList.add('ea-remove');
-      });
-    }
-
-    // lower-value overview sections quieter
-    document.querySelectorAll('#overviewPerformanceGrid, #overviewAccountGrid').forEach((el) => {
-      el.classList.add('ea-quiet');
-    });
-
-    // personal wording cleanup
-    document.querySelectorAll('.card h2, .section-head h2, .subtext, .module-group-label, .stat-label').forEach((node) => {
-      let text = node.textContent || '';
-      text = text
-        .replace(/manager oversight/gi, 'Operator workspace')
-        .replace(/primary dealership/gi, 'Dealership')
-        .replace(/dealership health/gi, 'Listing health')
-        .replace(/team command/gi, 'Operator workflow')
-        .replace(/manager summary/gi, 'Summary')
-        .replace(/portfolio view/gi, 'Analytics');
-      node.textContent = clean(text);
-    });
-
-    // tools page cleanup
-    document.querySelectorAll('#extension .card .list-block, #extension .card .subtext').forEach((node) => {
-      const t = clean(node.textContent || '');
-      if (/module|system status|platform modules/i.test(t)) {
-        node.textContent = t
-          .replace(/system status/gi, 'Status')
-          .replace(/platform modules/gi, 'Tools')
-          .replace(/module state mix/gi, 'Tool mix');
-      }
-    });
-  }
-
   function createReviewNavIfMissing(){
     if (document.querySelector('.sidebar-nav [data-section="review_center"]')) return;
     const nav = document.querySelector('.sidebar-nav');
@@ -360,8 +279,8 @@
     btn.dataset.section = 'review_center';
     btn.textContent = 'Review Center';
 
-    const analyticsBtn = nav.querySelector('[data-section="tools"]');
-    if (analyticsBtn) analyticsBtn.insertAdjacentElement('afterend', btn);
+    const toolsBtn = nav.querySelector('[data-section="tools"]');
+    if (toolsBtn) toolsBtn.insertAdjacentElement('afterend', btn);
     else nav.appendChild(btn);
 
     btn.addEventListener('click', () => {
@@ -372,13 +291,82 @@
     });
   }
 
+  function hardSplitOperatorSurface(){
+    if (isManagerView()) return;
+
+    // absolute removal of manager/dealership leakage
+    const leakagePatterns = [
+      /manager oversight/i,
+      /primary dealership/i,
+      /dealership health/i,
+      /team command/i,
+      /manager summary/i,
+      /primary dealership team/i
+    ];
+
+    document.querySelectorAll('.card, .sidebar-card, .tool-tile, .mini-stat, .list-block, .status-line').forEach((node) => {
+      const text = clean(node.textContent || '');
+      if (leakagePatterns.some((p) => p.test(text))) node.classList.add('ea-remove');
+    });
+    document.querySelectorAll('[id*="manager"], [class*="manager"], [data-role="manager"]').forEach((el) => el.classList.add('ea-remove'));
+
+    // keep only 4 core operator stats
+    const operatorStrip = document.getElementById('overviewOperatorStrip');
+    if (operatorStrip) {
+      Array.from(operatorStrip.children || []).forEach((node, idx) => {
+        if (idx > 3) node.classList.add('ea-remove');
+      });
+    }
+
+    // remove extra overview/admin surfaces
+    [
+      '#overviewUpgradeCard',
+      '#overviewPriorityGrid',
+      '#overviewAccountGrid .card:first-child',
+      '#revenueIntelligencePanel'
+    ].forEach((sel) => {
+      document.querySelectorAll(sel).forEach((el) => el.classList.add('ea-remove'));
+    });
+
+    // make account details quiet/collapsed
+    const accountGrid = document.getElementById('overviewAccountGrid');
+    if (accountGrid && !document.getElementById('eaDetailsToggleF')) {
+      const head = document.createElement('div');
+      head.style.display = 'flex';
+      head.style.justifyContent = 'space-between';
+      head.style.alignItems = 'center';
+      head.style.gap = '12px';
+      head.style.marginBottom = '12px';
+      head.innerHTML = `<div class="subtext">Secondary account details</div><button id="eaDetailsToggleF" class="ea-toggle" type="button">Show details</button>`;
+      accountGrid.parentNode.insertBefore(head, accountGrid);
+      accountGrid.classList.add('ea-collapsible', 'ea-hide');
+
+      const btn = head.querySelector('#eaDetailsToggleF');
+      btn.addEventListener('click', () => {
+        const hidden = accountGrid.classList.toggle('ea-hide');
+        btn.textContent = hidden ? 'Show details' : 'Hide details';
+      });
+    }
+
+    // tools/admin wording cleanup
+    document.querySelectorAll('#extension .card h2, #extension .card .subtext, #tools .card h2, #tools .card .subtext').forEach((node) => {
+      let text = clean(node.textContent || '');
+      text = text
+        .replace(/system status/gi, 'Status')
+        .replace(/platform modules/gi, 'Tools')
+        .replace(/module state/gi, 'Tool state')
+        .replace(/operator workspace/gi, 'Workspace');
+      node.textContent = text;
+    });
+  }
+
   function applyOperatorShell(){
-    if (document.body.dataset.eaOperatorShellE === 'true') return;
+    if (document.body.dataset.eaOperatorShellF === 'true') return;
     ensureStyle();
     compressGlobalCopy();
     createReviewNavIfMissing();
-    lockPersonalView();
-    document.body.dataset.eaOperatorShellE = 'true';
+    hardSplitOperatorSurface();
+    document.body.dataset.eaOperatorShellF = 'true';
   }
 
   function getListings(){
@@ -394,6 +382,13 @@
       const likelySold = Boolean(row.likely_sold) || /review_delete|removedvehicles/i.test(lifecycle);
       const stale = Boolean(row.weak) || /stale/i.test(clean(row.status || lifecycle));
       const priceReview = /price/i.test(lifecycle) || /price/i.test(recommended) || !Boolean(row.price_resolved ?? true);
+
+      let stateLabel = 'Active';
+      if (!row.price_resolved) stateLabel = 'Price Pending';
+      else if (likelySold) stateLabel = 'Likely Sold';
+      else if (priceReview) stateLabel = 'Price Watch';
+      else if (stale) stateLabel = 'Needs Refresh';
+
       return {
         id: clean(row.id || row.identity_key || row.marketplace_listing_id || row.vin || row.stock_number || row.title),
         identity_key: clean(row.identity_key || ''),
@@ -413,6 +408,7 @@
         pricing_insight: clean(row.pricing_insight || ''),
         lifecycle_status: lifecycle,
         status: clean(row.status || 'active'),
+        state_label: stateLabel,
         source_url: clean(row.source_url || ''),
         likely_sold: likelySold,
         stale,
@@ -441,7 +437,6 @@
   }
 
   function postCard(item){
-    const badge = !item.price_resolved ? 'Price Pending' : item.likely_sold ? 'Likely Sold' : item.price_review ? 'Price Watch' : item.stale ? 'Needs Refresh' : 'Active';
     const badgeClass = !item.price_resolved ? 'estimated' : item.likely_sold ? 'critical' : (item.price_review ? 'tracked' : (item.stale ? 'estimated' : 'synced'));
     return `
       <div class="ea-post-card">
@@ -452,13 +447,13 @@
               <div class="ea-post-title">${item.title}</div>
               <div class="ea-post-sub">${item.subtitle || 'Tracked listing'}</div>
             </div>
-            <span class="ea-pill ${badgeClass}">${badge}</span>
+            <span class="ea-pill ${badgeClass}">${item.state_label}</span>
           </div>
           <div class="ea-post-price ${item.price_resolved ? '' : 'unresolved'}">${displayPrice(item)}</div>
           <div class="ea-post-kpis">
             <div class="ea-post-kpi"><span>Views</span><strong>${item.views}</strong></div>
             <div class="ea-post-kpi"><span>Messages</span><strong>${item.messages}</strong></div>
-            <div class="ea-post-kpi"><span>Score</span><strong>${item.health_score || '—'}</strong></div>
+            <div class="ea-post-kpi"><span>State</span><strong>${item.state_label}</strong></div>
           </div>
           <div class="ea-review-reason">${item.recommended_action}${item.pricing_insight ? `<br><br><em>${item.pricing_insight}</em>` : ''}</div>
           <div class="ea-post-actions">
@@ -471,7 +466,6 @@
   }
 
   function reviewItem(item, actionLabel){
-    const badge = !item.price_resolved ? 'Price unresolved' : item.likely_sold ? 'Likely sold' : item.price_review ? 'Price review' : 'Needs review';
     const badgeClass = !item.price_resolved ? 'estimated' : item.likely_sold ? 'critical' : (item.price_review ? 'tracked' : 'estimated');
     const encoded = JSON.stringify({
       id:item.id,
@@ -489,7 +483,7 @@
             <strong>${item.title}</strong>
             <div class="ea-a-meta">${item.subtitle || 'Tracked listing'}</div>
           </div>
-          <span class="ea-pill ${badgeClass}">${badge}</span>
+          <span class="ea-pill ${badgeClass}">${item.state_label}</span>
         </div>
         <div class="ea-a-meta">Views ${item.views} · Messages ${item.messages} · Price ${displayPrice(item)}</div>
         <div class="ea-review-reason">${item.recommended_action}${item.pricing_insight ? `<br><br><em>${item.pricing_insight}</em>` : ''}</div>
@@ -503,7 +497,7 @@
 
   function renderBlock(title, items){
     return `<div class="ea-analytics-card"><div class="stat-label">${title}</div><div class="ea-mini">${
-      items.length ? items.slice(0,3).map(item => `${item.title || 'Listing'} · ${item.status || 'active'}`).join('<br>')
+      items.length ? items.slice(0,3).map(item => `${item.title || 'Listing'} · ${item.state_label || item.status || 'active'}`).join('<br>')
       : 'No listings in this lane yet.'
     }</div></div>`;
   }
@@ -531,34 +525,24 @@
     });
   }
 
-  function render() {
-    const section = document.getElementById('tools');
-    if (!section || !NS.state) return;
-
-    applyOperatorShell();
-
-    const analytics = get('analytics', {}) || {};
-    const tracking = analytics.tracking_summary || {};
-    const sync = get('sync', {}) || {};
-    const actions = Array.isArray(analytics.action_queue) ? analytics.action_queue : [];
-    const listings = getListings();
-    const lists = topLists(listings);
-
-    let shell = document.getElementById('eaAnalyticsShell');
+  function renderOperatorSurface(section, listings, lists, analytics, tracking, sync){
+    let shell = document.getElementById('eaOperatorShell');
     if (!shell) {
       shell = document.createElement('div');
-      shell.id = 'eaAnalyticsShell';
-      shell.className = 'ea-analytics-shell';
+      shell.id = 'eaOperatorShell';
+      shell.className = 'ea-operator-shell';
       section.prepend(shell);
     }
 
+    const actions = Array.isArray(analytics.action_queue) ? analytics.action_queue : [];
+
     shell.innerHTML = `
-      <div id="eaAnalyticsHero" class="ea-analytics-hero">
+      <div class="ea-analytics-hero">
         <div class="ea-analytics-hero-grid">
           <div class="ea-analytics-card">
             <div class="module-group-label">Operator View</div>
             <h2 class="ea-a-title">Your posts, your review queue, and the next actions — without manager or dealership noise.</h2>
-            <div class="ea-a-copy">Bundle E shifts Review Center into a more dedicated surface and keeps the personal view cleaner.</div>
+            <div class="ea-a-copy">Bundle F treats the operator view as its own render shape instead of cleaning a mixed surface after the fact.</div>
           </div>
           <div class="ea-analytics-card"><div class="stat-label">Client Posts</div><div class="stat-value" style="font-size:24px">${listings.length}</div><div class="stat-sub">Visible now</div></div>
           <div class="ea-analytics-card"><div class="stat-label">Review Queue</div><div class="stat-value" style="font-size:24px">${lists.needsAttention.length}</div><div class="stat-sub">Needs action</div></div>
@@ -567,7 +551,7 @@
         </div>
       </div>
 
-      <div id="eaAnalyticsWorkspace" class="ea-analytics-card">
+      <div class="ea-analytics-card">
         <div class="section-head">
           <div>
             <div class="module-group-label">Client Posts</div>
@@ -620,7 +604,7 @@
         </div>
       </div>
 
-      <div id="eaAnalyticsInsights" class="ea-analytics-card">
+      <div class="ea-analytics-card">
         <div class="section-head">
           <div>
             <div class="module-group-label">Analytics</div>
@@ -646,12 +630,54 @@
         </div>
       </div>
     `;
-
     bindButtons(shell);
+  }
+
+  function renderManagerSurface(section, listings, lists, analytics, tracking, sync){
+    // Minimal fallback to preserve functionality if a manager account appears.
+    let shell = document.getElementById('eaOperatorShell');
+    if (!shell) {
+      shell = document.createElement('div');
+      shell.id = 'eaOperatorShell';
+      shell.className = 'ea-operator-shell';
+      section.prepend(shell);
+    }
+    shell.innerHTML = `
+      <div class="ea-analytics-hero">
+        <div class="ea-analytics-hero-grid">
+          <div class="ea-analytics-card">
+            <div class="module-group-label">Manager View</div>
+            <h2 class="ea-a-title">Manager workspace stays separate from the operator-focused surface.</h2>
+            <div class="ea-a-copy">Bundle F preserves a lightweight manager fallback while prioritizing the operator render path.</div>
+          </div>
+          <div class="ea-analytics-card"><div class="stat-label">Tracked Listings</div><div class="stat-value" style="font-size:24px">${listings.length}</div><div class="stat-sub">Visible now</div></div>
+          <div class="ea-analytics-card"><div class="stat-label">Review Queue</div><div class="stat-value" style="font-size:24px">${lists.needsAttention.length}</div><div class="stat-sub">Needs action</div></div>
+          <div class="ea-analytics-card"><div class="stat-label">Sync</div><div class="stat-value" style="font-size:24px">${tracking.sync_confidence || sync.confidence || 'local'}</div><div class="stat-sub">Current truth level</div></div>
+          <div class="ea-analytics-card"><div class="stat-label">Insights</div><div class="stat-value" style="font-size:24px">${(analytics.action_queue || []).length}</div><div class="stat-sub">Action items</div></div>
+        </div>
+      </div>
+    `;
+  }
+
+  function render() {
+    const section = document.getElementById('tools');
+    if (!section || !NS.state) return;
+
+    applyOperatorShell();
+
+    const analytics = get('analytics', {}) || {};
+    const tracking = analytics.tracking_summary || {};
+    const sync = get('sync', {}) || {};
+    const listings = getListings();
+    const lists = topLists(listings);
+
+    if (isManagerView()) renderManagerSurface(section, listings, lists, analytics, tracking, sync);
+    else renderOperatorSurface(section, listings, lists, analytics, tracking, sync);
+
     applyOperatorShell();
   }
 
-  NS.analytics = { renderBundleEAnalytics: render, applyOperatorShell };
+  NS.analytics = { renderBundleFAnalytics: render, applyOperatorShell };
   NS.modules = NS.modules || {};
   NS.modules.analytics = true;
 
