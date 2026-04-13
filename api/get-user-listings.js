@@ -57,22 +57,15 @@ function buildListingIntelligence(row = {}) {
   const promoteNow = activeLike && views >= 20 && messages >= 1;
   const lowPerformance = activeLike && ageDays >= 7 && views < 5 && messages === 0;
   const weak = staleLike || lowPerformance;
-  const needsAction = weak || highViewsNoMessages || lifecycle === "review_price_update" || reviewBucket === "pricechanges";
+  const needsAction = weak || highViewsNoMessages || lifecycle === "review_price_update" || reviewBucket === "pricechanges" || !row.price_resolved;
 
   let recommendedAction = "Keep live";
-  if (likelySold) recommendedAction = "Check if sold or stale";
+  if (!row.price_resolved) recommendedAction = "Resolve price source";
+  else if (likelySold) recommendedAction = "Check if sold or stale";
   else if (lifecycle === "review_price_update" || reviewBucket === "pricechanges" || highViewsNoMessages) recommendedAction = "Review price";
   else if (lifecycle === "review_new" || reviewBucket === "newvehicles") recommendedAction = "Review new listing";
   else if (lowPerformance) recommendedAction = "Refresh title/photos";
   else if (promoteNow) recommendedAction = "Promote now";
-
-  let predictedScore = 50;
-  predictedScore += Math.min(views, 25);
-  predictedScore += Math.min(messages * 18, 36);
-  predictedScore -= Math.min(ageDays * 3, 24);
-  if (highViewsNoMessages) predictedScore -= 8;
-  if (weak) predictedScore -= 20;
-  predictedScore = Math.max(0, Math.min(100, Math.round(predictedScore)));
 
   return {
     age_days: ageDays,
@@ -81,9 +74,9 @@ function buildListingIntelligence(row = {}) {
     weak,
     needs_action: needsAction,
     recommended_action: recommendedAction,
-    predicted_score: predictedScore,
-    predicted_label: predictedScore >= 75 ? "High Performer" : predictedScore >= 55 ? "Likely Performer" : predictedScore < 35 ? "Low Probability" : "Uncertain",
-    pricing_insight: highViewsNoMessages ? "Price may be limiting message conversion." : messages >= 2 ? "Pricing appears competitive." : "Pricing signal still developing.",
+    predicted_score: Math.max(0, Math.min(100, Math.round(50 + Math.min(views, 25) + Math.min(messages * 18, 36) - Math.min(ageDays * 3, 24) - (!row.price_resolved ? 15 : 0)))),
+    predicted_label: !row.price_resolved ? "Data Incomplete" : "Likely Performer",
+    pricing_insight: !row.price_resolved ? "Price source is unresolved. Do not trust displayed price yet." : highViewsNoMessages ? "Price may be limiting message conversion." : messages >= 2 ? "Pricing appears competitive." : "Pricing signal still developing.",
     content_feedback: "Listing structure looks strong.",
     popularity_score: messages * 1000 + views * 10 + (postedTs / 100000000)
   };
@@ -125,6 +118,9 @@ function normalizeListingRow(row = {}, source = "user_listings") {
     price_source: canonical.price_source,
     mileage_source: canonical.mileage_source,
     price_warning: canonical.price_warning,
+    price_resolved: canonical.price_resolved,
+    mileage_resolved: canonical.mileage_resolved,
+    display_price_text: canonical.display_price_text,
     body_style: clean(row.body_style || ""),
     make: clean(row.make || ""),
     model: clean(row.model || ""),
@@ -135,8 +131,8 @@ function normalizeListingRow(row = {}, source = "user_listings") {
 
 function preferListingRow(current, incoming) {
   if (!current) return incoming;
-  const currentScore = (current.source_table === "user_listings" ? 1000 : 0) + safeNumber(current.views_count) + safeNumber(current.messages_count) * 10;
-  const incomingScore = (incoming.source_table === "user_listings" ? 1000 : 0) + safeNumber(incoming.views_count) + safeNumber(incoming.messages_count) * 10;
+  const currentScore = (current.source_table === "user_listings" ? 1000 : 0) + safeNumber(current.views_count) + safeNumber(current.messages_count) * 10 + (current.price_resolved ? 100 : 0);
+  const incomingScore = (incoming.source_table === "user_listings" ? 1000 : 0) + safeNumber(incoming.views_count) + safeNumber(incoming.messages_count) * 10 + (incoming.price_resolved ? 100 : 0);
   return incomingScore >= currentScore ? { ...current, ...incoming } : { ...incoming, ...current };
 }
 
@@ -194,6 +190,7 @@ function matchesFilter(row, { status, lifecycleStatus, reviewBucket, search, pre
   if (lifecycleStatus && normalizedLifecycle !== lifecycleStatus) return false;
   if (reviewBucket && normalizedBucket !== reviewBucket) return false;
   if (preset === "price" && normalizedLifecycle !== "review_price_update" && normalizedBucket !== "pricechanges") return false;
+  if (preset === "unresolved_price" && row.price_resolved) return false;
   if (search) {
     const haystack = [row.title, row.make, row.model, row.trim, row.vin, row.stock_number, row.body_style, row.price_source, row.mileage_source].map((v) => clean(v).toLowerCase()).join(" ");
     if (!haystack.includes(search)) return false;
@@ -261,6 +258,7 @@ export default async function handler(req, res) {
       data: rows,
       meta: {
         total: rows.length,
+        unresolved_price_count: rows.filter((row) => !row.price_resolved).length,
         limit,
         auth_mode: verifiedUser ? "verified_bearer" : (dashboardClient ? "dashboard_identity_fallback" : "query_identity"),
         sources: { user_listings: userRows.length, listings: legacyRows.length, merged: mergedMap.size }
