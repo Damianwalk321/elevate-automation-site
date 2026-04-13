@@ -61,10 +61,26 @@ img { max-width: 100%; display: block; }
   text-transform: uppercase;
   color: var(--gold);
 }
-.brand-sub { font-size: 13px; color: var(--text-muted); }
-.main-nav { display: flex; gap: 22px; flex-wrap: wrap; }
-.main-nav a { color: var(--text-soft); font-size: 14px; }
-.main-nav a:hover { color: var(--gold); }
+.brand-sub,
+.footer-sub {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+.main-nav,
+.footer-links {
+  display: flex;
+  gap: 22px;
+  flex-wrap: wrap;
+}
+.main-nav a,
+.footer-links a {
+  color: var(--text-soft);
+  font-size: 14px;
+}
+.main-nav a:hover,
+.footer-links a:hover {
+  color: var(--gold);
+}
 
 .btn {
   display: inline-flex;
@@ -92,22 +108,36 @@ img { max-width: 100%; display: block; }
 }
 .nav-cta { white-space: nowrap; }
 
-.hero-section { padding: 74px 0 46px; }
+.hero-section { padding: 72px 0 42px; }
 .hero-grid {
   display: grid;
   grid-template-columns: 1.02fr 0.98fr;
   gap: 34px;
   align-items: center;
 }
+.eyebrow-row {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.eyebrow-pill {
+  padding: 7px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--line-strong);
+  background: rgba(212,175,55,0.08);
+  color: #f0d887;
+  font-size: 12px;
+}
 .hero-copy h1 {
-  margin: 10px 0 18px;
-  font-size: clamp(40px, 6.4vw, 70px);
-  line-height: 0.98;
-  letter-spacing: -0.035em;
-  max-width: 840px;
+  margin: 12px 0 18px;
+  font-size: clamp(40px, 6.1vw, 72px);
+  line-height: 0.96;
+  letter-spacing: -0.04em;
+  max-width: 900px;
 }
 .hero-text {
-  max-width: 720px;
+  max-width: 760px;
   font-size: 17px;
   color: var(--text-soft);
 }
@@ -126,12 +156,12 @@ img { max-width: 100%; display: block; }
   gap: 12px;
 }
 .hero-highlights {
-  margin-top: 24px;
+  margin-top: 22px;
   grid-template-columns: repeat(3, 1fr);
 }
 .hero-kpi-strip {
   margin-top: 16px;
-  grid-template-columns: repeat(2, 1fr);
+  grid-template-columns: repeat(3, 1fr);
 }
 .hero-trust-row {
   margin-top: 16px;
@@ -148,7 +178,8 @@ img { max-width: 100%; display: block; }
 .workflow-card,
 .pricing-card,
 .trust-chip,
-.support-chip {
+.support-chip,
+.authority-item {
   background: rgba(255, 255, 255, 0.03);
   border: 1px solid var(--line);
   border-radius: 18px;
@@ -161,7 +192,8 @@ img { max-width: 100%; display: block; }
 }
 .hero-kpi,
 .trust-chip,
-.support-chip {
+.support-chip,
+.authority-item {
   padding: 14px 16px;
 }
 .hero-kpi span,
@@ -170,19 +202,22 @@ img { max-width: 100%; display: block; }
 .benefit-item strong,
 .trust-chip,
 .support-chip,
-.plan-cap {
+.plan-cap,
+.authority-item span {
   color: var(--gold);
   font-size: 11px;
   letter-spacing: 0.12em;
   text-transform: uppercase;
 }
-.hero-kpi strong {
+.hero-kpi strong,
+.authority-item strong {
   display: block;
   margin-top: 8px;
-  font-size: 18px;
+  font-size: 17px;
   color: var(--text);
   text-transform: none;
   letter-spacing: 0;
+  line-height: 1.35;
 }
 .trust-chip,
 .support-chip {
@@ -257,23 +292,32 @@ img { max-width: 100%; display: block; }
   font-size: 12px;
 }
 
-.section { padding: 72px 0; }
+.section { padding: 70px 0; }
 .section-dark {
   background: rgba(255, 255, 255, 0.025);
   border-top: 1px solid var(--line);
   border-bottom: 1px solid var(--line);
 }
+.authority-strip-section {
+  padding-top: 0;
+  padding-bottom: 18px;
+}
+.authority-strip {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 14px;
+}
 .section-heading {
   max-width: 860px;
-  margin-bottom: 28px;
+  margin-bottom: 26px;
 }
 .section-heading-tight {
-  margin-bottom: 24px;
+  margin-bottom: 22px;
 }
 .section-heading h2 {
   margin: 8px 0 10px;
   font-size: clamp(28px, 4.5vw, 48px);
-  line-height: 1.06;
+  line-height: 1.05;
   letter-spacing: -0.02em;
 }
 .section-heading p,
@@ -287,6 +331,7 @@ img { max-width: 100%; display: block; }
   color: var(--text-soft);
   font-size: 17px;
 }
+
 .feature-grid,
 .workflow-grid,
 .faq-grid,
@@ -511,9 +556,6 @@ img { max-width: 100%; display: block; }
   margin-top: 16px;
   grid-template-columns: repeat(3, 1fr);
 }
-.pricing-heading {
-  max-width: 880px;
-}
 .final-cta {
   margin-top: 18px;
   display: grid;
@@ -536,8 +578,27 @@ img { max-width: 100%; display: block; }
   gap: 12px;
   flex-wrap: wrap;
 }
-.faq-grid-refined .faq-card {
-  min-height: 100%;
+
+.site-footer {
+  border-top: 1px solid var(--line);
+  background: rgba(255,255,255,0.02);
+}
+.footer-wrap {
+  min-height: 110px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  flex-wrap: wrap;
+  padding: 22px 0;
+}
+.footer-brand {
+  font-size: 18px;
+  font-weight: 700;
+}
+.footer-actions {
+  display: flex;
+  align-items: center;
 }
 
 @media (max-width: 1180px) {
@@ -549,7 +610,8 @@ img { max-width: 100%; display: block; }
   .feature-grid,
   .benefit-band,
   .proof-metric-grid,
-  .final-cta {
+  .final-cta,
+  .authority-strip {
     grid-template-columns: 1fr 1fr;
   }
 
@@ -570,7 +632,8 @@ img { max-width: 100%; display: block; }
     min-height: auto;
   }
 
-  .main-nav {
+  .main-nav,
+  .footer-links {
     gap: 12px;
   }
 
@@ -586,7 +649,8 @@ img { max-width: 100%; display: block; }
   .proof-metric-grid,
   .scanner-chip-grid,
   .final-cta,
-  .pricing-support-row {
+  .pricing-support-row,
+  .authority-strip {
     grid-template-columns: 1fr;
   }
 
@@ -602,7 +666,8 @@ img { max-width: 100%; display: block; }
   .panel-top,
   .proof-head,
   .final-cta-actions,
-  .pricing-topline {
+  .pricing-topline,
+  .footer-wrap {
     flex-direction: column;
     align-items: flex-start;
   }
@@ -628,7 +693,8 @@ img { max-width: 100%; display: block; }
   .workflow-card,
   .pricing-card,
   .faq-card,
-  .included-card {
+  .included-card,
+  .authority-item {
     border-radius: 18px;
   }
 
@@ -637,7 +703,8 @@ img { max-width: 100%; display: block; }
   .faq-card,
   .pricing-card,
   .included-card,
-  .proof-card {
+  .proof-card,
+  .authority-item {
     padding: 18px;
   }
 
@@ -646,7 +713,8 @@ img { max-width: 100%; display: block; }
   }
 
   .hero-actions .btn,
-  .final-cta-actions .btn {
+  .final-cta-actions .btn,
+  .footer-actions .btn {
     width: 100%;
   }
 
