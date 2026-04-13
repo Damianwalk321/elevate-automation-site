@@ -73,6 +73,7 @@ function showCheckoutMessage(message) {
   if (!el) return;
   el.textContent = message;
   el.classList.remove("hidden");
+  el.scrollIntoView({ behavior: "smooth", block: "center" });
 }
 
 async function getLoggedInUserEmail() {
@@ -175,7 +176,20 @@ function bindCheckoutButtons() {
   });
 }
 
+function bindFaqAccordion() {
+  const items = Array.from(document.querySelectorAll(".faq-item"));
+  items.forEach((item) => {
+    item.addEventListener("toggle", () => {
+      if (!item.open) return;
+      items.forEach((other) => {
+        if (other !== item) other.open = false;
+      });
+    });
+  });
+}
+
 document.addEventListener("DOMContentLoaded", () => {
   loadStoredReferralCode();
   bindCheckoutButtons();
+  bindFaqAccordion();
 });
