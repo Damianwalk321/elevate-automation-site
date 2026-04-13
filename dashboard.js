@@ -1,9 +1,10 @@
+
 (() => {
   if (window.__ELEVATE_DASHBOARD_PHASE18_20_LOADER__) return;
   window.__ELEVATE_DASHBOARD_PHASE18_20_LOADER__ = true;
 
   const NS = (window.ElevateDashboard = window.ElevateDashboard || {});
-  NS.version = "phase24-bundle-b";
+  NS.version = "phase24-bundle-c";
   NS.modules = NS.modules || {};
   NS.events = NS.events || new EventTarget();
 
@@ -48,19 +49,12 @@
     "/dashboard-phase19-language-compression.js?v=20260411p19",
     "/dashboard-phase20-rc-hardening.js?v=20260411p20",
     "/dashboard-phase21-shell-repair.js?v=20260412p23",
-    "/dashboard-phase22-bundle-b.js?v=20260412p24"
+    "/dashboard-phase23-bundle-c.js?v=20260412c1"
   ];
 
   let compatBootTriggered = false;
-
-  function clean(value) {
-    return String(value || "").replace(/\s+/g, " ").trim();
-  }
-
-  function setLoaderState(state) {
-    try { document.body?.setAttribute("data-ea-loader", state); } catch {}
-  }
-
+  function clean(value) { return String(value || "").replace(/\s+/g, " ").trim(); }
+  function setLoaderState(state) { try { document.body?.setAttribute("data-ea-loader", state); } catch {} }
   function setFriendlyStatus(message) {
     const bootStatus = document.getElementById("bootStatus");
     if (bootStatus) bootStatus.textContent = "";
@@ -70,53 +64,32 @@
     const looksLoading = !current || /loading|booting|starting/i.test(current);
     if (message && looksLoading) welcomeText.textContent = message;
   }
-
   function installLateDOMContentLoadedCompat() {
     if (window.__ELEVATE_LATE_DOMCONTENTLOADED_COMPAT__) return;
     window.__ELEVATE_LATE_DOMCONTENTLOADED_COMPAT__ = true;
-
     const originalAddEventListener = document.addEventListener.bind(document);
     document.addEventListener = function (type, listener, options) {
-      if (
-        type === "DOMContentLoaded" &&
-        typeof listener === "function" &&
-        document.readyState !== "loading"
-      ) {
-        try {
-          queueMicrotask(() => {
-            try { listener.call(document, new Event("DOMContentLoaded")); }
-            catch (error) { console.error("[Elevate Dashboard] Late DOMContentLoaded listener failed:", error); }
-          });
-        } catch {
-          setTimeout(() => {
-            try { listener.call(document, new Event("DOMContentLoaded")); }
-            catch (innerError) { console.error("[Elevate Dashboard] Late DOMContentLoaded listener failed:", innerError); }
-          }, 0);
-        }
+      if (type === "DOMContentLoaded" && typeof listener === "function" && document.readyState !== "loading") {
+        try { queueMicrotask(() => listener.call(document, new Event("DOMContentLoaded"))); } catch { setTimeout(() => listener.call(document, new Event("DOMContentLoaded")), 0); }
         if (options && typeof options === "object" && options.once) return;
       }
       return originalAddEventListener(type, listener, options);
     };
   }
-
   function userLooksHydrated() {
     const emailText = clean(document.querySelector(".user-email")?.textContent || "");
     return Boolean(window.currentUser?.id || (emailText && !/loading/i.test(emailText)));
   }
-
   function kickLegacyBoot() {
     if (compatBootTriggered) return;
     compatBootTriggered = true;
-    try { document.dispatchEvent(new Event("DOMContentLoaded", { bubbles: true, cancelable: true })); }
-    catch (error) { console.error("[Elevate Dashboard] Compatibility boot failed:", error); }
+    try { document.dispatchEvent(new Event("DOMContentLoaded", { bubbles: true, cancelable: true })); } catch (error) { console.error("[Elevate Dashboard] Compatibility boot failed:", error); }
   }
-
   function installControlledBootKick() {
     if (window.__ELEVATE_CONTROLLED_BOOT_KICK__) return;
     window.__ELEVATE_CONTROLLED_BOOT_KICK__ = true;
     setTimeout(() => { if (!userLooksHydrated()) kickLegacyBoot(); }, 600);
   }
-
   function loadScriptSequentially(index = 0) {
     if (index >= MODULES.length) return Promise.resolve();
     const src = MODULES[index];
