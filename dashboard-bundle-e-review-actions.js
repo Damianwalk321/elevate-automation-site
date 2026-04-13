@@ -1,32 +1,35 @@
 (() => {
-  if (window.__ELEVATE_BUNDLE_A_REVIEW_ACTIONS__) return;
-  window.__ELEVATE_BUNDLE_A_REVIEW_ACTIONS__ = true;
+  if (window.__ELEVATE_BUNDLE_B_REVIEW_ACTIONS__) return;
+  window.__ELEVATE_BUNDLE_B_REVIEW_ACTIONS__ = true;
 
   const CSS = `
     .ea-review-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
     .ea-review-status{margin-top:10px;font-size:12px;color:#d4af37;min-height:16px}
     .ea-review-inline-note{font-size:12px;color:#a9a9a9;line-height:1.5}
-    .ea-review-price-box{display:grid;gap:8px;padding:12px;border:1px solid rgba(212,175,55,.12);border-radius:12px;background:#111}
-    .ea-review-price-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px}
-    .ea-review-price-input{width:100%;background:#171717;border:1px solid rgba(255,255,255,.08);color:#f3f3f3;border-radius:10px;padding:10px 12px;font-size:13px}
-    @media (max-width:760px){.ea-review-actions,.ea-review-price-row{grid-template-columns:1fr}}
+    .ea-price-review-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:center}
+    .ea-price-review-row input{
+      background:#101010;border:1px solid rgba(255,255,255,.08);border-radius:12px;padding:11px 12px;color:#f5f5f5;
+      font-size:13px;outline:none;width:100%;
+    }
+    .ea-review-primary{
+      background:rgba(212,175,55,.15)!important;
+      border-color:rgba(212,175,55,.28)!important;
+      color:#f3ddb0!important;
+      font-weight:700!important;
+    }
+    @media (max-width:760px){.ea-review-actions,.ea-price-review-row{grid-template-columns:1fr}}
   `;
 
   function ensureStyle() {
-    if (document.getElementById('ea-bundle-a-review-style')) return;
+    if (document.getElementById('ea-bundle-b-review-style')) return;
     const style = document.createElement('style');
-    style.id = 'ea-bundle-a-review-style';
+    style.id = 'ea-bundle-b-review-style';
     style.textContent = CSS;
     document.head.appendChild(style);
   }
 
   function clean(value) {
     return String(value || '').replace(/\s+/g, ' ').trim();
-  }
-
-  function asNumber(value) {
-    const match = String(value || '').replace(/,/g, '').match(/-?\d+(\.\d+)?/);
-    return match ? Number(match[0]) : 0;
   }
 
   function getIdentityPayloadFromNode(node) {
@@ -80,74 +83,36 @@
     } catch {}
   }
 
-  function buildPriceBox(identity) {
-    const wrapper = document.createElement('div');
-    wrapper.className = 'ea-review-price-box';
-
-    const label = document.createElement('div');
-    label.className = 'ea-review-inline-note';
-    label.textContent = 'Record a reviewed price directly against the tracked listing row. This updates dashboard state; it does not directly push a live Marketplace repricing action yet.';
-
-    const row = document.createElement('div');
-    row.className = 'ea-review-price-row';
-
-    const input = document.createElement('input');
-    input.className = 'ea-review-price-input';
-    input.type = 'text';
-    input.inputMode = 'decimal';
-    input.placeholder = 'Enter reviewed price';
-    if (identity?.price) input.value = String(identity.price);
-
-    const btn = document.createElement('button');
-    btn.className = 'action-btn';
-    btn.type = 'button';
-    btn.textContent = 'Save Reviewed Price';
-
-    const status = document.createElement('div');
-    status.className = 'ea-review-status';
-
-    btn.addEventListener('click', async () => {
-      const numeric = asNumber(input.value);
-      if (!numeric) {
-        status.textContent = 'Enter a valid price first.';
-        return;
-      }
-      status.textContent = 'Saving reviewed price...';
-      try {
-        await postReviewAction(identity, 'mark_price_updated', { price: numeric });
-        status.textContent = `Saved reviewed price: $${numeric.toLocaleString()}`;
-        await refreshDashboardSurfaces();
-      } catch (error) {
-        status.textContent = error?.message || 'Price update failed';
-      }
-    });
-
-    row.appendChild(input);
-    row.appendChild(btn);
-    wrapper.appendChild(label);
-    wrapper.appendChild(row);
-    wrapper.appendChild(status);
-    return wrapper;
+  function parsePriceValue(raw) {
+    const n = Number(String(raw || '').replace(/[^0-9.]/g, ''));
+    return Number.isFinite(n) && n > 0 ? Math.round(n) : 0;
   }
 
   function injectActionPanels() {
     document.querySelectorAll('.ea-review-item').forEach((item) => {
-      if (item.dataset.bundleAActions === 'true') return;
+      if (item.dataset.bundleBActions === 'true') return;
       const identity = getIdentityPayloadFromNode(item);
       if (!identity) return;
-      item.dataset.bundleAActions = 'true';
+      item.dataset.bundleBActions = 'true';
 
       const note = document.createElement('div');
       note.className = 'ea-review-inline-note';
-      note.textContent = 'Persist review outcomes directly to listing rows, then refresh the dashboard surfaces.';
+      note.textContent = 'Persist the decision, then refresh the workspace.';
 
       const actions = document.createElement('div');
       actions.className = 'ea-review-actions';
       actions.innerHTML = `
-        <button class="action-btn" type="button" data-review-action="keep_live">Keep Live</button>
-        <button class="action-btn" type="button" data-review-action="mark_sold">Mark Sold</button>
-        <button class="action-btn" type="button" data-review-action="send_to_price_review">Send to Price Watch</button>
-        <button class="action-btn" type="button" data-review-action="mark_stale">Mark Stale</button>
+        <button class="action-btn ea-review-primary" type="button" data-review-action="keep_live">Keep live</button>
+        <button class="action-btn" type="button" data-review-action="mark_sold">Mark sold</button>
+        <button class="action-btn" type="button" data-review-action="send_to_price_review">Price review</button>
+        <button class="action-btn" type="button" data-review-action="mark_stale">Mark stale</button>
+      `;
+
+      const priceRow = document.createElement('div');
+      priceRow.className = 'ea-price-review-row';
+      priceRow.innerHTML = `
+        <input type="text" inputmode="numeric" placeholder="Updated price">
+        <button class="action-btn" type="button" data-review-action="mark_price_updated">Save price</button>
       `;
 
       const status = document.createElement('div');
@@ -156,7 +121,7 @@
       actions.querySelectorAll('[data-review-action]').forEach((btn) => {
         btn.addEventListener('click', async () => {
           const action = btn.getAttribute('data-review-action');
-          status.textContent = 'Saving review action...';
+          status.textContent = 'Saving...';
           try {
             await postReviewAction(identity, action);
             status.textContent = `Saved: ${action.replace(/_/g, ' ')}`;
@@ -167,9 +132,27 @@
         });
       });
 
+      const priceInput = priceRow.querySelector('input');
+      const priceBtn = priceRow.querySelector('[data-review-action="mark_price_updated"]');
+      priceBtn.addEventListener('click', async () => {
+        const parsed = parsePriceValue(priceInput.value);
+        if (!parsed) {
+          status.textContent = 'Enter a valid price.';
+          return;
+        }
+        status.textContent = 'Saving price...';
+        try {
+          await postReviewAction(identity, 'mark_price_updated', { price: parsed });
+          status.textContent = `Saved price: $${parsed.toLocaleString()}`;
+          await refreshDashboardSurfaces();
+        } catch (error) {
+          status.textContent = error?.message || 'Price update failed';
+        }
+      });
+
       item.appendChild(note);
       item.appendChild(actions);
-      item.appendChild(buildPriceBox(identity));
+      item.appendChild(priceRow);
       item.appendChild(status);
     });
   }
