@@ -24,16 +24,15 @@ function normalizeEmail(value) {
 }
 
 function normalizeReferralSource(value) {
-  const source = clean(value).toLowerCase().replace(/[^a-z0-9_:-]+/g, '_');
-  if (!source) return '';
-  if (["ref","referral","link","direct_link"].includes(source)) return 'link';
-  if (["checkout","stripe","billing"].includes(source)) return 'checkout';
-  if (["signup","auth","register"].includes(source)) return 'signup';
-  if (["story","ig_story","facebook_story"].includes(source)) return 'story';
-  if (["dm","message","direct_message"].includes(source)) return 'dm';
+  const source = clean(value).toLowerCase().replace(/[^a-z0-9_:-]+/g, "_");
+  if (!source) return "";
+  if (["ref", "referral", "link", "direct_link"].includes(source)) return "link";
+  if (["checkout", "stripe", "billing"].includes(source)) return "checkout";
+  if (["signup", "auth", "register"].includes(source)) return "signup";
+  if (["story", "ig_story", "facebook_story"].includes(source)) return "story";
+  if (["dm", "message", "direct_message"].includes(source)) return "dm";
   return source;
 }
-
 
 function getSiteUrl(req) {
   return (
@@ -78,7 +77,8 @@ function getPlanConfig(planType, accessType, userType) {
   const starterPriceId = clean(process.env.STRIPE_STARTER_PRICE_ID);
   const proPriceId = clean(process.env.STRIPE_PRO_PRICE_ID);
 
-  // Founder beta
+  const publicTrialUntil = "2026-04-20T00:00:00Z";
+
   if (
     normalizedPlanType === "founder_beta" ||
     normalizedPlanType === "founder-beta" ||
@@ -93,11 +93,7 @@ function getPlanConfig(planType, accessType, userType) {
     };
   }
 
-  // Founder pro
-  if (
-    normalizedPlanType === "founder_pro" ||
-    normalizedPlanType === "founder-pro"
-  ) {
+  if (normalizedPlanType === "founder_pro" || normalizedPlanType === "founder-pro") {
     return {
       planName: "Founder Pro",
       lookupKey: "STRIPE_FOUNDER_PRO_PRICE_ID",
@@ -106,7 +102,6 @@ function getPlanConfig(planType, accessType, userType) {
     };
   }
 
-  // Public starter
   if (
     normalizedPlanType === "starter" ||
     (normalizedPlanType === "" &&
@@ -117,17 +112,16 @@ function getPlanConfig(planType, accessType, userType) {
       planName: "Starter",
       lookupKey: "STRIPE_STARTER_PRICE_ID",
       priceId: starterPriceId,
-      trialUntil: null
+      trialUntil: publicTrialUntil
     };
   }
 
-  // Public pro
   if (normalizedPlanType === "pro") {
     return {
       planName: "Pro",
       lookupKey: "STRIPE_PRO_PRICE_ID",
       priceId: proPriceId,
-      trialUntil: null
+      trialUntil: publicTrialUntil
     };
   }
 
@@ -138,7 +132,6 @@ function getTrialEndUnix(trialUntilIso) {
   if (!trialUntilIso) return null;
   const unix = Math.floor(new Date(trialUntilIso).getTime() / 1000);
   const now = Math.floor(Date.now() / 1000);
-
   if (!unix || Number.isNaN(unix) || unix <= now) return null;
   return unix;
 }
@@ -153,22 +146,12 @@ async function findOrCreateCustomer({ stripeClient, email, userId }) {
 
   if (existing?.data?.length) {
     const customer = existing.data[0];
+    const nextMetadata = { ...(customer.metadata || {}) };
 
-    // Keep useful metadata in sync
-    const nextMetadata = {
-      ...(customer.metadata || {})
-    };
+    if (userId && !nextMetadata.user_id) nextMetadata.user_id = clean(userId);
+    if (normalizedEmail && !nextMetadata.email) nextMetadata.email = normalizedEmail;
 
-    if (userId && !nextMetadata.user_id) {
-      nextMetadata.user_id = clean(userId);
-    }
-    if (normalizedEmail && !nextMetadata.email) {
-      nextMetadata.email = normalizedEmail;
-    }
-
-    if (
-      JSON.stringify(nextMetadata) !== JSON.stringify(customer.metadata || {})
-    ) {
+    if (JSON.stringify(nextMetadata) !== JSON.stringify(customer.metadata || {})) {
       return await stripeClient.customers.update(customer.id, {
         metadata: nextMetadata
       });
@@ -190,9 +173,7 @@ async function mirrorCustomerToSupabase({ email, userId, stripeCustomerId }) {
   const supabaseUrl = process.env.SUPABASE_URL;
   const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-  if (!supabaseUrl || !supabaseServiceRoleKey) {
-    return;
-  }
+  if (!supabaseUrl || !supabaseServiceRoleKey) return;
 
   const supabase = createClient(supabaseUrl, supabaseServiceRoleKey);
   const normalizedEmail = normalizeEmail(email);
@@ -205,30 +186,19 @@ async function mirrorCustomerToSupabase({ email, userId, stripeCustomerId }) {
 
   try {
     if (cleanedUserId) {
-      const { error } = await supabase
-        .from("users")
-        .update(payload)
-        .eq("id", cleanedUserId);
-
+      const { error } = await supabase.from("users").update(payload).eq("id", cleanedUserId);
       if (!error) return;
       console.error("[checkout] users update by id warning:", error.message);
     }
 
     if (normalizedEmail) {
-      const { error } = await supabase
-        .from("users")
-        .update(payload)
-        .eq("email", normalizedEmail);
-
-      if (error) {
-        console.error("[checkout] users update by email warning:", error.message);
-      }
+      const { error } = await supabase.from("users").update(payload).eq("email", normalizedEmail);
+      if (error) console.error("[checkout] users update by email warning:", error.message);
     }
   } catch (error) {
     console.error("[checkout] supabase mirror warning:", error);
   }
 }
-
 
 async function getLockedReferralFromSupabase({ email, userId }) {
   const supabaseUrl = process.env.SUPABASE_URL;
@@ -286,16 +256,20 @@ export default async function handler(req, res) {
     }
 
     const stripe = getStripeClient();
-
     const body = parseBody(req);
     if (body.__parse_error) {
       return json(res, 400, { error: body.__parse_error });
     }
 
     const verifiedUser = await requireVerifiedDashboardUser(req, res);
-    if (req.headers?.["x-elevate-client"] && !verifiedUser && String(req.headers["x-elevate-client"]).toLowerCase() === "dashboard") {
+    if (
+      req.headers?.["x-elevate-client"] &&
+      !verifiedUser &&
+      String(req.headers["x-elevate-client"]).toLowerCase() === "dashboard"
+    ) {
       return;
     }
+
     const identity = getTrustedIdentity({ verifiedUser, body });
 
     const email = normalizeEmail(identity.email || body.email || "");
@@ -315,16 +289,14 @@ export default async function handler(req, res) {
     if (!referralSource) referralSource = clean(lockedReferral.referralSource || "");
     referralSource = normalizeReferralSource(referralSource);
     if (!referralSource && referralCode) referralSource = "checkout";
+
+    const normalizedPlan = normalizePlanRequest(planType, accessType, userType);
     const plan = getPlanConfig(planType, accessType, userType);
 
     if (!plan) {
       return json(res, 400, {
         error: "Invalid or unsupported plan type",
-        debug: {
-          planType,
-          userType,
-          accessType
-        }
+        debug: { planType, userType, accessType }
       });
     }
 
@@ -353,12 +325,7 @@ export default async function handler(req, res) {
       mode: "subscription",
       customer: customer.id,
       customer_email: undefined,
-      line_items: [
-        {
-          price: plan.priceId,
-          quantity: 1
-        }
-      ],
+      line_items: [{ price: plan.priceId, quantity: 1 }],
       success_url: `${siteUrl}/dashboard.html?checkout=success`,
       cancel_url: `${siteUrl}/index.html?checkout=cancelled`,
       allow_promotion_codes: true,
@@ -367,8 +334,8 @@ export default async function handler(req, res) {
         email,
         user_id: userId || "",
         plan_name: plan.planName,
-        plan_type: normalizePlanRequest(planType, accessType, userType),
-        normalized_plan: normalizePlanRequest(planType, accessType, userType),
+        plan_type: normalizedPlan,
+        normalized_plan: normalizedPlan,
         user_type: userType,
         access_type: accessType,
         referral_code: referralCode,
@@ -379,8 +346,8 @@ export default async function handler(req, res) {
           email,
           user_id: userId || "",
           plan_name: plan.planName,
-          plan_type: normalizePlanRequest(planType, accessType, userType),
-        normalized_plan: normalizePlanRequest(planType, accessType, userType),
+          plan_type: normalizedPlan,
+          normalized_plan: normalizedPlan,
           user_type: userType,
           access_type: accessType,
           referral_code: referralCode,
@@ -396,7 +363,6 @@ export default async function handler(req, res) {
     });
   } catch (error) {
     console.error("[checkout] fatal error:", error);
-
     return json(res, 500, {
       error: error?.message || "Failed to create checkout session"
     });
