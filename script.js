@@ -27,9 +27,7 @@ function storeReferralData(code, source = "direct") {
 
   try {
     const existing = normalizeReferralCode(localStorage.getItem("elevate_referral_code"));
-    if (existing && existing !== normalizedCode) {
-      return;
-    }
+    if (existing && existing !== normalizedCode) return;
     localStorage.setItem("elevate_referral_code", normalizedCode);
     localStorage.setItem("elevate_referral_source", normalizeReferralCode(source) || "direct");
   } catch (error) {
@@ -40,12 +38,9 @@ function storeReferralData(code, source = "direct") {
 function showReferralBanner(refCode, source = "direct") {
   const banner = document.getElementById("referral-banner");
   const display = document.getElementById("referral-code-display");
-
   if (!banner || !display || !refCode) return;
-
   display.textContent = refCode;
   banner.classList.remove("hidden");
-
   storeReferralData(refCode, source);
 }
 
@@ -73,16 +68,11 @@ function loadStoredReferralCode() {
   return null;
 }
 
-function showCheckoutMessage(message, variant = "") {
+function showCheckoutMessage(message) {
   const el = document.getElementById("checkout-message");
   if (!el) return;
-
   el.textContent = message;
-  el.classList.remove("hidden", "success", "cancelled");
-
-  if (variant) {
-    el.classList.add(variant);
-  }
+  el.classList.remove("hidden");
 }
 
 async function getLoggedInUserEmail() {
@@ -118,38 +108,20 @@ async function getAuthAccessTokenForCheckout() {
   return "";
 }
 
-function normalizePlanPayload(planType, userType, accessType) {
+function normalizePlanPayload(planType) {
   const plan = String(planType || "").trim().toLowerCase();
-
-  if (plan === "starter") {
-    return {
-      planType: "starter",
-      userType: "starter",
-      accessType: "starter"
-    };
-  }
-
   if (plan === "pro") {
-    return {
-      planType: "pro",
-      userType: "pro",
-      accessType: "pro"
-    };
+    return { planType: "pro", userType: "pro", accessType: "pro" };
   }
-
-  return {
-    planType: planType || "starter",
-    userType: userType || "starter",
-    accessType: accessType || "starter"
-  };
+  return { planType: "starter", userType: "starter", accessType: "starter" };
 }
 
-async function startCheckout(planType, userType, accessType) {
+async function startCheckout(planType) {
   try {
     const email = await getLoggedInUserEmail();
     const referralCode = loadStoredReferralCode();
     const referralSource = getStoredReferralData().source;
-    const normalized = normalizePlanPayload(planType, userType, accessType);
+    const normalized = normalizePlanPayload(planType);
 
     if (!email) {
       showCheckoutMessage("Please create an account or log in before starting your free trial.");
@@ -196,21 +168,14 @@ async function startCheckout(planType, userType, accessType) {
 }
 
 function bindCheckoutButtons() {
-  const buttons = document.querySelectorAll(".checkout-btn");
-  if (!buttons.length) return;
-
-  buttons.forEach((button) => {
+  document.querySelectorAll(".checkout-btn").forEach((button) => {
     button.addEventListener("click", async () => {
-      const planType = button.dataset.planType || "starter";
-      const userType = button.dataset.userType || planType;
-      const accessType = button.dataset.accessType || planType;
-
-      await startCheckout(planType, userType, accessType);
+      await startCheckout(button.dataset.planType || "starter");
     });
   });
 }
 
-document.addEventListener("DOMContentLoaded", async () => {
+document.addEventListener("DOMContentLoaded", () => {
   loadStoredReferralCode();
   bindCheckoutButtons();
 });
