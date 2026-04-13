@@ -2,7 +2,7 @@
   const NS = (window.ElevateDashboard = window.ElevateDashboard || {});
   if (NS.modules?.analytics) return;
 
-  const GLOBAL_CSS = `
+  const CSS = `
     :root{
       --ea-radius-xl:20px;
       --ea-radius-lg:16px;
@@ -22,11 +22,13 @@
       --ea-shadow-soft:0 16px 36px rgba(0,0,0,.30);
       --ea-shadow-card:0 20px 44px rgba(0,0,0,.36);
     }
+
     body{
       background:
-        radial-gradient(circle at top right, rgba(212,175,55,.08), transparent 18%),
+        radial-gradient(circle at top right, rgba(212,175,55,.07), transparent 18%),
         linear-gradient(180deg,#090909 0%,#0c0c0c 100%);
     }
+
     .sidebar{
       background:
         linear-gradient(180deg, rgba(255,255,255,.015), rgba(255,255,255,0)),
@@ -35,7 +37,7 @@
       gap:14px !important;
     }
     .brand-title{font-size:18px !important; line-height:1.12 !important;}
-    .brand-subtitle{font-size:13px !important; color:var(--ea-text-2) !important; max-width:30ch;}
+    .brand-subtitle{font-size:13px !important; color:var(--ea-text-2) !important; max-width:32ch;}
     .sidebar-card,.card,.mini-stat,.tool-tile,.listing-card,.command-side-card,.command-meta-card{
       border-radius:var(--ea-radius-xl) !important;
       border-color:var(--ea-line-soft) !important;
@@ -52,6 +54,7 @@
         linear-gradient(135deg, rgba(212,175,55,.18), rgba(212,175,55,.05)),
         #171717 !important;
     }
+
     .main{padding:24px 24px 40px !important;}
     .main-header{
       position:sticky; top:0; z-index:15;
@@ -62,34 +65,34 @@
     }
     .main-header h1{font-size:28px !important; letter-spacing:-.02em;}
     .subtext{color:var(--ea-text-2) !important;}
-    .module-group-label,.stat-label,.sidebar-card-label{
-      font-size:11px !important;
-      letter-spacing:.14em !important;
-    }
+    .module-group-label,.stat-label,.sidebar-card-label{font-size:11px !important; letter-spacing:.14em !important;}
+
     #overview .command-center-grid{gap:16px !important; margin-bottom:16px !important;}
     #overview .command-primary{
-      padding:24px !important;
+      padding:22px !important;
       background:
-        radial-gradient(circle at top right, rgba(212,175,55,.14), transparent 24%),
-        linear-gradient(180deg, rgba(255,255,255,.022), rgba(255,255,255,.01)),
+        radial-gradient(circle at top right, rgba(212,175,55,.12), transparent 24%),
+        linear-gradient(180deg, rgba(255,255,255,.02), rgba(255,255,255,.01)),
         #141414 !important;
     }
-    #overview .command-title-row h2{
-      font-size:32px !important;
-      line-height:1.05 !important;
-      max-width:620px !important;
-    }
+    #overview .command-title-row h2{font-size:30px !important; line-height:1.04 !important; max-width:560px !important;}
     #overview .command-meta-card{
       padding:14px !important;
       background:linear-gradient(180deg, rgba(255,255,255,.03), rgba(255,255,255,.012)) !important;
     }
     #overview .command-meta-value{font-size:24px !important;}
     #overview .overview-chip{min-height:34px !important; font-size:12px !important;}
-    #overview .overview-action-item{padding:14px 16px !important; border-radius:14px !important;}
-    #overview .operator-strip{grid-template-columns:repeat(3,minmax(0,1fr)) !important; gap:12px !important;}
-    #overview .mini-stat{min-height:124px !important; padding:16px !important;}
-    #overview .mini-stat .stat-value{font-size:24px !important;}
-    #overview .mini-stat .stat-sub{font-size:12px !important; line-height:1.42 !important;}
+    #overview .overview-action-item{padding:13px 15px !important; border-radius:14px !important;}
+
+    #overview .operator-strip{
+      grid-template-columns:repeat(3,minmax(0,1fr)) !important;
+      gap:12px !important;
+      margin-bottom:16px !important;
+    }
+    #overview .mini-stat{min-height:120px !important; padding:16px !important;}
+    #overview .mini-stat .stat-value{font-size:23px !important;}
+    #overview .mini-stat .stat-sub{font-size:12px !important; line-height:1.4 !important;}
+
     #overview .listing-grid{gap:14px !important;}
     #overview .listing-card{
       background:
@@ -113,47 +116,30 @@
       border-radius:12px !important;
       background:rgba(255,255,255,.025) !important;
     }
-    #overview .spec-chip-label,#overview .metric-pill-label{
-      font-size:10px !important;
-      letter-spacing:.10em !important;
-    }
+    #overview .spec-chip-label,#overview .metric-pill-label{font-size:10px !important; letter-spacing:.10em !important;}
     #overview .spec-chip-value,#overview .metric-pill-value{font-size:12px !important;}
-    #overview .listing-actions .action-btn{
-      padding:11px 12px !important;
-      font-size:12px !important;
-    }
+    #overview .listing-actions .action-btn{padding:11px 12px !important; font-size:12px !important;}
     #overview .listing-actions .action-btn:first-child{
       background:rgba(212,175,55,.15) !important;
       border-color:rgba(212,175,55,.28) !important;
       color:var(--ea-gold-soft) !important;
       font-weight:700 !important;
     }
+
     #extension .card,#tools .card,#affiliate .card,#billing .card,#compliance .card{
       background:linear-gradient(180deg, rgba(255,255,255,.016), rgba(255,255,255,.008)) !important;
     }
-    .tool-tile{
-      min-height:156px !important;
-      padding:16px !important;
-      background:
-        linear-gradient(180deg, rgba(255,255,255,.02), rgba(255,255,255,.008)),
-        #141414 !important;
-    }
-    .tool-status,.badge,.setup-state{
-      font-size:11px !important;
-      letter-spacing:.06em !important;
-      text-transform:uppercase !important;
-    }
-    .premium-quiet{opacity:.82;}
-    .premium-hidden{display:none !important;}
-    .premium-collapsible{overflow:hidden; transition:max-height .18s ease, opacity .18s ease;}
-    .premium-toggle{
+
+    .ea-hide{display:none !important;}
+    .ea-quiet{opacity:.82;}
+    .ea-collapsible{overflow:hidden; transition:max-height .18s ease, opacity .18s ease;}
+    .ea-toggle{
       appearance:none; border:1px solid rgba(212,175,55,.18); background:#151515; color:#efefef;
       border-radius:999px; padding:10px 14px; cursor:pointer; font-weight:700; font-size:12px;
     }
-    .premium-section-head{display:flex; justify-content:space-between; gap:12px; align-items:center; flex-wrap:wrap;}
-    .ea-analytics-shell{display:grid; gap:16px; margin-bottom:20px}
+    .ea-analytics-shell{display:grid;gap:16px;margin-bottom:20px}
     .ea-analytics-card,.ea-analytics-hero{border:1px solid rgba(212,175,55,.12);border-radius:16px;padding:18px;background:linear-gradient(180deg,rgba(255,255,255,.018),rgba(255,255,255,.006))}
-    .ea-analytics-hero-grid{display:grid;grid-template-columns:1.5fr repeat(4,minmax(0,1fr));gap:12px}
+    .ea-analytics-hero-grid{display:grid;grid-template-columns:1.45fr repeat(4,minmax(0,1fr));gap:12px}
     .ea-a-title{font-size:28px;line-height:1.05;margin:0 0 8px}
     .ea-a-copy{color:#d6d6d6;line-height:1.55;font-size:14px}
     .ea-a-list{display:grid;gap:10px;margin-top:12px}
@@ -166,6 +152,7 @@
     .ea-pill.tracked{color:#f3ddb0;border-color:rgba(212,175,55,.22)}
     .ea-pill.estimated{color:#ffcfad;border-color:rgba(255,207,173,.22)}
     .ea-pill.critical{color:#ffb4b4;border-color:rgba(255,180,180,.22)}
+    .ea-pill.neutral{color:#d8d8d8;border-color:rgba(255,255,255,.12)}
     .ea-tabbar{display:flex;gap:8px;flex-wrap:wrap}
     .ea-tabbar button{appearance:none;border:1px solid rgba(255,255,255,.08);background:#171717;color:#efefef;border-radius:999px;padding:10px 14px;cursor:pointer;font-weight:700;font-size:13px}
     .ea-tabbar button.active{background:rgba(212,175,55,.15);color:#f3ddb0;border-color:rgba(212,175,55,.24)}
@@ -191,140 +178,187 @@
     .ea-review-item{background:#151515;border:1px solid rgba(255,255,255,.06);border-radius:14px;padding:14px;display:grid;gap:10px}
     .ea-review-reason{font-size:12px;line-height:1.5;color:#cfcfcf;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.05);border-radius:10px;padding:10px}
     .ea-empty{padding:20px;border-radius:14px;border:1px dashed rgba(212,175,55,.16);color:#9d9d9d;text-align:center}
-    .ea-kpi-row{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin:0 0 16px}
-    .ea-kpi-chip{padding:14px;border-radius:14px;background:#151515;border:1px solid rgba(255,255,255,.05)}
-    .ea-kpi-chip strong{display:block;font-size:22px;line-height:1;margin:6px 0}
-    .ea-kpi-chip span{display:block;font-size:11px;letter-spacing:.10em;text-transform:uppercase;color:#d4af37}
-    @media (max-width:1200px){.ea-analytics-hero-grid,.ea-sync-grid,.ea-review-columns,.ea-kpi-row{grid-template-columns:1fr 1fr}.ea-post-grid{grid-template-columns:1fr 1fr}}
+    .ea-review-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-bottom:14px}
+    .ea-review-kpi{background:#121212;border:1px solid rgba(212,175,55,.10);border-radius:14px;padding:14px}
+    .ea-review-kpi strong{display:block;font-size:24px;line-height:1;margin-top:6px}
+    .ea-review-kpi span{display:block;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:#d4af37}
+    @media (max-width:1200px){.ea-analytics-hero-grid,.ea-sync-grid,.ea-review-columns,.ea-review-kpis{grid-template-columns:1fr 1fr}.ea-post-grid{grid-template-columns:1fr 1fr}}
     @media (max-width:920px){.main-header{position:static;background:transparent;backdrop-filter:none}}
-    @media (max-width:760px){.ea-analytics-hero-grid,.ea-sync-grid,.ea-review-columns,.ea-post-grid,.ea-post-kpis,.ea-post-actions,.ea-kpi-row{grid-template-columns:1fr}.ea-a-title{font-size:24px}}
+    @media (max-width:760px){.ea-analytics-hero-grid,.ea-sync-grid,.ea-review-columns,.ea-post-grid,.ea-post-kpis,.ea-post-actions,.ea-review-kpis{grid-template-columns:1fr}.ea-a-title{font-size:24px}}
   `;
 
-  function ensureStyle() {
-    if (document.getElementById('ea-bundle-b-premium-style')) return;
-    const s = document.createElement('style');
-    s.id = 'ea-bundle-b-premium-style';
-    s.textContent = GLOBAL_CSS;
+  function ensureStyle(){
+    if(document.getElementById('ea-analytics-bundle-c-style')) return;
+    const s=document.createElement('style');
+    s.id='ea-analytics-bundle-c-style';
+    s.textContent=CSS;
     document.head.appendChild(s);
   }
 
   function get(path, fallback){ return NS.state?.get?.(path, fallback); }
-  function num(value){ const n = Number(value); return Number.isFinite(n) ? n : 0; }
+  function num(value){ const parsed = Number(value); return Number.isFinite(parsed) ? parsed : 0; }
   function clean(value){ return String(value || '').replace(/\s+/g,' ').trim(); }
   function displayPrice(item){
     if (item.display_price_text) return item.display_price_text;
-    const n = num(item.price);
-    return n ? `$${n.toLocaleString()}` : 'Price pending';
+    const value = num(item.price);
+    return value ? `$${value.toLocaleString()}` : 'Price pending';
   }
   function open(section, focusId){
     try{ if(typeof window.showSection==='function') window.showSection(section); }catch{}
     if(focusId) setTimeout(()=>document.getElementById(focusId)?.scrollIntoView({behavior:'smooth', block:'center'}),220);
   }
 
-  function text(id, value){
-    const el = document.getElementById(id);
-    if (el && value) el.textContent = value;
+  function isManagerView(){
+    return Boolean(window.dashboardSummary?.manager_access);
   }
 
-  function trimNode(selector, value){
+  function setText(selector, value){
     const el = document.querySelector(selector);
     if (el && value) el.textContent = value;
   }
 
-  function hideIfFound(selector){
-    document.querySelectorAll(selector).forEach((el)=>el.classList.add('premium-hidden'));
-  }
-
-  function quietIfFound(selector){
-    document.querySelectorAll(selector).forEach((el)=>el.classList.add('premium-quiet'));
-  }
-
-  function compressButtons(){
-    const replacements = new Map([
-      ['Open Tools','Tools'],
-      ['Open Analytics','Analytics'],
-      ['Review Listings','Review'],
-      ['Finish Setup','Setup'],
-      ['Open Setup','Setup'],
-      ['Refresh Listings','Refresh'],
-      ['Refresh Extension State','Refresh State'],
-      ['View Setup Steps','Setup Steps'],
-      ['Open Billing Portal','Billing Portal'],
-      ['Refresh Billing Data','Refresh Billing'],
-      ['Compare Access','Compare'],
-      ['See Premium Preview','Premium'],
-      ['View Upgrade Path','Upgrade'],
-      ['Use Credits','Credits'],
-      ['See Upgrade Levers','Upgrade'],
-      ['Fix Compliance Data','Fix Data'],
-      ['Add License','Add License'],
-      ['Fix Setup','Fix Setup'],
-      ['Open Compliance','Compliance'],
-    ]);
-    document.querySelectorAll('button, a').forEach((el) => {
-      const current = clean(el.textContent);
-      if (replacements.has(current)) el.textContent = replacements.get(current);
+  function hideCardsByText(scopeSelector, regex){
+    document.querySelectorAll(scopeSelector).forEach((card) => {
+      const text = clean(card.textContent || '');
+      if (regex.test(text)) card.classList.add('ea-hide');
     });
   }
 
-  function compressOverview(){
-    trimNode('.brand-subtitle', 'Premium posting, review, analytics, and compliance control.');
-    text('dashboardPageTitle', 'Operator Console');
-    text('welcomeText', 'Run the highest-value actions first.');
-    text('commandCenterSubtext', 'Top-priority moves only.');
-    text('overviewBlockers', 'Review the queue, fix blockers, and move the next listing.');
-    text('listingDataStatus', 'Client posts and review-ready rows.');
-    text('listingGridStatus', 'Use filters to work stale, sold, and price-watch items.');
-    text('setupReadinessSummary', 'Complete the essentials required to post cleanly.');
-    text('commandSetupSummary', 'Finish the remaining essentials.');
-    text('snapshotSetupSummary', 'Profile, scanner, and compliance should stay complete.');
-    text('toolsNextStepPanel', 'Keep setup clean, then post.');
-    text('toolsSystemStatusPanel', clean(document.getElementById('toolsSystemStatusPanel')?.textContent || '').replace(/Loading system status\.\.\./i,'Live status loads here.'));
-    quietIfFound('#overviewAccountGrid .card:first-child');
-    quietIfFound('#overviewUpgradeCard');
+  function replaceDangerousTerms(){
+    const replacements = [
+      [/manager oversight/gi, 'Operator workspace'],
+      [/team command/gi, 'Operator workflow'],
+      [/primary dealership/gi, 'Dealership'],
+      [/dealership health/gi, 'Listing health'],
+      [/portfolio view/gi, 'Analytics'],
+      [/manager summary/gi, 'Summary'],
+      [/team/gi, ''],
+    ];
+
+    const selectors = [
+      '.sidebar-card-label', '.section-head h2', '.card h2', '.subtext', '.module-group-label',
+      '.stat-label', '.sidebar-card-value', '.action-btn', '.nav-btn', '.list-block', '.status-line'
+    ];
+
+    selectors.forEach((sel) => {
+      document.querySelectorAll(sel).forEach((node) => {
+        let text = node.textContent || '';
+        let changed = false;
+        replacements.forEach(([pattern, next]) => {
+          if (pattern.test(text)) {
+            text = text.replace(pattern, next);
+            changed = true;
+          }
+        });
+        if (changed) node.textContent = clean(text);
+      });
+    });
   }
 
-  function buildSectionToggles(){
-    if (document.getElementById('premiumDetailsToggle')) return;
+  function compressCopy(){
+    setText('.brand-subtitle', 'Premium posting, review, analytics, and compliance control.');
+    setText('#dashboardPageTitle', 'Operator Console');
+    setText('#welcomeText', 'Your posts, review queue, and next actions.');
+    setText('#commandCenterSubtext', 'Focus on the next highest-value move.');
+    setText('#overviewBlockers', 'Review the queue, clear blockers, and move the next listing.');
+    setText('#listingDataStatus', 'Client posts and review-ready rows.');
+    setText('#listingGridStatus', 'Filter by status and work the next listing.');
+    setText('#commandSetupSummary', 'Complete the essentials required to post cleanly.');
+    setText('#setupReadinessSummary', 'Complete the essentials required to post cleanly.');
+    setText('#toolsNextStepPanel', 'Keep setup clean, then post.');
+    setText('#snapshotSetupSummary', 'Account, setup, and compliance should stay complete.');
+
+    document.querySelectorAll('.section-head .subtext, .card > p, .tool-tile p, .stat-sub').forEach((el) => {
+      const t = clean(el.textContent);
+      if (!t) return;
+      if (t.length > 110) el.textContent = `${t.slice(0, 104).trim()}…`;
+    });
+
+    document.querySelectorAll('button, a').forEach((el) => {
+      const t = clean(el.textContent);
+      const map = new Map([
+        ['Open Tools', 'Tools'],
+        ['Open Analytics', 'Analytics'],
+        ['Review Listings', 'Review'],
+        ['Finish Setup', 'Setup'],
+        ['Refresh Listings', 'Refresh'],
+        ['Open Overview Grid', 'Overview'],
+        ['Open Review Center', 'Review Center'],
+        ['Back to Client Posts', 'Client Posts'],
+        ['View Upgrade Path', 'Upgrade'],
+        ['See Upgrade Levers', 'Upgrade'],
+        ['Use Credits', 'Credits'],
+        ['Compare Access', 'Compare'],
+        ['Open Billing Portal', 'Billing Portal'],
+      ]);
+      if (map.has(t)) el.textContent = map.get(t);
+    });
+  }
+
+  function addDetailsToggle(){
+    if (document.getElementById('eaDetailsToggle')) return;
     const accountGrid = document.getElementById('overviewAccountGrid');
     if (!accountGrid) return;
-    const wrap = document.createElement('div');
-    wrap.className = 'premium-section-head';
-    wrap.style.marginBottom = '12px';
-    wrap.innerHTML = `<div class="subtext">Lower-priority account details</div><button id="premiumDetailsToggle" class="premium-toggle" type="button">Show details</button>`;
-    accountGrid.parentNode.insertBefore(wrap, accountGrid);
-    accountGrid.classList.add('premium-collapsible', 'premium-hidden');
 
-    const btn = wrap.querySelector('#premiumDetailsToggle');
+    const head = document.createElement('div');
+    head.style.display = 'flex';
+    head.style.justifyContent = 'space-between';
+    head.style.alignItems = 'center';
+    head.style.gap = '12px';
+    head.style.marginBottom = '12px';
+    head.innerHTML = `<div class="subtext">Secondary account details</div><button id="eaDetailsToggle" class="ea-toggle" type="button">Show details</button>`;
+    accountGrid.parentNode.insertBefore(head, accountGrid);
+    accountGrid.classList.add('ea-collapsible', 'ea-hide');
+
+    const btn = head.querySelector('#eaDetailsToggle');
     btn.addEventListener('click', () => {
-      const hidden = accountGrid.classList.toggle('premium-hidden');
+      const hidden = accountGrid.classList.toggle('ea-hide');
       btn.textContent = hidden ? 'Show details' : 'Hide details';
     });
   }
 
-  function applyPremiumSweep(){
-    if (document.body?.dataset?.eaPremiumSweep === 'true') return;
-    ensureStyle();
-    compressButtons();
-    compressOverview();
-    buildSectionToggles();
-
-    document.querySelectorAll('.section-head .subtext, .card > p.subtext, .tool-tile p, .stat-sub').forEach((el) => {
-      const t = clean(el.textContent);
-      if (t.length > 120) el.textContent = `${t.slice(0, 115).trim()}…`;
+  function compressOverview(){
+    const idsToHide = [
+      '#overviewUpgradeCard',
+      '#overviewPriorityGrid'
+    ];
+    idsToHide.forEach((id) => {
+      const el = document.querySelector(id);
+      if (el) el.classList.add('ea-quiet');
     });
 
-    hideIfFound('#overviewPriorityGrid .section-head .subtext');
-    quietIfFound('#overviewPriorityGrid');
-    quietIfFound('#overviewPerformanceGrid');
-    document.body.dataset.eaPremiumSweep = 'true';
+    const operatorStrip = document.getElementById('overviewOperatorStrip');
+    if (operatorStrip) {
+      const children = Array.from(operatorStrip.children || []);
+      children.forEach((node, idx) => {
+        if (idx > 3) node.classList.add('ea-hide');
+      });
+    }
+
+    addDetailsToggle();
+  }
+
+  function applyRoleAwareSweep(){
+    if (document.body.dataset.eaRoleAwareSweep === 'true') return;
+
+    ensureStyle();
+    compressCopy();
+    compressOverview();
+
+    if (!isManagerView()) {
+      replaceDangerousTerms();
+      hideCardsByText('.card, .sidebar-card, .tool-tile', /(manager oversight|dealership health|team command|manager summary|primary dealership)/i);
+      document.querySelectorAll('[id*="manager"], [class*="manager"]').forEach((el) => el.classList.add('ea-hide'));
+    }
+
+    document.body.dataset.eaRoleAwareSweep = 'true';
   }
 
   function getListings(){
     const summaryRows = Array.isArray(window.dashboardSummary?.recent_listings) ? window.dashboardSummary.recent_listings : [];
     const registryRows = Object.values(get('listingRegistry', {}) || {});
-    const source = registryRows.length ? registryRows : summaryRows;
-    return source.map((row) => {
+    const sourceRows = registryRows.length ? registryRows : summaryRows;
+    return sourceRows.map((row) => {
       const views = num(row.views_count ?? row.views);
       const messages = num(row.messages_count ?? row.messages);
       const price = num(row.price);
@@ -344,13 +378,12 @@
         display_price_text: clean(row.display_price_text || ''),
         views,
         messages,
-        health_score: num(row.health_score || row.predicted_score),
+        health_score: num(row.health_score ?? row.predicted_score),
         opportunity_score: num(row.opportunity_score),
         price_review_priority: num(row.price_review_priority),
         refresh_priority: num(row.refresh_priority),
         recommended_action: recommended || 'Review',
         pricing_insight: clean(row.pricing_insight || ''),
-        content_feedback: clean(row.content_feedback || ''),
         lifecycle_status: lifecycle,
         status: clean(row.status || 'active'),
         source_url: clean(row.source_url || ''),
@@ -359,9 +392,6 @@
         price_review: priceReview,
         action_bucket: clean(row.action_bucket || ''),
         posted_at: row.posted_at || row.updated_at || '',
-        body_style: clean(row.body_style || ''),
-        fuel_type: clean(row.fuel_type || ''),
-        exterior_color: clean(row.exterior_color || ''),
         vin: clean(row.vin || ''),
         stock_number: clean(row.stock_number || '')
       };
@@ -370,11 +400,16 @@
 
   function topLists(listings){
     const byOpportunity = [...listings].sort((a,b) => (b.opportunity_score - a.opportunity_score) || (b.messages - a.messages) || (b.views - a.views));
+    const needsAttention = listings
+      .filter((x) => !x.price_resolved || x.price_review || x.stale || x.likely_sold)
+      .sort((a,b) => (Number(!a.price_resolved) - Number(!b.price_resolved)) || (b.price_review_priority - a.price_review_priority));
+
     return {
       posts: byOpportunity.slice(0, 12),
       soldStale: listings.filter((x) => x.likely_sold || x.stale).sort((a,b) => (Number(b.likely_sold) - Number(a.likely_sold)) || (b.refresh_priority - a.refresh_priority)).slice(0, 12),
       priceWatch: listings.filter((x) => x.price_review).sort((a,b) => (b.price_review_priority - a.price_review_priority) || (b.views - a.views)).slice(0, 12),
-      healthy: listings.filter((x) => !x.likely_sold && !x.stale && !x.price_review).sort((a,b) => (b.messages - a.messages) || (b.views - a.views)).slice(0, 12)
+      needsAttention: needsAttention.slice(0, 12),
+      healthy: listings.filter((x) => !x.likely_sold && !x.stale && !x.price_review && x.price_resolved).sort((a,b) => (b.messages - a.messages) || (b.views - a.views)).slice(0, 12)
     };
   }
 
@@ -400,7 +435,7 @@
           </div>
           <div class="ea-review-reason">${item.recommended_action}${item.pricing_insight ? `<br><br><em>${item.pricing_insight}</em>` : ''}</div>
           <div class="ea-post-actions">
-            <button class="action-btn" type="button" data-ea-open="tools" data-ea-focus="listingSearchInput">Review</button>
+            <button class="action-btn" type="button" data-ea-tab-open="eaAnalyticsTabReview">Review</button>
             <button class="action-btn" type="button" data-ea-source="${item.source_url}">Open Source</button>
           </div>
         </div>
@@ -409,13 +444,19 @@
   }
 
   function reviewItem(item, actionLabel){
-    const payload = JSON.stringify({
-      id:item.id, identity_key:item.identity_key, vin:item.vin, stock_number:item.stock_number, source_url:item.source_url, title:item.title
-    }).replace(/'/g,"&#39;");
-    const badge = !item.price_resolved ? 'Price unresolved' : item.likely_sold ? 'Likely sold' : item.price_review ? 'Price review' : 'Stale';
+    const badge = !item.price_resolved ? 'Price unresolved' : item.likely_sold ? 'Likely sold' : item.price_review ? 'Price review' : 'Needs review';
     const badgeClass = !item.price_resolved ? 'estimated' : item.likely_sold ? 'critical' : (item.price_review ? 'tracked' : 'estimated');
+    const encoded = JSON.stringify({
+      id:item.id,
+      identity_key:item.identity_key,
+      vin:item.vin,
+      stock_number:item.stock_number,
+      source_url:item.source_url,
+      title:item.title,
+      price:item.price
+    }).replace(/'/g,"&#39;");
     return `
-      <div class="ea-review-item" data-review-item='${payload}'>
+      <div class="ea-review-item" data-review-item='${encoded}'>
         <div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start;">
           <div>
             <strong>${item.title}</strong>
@@ -435,9 +476,14 @@
 
   function renderBlock(title, items){
     return `<div class="ea-analytics-card"><div class="stat-label">${title}</div><div class="ea-mini">${
-      items.length ? items.slice(0,3).map(item => `${item.title || 'Listing'} · ${item.health_state || item.status || 'active'}`).join('<br>')
+      items.length ? items.slice(0,3).map(item => `${item.title || 'Listing'} · ${item.status || 'active'}`).join('<br>')
       : 'No listings in this lane yet.'
     }</div></div>`;
+  }
+
+  function activateTab(root, targetId){
+    root.querySelectorAll('[data-ea-tab]').forEach((node) => node.classList.toggle('active', node.getAttribute('data-ea-tab') === targetId));
+    root.querySelectorAll('.ea-tab-panel').forEach((panel) => panel.classList.toggle('active', panel.id === targetId));
   }
 
   function bindButtons(root){
@@ -457,11 +503,12 @@
     root.querySelectorAll('[data-ea-tab]').forEach((btn) => {
       if (btn.dataset.boundEaTab === 'true') return;
       btn.dataset.boundEaTab = 'true';
-      btn.addEventListener('click', () => {
-        const target = btn.getAttribute('data-ea-tab');
-        root.querySelectorAll('[data-ea-tab]').forEach((node) => node.classList.toggle('active', node === btn));
-        root.querySelectorAll('.ea-tab-panel').forEach((panel) => panel.classList.toggle('active', panel.id === target));
-      });
+      btn.addEventListener('click', () => activateTab(root, btn.getAttribute('data-ea-tab')));
+    });
+    root.querySelectorAll('[data-ea-tab-open]').forEach((btn) => {
+      if (btn.dataset.boundEaTabOpen === 'true') return;
+      btn.dataset.boundEaTabOpen = 'true';
+      btn.addEventListener('click', () => activateTab(root, btn.getAttribute('data-ea-tab-open')));
     });
   }
 
@@ -469,7 +516,7 @@
     const section = document.getElementById('tools');
     if (!section || !NS.state) return;
 
-    applyPremiumSweep();
+    applyRoleAwareSweep();
 
     const analytics = get('analytics', {}) || {};
     const tracking = analytics.tracking_summary || {};
@@ -490,13 +537,13 @@
     if (!hero) { hero = document.createElement('div'); hero.id='eaAnalyticsHero'; hero.className='ea-analytics-hero'; shell.appendChild(hero); }
     hero.innerHTML = `<div class="ea-analytics-hero-grid">
       <div class="ea-analytics-card">
-        <div class="module-group-label">Premium Workspace</div>
-        <h2 class="ea-a-title">Client posts and review decisions now sit ahead of secondary analytics.</h2>
-        <div class="ea-a-copy">Faster scan. Cleaner actions. Less dashboard noise.</div>
+        <div class="module-group-label">Operator View</div>
+        <h2 class="ea-a-title">Your posts, your review queue, and the next actions — without manager or dealership noise.</h2>
+        <div class="ea-a-copy">Bundle C shifts the dashboard harder toward the individual operator workflow.</div>
       </div>
-      <div class="ea-analytics-card"><div class="stat-label">Client Posts</div><div class="stat-value" style="font-size:24px">${listings.length}</div><div class="stat-sub">Visible in workspace</div></div>
-      <div class="ea-analytics-card"><div class="stat-label">Review Queue</div><div class="stat-value" style="font-size:24px">${lists.soldStale.length + lists.priceWatch.length}</div><div class="stat-sub">Needs action</div></div>
-      <div class="ea-analytics-card"><div class="stat-label">Price Pending</div><div class="stat-value" style="font-size:24px">${listings.filter((x)=>!x.price_resolved).length}</div><div class="stat-sub">Canonical price unresolved</div></div>
+      <div class="ea-analytics-card"><div class="stat-label">Client Posts</div><div class="stat-value" style="font-size:24px">${listings.length}</div><div class="stat-sub">Visible now</div></div>
+      <div class="ea-analytics-card"><div class="stat-label">Review Queue</div><div class="stat-value" style="font-size:24px">${lists.needsAttention.length}</div><div class="stat-sub">Needs action</div></div>
+      <div class="ea-analytics-card"><div class="stat-label">Price Watch</div><div class="stat-value" style="font-size:24px">${lists.priceWatch.length}</div><div class="stat-sub">Review price</div></div>
       <div class="ea-analytics-card"><div class="stat-label">Sync</div><div class="stat-value" style="font-size:24px">${tracking.sync_confidence || sync.confidence || 'local'}</div><div class="stat-sub">Current truth level</div></div>
     </div>`;
 
@@ -505,9 +552,9 @@
     const confidenceClass = String(sync.confidence || '').toLowerCase().includes('sync') ? 'synced' : (String(sync.confidence || '').toLowerCase().includes('track') ? 'tracked' : 'estimated');
     syncCard.innerHTML = `<div class="section-head">
         <div>
-          <div class="module-group-label">Truth Layer</div>
-          <h2 style="margin-top:6px;">Listings + review + analytics</h2>
-          <div class="subtext">One cleaner operating surface.</div>
+          <div class="module-group-label">Workspace</div>
+          <h2 style="margin-top:6px;">Client posts and review center</h2>
+          <div class="subtext">The main operating surface for individual users.</div>
         </div>
         <div class="ea-tabbar">
           <button class="active" type="button" data-ea-tab="eaAnalyticsTabPosts">Client Posts</button>
@@ -515,16 +562,17 @@
           <button type="button" data-ea-tab="eaAnalyticsTabOverview">Analytics</button>
         </div>
       </div>
-      <div class="ea-kpi-row">
-        <div class="ea-kpi-chip"><span>Sync source</span><strong>${tracking.sync_source || sync.source || 'local_only'}</strong></div>
-        <div class="ea-kpi-chip"><span>Seen</span><strong>${tracking.listing_seen_events || 0}</strong></div>
-        <div class="ea-kpi-chip"><span>Views</span><strong>${tracking.view_update_events || 0}</strong></div>
-        <div class="ea-kpi-chip"><span>Msgs</span><strong>${tracking.message_update_events || 0}</strong></div>
+      <div class="ea-sync-grid" style="margin-bottom:12px;">
+        <div class="ea-analytics-card"><div class="stat-label">Last Ingest</div><div class="ea-mini">${sync.last_ingest_at || 'Not synced yet.'}</div></div>
+        <div class="ea-analytics-card"><div class="stat-label">Last Reconcile</div><div class="ea-mini">${sync.last_reconcile_at || 'Not reconciled yet.'}</div></div>
+        <div class="ea-analytics-card"><div class="stat-label">Issues</div><div class="ea-mini">${(sync.issues || []).length ? (sync.issues || []).join('<br>') : 'No active sync issues reported.'}</div></div>
       </div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;">
         <span class="ea-pill ${confidenceClass}">${sync.confidence || 'local'}</span>
-        <span class="ea-pill tracked">price changes ${tracking.price_changed_events || 0}</span>
-        <span class="ea-pill critical">review lanes ${lists.soldStale.length + lists.priceWatch.length}</span>
+        <span class="ea-pill tracked">seen ${tracking.listing_seen_events || 0}</span>
+        <span class="ea-pill tracked">views ${tracking.view_update_events || 0}</span>
+        <span class="ea-pill tracked">msgs ${tracking.message_update_events || 0}</span>
+        <span class="ea-pill tracked">price ${tracking.price_changed_events || 0}</span>
       </div>`;
 
     let tabs = document.getElementById('eaAnalyticsTabs');
@@ -534,8 +582,12 @@
         <div class="section-head">
           <div>
             <div class="module-group-label">Client Posts</div>
-            <h2 style="margin-top:6px;">Vehicle cards inside analytics</h2>
-            <div class="subtext">Posts first. Charts second.</div>
+            <h2 style="margin-top:6px;">Vehicle cards first</h2>
+            <div class="subtext">The fastest way to scan what is live and what needs review.</div>
+          </div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;">
+            <button class="action-btn" type="button" data-ea-tab-open="eaAnalyticsTabReview">Review Center</button>
+            <button class="action-btn" type="button" data-ea-open="overview" data-ea-focus="listingSearchInput">Overview</button>
           </div>
         </div>
         <div class="ea-post-grid">
@@ -547,22 +599,32 @@
         <div class="section-head">
           <div>
             <div class="module-group-label">Review Center</div>
-            <h2 style="margin-top:6px;">Sold, stale, and price-watch lanes</h2>
+            <h2 style="margin-top:6px;">Sold, stale, and price review</h2>
             <div class="subtext">Make the decision, persist it, move on.</div>
           </div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;">
+            <button class="action-btn" type="button" data-ea-tab-open="eaAnalyticsTabPosts">Client Posts</button>
+            <button class="action-btn" type="button" data-ea-open="overview" data-ea-focus="listingSearchInput">Overview</button>
+          </div>
+        </div>
+        <div class="ea-review-kpis">
+          <div class="ea-review-kpi"><span>Needs Action</span><strong>${lists.needsAttention.length}</strong></div>
+          <div class="ea-review-kpi"><span>Price Watch</span><strong>${lists.priceWatch.length}</strong></div>
+          <div class="ea-review-kpi"><span>Sold / Stale</span><strong>${lists.soldStale.length}</strong></div>
+          <div class="ea-review-kpi"><span>Healthy</span><strong>${lists.healthy.length}</strong></div>
         </div>
         <div class="ea-review-columns">
           <div class="ea-review-col">
-            <div class="ea-review-col-head"><h3>Sold / Stale</h3><span class="ea-pill critical">${lists.soldStale.length}</span></div>
-            ${lists.soldStale.length ? lists.soldStale.map((item) => reviewItem(item, 'Review status')).join('') : `<div class="ea-empty">No sold or stale items right now.</div>`}
+            <div class="ea-review-col-head"><h3>Needs Action</h3><span class="ea-pill neutral">${lists.needsAttention.length}</span></div>
+            ${lists.needsAttention.length ? lists.needsAttention.map((item) => reviewItem(item, 'Review')).join('') : `<div class="ea-empty">No needs-action items right now.</div>`}
           </div>
           <div class="ea-review-col">
             <div class="ea-review-col-head"><h3>Price Watch</h3><span class="ea-pill tracked">${lists.priceWatch.length}</span></div>
-            ${lists.priceWatch.length ? lists.priceWatch.map((item) => reviewItem(item, 'Review price')).join('') : `<div class="ea-empty">No price-watch items right now.</div>`}
+            ${lists.priceWatch.length ? lists.priceWatch.map((item) => reviewItem(item, 'Price')).join('') : `<div class="ea-empty">No price-watch items right now.</div>`}
           </div>
           <div class="ea-review-col">
-            <div class="ea-review-col-head"><h3>Healthy / Active</h3><span class="ea-pill synced">${lists.healthy.length}</span></div>
-            ${lists.healthy.length ? lists.healthy.slice(0,8).map((item) => reviewItem(item, 'Open')).join('') : `<div class="ea-empty">No active items right now.</div>`}
+            <div class="ea-review-col-head"><h3>Sold / Stale</h3><span class="ea-pill critical">${lists.soldStale.length}</span></div>
+            ${lists.soldStale.length ? lists.soldStale.map((item) => reviewItem(item, 'Status')).join('') : `<div class="ea-empty">No sold or stale items right now.</div>`}
           </div>
         </div>
       </div>
@@ -572,7 +634,7 @@
           <div>
             <div class="module-group-label">Analytics</div>
             <h2 style="margin-top:6px;">Signals worth acting on</h2>
-            <div class="subtext">Only the high-signal lanes stay above the fold.</div>
+            <div class="subtext">Only the higher-signal blocks stay visible here.</div>
           </div>
         </div>
         <div class="ea-a-list">
@@ -587,21 +649,19 @@
           `).join('') : `<div class="ea-empty">No analytics actions yet.</div>`}
         </div>
         <div class="ea-sync-grid" style="margin-top:16px;">
-          ${renderBlock('Message leaders', analytics.leaders?.message_leaders || [])}
-          ${renderBlock('View leaders', analytics.leaders?.view_leaders || [])}
           ${renderBlock('Fresh traction', analytics.leaders?.fresh_traction || [])}
           ${renderBlock('Price attention', analytics.leaders?.price_attention || [])}
           ${renderBlock('Needs refresh', analytics.leaders?.needs_refresh || [])}
-          ${renderBlock('Recovered', analytics.leaders?.recovered || [])}
         </div>
       </div>
     `;
 
     bindButtons(shell);
-    applyPremiumSweep();
+    activateTab(shell, 'eaAnalyticsTabPosts');
+    applyRoleAwareSweep();
   }
 
-  NS.analytics = { renderBundleBAnalytics: render, applyPremiumSweep };
+  NS.analytics = { renderBundleCAnalytics: render, applyRoleAwareSweep };
   NS.modules = NS.modules || {};
   NS.modules.analytics = true;
 

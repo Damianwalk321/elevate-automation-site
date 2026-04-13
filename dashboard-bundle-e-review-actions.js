@@ -1,6 +1,6 @@
 (() => {
-  if (window.__ELEVATE_BUNDLE_B_REVIEW_ACTIONS__) return;
-  window.__ELEVATE_BUNDLE_B_REVIEW_ACTIONS__ = true;
+  if (window.__ELEVATE_BUNDLE_C_REVIEW_ACTIONS__) return;
+  window.__ELEVATE_BUNDLE_C_REVIEW_ACTIONS__ = true;
 
   const CSS = `
     .ea-review-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
@@ -21,9 +21,9 @@
   `;
 
   function ensureStyle() {
-    if (document.getElementById('ea-bundle-b-review-style')) return;
+    if (document.getElementById('ea-bundle-c-review-style')) return;
     const style = document.createElement('style');
-    style.id = 'ea-bundle-b-review-style';
+    style.id = 'ea-bundle-c-review-style';
     style.textContent = CSS;
     document.head.appendChild(style);
   }
@@ -90,14 +90,14 @@
 
   function injectActionPanels() {
     document.querySelectorAll('.ea-review-item').forEach((item) => {
-      if (item.dataset.bundleBActions === 'true') return;
+      if (item.dataset.bundleCActions === 'true') return;
       const identity = getIdentityPayloadFromNode(item);
       if (!identity) return;
-      item.dataset.bundleBActions = 'true';
+      item.dataset.bundleCActions = 'true';
 
       const note = document.createElement('div');
       note.className = 'ea-review-inline-note';
-      note.textContent = 'Persist the decision, then refresh the workspace.';
+      note.textContent = 'Save the outcome, then refresh the workspace.';
 
       const actions = document.createElement('div');
       actions.className = 'ea-review-actions';
