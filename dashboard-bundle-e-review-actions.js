@@ -1,6 +1,6 @@
 (() => {
-  if (window.__ELEVATE_BUNDLE_C_REVIEW_ACTIONS__) return;
-  window.__ELEVATE_BUNDLE_C_REVIEW_ACTIONS__ = true;
+  if (window.__ELEVATE_BUNDLE_D_REVIEW_ACTIONS__) return;
+  window.__ELEVATE_BUNDLE_D_REVIEW_ACTIONS__ = true;
 
   const CSS = `
     .ea-review-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
@@ -21,9 +21,9 @@
   `;
 
   function ensureStyle() {
-    if (document.getElementById('ea-bundle-c-review-style')) return;
+    if (document.getElementById('ea-bundle-d-review-style')) return;
     const style = document.createElement('style');
-    style.id = 'ea-bundle-c-review-style';
+    style.id = 'ea-bundle-d-review-style';
     style.textContent = CSS;
     document.head.appendChild(style);
   }
@@ -90,10 +90,10 @@
 
   function injectActionPanels() {
     document.querySelectorAll('.ea-review-item').forEach((item) => {
-      if (item.dataset.bundleCActions === 'true') return;
+      if (item.dataset.bundleDActions === 'true') return;
       const identity = getIdentityPayloadFromNode(item);
       if (!identity) return;
-      item.dataset.bundleCActions = 'true';
+      item.dataset.bundleDActions = 'true';
 
       const note = document.createElement('div');
       note.className = 'ea-review-inline-note';

@@ -69,13 +69,13 @@
 
     #overview .command-center-grid{gap:16px !important; margin-bottom:16px !important;}
     #overview .command-primary{
-      padding:22px !important;
+      padding:20px !important;
       background:
         radial-gradient(circle at top right, rgba(212,175,55,.12), transparent 24%),
         linear-gradient(180deg, rgba(255,255,255,.02), rgba(255,255,255,.01)),
         #141414 !important;
     }
-    #overview .command-title-row h2{font-size:30px !important; line-height:1.04 !important; max-width:560px !important;}
+    #overview .command-title-row h2{font-size:29px !important; line-height:1.04 !important; max-width:540px !important;}
     #overview .command-meta-card{
       padding:14px !important;
       background:linear-gradient(180deg, rgba(255,255,255,.03), rgba(255,255,255,.012)) !important;
@@ -89,7 +89,7 @@
       gap:12px !important;
       margin-bottom:16px !important;
     }
-    #overview .mini-stat{min-height:120px !important; padding:16px !important;}
+    #overview .mini-stat{min-height:118px !important; padding:16px !important;}
     #overview .mini-stat .stat-value{font-size:23px !important;}
     #overview .mini-stat .stat-sub{font-size:12px !important; line-height:1.4 !important;}
 
@@ -131,12 +131,16 @@
     }
 
     .ea-hide{display:none !important;}
+    .ea-remove{display:none !important;}
     .ea-quiet{opacity:.82;}
     .ea-collapsible{overflow:hidden; transition:max-height .18s ease, opacity .18s ease;}
     .ea-toggle{
       appearance:none; border:1px solid rgba(212,175,55,.18); background:#151515; color:#efefef;
       border-radius:999px; padding:10px 14px; cursor:pointer; font-weight:700; font-size:12px;
     }
+    .ea-review-center-shell{display:grid;gap:16px}
+    .ea-review-center-shell .ea-review-columns{grid-template-columns:repeat(3,minmax(0,1fr))}
+    .ea-review-center-nav-note{font-size:12px;color:#a9a9a9}
     .ea-analytics-shell{display:grid;gap:16px;margin-bottom:20px}
     .ea-analytics-card,.ea-analytics-hero{border:1px solid rgba(212,175,55,.12);border-radius:16px;padding:18px;background:linear-gradient(180deg,rgba(255,255,255,.018),rgba(255,255,255,.006))}
     .ea-analytics-hero-grid{display:grid;grid-template-columns:1.45fr repeat(4,minmax(0,1fr));gap:12px}
@@ -182,15 +186,15 @@
     .ea-review-kpi{background:#121212;border:1px solid rgba(212,175,55,.10);border-radius:14px;padding:14px}
     .ea-review-kpi strong{display:block;font-size:24px;line-height:1;margin-top:6px}
     .ea-review-kpi span{display:block;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:#d4af37}
-    @media (max-width:1200px){.ea-analytics-hero-grid,.ea-sync-grid,.ea-review-columns,.ea-review-kpis{grid-template-columns:1fr 1fr}.ea-post-grid{grid-template-columns:1fr 1fr}}
+    @media (max-width:1200px){.ea-analytics-hero-grid,.ea-sync-grid,.ea-review-columns,.ea-review-kpis,.ea-review-center-shell .ea-review-columns{grid-template-columns:1fr 1fr}.ea-post-grid{grid-template-columns:1fr 1fr}}
     @media (max-width:920px){.main-header{position:static;background:transparent;backdrop-filter:none}}
-    @media (max-width:760px){.ea-analytics-hero-grid,.ea-sync-grid,.ea-review-columns,.ea-post-grid,.ea-post-kpis,.ea-post-actions,.ea-review-kpis{grid-template-columns:1fr}.ea-a-title{font-size:24px}}
+    @media (max-width:760px){.ea-analytics-hero-grid,.ea-sync-grid,.ea-review-columns,.ea-post-grid,.ea-post-kpis,.ea-post-actions,.ea-review-kpis,.ea-review-center-shell .ea-review-columns{grid-template-columns:1fr}.ea-a-title{font-size:24px}}
   `;
 
   function ensureStyle(){
-    if(document.getElementById('ea-analytics-bundle-c-style')) return;
+    if(document.getElementById('ea-analytics-bundle-d-style')) return;
     const s=document.createElement('style');
-    s.id='ea-analytics-bundle-c-style';
+    s.id='ea-analytics-bundle-d-style';
     s.textContent=CSS;
     document.head.appendChild(s);
   }
@@ -217,45 +221,7 @@
     if (el && value) el.textContent = value;
   }
 
-  function hideCardsByText(scopeSelector, regex){
-    document.querySelectorAll(scopeSelector).forEach((card) => {
-      const text = clean(card.textContent || '');
-      if (regex.test(text)) card.classList.add('ea-hide');
-    });
-  }
-
-  function replaceDangerousTerms(){
-    const replacements = [
-      [/manager oversight/gi, 'Operator workspace'],
-      [/team command/gi, 'Operator workflow'],
-      [/primary dealership/gi, 'Dealership'],
-      [/dealership health/gi, 'Listing health'],
-      [/portfolio view/gi, 'Analytics'],
-      [/manager summary/gi, 'Summary'],
-      [/team/gi, ''],
-    ];
-
-    const selectors = [
-      '.sidebar-card-label', '.section-head h2', '.card h2', '.subtext', '.module-group-label',
-      '.stat-label', '.sidebar-card-value', '.action-btn', '.nav-btn', '.list-block', '.status-line'
-    ];
-
-    selectors.forEach((sel) => {
-      document.querySelectorAll(sel).forEach((node) => {
-        let text = node.textContent || '';
-        let changed = false;
-        replacements.forEach(([pattern, next]) => {
-          if (pattern.test(text)) {
-            text = text.replace(pattern, next);
-            changed = true;
-          }
-        });
-        if (changed) node.textContent = clean(text);
-      });
-    });
-  }
-
-  function compressCopy(){
+  function compressGlobalCopy(){
     setText('.brand-subtitle', 'Premium posting, review, analytics, and compliance control.');
     setText('#dashboardPageTitle', 'Operator Console');
     setText('#welcomeText', 'Your posts, review queue, and next actions.');
@@ -267,91 +233,149 @@
     setText('#setupReadinessSummary', 'Complete the essentials required to post cleanly.');
     setText('#toolsNextStepPanel', 'Keep setup clean, then post.');
     setText('#snapshotSetupSummary', 'Account, setup, and compliance should stay complete.');
+    setText('#overviewPlanChip', 'Plan');
+    setText('#overviewAccessChip', 'Access');
+    setText('#commandSetupChip', 'Setup');
 
     document.querySelectorAll('.section-head .subtext, .card > p, .tool-tile p, .stat-sub').forEach((el) => {
       const t = clean(el.textContent);
       if (!t) return;
-      if (t.length > 110) el.textContent = `${t.slice(0, 104).trim()}…`;
+      if (t.length > 95) el.textContent = `${t.slice(0, 89).trim()}…`;
     });
 
+    const buttonMap = new Map([
+      ['Open Tools', 'Tools'],
+      ['Open Analytics', 'Analytics'],
+      ['Review Listings', 'Review'],
+      ['Finish Setup', 'Setup'],
+      ['Refresh Listings', 'Refresh'],
+      ['Open Review Center', 'Review Center'],
+      ['Open Overview Grid', 'Overview'],
+      ['Back to Client Posts', 'Client Posts'],
+      ['View Upgrade Path', 'Upgrade'],
+      ['See Upgrade Levers', 'Upgrade'],
+      ['Use Credits', 'Credits'],
+      ['Compare Access', 'Compare'],
+      ['Open Billing Portal', 'Billing Portal'],
+      ['View Setup Steps', 'Setup Steps'],
+      ['Refresh Extension State', 'Refresh State']
+    ]);
     document.querySelectorAll('button, a').forEach((el) => {
       const t = clean(el.textContent);
-      const map = new Map([
-        ['Open Tools', 'Tools'],
-        ['Open Analytics', 'Analytics'],
-        ['Review Listings', 'Review'],
-        ['Finish Setup', 'Setup'],
-        ['Refresh Listings', 'Refresh'],
-        ['Open Overview Grid', 'Overview'],
-        ['Open Review Center', 'Review Center'],
-        ['Back to Client Posts', 'Client Posts'],
-        ['View Upgrade Path', 'Upgrade'],
-        ['See Upgrade Levers', 'Upgrade'],
-        ['Use Credits', 'Credits'],
-        ['Compare Access', 'Compare'],
-        ['Open Billing Portal', 'Billing Portal'],
-      ]);
-      if (map.has(t)) el.textContent = map.get(t);
+      if (buttonMap.has(t)) el.textContent = buttonMap.get(t);
     });
   }
 
-  function addDetailsToggle(){
-    if (document.getElementById('eaDetailsToggle')) return;
-    const accountGrid = document.getElementById('overviewAccountGrid');
-    if (!accountGrid) return;
+  function hardRemovePersonalLeakage(){
+    if (isManagerView()) return;
 
-    const head = document.createElement('div');
-    head.style.display = 'flex';
-    head.style.justifyContent = 'space-between';
-    head.style.alignItems = 'center';
-    head.style.gap = '12px';
-    head.style.marginBottom = '12px';
-    head.innerHTML = `<div class="subtext">Secondary account details</div><button id="eaDetailsToggle" class="ea-toggle" type="button">Show details</button>`;
-    accountGrid.parentNode.insertBefore(head, accountGrid);
-    accountGrid.classList.add('ea-collapsible', 'ea-hide');
-
-    const btn = head.querySelector('#eaDetailsToggle');
-    btn.addEventListener('click', () => {
-      const hidden = accountGrid.classList.toggle('ea-hide');
-      btn.textContent = hidden ? 'Show details' : 'Hide details';
-    });
-  }
-
-  function compressOverview(){
-    const idsToHide = [
-      '#overviewUpgradeCard',
-      '#overviewPriorityGrid'
+    const leakagePatterns = [
+      /manager oversight/i,
+      /primary dealership/i,
+      /dealership health/i,
+      /team command/i,
+      /manager summary/i,
+      /primary dealership team/i
     ];
-    idsToHide.forEach((id) => {
-      const el = document.querySelector(id);
-      if (el) el.classList.add('ea-quiet');
+
+    const allCards = Array.from(document.querySelectorAll('.card, .sidebar-card, .tool-tile, .mini-stat'));
+    allCards.forEach((node) => {
+      const text = clean(node.textContent || '');
+      if (leakagePatterns.some((p) => p.test(text))) {
+        node.classList.add('ea-remove');
+      }
     });
 
+    document.querySelectorAll('[id*="manager"], [class*="manager"], [data-role="manager"]').forEach((el) => {
+      el.classList.add('ea-remove');
+    });
+
+    // Hard-trim overview for personal users
+    ['#overviewUpgradeCard', '#overviewPriorityGrid'].forEach((sel) => {
+      const el = document.querySelector(sel);
+      if (el) el.classList.add('ea-remove');
+    });
+
+    // Hide lower-value overview stats beyond the core four
     const operatorStrip = document.getElementById('overviewOperatorStrip');
     if (operatorStrip) {
-      const children = Array.from(operatorStrip.children || []);
-      children.forEach((node, idx) => {
-        if (idx > 3) node.classList.add('ea-hide');
+      Array.from(operatorStrip.children || []).forEach((node, idx) => {
+        if (idx > 3) node.classList.add('ea-remove');
       });
     }
 
-    addDetailsToggle();
-  }
+    // Collapse account snapshot block by default
+    const accountGrid = document.getElementById('overviewAccountGrid');
+    if (accountGrid && !document.getElementById('eaDetailsToggleD')) {
+      const head = document.createElement('div');
+      head.style.display = 'flex';
+      head.style.justifyContent = 'space-between';
+      head.style.alignItems = 'center';
+      head.style.gap = '12px';
+      head.style.marginBottom = '12px';
+      head.innerHTML = `<div class="subtext">Secondary account details</div><button id="eaDetailsToggleD" class="ea-toggle" type="button">Show details</button>`;
+      accountGrid.parentNode.insertBefore(head, accountGrid);
+      accountGrid.classList.add('ea-collapsible', 'ea-hide');
 
-  function applyRoleAwareSweep(){
-    if (document.body.dataset.eaRoleAwareSweep === 'true') return;
-
-    ensureStyle();
-    compressCopy();
-    compressOverview();
-
-    if (!isManagerView()) {
-      replaceDangerousTerms();
-      hideCardsByText('.card, .sidebar-card, .tool-tile', /(manager oversight|dealership health|team command|manager summary|primary dealership)/i);
-      document.querySelectorAll('[id*="manager"], [class*="manager"]').forEach((el) => el.classList.add('ea-hide'));
+      const btn = head.querySelector('#eaDetailsToggleD');
+      btn.addEventListener('click', () => {
+        const hidden = accountGrid.classList.toggle('ea-hide');
+        btn.textContent = hidden ? 'Show details' : 'Hide details';
+      });
     }
 
-    document.body.dataset.eaRoleAwareSweep = 'true';
+    // Personal tools wording cleanup
+    document.querySelectorAll('.card h2, .section-head h2, .subtext, .module-group-label, .stat-label').forEach((node) => {
+      let text = node.textContent || '';
+      text = text
+        .replace(/manager oversight/gi, 'Operator workspace')
+        .replace(/primary dealership/gi, 'Dealership')
+        .replace(/dealership health/gi, 'Listing health')
+        .replace(/team command/gi, 'Operator workflow')
+        .replace(/manager summary/gi, 'Summary');
+      node.textContent = clean(text);
+    });
+  }
+
+  function createReviewNavIfMissing(){
+    if (document.querySelector('.sidebar-nav [data-section="review_center"]')) return;
+    const nav = document.querySelector('.sidebar-nav');
+    if (!nav) return;
+
+    const btn = document.createElement('button');
+    btn.className = 'nav-btn';
+    btn.type = 'button';
+    btn.dataset.section = 'review_center';
+    btn.textContent = 'Review Center';
+
+    const analyticsBtn = nav.querySelector('[data-section="tools"]');
+    if (analyticsBtn) analyticsBtn.insertAdjacentElement('afterend', btn);
+    else nav.appendChild(btn);
+
+    btn.addEventListener('click', () => {
+      open('tools');
+      setTimeout(() => {
+        const shell = document.getElementById('eaAnalyticsTabs');
+        if (!shell) return;
+        shell.querySelectorAll('[data-ea-tab]').forEach((tab) => {
+          const isTarget = tab.getAttribute('data-ea-tab') === 'eaAnalyticsTabReview';
+          tab.classList.toggle('active', isTarget);
+        });
+        shell.querySelectorAll('.ea-tab-panel').forEach((panel) => {
+          panel.classList.toggle('active', panel.id === 'eaAnalyticsTabReview');
+        });
+        document.getElementById('eaReviewCenterAnchor')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, 160);
+    });
+  }
+
+  function applyOperatorLock(){
+    if (document.body.dataset.eaOperatorLockD === 'true') return;
+    ensureStyle();
+    compressGlobalCopy();
+    createReviewNavIfMissing();
+    hardRemovePersonalLeakage();
+    document.body.dataset.eaOperatorLockD = 'true';
   }
 
   function getListings(){
@@ -414,7 +438,7 @@
   }
 
   function postCard(item){
-    const badge = !item.price_resolved ? 'Price Pending' : item.likely_sold ? 'Likely Sold' : item.price_review ? 'Price Watch' : item.stale ? 'Needs Refresh' : 'Active';
+    const badge = !item.price_resolved ? 'Price Pending' : item.likelySold ? 'Likely Sold' : item.price_review ? 'Price Watch' : item.stale ? 'Needs Refresh' : 'Active';
     const badgeClass = !item.price_resolved ? 'estimated' : item.likely_sold ? 'critical' : (item.price_review ? 'tracked' : (item.stale ? 'estimated' : 'synced'));
     return `
       <div class="ea-post-card">
@@ -516,7 +540,7 @@
     const section = document.getElementById('tools');
     if (!section || !NS.state) return;
 
-    applyRoleAwareSweep();
+    applyOperatorLock();
 
     const analytics = get('analytics', {}) || {};
     const tracking = analytics.tracking_summary || {};
@@ -539,7 +563,7 @@
       <div class="ea-analytics-card">
         <div class="module-group-label">Operator View</div>
         <h2 class="ea-a-title">Your posts, your review queue, and the next actions — without manager or dealership noise.</h2>
-        <div class="ea-a-copy">Bundle C shifts the dashboard harder toward the individual operator workflow.</div>
+        <div class="ea-a-copy">Bundle D hard-locks the personal surface and pushes Review Center closer to a primary destination.</div>
       </div>
       <div class="ea-analytics-card"><div class="stat-label">Client Posts</div><div class="stat-value" style="font-size:24px">${listings.length}</div><div class="stat-sub">Visible now</div></div>
       <div class="ea-analytics-card"><div class="stat-label">Review Queue</div><div class="stat-value" style="font-size:24px">${lists.needsAttention.length}</div><div class="stat-sub">Needs action</div></div>
@@ -596,7 +620,7 @@
       </div>
 
       <div id="eaAnalyticsTabReview" class="ea-tab-panel">
-        <div class="section-head">
+        <div id="eaReviewCenterAnchor" class="section-head">
           <div>
             <div class="module-group-label">Review Center</div>
             <h2 style="margin-top:6px;">Sold, stale, and price review</h2>
@@ -613,18 +637,20 @@
           <div class="ea-review-kpi"><span>Sold / Stale</span><strong>${lists.soldStale.length}</strong></div>
           <div class="ea-review-kpi"><span>Healthy</span><strong>${lists.healthy.length}</strong></div>
         </div>
-        <div class="ea-review-columns">
-          <div class="ea-review-col">
-            <div class="ea-review-col-head"><h3>Needs Action</h3><span class="ea-pill neutral">${lists.needsAttention.length}</span></div>
-            ${lists.needsAttention.length ? lists.needsAttention.map((item) => reviewItem(item, 'Review')).join('') : `<div class="ea-empty">No needs-action items right now.</div>`}
-          </div>
-          <div class="ea-review-col">
-            <div class="ea-review-col-head"><h3>Price Watch</h3><span class="ea-pill tracked">${lists.priceWatch.length}</span></div>
-            ${lists.priceWatch.length ? lists.priceWatch.map((item) => reviewItem(item, 'Price')).join('') : `<div class="ea-empty">No price-watch items right now.</div>`}
-          </div>
-          <div class="ea-review-col">
-            <div class="ea-review-col-head"><h3>Sold / Stale</h3><span class="ea-pill critical">${lists.soldStale.length}</span></div>
-            ${lists.soldStale.length ? lists.soldStale.map((item) => reviewItem(item, 'Status')).join('') : `<div class="ea-empty">No sold or stale items right now.</div>`}
+        <div class="ea-review-center-shell">
+          <div class="ea-review-columns">
+            <div class="ea-review-col">
+              <div class="ea-review-col-head"><h3>Needs Action</h3><span class="ea-pill neutral">${lists.needsAttention.length}</span></div>
+              ${lists.needsAttention.length ? lists.needsAttention.map((item) => reviewItem(item, 'Review')).join('') : `<div class="ea-empty">No needs-action items right now.</div>`}
+            </div>
+            <div class="ea-review-col">
+              <div class="ea-review-col-head"><h3>Price Watch</h3><span class="ea-pill tracked">${lists.priceWatch.length}</span></div>
+              ${lists.priceWatch.length ? lists.priceWatch.map((item) => reviewItem(item, 'Price')).join('') : `<div class="ea-empty">No price-watch items right now.</div>`}
+            </div>
+            <div class="ea-review-col">
+              <div class="ea-review-col-head"><h3>Sold / Stale</h3><span class="ea-pill critical">${lists.soldStale.length}</span></div>
+              ${lists.soldStale.length ? lists.soldStale.map((item) => reviewItem(item, 'Status')).join('') : `<div class="ea-empty">No sold or stale items right now.</div>`}
+            </div>
           </div>
         </div>
       </div>
@@ -638,7 +664,7 @@
           </div>
         </div>
         <div class="ea-a-list">
-          ${actions.length ? actions.slice(0,5).map((item, idx) => `
+          ${actions.length ? actions.slice(0,4).map((item, idx) => `
             <div class="ea-a-item">
               <div><strong>${idx + 1}. ${item.title}</strong><div class="ea-a-meta">${item.copy || ''}</div></div>
               <div style="display:grid;gap:10px;justify-items:end;">
@@ -658,10 +684,10 @@
 
     bindButtons(shell);
     activateTab(shell, 'eaAnalyticsTabPosts');
-    applyRoleAwareSweep();
+    applyOperatorLock();
   }
 
-  NS.analytics = { renderBundleCAnalytics: render, applyRoleAwareSweep };
+  NS.analytics = { renderBundleDAnalytics: render, applyOperatorLock };
   NS.modules = NS.modules || {};
   NS.modules.analytics = true;
 
