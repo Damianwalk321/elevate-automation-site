@@ -75,7 +75,7 @@
         linear-gradient(180deg, rgba(255,255,255,.02), rgba(255,255,255,.01)),
         #141414 !important;
     }
-    #overview .command-title-row h2{font-size:29px !important; line-height:1.04 !important; max-width:540px !important;}
+    #overview .command-title-row h2{font-size:28px !important; line-height:1.04 !important; max-width:520px !important;}
     #overview .command-meta-card{
       padding:14px !important;
       background:linear-gradient(180deg, rgba(255,255,255,.03), rgba(255,255,255,.012)) !important;
@@ -85,7 +85,7 @@
     #overview .overview-action-item{padding:13px 15px !important; border-radius:14px !important;}
 
     #overview .operator-strip{
-      grid-template-columns:repeat(3,minmax(0,1fr)) !important;
+      grid-template-columns:repeat(4,minmax(0,1fr)) !important;
       gap:12px !important;
       margin-bottom:16px !important;
     }
@@ -138,9 +138,7 @@
       appearance:none; border:1px solid rgba(212,175,55,.18); background:#151515; color:#efefef;
       border-radius:999px; padding:10px 14px; cursor:pointer; font-weight:700; font-size:12px;
     }
-    .ea-review-center-shell{display:grid;gap:16px}
-    .ea-review-center-shell .ea-review-columns{grid-template-columns:repeat(3,minmax(0,1fr))}
-    .ea-review-center-nav-note{font-size:12px;color:#a9a9a9}
+
     .ea-analytics-shell{display:grid;gap:16px;margin-bottom:20px}
     .ea-analytics-card,.ea-analytics-hero{border:1px solid rgba(212,175,55,.12);border-radius:16px;padding:18px;background:linear-gradient(180deg,rgba(255,255,255,.018),rgba(255,255,255,.006))}
     .ea-analytics-hero-grid{display:grid;grid-template-columns:1.45fr repeat(4,minmax(0,1fr));gap:12px}
@@ -176,25 +174,45 @@
     .ea-post-kpi strong{display:block;font-size:14px}
     .ea-post-kpi span{display:block;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:#d4af37;margin-bottom:4px}
     .ea-post-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+
+    .ea-review-surface{
+      display:grid;
+      gap:16px;
+      margin-bottom:20px;
+    }
+    .ea-review-surface .ea-analytics-card{
+      background:
+        radial-gradient(circle at top right, rgba(212,175,55,.10), transparent 26%),
+        linear-gradient(180deg,rgba(255,255,255,.018),rgba(255,255,255,.006));
+    }
+    .ea-review-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-bottom:14px}
+    .ea-review-kpi{background:#121212;border:1px solid rgba(212,175,55,.10);border-radius:14px;padding:14px}
+    .ea-review-kpi strong{display:block;font-size:24px;line-height:1;margin-top:6px}
+    .ea-review-kpi span{display:block;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:#d4af37}
     .ea-review-columns{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}
     .ea-review-col{display:grid;gap:10px;align-content:start}
     .ea-review-col-head{display:flex;justify-content:space-between;align-items:center;gap:10px}
     .ea-review-item{background:#151515;border:1px solid rgba(255,255,255,.06);border-radius:14px;padding:14px;display:grid;gap:10px}
     .ea-review-reason{font-size:12px;line-height:1.5;color:#cfcfcf;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.05);border-radius:10px;padding:10px}
     .ea-empty{padding:20px;border-radius:14px;border:1px dashed rgba(212,175,55,.16);color:#9d9d9d;text-align:center}
-    .ea-review-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-bottom:14px}
-    .ea-review-kpi{background:#121212;border:1px solid rgba(212,175,55,.10);border-radius:14px;padding:14px}
-    .ea-review-kpi strong{display:block;font-size:24px;line-height:1;margin-top:6px}
-    .ea-review-kpi span{display:block;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:#d4af37}
-    @media (max-width:1200px){.ea-analytics-hero-grid,.ea-sync-grid,.ea-review-columns,.ea-review-kpis,.ea-review-center-shell .ea-review-columns{grid-template-columns:1fr 1fr}.ea-post-grid{grid-template-columns:1fr 1fr}}
-    @media (max-width:920px){.main-header{position:static;background:transparent;backdrop-filter:none}}
-    @media (max-width:760px){.ea-analytics-hero-grid,.ea-sync-grid,.ea-review-columns,.ea-post-grid,.ea-post-kpis,.ea-post-actions,.ea-review-kpis,.ea-review-center-shell .ea-review-columns{grid-template-columns:1fr}.ea-a-title{font-size:24px}}
+
+    @media (max-width:1200px){
+      .ea-analytics-hero-grid,.ea-sync-grid,.ea-review-columns,.ea-review-kpis{grid-template-columns:1fr 1fr}
+      .ea-post-grid{grid-template-columns:1fr 1fr}
+    }
+    @media (max-width:920px){
+      .main-header{position:static;background:transparent;backdrop-filter:none}
+    }
+    @media (max-width:760px){
+      .ea-analytics-hero-grid,.ea-sync-grid,.ea-review-columns,.ea-post-grid,.ea-post-kpis,.ea-post-actions,.ea-review-kpis{grid-template-columns:1fr}
+      .ea-a-title{font-size:24px}
+    }
   `;
 
   function ensureStyle(){
-    if(document.getElementById('ea-analytics-bundle-d-style')) return;
+    if(document.getElementById('ea-analytics-bundle-e-style')) return;
     const s=document.createElement('style');
-    s.id='ea-analytics-bundle-d-style';
+    s.id='ea-analytics-bundle-e-style';
     s.textContent=CSS;
     document.head.appendChild(s);
   }
@@ -211,11 +229,9 @@
     try{ if(typeof window.showSection==='function') window.showSection(section); }catch{}
     if(focusId) setTimeout(()=>document.getElementById(focusId)?.scrollIntoView({behavior:'smooth', block:'center'}),220);
   }
-
   function isManagerView(){
     return Boolean(window.dashboardSummary?.manager_access);
   }
-
   function setText(selector, value){
     const el = document.querySelector(selector);
     if (el && value) el.textContent = value;
@@ -240,7 +256,7 @@
     document.querySelectorAll('.section-head .subtext, .card > p, .tool-tile p, .stat-sub').forEach((el) => {
       const t = clean(el.textContent);
       if (!t) return;
-      if (t.length > 95) el.textContent = `${t.slice(0, 89).trim()}…`;
+      if (t.length > 85) el.textContent = `${t.slice(0, 79).trim()}…`;
     });
 
     const buttonMap = new Map([
@@ -266,9 +282,10 @@
     });
   }
 
-  function hardRemovePersonalLeakage(){
+  function lockPersonalView(){
     if (isManagerView()) return;
 
+    // remove manager/dealership leakage
     const leakagePatterns = [
       /manager oversight/i,
       /primary dealership/i,
@@ -281,22 +298,20 @@
     const allCards = Array.from(document.querySelectorAll('.card, .sidebar-card, .tool-tile, .mini-stat'));
     allCards.forEach((node) => {
       const text = clean(node.textContent || '');
-      if (leakagePatterns.some((p) => p.test(text))) {
-        node.classList.add('ea-remove');
-      }
+      if (leakagePatterns.some((p) => p.test(text))) node.classList.add('ea-remove');
     });
 
     document.querySelectorAll('[id*="manager"], [class*="manager"], [data-role="manager"]').forEach((el) => {
       el.classList.add('ea-remove');
     });
 
-    // Hard-trim overview for personal users
-    ['#overviewUpgradeCard', '#overviewPriorityGrid'].forEach((sel) => {
+    // overview reduction
+    ['#overviewUpgradeCard', '#overviewPriorityGrid', '#overviewAccountGrid .card:first-child'].forEach((sel) => {
       const el = document.querySelector(sel);
       if (el) el.classList.add('ea-remove');
     });
 
-    // Hide lower-value overview stats beyond the core four
+    // keep only 4 core operator stats
     const operatorStrip = document.getElementById('overviewOperatorStrip');
     if (operatorStrip) {
       Array.from(operatorStrip.children || []).forEach((node, idx) => {
@@ -304,27 +319,12 @@
       });
     }
 
-    // Collapse account snapshot block by default
-    const accountGrid = document.getElementById('overviewAccountGrid');
-    if (accountGrid && !document.getElementById('eaDetailsToggleD')) {
-      const head = document.createElement('div');
-      head.style.display = 'flex';
-      head.style.justifyContent = 'space-between';
-      head.style.alignItems = 'center';
-      head.style.gap = '12px';
-      head.style.marginBottom = '12px';
-      head.innerHTML = `<div class="subtext">Secondary account details</div><button id="eaDetailsToggleD" class="ea-toggle" type="button">Show details</button>`;
-      accountGrid.parentNode.insertBefore(head, accountGrid);
-      accountGrid.classList.add('ea-collapsible', 'ea-hide');
+    // lower-value overview sections quieter
+    document.querySelectorAll('#overviewPerformanceGrid, #overviewAccountGrid').forEach((el) => {
+      el.classList.add('ea-quiet');
+    });
 
-      const btn = head.querySelector('#eaDetailsToggleD');
-      btn.addEventListener('click', () => {
-        const hidden = accountGrid.classList.toggle('ea-hide');
-        btn.textContent = hidden ? 'Show details' : 'Hide details';
-      });
-    }
-
-    // Personal tools wording cleanup
+    // personal wording cleanup
     document.querySelectorAll('.card h2, .section-head h2, .subtext, .module-group-label, .stat-label').forEach((node) => {
       let text = node.textContent || '';
       text = text
@@ -332,8 +332,20 @@
         .replace(/primary dealership/gi, 'Dealership')
         .replace(/dealership health/gi, 'Listing health')
         .replace(/team command/gi, 'Operator workflow')
-        .replace(/manager summary/gi, 'Summary');
+        .replace(/manager summary/gi, 'Summary')
+        .replace(/portfolio view/gi, 'Analytics');
       node.textContent = clean(text);
+    });
+
+    // tools page cleanup
+    document.querySelectorAll('#extension .card .list-block, #extension .card .subtext').forEach((node) => {
+      const t = clean(node.textContent || '');
+      if (/module|system status|platform modules/i.test(t)) {
+        node.textContent = t
+          .replace(/system status/gi, 'Status')
+          .replace(/platform modules/gi, 'Tools')
+          .replace(/module state mix/gi, 'Tool mix');
+      }
     });
   }
 
@@ -355,27 +367,18 @@
     btn.addEventListener('click', () => {
       open('tools');
       setTimeout(() => {
-        const shell = document.getElementById('eaAnalyticsTabs');
-        if (!shell) return;
-        shell.querySelectorAll('[data-ea-tab]').forEach((tab) => {
-          const isTarget = tab.getAttribute('data-ea-tab') === 'eaAnalyticsTabReview';
-          tab.classList.toggle('active', isTarget);
-        });
-        shell.querySelectorAll('.ea-tab-panel').forEach((panel) => {
-          panel.classList.toggle('active', panel.id === 'eaAnalyticsTabReview');
-        });
-        document.getElementById('eaReviewCenterAnchor')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      }, 160);
+        document.getElementById('eaReviewSurface')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, 180);
     });
   }
 
-  function applyOperatorLock(){
-    if (document.body.dataset.eaOperatorLockD === 'true') return;
+  function applyOperatorShell(){
+    if (document.body.dataset.eaOperatorShellE === 'true') return;
     ensureStyle();
     compressGlobalCopy();
     createReviewNavIfMissing();
-    hardRemovePersonalLeakage();
-    document.body.dataset.eaOperatorLockD = 'true';
+    lockPersonalView();
+    document.body.dataset.eaOperatorShellE = 'true';
   }
 
   function getListings(){
@@ -438,7 +441,7 @@
   }
 
   function postCard(item){
-    const badge = !item.price_resolved ? 'Price Pending' : item.likelySold ? 'Likely Sold' : item.price_review ? 'Price Watch' : item.stale ? 'Needs Refresh' : 'Active';
+    const badge = !item.price_resolved ? 'Price Pending' : item.likely_sold ? 'Likely Sold' : item.price_review ? 'Price Watch' : item.stale ? 'Needs Refresh' : 'Active';
     const badgeClass = !item.price_resolved ? 'estimated' : item.likely_sold ? 'critical' : (item.price_review ? 'tracked' : (item.stale ? 'estimated' : 'synced'));
     return `
       <div class="ea-post-card">
@@ -459,7 +462,7 @@
           </div>
           <div class="ea-review-reason">${item.recommended_action}${item.pricing_insight ? `<br><br><em>${item.pricing_insight}</em>` : ''}</div>
           <div class="ea-post-actions">
-            <button class="action-btn" type="button" data-ea-tab-open="eaAnalyticsTabReview">Review</button>
+            <button class="action-btn" type="button" data-ea-scroll-review="true">Review</button>
             <button class="action-btn" type="button" data-ea-source="${item.source_url}">Open Source</button>
           </div>
         </div>
@@ -505,11 +508,6 @@
     }</div></div>`;
   }
 
-  function activateTab(root, targetId){
-    root.querySelectorAll('[data-ea-tab]').forEach((node) => node.classList.toggle('active', node.getAttribute('data-ea-tab') === targetId));
-    root.querySelectorAll('.ea-tab-panel').forEach((panel) => panel.classList.toggle('active', panel.id === targetId));
-  }
-
   function bindButtons(root){
     root.querySelectorAll('[data-ea-open]').forEach((btn) => {
       if (btn.dataset.boundEaOpen === 'true') return;
@@ -524,15 +522,12 @@
         if (url) window.open(url, '_blank', 'noopener,noreferrer');
       });
     });
-    root.querySelectorAll('[data-ea-tab]').forEach((btn) => {
-      if (btn.dataset.boundEaTab === 'true') return;
-      btn.dataset.boundEaTab = 'true';
-      btn.addEventListener('click', () => activateTab(root, btn.getAttribute('data-ea-tab')));
-    });
-    root.querySelectorAll('[data-ea-tab-open]').forEach((btn) => {
-      if (btn.dataset.boundEaTabOpen === 'true') return;
-      btn.dataset.boundEaTabOpen = 'true';
-      btn.addEventListener('click', () => activateTab(root, btn.getAttribute('data-ea-tab-open')));
+    root.querySelectorAll('[data-ea-scroll-review]').forEach((btn) => {
+      if (btn.dataset.boundEaScrollReview === 'true') return;
+      btn.dataset.boundEaScrollReview = 'true';
+      btn.addEventListener('click', () => {
+        document.getElementById('eaReviewSurface')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      });
     });
   }
 
@@ -540,7 +535,7 @@
     const section = document.getElementById('tools');
     if (!section || !NS.state) return;
 
-    applyOperatorLock();
+    applyOperatorShell();
 
     const analytics = get('analytics', {}) || {};
     const tracking = analytics.tracking_summary || {};
@@ -557,52 +552,22 @@
       section.prepend(shell);
     }
 
-    let hero = document.getElementById('eaAnalyticsHero');
-    if (!hero) { hero = document.createElement('div'); hero.id='eaAnalyticsHero'; hero.className='ea-analytics-hero'; shell.appendChild(hero); }
-    hero.innerHTML = `<div class="ea-analytics-hero-grid">
-      <div class="ea-analytics-card">
-        <div class="module-group-label">Operator View</div>
-        <h2 class="ea-a-title">Your posts, your review queue, and the next actions — without manager or dealership noise.</h2>
-        <div class="ea-a-copy">Bundle D hard-locks the personal surface and pushes Review Center closer to a primary destination.</div>
-      </div>
-      <div class="ea-analytics-card"><div class="stat-label">Client Posts</div><div class="stat-value" style="font-size:24px">${listings.length}</div><div class="stat-sub">Visible now</div></div>
-      <div class="ea-analytics-card"><div class="stat-label">Review Queue</div><div class="stat-value" style="font-size:24px">${lists.needsAttention.length}</div><div class="stat-sub">Needs action</div></div>
-      <div class="ea-analytics-card"><div class="stat-label">Price Watch</div><div class="stat-value" style="font-size:24px">${lists.priceWatch.length}</div><div class="stat-sub">Review price</div></div>
-      <div class="ea-analytics-card"><div class="stat-label">Sync</div><div class="stat-value" style="font-size:24px">${tracking.sync_confidence || sync.confidence || 'local'}</div><div class="stat-sub">Current truth level</div></div>
-    </div>`;
-
-    let syncCard = document.getElementById('eaAnalyticsSync');
-    if (!syncCard) { syncCard = document.createElement('div'); syncCard.id='eaAnalyticsSync'; syncCard.className='ea-analytics-card'; shell.appendChild(syncCard); }
-    const confidenceClass = String(sync.confidence || '').toLowerCase().includes('sync') ? 'synced' : (String(sync.confidence || '').toLowerCase().includes('track') ? 'tracked' : 'estimated');
-    syncCard.innerHTML = `<div class="section-head">
-        <div>
-          <div class="module-group-label">Workspace</div>
-          <h2 style="margin-top:6px;">Client posts and review center</h2>
-          <div class="subtext">The main operating surface for individual users.</div>
-        </div>
-        <div class="ea-tabbar">
-          <button class="active" type="button" data-ea-tab="eaAnalyticsTabPosts">Client Posts</button>
-          <button type="button" data-ea-tab="eaAnalyticsTabReview">Review Center</button>
-          <button type="button" data-ea-tab="eaAnalyticsTabOverview">Analytics</button>
+    shell.innerHTML = `
+      <div id="eaAnalyticsHero" class="ea-analytics-hero">
+        <div class="ea-analytics-hero-grid">
+          <div class="ea-analytics-card">
+            <div class="module-group-label">Operator View</div>
+            <h2 class="ea-a-title">Your posts, your review queue, and the next actions — without manager or dealership noise.</h2>
+            <div class="ea-a-copy">Bundle E shifts Review Center into a more dedicated surface and keeps the personal view cleaner.</div>
+          </div>
+          <div class="ea-analytics-card"><div class="stat-label">Client Posts</div><div class="stat-value" style="font-size:24px">${listings.length}</div><div class="stat-sub">Visible now</div></div>
+          <div class="ea-analytics-card"><div class="stat-label">Review Queue</div><div class="stat-value" style="font-size:24px">${lists.needsAttention.length}</div><div class="stat-sub">Needs action</div></div>
+          <div class="ea-analytics-card"><div class="stat-label">Price Watch</div><div class="stat-value" style="font-size:24px">${lists.priceWatch.length}</div><div class="stat-sub">Review price</div></div>
+          <div class="ea-analytics-card"><div class="stat-label">Sync</div><div class="stat-value" style="font-size:24px">${tracking.sync_confidence || sync.confidence || 'local'}</div><div class="stat-sub">Current truth level</div></div>
         </div>
       </div>
-      <div class="ea-sync-grid" style="margin-bottom:12px;">
-        <div class="ea-analytics-card"><div class="stat-label">Last Ingest</div><div class="ea-mini">${sync.last_ingest_at || 'Not synced yet.'}</div></div>
-        <div class="ea-analytics-card"><div class="stat-label">Last Reconcile</div><div class="ea-mini">${sync.last_reconcile_at || 'Not reconciled yet.'}</div></div>
-        <div class="ea-analytics-card"><div class="stat-label">Issues</div><div class="ea-mini">${(sync.issues || []).length ? (sync.issues || []).join('<br>') : 'No active sync issues reported.'}</div></div>
-      </div>
-      <div style="display:flex;gap:8px;flex-wrap:wrap;">
-        <span class="ea-pill ${confidenceClass}">${sync.confidence || 'local'}</span>
-        <span class="ea-pill tracked">seen ${tracking.listing_seen_events || 0}</span>
-        <span class="ea-pill tracked">views ${tracking.view_update_events || 0}</span>
-        <span class="ea-pill tracked">msgs ${tracking.message_update_events || 0}</span>
-        <span class="ea-pill tracked">price ${tracking.price_changed_events || 0}</span>
-      </div>`;
 
-    let tabs = document.getElementById('eaAnalyticsTabs');
-    if (!tabs) { tabs = document.createElement('div'); tabs.id='eaAnalyticsTabs'; tabs.className='ea-analytics-card'; shell.appendChild(tabs); }
-    tabs.innerHTML = `
-      <div id="eaAnalyticsTabPosts" class="ea-tab-panel active">
+      <div id="eaAnalyticsWorkspace" class="ea-analytics-card">
         <div class="section-head">
           <div>
             <div class="module-group-label">Client Posts</div>
@@ -610,7 +575,7 @@
             <div class="subtext">The fastest way to scan what is live and what needs review.</div>
           </div>
           <div style="display:flex;gap:8px;flex-wrap:wrap;">
-            <button class="action-btn" type="button" data-ea-tab-open="eaAnalyticsTabReview">Review Center</button>
+            <button class="action-btn" type="button" data-ea-scroll-review="true">Review Center</button>
             <button class="action-btn" type="button" data-ea-open="overview" data-ea-focus="listingSearchInput">Overview</button>
           </div>
         </div>
@@ -619,25 +584,25 @@
         </div>
       </div>
 
-      <div id="eaAnalyticsTabReview" class="ea-tab-panel">
-        <div id="eaReviewCenterAnchor" class="section-head">
-          <div>
-            <div class="module-group-label">Review Center</div>
-            <h2 style="margin-top:6px;">Sold, stale, and price review</h2>
-            <div class="subtext">Make the decision, persist it, move on.</div>
+      <div id="eaReviewSurface" class="ea-review-surface">
+        <div class="ea-analytics-card">
+          <div class="section-head">
+            <div>
+              <div class="module-group-label">Review Center</div>
+              <h2 style="margin-top:6px;">Dedicated review surface</h2>
+              <div class="subtext">Make the decision, persist it, move on.</div>
+            </div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;">
+              <button class="action-btn" type="button" data-ea-open="overview" data-ea-focus="listingSearchInput">Overview</button>
+              <button class="action-btn" type="button" data-ea-open="tools" data-ea-focus="">Top</button>
+            </div>
           </div>
-          <div style="display:flex;gap:8px;flex-wrap:wrap;">
-            <button class="action-btn" type="button" data-ea-tab-open="eaAnalyticsTabPosts">Client Posts</button>
-            <button class="action-btn" type="button" data-ea-open="overview" data-ea-focus="listingSearchInput">Overview</button>
+          <div class="ea-review-kpis">
+            <div class="ea-review-kpi"><span>Needs Action</span><strong>${lists.needsAttention.length}</strong></div>
+            <div class="ea-review-kpi"><span>Price Watch</span><strong>${lists.priceWatch.length}</strong></div>
+            <div class="ea-review-kpi"><span>Sold / Stale</span><strong>${lists.soldStale.length}</strong></div>
+            <div class="ea-review-kpi"><span>Healthy</span><strong>${lists.healthy.length}</strong></div>
           </div>
-        </div>
-        <div class="ea-review-kpis">
-          <div class="ea-review-kpi"><span>Needs Action</span><strong>${lists.needsAttention.length}</strong></div>
-          <div class="ea-review-kpi"><span>Price Watch</span><strong>${lists.priceWatch.length}</strong></div>
-          <div class="ea-review-kpi"><span>Sold / Stale</span><strong>${lists.soldStale.length}</strong></div>
-          <div class="ea-review-kpi"><span>Healthy</span><strong>${lists.healthy.length}</strong></div>
-        </div>
-        <div class="ea-review-center-shell">
           <div class="ea-review-columns">
             <div class="ea-review-col">
               <div class="ea-review-col-head"><h3>Needs Action</h3><span class="ea-pill neutral">${lists.needsAttention.length}</span></div>
@@ -655,7 +620,7 @@
         </div>
       </div>
 
-      <div id="eaAnalyticsTabOverview" class="ea-tab-panel">
+      <div id="eaAnalyticsInsights" class="ea-analytics-card">
         <div class="section-head">
           <div>
             <div class="module-group-label">Analytics</div>
@@ -683,11 +648,10 @@
     `;
 
     bindButtons(shell);
-    activateTab(shell, 'eaAnalyticsTabPosts');
-    applyOperatorLock();
+    applyOperatorShell();
   }
 
-  NS.analytics = { renderBundleDAnalytics: render, applyOperatorLock };
+  NS.analytics = { renderBundleEAnalytics: render, applyOperatorShell };
   NS.modules = NS.modules || {};
   NS.modules.analytics = true;
 
