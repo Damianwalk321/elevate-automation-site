@@ -1,4 +1,3 @@
-
 export function clean(value) {
   return String(value || "").replace(/\s+/g, " ").trim();
 }
@@ -38,13 +37,42 @@ export function looksLikePrice(n) {
   return Number.isFinite(n) && n >= 500 && n <= 250000;
 }
 
+function scorePriceKey(key = "") {
+  const k = clean(key).toLowerCase();
+  if (!k) return 0;
+  let score = 0;
+  if (/^(price|list_price|sale_price|asking_price|vehicle_price|internet_price|our_price|advertised_price|current_price|final_price|selling_price|msrp)$/.test(k)) score += 100;
+  if (/price|msrp|sale|internet|asking|selling|advertised|cash/.test(k)) score += 25;
+  if (/mileage|kilometers|km|odometer|distance/.test(k)) score -= 100;
+  return score;
+}
+
+function collectNumericCandidates(row = {}) {
+  return Object.entries(row)
+    .map(([key, value]) => ({ key, value: safeNumber(value, 0), score: scorePriceKey(key) }))
+    .filter((item) => item.value > 0);
+}
+
+function pickBestAlternatePrice(row = {}, excludeKeys = [], mileageValue = 0) {
+  const excluded = new Set(excludeKeys.map((key) => clean(key).toLowerCase()));
+  const candidates = collectNumericCandidates(row)
+    .filter((item) => !excluded.has(clean(item.key).toLowerCase()))
+    .filter((item) => looksLikePrice(item.value))
+    .filter((item) => !mileageValue || item.value !== mileageValue)
+    .sort((a, b) => (b.score - a.score) || (b.value - a.value));
+
+  return candidates[0] || null;
+}
+
 export function extractCanonicalPriceMileage(row = {}) {
   const priceKeys = [
-    "price","list_price","sale_price","asking_price","vehicle_price","internet_price",
-    "our_price","advertised_price","current_price","final_price","selling_price","msrp"
+    "price", "list_price", "sale_price", "asking_price", "vehicle_price", "internet_price",
+    "our_price", "advertised_price", "current_price", "final_price", "selling_price", "msrp",
+    "display_price", "price_value", "price_amount", "dealer_price", "cash_price"
   ];
+
   const mileageKeys = [
-    "mileage","kilometers","km","odometer","odometer_value","distance","distance_km"
+    "mileage", "kilometers", "km", "odometer", "odometer_value", "distance", "distance_km"
   ];
 
   const rawPrice = firstPresent(row, priceKeys);
@@ -62,15 +90,11 @@ export function extractCanonicalPriceMileage(row = {}) {
 
   if (price && !looksLikePrice(price) && looksLikeMileage(price)) {
     warnings.push("price_looked_like_mileage");
-    for (const key of priceKeys) {
-      if (key === rawPrice.key) continue;
-      const candidate = safeNumber(row[key], 0);
-      if (looksLikePrice(candidate) && candidate !== mileage) {
-        price = candidate;
-        priceSource = key;
-        warnings.push("price_recovered_from_alt_field");
-        break;
-      }
+    const alt = pickBestAlternatePrice(row, [rawPrice.key, ...mileageKeys], mileage);
+    if (alt) {
+      price = alt.value;
+      priceSource = alt.key;
+      warnings.push("price_recovered_from_alt_field");
     }
   }
 
@@ -87,17 +111,31 @@ export function extractCanonicalPriceMileage(row = {}) {
   }
 
   if (price && mileage && price === mileage) {
-    price = 0;
-    warnings.push("price_zeroed_due_to_duplicate_mileage");
-    for (const key of priceKeys) {
-      const candidate = safeNumber(row[key], 0);
-      if (looksLikePrice(candidate) && candidate !== mileage) {
-        price = candidate;
-        priceSource = key;
-        warnings.push("price_recovered_after_zero");
-        break;
-      }
+    const alt = pickBestAlternatePrice(row, [priceSource, ...mileageKeys], mileage);
+    if (alt) {
+      price = alt.value;
+      priceSource = alt.key;
+      warnings.push("price_recovered_after_duplicate_match");
+    } else {
+      price = 0;
+      warnings.push("price_unresolved_due_to_duplicate_mileage");
     }
+  }
+
+  if (price && !looksLikePrice(price)) {
+    const alt = pickBestAlternatePrice(row, [priceSource, ...mileageKeys], mileage);
+    if (alt) {
+      price = alt.value;
+      priceSource = alt.key;
+      warnings.push("price_recovered_after_invalid_range");
+    } else {
+      price = 0;
+      warnings.push("price_unresolved_invalid_range");
+    }
+  }
+
+  if (!price) {
+    warnings.push("price_unresolved_missing");
   }
 
   return {
