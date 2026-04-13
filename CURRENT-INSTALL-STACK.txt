@@ -1,0 +1,18 @@
+CURRENT INSTALL STACK
+
+Website / Dashboard:
+- Phase J
+- Phase K
+- Phase L
+- Phase M
+
+Extension:
+- Phase N
+- Phase O
+
+Backend:
+- Phase I
+
+Meaning:
+You are already very close.
+What remains is mostly exact embedding, validation, and cleanup.
