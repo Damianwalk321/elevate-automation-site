@@ -27,7 +27,9 @@ function storeReferralData(code, source = "direct") {
 
   try {
     const existing = normalizeReferralCode(localStorage.getItem("elevate_referral_code"));
-    if (existing && existing !== normalizedCode) return;
+    if (existing && existing !== normalizedCode) {
+      return;
+    }
     localStorage.setItem("elevate_referral_code", normalizedCode);
     localStorage.setItem("elevate_referral_source", normalizeReferralCode(source) || "direct");
   } catch (error) {
@@ -35,7 +37,7 @@ function storeReferralData(code, source = "direct") {
   }
 }
 
-function showReferralBanner(refCode) {
+function showReferralBanner(refCode, source = "direct") {
   const banner = document.getElementById("referral-banner");
   const display = document.getElementById("referral-code-display");
 
@@ -43,6 +45,8 @@ function showReferralBanner(refCode) {
 
   display.textContent = refCode;
   banner.classList.remove("hidden");
+
+  storeReferralData(refCode, source);
 }
 
 function loadStoredReferralCode() {
@@ -57,27 +61,28 @@ function loadStoredReferralCode() {
   if (queryRef) {
     storeReferralData(queryRef, stored.code ? stored.source : "link");
     const locked = getStoredReferralData();
-    showReferralBanner(locked.code);
+    showReferralBanner(locked.code, locked.source);
     return locked.code;
   }
 
   if (stored.code) {
-    showReferralBanner(stored.code);
+    showReferralBanner(stored.code, stored.source);
     return stored.code;
   }
 
   return null;
 }
 
-function showCheckoutMessage(message, isError = false) {
+function showCheckoutMessage(message, variant = "") {
   const el = document.getElementById("checkout-message");
   if (!el) return;
 
   el.textContent = message;
-  el.classList.remove("hidden");
-  el.style.color = isError ? "#ffb3b3" : "";
-  el.style.borderColor = isError ? "rgba(255,92,92,0.22)" : "";
-  el.style.background = isError ? "rgba(255,92,92,0.08)" : "";
+  el.classList.remove("hidden", "success", "cancelled");
+
+  if (variant) {
+    el.classList.add(variant);
+  }
 }
 
 async function getLoggedInUserEmail() {
@@ -113,14 +118,41 @@ async function getAuthAccessTokenForCheckout() {
   return "";
 }
 
+function normalizePlanPayload(planType, userType, accessType) {
+  const plan = String(planType || "").trim().toLowerCase();
+
+  if (plan === "starter") {
+    return {
+      planType: "starter",
+      userType: "starter",
+      accessType: "starter"
+    };
+  }
+
+  if (plan === "pro") {
+    return {
+      planType: "pro",
+      userType: "pro",
+      accessType: "pro"
+    };
+  }
+
+  return {
+    planType: planType || "starter",
+    userType: userType || "starter",
+    accessType: accessType || "starter"
+  };
+}
+
 async function startCheckout(planType, userType, accessType) {
   try {
     const email = await getLoggedInUserEmail();
     const referralCode = loadStoredReferralCode();
     const referralSource = getStoredReferralData().source;
+    const normalized = normalizePlanPayload(planType, userType, accessType);
 
     if (!email) {
-      showCheckoutMessage("Please create an account or log in before checkout.", true);
+      showCheckoutMessage("Please create an account or log in before starting your free trial.");
       window.location.href = "/login.html";
       return;
     }
@@ -139,13 +171,13 @@ async function startCheckout(planType, userType, accessType) {
         email,
         referralCode,
         referralSource,
-        planType,
-        userType,
-        accessType
+        planType: normalized.planType,
+        userType: normalized.userType,
+        accessType: normalized.accessType
       })
     });
 
-    const data = await response.json();
+    const data = await response.json().catch(() => ({}));
 
     if (!response.ok) {
       throw new Error(data.error || "Checkout session could not be created.");
@@ -159,7 +191,7 @@ async function startCheckout(planType, userType, accessType) {
     throw new Error("Checkout URL missing.");
   } catch (error) {
     console.error("Checkout error:", error);
-    showCheckoutMessage(error.message || "Could not start checkout.", true);
+    showCheckoutMessage(error.message || "Could not start checkout.");
   }
 }
 
@@ -169,20 +201,11 @@ function bindCheckoutButtons() {
 
   buttons.forEach((button) => {
     button.addEventListener("click", async () => {
-      const planType = button.dataset.planType || "";
-      const userType = button.dataset.userType || "";
-      const accessType = button.dataset.accessType || "";
-      await startCheckout(planType, userType, accessType);
-    });
-  });
-}
+      const planType = button.dataset.planType || "starter";
+      const userType = button.dataset.userType || planType;
+      const accessType = button.dataset.accessType || planType;
 
-function bindStaticPartnerActions() {
-  const betaAccessButtons = document.querySelectorAll("[data-beta-access]");
-  betaAccessButtons.forEach((button) => {
-    button.addEventListener("click", async () => {
-      const email = await getLoggedInUserEmail();
-      window.location.href = email ? "/dashboard.html" : "/signup.html";
+      await startCheckout(planType, userType, accessType);
     });
   });
 }
@@ -190,5 +213,4 @@ function bindStaticPartnerActions() {
 document.addEventListener("DOMContentLoaded", async () => {
   loadStoredReferralCode();
   bindCheckoutButtons();
-  bindStaticPartnerActions();
 });
