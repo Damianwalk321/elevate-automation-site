@@ -1,14 +1,31 @@
-const SUPABASE_URL = "https://teixblbxkoershwgqpym.supabase.co";
-const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRlaXhibGJ4a29lcnNod2dxcHltIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMwODUzMDMsImV4cCI6MjA4ODY2MTMwM30.wxt9zjKhsBuflaFZZT9awZiwckRzYkEl-OLm_4q8qF4";
+function getElevateSupabaseConfig() {
+  const config = window.__ELEVATE_SUPABASE_CONFIG || null;
+  const url = config?.url || window.__ELEVATE_SUPABASE_URL || "";
+  const apiKey =
+    config?.publishableKey ||
+    window.__ELEVATE_SUPABASE_PUBLISHABLE_KEY ||
+    window.__ELEVATE_SUPABASE_ANON_KEY ||
+    "";
+
+  if (!url || !apiKey) {
+    throw new Error(
+      "Elevate Supabase config is unavailable. Ensure /js/supabase-client.js is loaded before beta.js."
+    );
+  }
+
+  return { url, apiKey };
+}
 
 async function insertIntoSupabase(table, payload) {
-  const response = await fetch(`${SUPABASE_URL}/rest/v1/${table}`, {
+  const { url, apiKey } = getElevateSupabaseConfig();
+
+  const response = await fetch(`${url}/rest/v1/${table}`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      "apikey": SUPABASE_ANON_KEY,
-      "Authorization": `Bearer ${SUPABASE_ANON_KEY}`,
-      "Prefer": "return=minimal"
+      apikey: apiKey,
+      Authorization: `Bearer ${apiKey}`,
+      Prefer: "return=minimal"
     },
     body: JSON.stringify(payload)
   });
@@ -72,7 +89,9 @@ document.addEventListener("DOMContentLoaded", function () {
       console.error("Beta feedback error:", error);
       if (statusBox) {
         statusBox.className = "feedback-status error";
-        statusBox.textContent = "There was an issue submitting your feedback. Please try again.";
+        statusBox.textContent =
+          error?.message ||
+          "There was an issue submitting your feedback. Please try again.";
       }
     } finally {
       resetButton(submitButton);
