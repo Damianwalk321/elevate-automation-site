@@ -1,7 +1,7 @@
 
 import { createClient } from "@supabase/supabase-js";
 import { randomUUID } from "node:crypto";
-import { getVerifiedRequestUser, getTrustedIdentity, isDashboardClient } from "./_shared/auth.js";
+import { getVerifiedRequestUser, getTrustedIdentity, requireVerifiedDashboardUser, isDashboardClient } from "./_shared/auth.js";
 import {
   clean,
   normalizeEmail,
@@ -214,15 +214,22 @@ export default async function handler(req, res) {
   if (req.method !== "GET") return res.status(405).json({ error: "Method not allowed", request_id: requestId });
 
   try {
-    const verifiedUser = await getVerifiedRequestUser(req);
-    const trusted = getTrustedIdentity({ verifiedUser, body: req.body || {}, query: req.query || {} });
     const dashboardClient = isDashboardClient(req);
+    const verifiedUser = dashboardClient
+      ? await requireVerifiedDashboardUser(req, res)
+      : await getVerifiedRequestUser(req);
+
+    if (dashboardClient && !verifiedUser) {
+      return;
+    }
+
+    const trusted = getTrustedIdentity({ verifiedUser, body: req.body || {}, query: req.query || {} });
 
     const userId = clean(trusted.id || req.query?.userId || req.query?.user_id || "");
     const email = normalizeEmail(trusted.email || req.query?.email || "");
 
-    if (dashboardClient && !verifiedUser && !(userId || email)) {
-      return res.status(401).json({ error: "Unauthorized", requires_auth: true, request_id: requestId });
+    if (!userId && !email) {
+      return res.status(400).json({ error: "No identity provided", request_id: requestId });
     }
 
     const status = clean(req.query?.status || "").toLowerCase();
@@ -260,7 +267,7 @@ export default async function handler(req, res) {
         total: rows.length,
         unresolved_price_count: rows.filter((row) => !row.price_resolved).length,
         limit,
-        auth_mode: verifiedUser ? "verified_bearer" : (dashboardClient ? "dashboard_identity_fallback" : "query_identity"),
+        auth_mode: verifiedUser ? "verified_bearer" : "query_identity",
         sources: { user_listings: userRows.length, listings: legacyRows.length, merged: mergedMap.size }
       }
     });

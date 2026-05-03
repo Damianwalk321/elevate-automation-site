@@ -1,6 +1,5 @@
 import { supabase } from '../lib/supabase.js';
-
-const ACCESS_OVERRIDE_EMAILS = new Set(['damian044@icloud.com']);
+import { requireVerifiedUser } from './_shared/auth.js';
 
 function clean(value) {
   return String(value || '').trim();
@@ -13,12 +12,11 @@ function normalizeEmail(value) {
 const CORS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization, x-elevate-client',
 };
 
-function resolveActiveState(subscription = {}, forcedAccess = false) {
+function resolveActiveState(subscription = {}) {
   return Boolean(
-    forcedAccess ||
     subscription?.is_active ||
     subscription?.access_active ||
     subscription?.bridge_access ||
@@ -84,22 +82,13 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  let authUid = null;
-  let email = normalizeEmail(req.query.email);
-
-  const authHeader = req.headers.authorization || '';
-  if (authHeader.startsWith('Bearer ')) {
-    const token = authHeader.slice(7);
-    const { data: { user }, error } = await supabase.auth.getUser(token);
-    if (!error && user) {
-      authUid = user.id;
-      email = normalizeEmail(user.email);
-    }
+  const verifiedUser = await requireVerifiedUser(req, res);
+  if (!verifiedUser) {
+    return;
   }
 
-  if (!email && !authUid) {
-    return res.status(400).json({ error: 'No identity provided' });
-  }
+  const authUid = clean(verifiedUser.id || '');
+  const email = normalizeEmail(verifiedUser.email || '');
 
   try {
     const identity = await resolveIdentity(authUid, email);
@@ -179,11 +168,10 @@ export default async function handler(req, res) {
       usage = data || null;
     }
 
-    const forcedAccess = ACCESS_OVERRIDE_EMAILS.has(normalizedEmail);
-    const active = resolveActiveState(subscription || {}, forcedAccess);
-    const normalizedStatus = forcedAccess ? 'active' : clean(subscription?.subscription_status || 'none');
-    const normalizedPlan = forcedAccess ? 'Pro' : clean(subscription?.plan_type || 'Beta');
-    const postingLimit = forcedAccess ? 25 : Number(subscription?.daily_posting_limit || 5);
+    const active = resolveActiveState(subscription || {});
+    const normalizedStatus = clean(subscription?.subscription_status || 'none');
+    const normalizedPlan = clean(subscription?.plan_type || 'Beta');
+    const postingLimit = Number(subscription?.daily_posting_limit || 5);
     const postsToday = Number(usage?.posts_today ?? usage?.posts_used ?? usage?.used_today ?? 0) || 0;
     const postsRemaining = Math.max(0, postingLimit - postsToday);
     const canPost = active && postsToday < postingLimit;
@@ -201,7 +189,7 @@ export default async function handler(req, res) {
         scanner_type: clean(profile?.scanner_type || '')
       },
       identity: {
-        auth_user_id: clean(authUid || ''),
+        auth_user_id: authUid,
         internal_user_id: internalUserId,
         email: normalizedEmail,
         candidate_user_ids: candidateIds
@@ -211,25 +199,21 @@ export default async function handler(req, res) {
         normalized_status: normalizedStatus,
         plan: normalizedPlan,
         normalized_plan: normalizedPlan,
-
         active,
         isActive: active,
         access_granted: active,
         accessGranted: active,
         bridge_access: Boolean(subscription?.bridge_access || false),
-
         posting_limit: postingLimit,
         daily_posting_limit: postingLimit,
         daily_limit: postingLimit,
         dailyLimit: postingLimit,
-
         posts_today: postsToday,
         postsToday: postsToday,
         posts_remaining: postsRemaining,
         postsRemaining: postsRemaining,
         can_post: canPost,
         canPost: canPost,
-
         trial_end: subscription?.trial_end || null,
         current_period_end: subscription?.current_period_end || null,
         license_key: licenseKey,
