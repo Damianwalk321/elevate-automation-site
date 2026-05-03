@@ -4,14 +4,6 @@
 // Persists supported profile fields to Supabase and keeps newer UI-only fields in local storage
 
 (function () {
-  const SUPABASE_URL =
-    window.__ELEVATE_SUPABASE_URL ||
-    "https://teixblbxkoershwgqpym.supabase.co";
-
-  const SUPABASE_ANON_KEY =
-    window.__ELEVATE_SUPABASE_ANON_KEY ||
-    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRlaXhibGJ4a29lcnNod2dxcHltIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMwODUzMDMsImV4cCI6MjA4ODY2MTMwM30.wxt9zjKhsBuflaFZZT9awZiwckRzYkEl-OLm_4q8qF4";
-
   const els = {};
   let supabaseClient = null;
   let currentUser = null;
@@ -62,20 +54,12 @@
       return supabaseClient;
     }
 
-    if (!window.supabase || !window.supabase.createClient) {
-      throw new Error("Supabase CDN client is not loaded.");
+    if (typeof window.getElevateSupabaseClient === "function") {
+      supabaseClient = window.getElevateSupabaseClient();
+      return supabaseClient;
     }
 
-    supabaseClient = window.supabase.createClient(
-      SUPABASE_URL,
-      SUPABASE_ANON_KEY
-    );
-
-    window.supabaseClient = supabaseClient;
-    window.__ELEVATE_SUPABASE_URL = SUPABASE_URL;
-    window.__ELEVATE_SUPABASE_ANON_KEY = SUPABASE_ANON_KEY;
-
-    return supabaseClient;
+    throw new Error("Elevate Supabase client helper is not available. Ensure /js/supabase-client.js is loaded before profile.js.");
   }
 
   function escapeHtml(value) {
