@@ -7,6 +7,10 @@ function clean(value) {
   return String(value || "").trim();
 }
 
+function normalizeEmail(value) {
+  return clean(value).toLowerCase();
+}
+
 export function isDashboardClient(req) {
   return clean(req?.headers?.["x-elevate-client"] || req?.headers?.["X-ELEVATE-CLIENT"] || "").toLowerCase() === "dashboard";
 }
@@ -39,13 +43,23 @@ export async function requireVerifiedDashboardUser(req, res) {
   return verifiedUser;
 }
 
+export async function requireVerifiedUser(req, res) {
+  const verifiedUser = await getVerifiedRequestUser(req);
+  if (!verifiedUser) {
+    res.status(401).setHeader("Content-Type", "application/json");
+    res.send(JSON.stringify({ error: "Unauthorized", requires_auth: true }));
+    return null;
+  }
+  return verifiedUser;
+}
+
 export function getTrustedIdentity({ verifiedUser = null, body = {}, query = {} } = {}) {
   const bodyId = clean(body.id || body.user_id || body.auth_user_id || query.id || query.user_id);
-  const bodyEmail = clean(body.email || query.email).toLowerCase();
+  const bodyEmail = normalizeEmail(body.email || query.email);
   if (verifiedUser?.id || verifiedUser?.email) {
     return {
       id: clean(verifiedUser.id || bodyId),
-      email: clean(verifiedUser.email || bodyEmail).toLowerCase(),
+      email: normalizeEmail(verifiedUser.email || bodyEmail),
       verified: true
     };
   }
@@ -54,4 +68,10 @@ export function getTrustedIdentity({ verifiedUser = null, body = {}, query = {} 
     email: bodyEmail,
     verified: false
   };
+}
+
+export function requireTrustedIdentity({ verifiedUser = null, body = {}, query = {} } = {}) {
+  const trusted = getTrustedIdentity({ verifiedUser, body, query });
+  if (!trusted.verified) return null;
+  return trusted;
 }
