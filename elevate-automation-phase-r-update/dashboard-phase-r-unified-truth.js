@@ -62,6 +62,7 @@
     const planAccess = summary.plan_access || {};
     const setup = summary.setup_status || {};
     const profile = summary.profile_snapshot || {};
+    const diagnostics = summary.diagnostics || {};
     const canonicalProfileTable = clean(summary.canonical_profile_table || "profiles");
     const canonicalListingsTable = clean(summary.canonical_listings_table || "user_listings");
     const legacyListingsTables = Array.isArray(summary.legacy_listings_tables) ? summary.legacy_listings_tables : [];
@@ -101,6 +102,9 @@
     return {
       source: "phase_r_dashboard_unified_truth",
       synced_at: new Date().toISOString(),
+      last_sync_at: diagnostics.timestamp || new Date().toISOString(),
+      last_sync_request_id: clean(diagnostics.request_id || ""),
+      last_sync_source: clean(diagnostics.summary_source || diagnostics.endpoint || "api/get-dashboard-summary-canonical"),
       email: clean(account.email || ""),
       user_id: clean(account.user_id || ""),
       identity_source: clean(summary.identity_source || ""),
