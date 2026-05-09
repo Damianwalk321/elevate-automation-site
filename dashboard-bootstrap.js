@@ -4,6 +4,8 @@
 
   const RETRY_TIMEOUT_MS = 12000;
   const POLL_MS = 350;
+  const AUTH_SETTLE_MS = 2200;
+  const REQUIRED_FAILED_AUTH_TICKS = 2;
 
   function qs(selector, root = document) {
     return root.querySelector(selector);
@@ -16,6 +18,7 @@
   function ensureBootstrapState() {
     NS.bootstrapState = NS.bootstrapState && typeof NS.bootstrapState === "object" ? NS.bootstrapState : {};
     if (!Array.isArray(NS.bootstrapState.stages)) NS.bootstrapState.stages = [];
+    NS.bootstrapState.failedAuthTicks = Number(NS.bootstrapState.failedAuthTicks || 0);
     return NS.bootstrapState;
   }
 
@@ -64,6 +67,16 @@
     }
   }
 
+  function hasVisibleAuthenticatedUser() {
+    const userEmailText = clean(qs(".user-email")?.textContent || "");
+    const loggedInBanner = clean(document.body?.textContent?.includes("LOGGED IN") ? "LOGGED IN" : "");
+    return Boolean(
+      window.currentUser?.id ||
+      (userEmailText && !/loading/i.test(userEmailText)) ||
+      loggedInBanner
+    );
+  }
+
   function getIndicators() {
     const userEmailText = clean(qs(".user-email")?.textContent || "");
     const welcomeText = clean(document.getElementById("welcomeText")?.textContent || "");
@@ -80,6 +93,7 @@
       activeSectionVisible
     );
     const shellLoading = /loading/i.test(userEmailText) || /loading workspace|loading operator/i.test(welcomeText);
+    const authSettled = Boolean(NS.authSettled || canonicalTruth?.auth_settled || canonicalTruth?.truth_ready);
 
     return {
       hasUser,
@@ -89,7 +103,9 @@
       listingsReady,
       activeSectionVisible,
       visibleDashboardContent,
-      shellLoading
+      shellLoading,
+      authSettled,
+      hasVisibleAuthenticatedUser: hasVisibleAuthenticatedUser()
     };
   }
 
@@ -115,6 +131,8 @@
     const state = ensureBootstrapState();
     state.ready = true;
     state.readyAt = new Date().toISOString();
+    state.authSettled = true;
+    NS.authSettled = true;
 
     const bootStatus = document.getElementById("bootStatus");
     if (bootStatus) bootStatus.textContent = "";
@@ -129,7 +147,7 @@
   }
 
   function startWatch() {
-    ensureBootstrapState();
+    const state = ensureBootstrapState();
     setWorkspaceState("false");
     NS.phase2render?.prepare?.();
     pushStage("Bootstrap", "Watching startup silently in production mode.");
@@ -139,9 +157,17 @@
 
     const tick = () => {
       const indicators = getIndicators();
+      const elapsed = Date.now() - startedAt;
       const stageText = waitingStage(indicators);
-      ensureBootstrapState().waitingStage = stageText;
-      setBootStatus(stageText);
+      state.waitingStage = stageText;
+      state.authSettling = elapsed < AUTH_SETTLE_MS && !indicators.authSettled;
+      setBootStatus(state.authSettling ? `${stageText} • settling auth...` : stageText);
+
+      if (indicators.hasCanonicalTruth || indicators.hasSession || indicators.hasVisibleAuthenticatedUser) {
+        state.failedAuthTicks = 0;
+      } else if (!state.authSettling) {
+        state.failedAuthTicks += 1;
+      }
 
       if (indicators.hasUser && !indicators.hasSummary) {
         setFriendlyStatus("Loading your workspace data...");
@@ -172,6 +198,17 @@
         finalizeReady("Workspace ready.");
         clearInterval(intervalId);
         return;
+      }
+
+      if (
+        !state.authSettling &&
+        state.failedAuthTicks >= REQUIRED_FAILED_AUTH_TICKS &&
+        !indicators.hasCanonicalTruth &&
+        !indicators.hasVisibleAuthenticatedUser
+      ) {
+        pushStage("Auth", "Stable unauthenticated state detected.");
+        state.authSettled = true;
+        NS.authSettled = true;
       }
 
       if (Date.now() - startedAt > RETRY_TIMEOUT_MS) {
