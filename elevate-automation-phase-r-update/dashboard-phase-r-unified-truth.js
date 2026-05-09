@@ -21,6 +21,8 @@
     "elevate.posting_gate_truth.v1",
     "elevate.session_bridge_truth.v1"
   ];
+  let startupSyncPromise = null;
+  let startupSyncCompleted = false;
 
   function clean(value) {
     return String(value || "").replace(/\s+/g, " ").trim();
@@ -105,6 +107,8 @@
       last_sync_at: diagnostics.timestamp || new Date().toISOString(),
       last_sync_request_id: clean(diagnostics.request_id || ""),
       last_sync_source: clean(diagnostics.summary_source || diagnostics.endpoint || "api/get-dashboard-summary-canonical"),
+      auth_settled: true,
+      truth_ready: true,
       email: clean(account.email || ""),
       user_id: clean(account.user_id || ""),
       identity_source: clean(summary.identity_source || ""),
@@ -140,6 +144,8 @@
 
   function publishTruth(truth) {
     NS.accountTruth = truth;
+    NS.authSettled = true;
+    NS.truthReady = true;
     try {
       NS.state?.set?.("accountTruth", truth, { silent: true });
     } catch {}
@@ -192,18 +198,37 @@
     }
   }
 
-  async function syncTruth() {
-    const response = await apiFetch("/api/get-dashboard-summary-canonical");
-    const data = await parseJson(response);
-    if (!response.ok || !data?.data) {
-      throw new Error(data?.error || "Failed to load dashboard summary");
+  async function syncTruth({ startup = false } = {}) {
+    if (startup && startupSyncCompleted && NS.accountTruth?.truth_ready) {
+      return NS.accountTruth;
+    }
+    if (startup && startupSyncPromise) {
+      return startupSyncPromise;
     }
 
-    const truth = buildTruth(data.data);
-    persistTruth(truth);
-    publishTruth(truth);
-    applyTruth(truth);
-    return truth;
+    const runner = (async () => {
+      const response = await apiFetch("/api/get-dashboard-summary-canonical");
+      const data = await parseJson(response);
+      if (!response.ok || !data?.data) {
+        throw new Error(data?.error || "Failed to load dashboard summary");
+      }
+
+      const truth = buildTruth(data.data);
+      persistTruth(truth);
+      publishTruth(truth);
+      applyTruth(truth);
+      startupSyncCompleted = true;
+      return truth;
+    })();
+
+    if (startup) {
+      startupSyncPromise = runner.finally(() => {
+        startupSyncPromise = null;
+      });
+      return startupSyncPromise;
+    }
+
+    return runner;
   }
 
   function bindRefreshHooks() {
@@ -212,15 +237,15 @@
       if (!btn || btn.dataset.phaseRBound === "true") return;
       btn.dataset.phaseRBound = "true";
       btn.addEventListener("click", () => {
-        setTimeout(() => { syncTruth().catch(console.error); }, 400);
-        setTimeout(() => { syncTruth().catch(console.error); }, 1600);
+        setTimeout(() => { syncTruth({ startup: false }).catch(console.error); }, 400);
+        setTimeout(() => { syncTruth({ startup: false }).catch(console.error); }, 1600);
       });
     });
   }
 
   function run() {
     bindRefreshHooks();
-    syncTruth().catch((error) => console.error("[Phase R] dashboard truth sync failed:", error));
+    syncTruth({ startup: true }).catch((error) => console.error("[Phase R] dashboard truth sync failed:", error));
   }
 
   if (document.readyState === "loading") {
@@ -229,6 +254,10 @@
     run();
   }
 
-  setTimeout(run, 1200);
-  setTimeout(run, 3200);
+  setTimeout(() => {
+    if (!startupSyncCompleted) syncTruth({ startup: true }).catch(console.error);
+  }, 1200);
+  setTimeout(() => {
+    if (!startupSyncCompleted) syncTruth({ startup: true }).catch(console.error);
+  }, 3200);
 })();
