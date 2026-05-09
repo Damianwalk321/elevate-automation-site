@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Elevate Automation | Operator Console for Automotive Sales</title>
-  <meta name="description" content="Elevate Automation helps automotive sales professionals scan inventory, post faster, manage listing workflow, and run cleaner operator control from one dashboard. Start a 7-day free trial until April 20. Starter $49/month. Pro $79/month." />
+  <meta name="description" content="Elevate Automation helps automotive sales professionals scan inventory, post faster, manage listing workflow, and run cleaner operator control from one dashboard. Start with a free trial. Starter and Pro plans available." />
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
@@ -36,7 +36,7 @@
       <div class="container hero-grid">
         <div class="hero-copy">
           <div class="eyebrow-row">
-            <div class="eyebrow">7-DAY FREE TRIAL ACTIVE NOW</div>
+            <div class="eyebrow" id="hero-offer-eyebrow">7-DAY FREE TRIAL AVAILABLE</div>
             <div class="eyebrow-pill">Automotive Sales OS</div>
           </div>
 
@@ -45,7 +45,7 @@
           <p class="hero-text">
             Elevate Automation is built for automotive sales professionals who want a sharper way to run setup,
             inventory scanning, posting workflow, and live output visibility — without juggling disconnected tools.
-            Start free now through April 20, then continue on Starter or Pro depending on posting volume.
+            Start with a free trial, then continue on Starter or Pro depending on posting volume.
           </p>
 
           <div class="hero-actions">
@@ -54,9 +54,9 @@
           </div>
 
           <div class="hero-highlights">
-            <div class="highlight-card">7 days free until April 20</div>
-            <div class="highlight-card">Starter $49 • 5 posts/day</div>
-            <div class="highlight-card">Pro $79 • 25 posts/day</div>
+            <div class="highlight-card" id="hero-highlight-trial">7-day free trial</div>
+            <div class="highlight-card" id="hero-highlight-starter">Starter $49 • 5 posts/day</div>
+            <div class="highlight-card" id="hero-highlight-pro">Pro $79 • 25 posts/day</div>
           </div>
 
           <div class="hero-kpi-strip">
@@ -86,9 +86,9 @@
             <div class="panel-top">
               <div>
                 <div class="panel-label">CURRENT OFFER</div>
-                <h2>Free Trial + Live Plans</h2>
+                <h2 id="offer-panel-title">Free Trial + Live Plans</h2>
               </div>
-              <div class="status-pill">Trial Active</div>
+              <div class="status-pill" id="offer-status-pill">Trial Available</div>
             </div>
 
             <div class="panel-grid">
@@ -105,10 +105,10 @@
               <div class="panel-card">
                 <h3>Billing Timeline</h3>
                 <ul>
-                  <li>Start free today</li>
-                  <li>Trial active through April 20</li>
-                  <li>Choose Starter or Pro after trial</li>
-                  <li>Monthly billing begins after trial</li>
+                  <li id="billing-line-1">Start free today</li>
+                  <li id="billing-line-2">Trial length depends on your current offer</li>
+                  <li id="billing-line-3">Choose Starter or Pro after trial</li>
+                  <li id="billing-line-4">Monthly billing begins after trial</li>
                 </ul>
               </div>
 
@@ -134,7 +134,7 @@
         <div class="urgency-band">
           <div class="urgency-item">
             <span>TRIAL WINDOW</span>
-            <strong>Start free now through April 20.</strong>
+            <strong id="urgency-trial-copy">Start with a free trial.</strong>
           </div>
           <div class="urgency-item">
             <span>WHAT HAPPENS NEXT</span>
@@ -397,9 +397,9 @@
       <div class="container">
         <div class="section-heading section-heading-tight pricing-heading">
           <div class="section-kicker">PRICING</div>
-          <h2>Start free now. Choose the right plan after trial.</h2>
-          <p>
-            New users can start with a 7-day free trial through April 20. After trial, choose Starter for individual posting volume or Pro for higher daily output and expanded operating capacity.
+          <h2 id="pricing-heading-title">Start free. Choose the right plan after trial.</h2>
+          <p id="pricing-heading-copy">
+            New users can start with a free trial. After trial, choose Starter for individual posting volume or Pro for higher daily output and expanded operating capacity.
           </p>
         </div>
 
@@ -412,41 +412,41 @@
         <div class="pricing-grid pricing-grid-refined">
           <div class="pricing-card pricing-card-featured">
             <div class="pricing-topline">
-              <div class="pricing-badge">Starter</div>
-              <div class="plan-cap">5 posts/day</div>
+              <div class="pricing-badge" id="starter-badge">Starter</div>
+              <div class="plan-cap" id="starter-cap">5 posts/day</div>
             </div>
-            <h3>Starter</h3>
-            <div class="price-line">$49<span>/month</span></div>
+            <h3 id="starter-title">Starter</h3>
+            <div class="price-line"><span id="starter-price">$49</span><span>/month</span></div>
             <p>Built for individual salespeople who need a cleaner, faster posting workflow without higher daily volume.</p>
             <ul>
-              <li>7-day free trial</li>
+              <li id="starter-trial-line">7-day free trial</li>
               <li>5 posts per day after trial</li>
               <li>Inventory Scanner access</li>
               <li>Operator Console dashboard</li>
               <li>Setup + compliance workflow</li>
               <li>Core posting controls</li>
             </ul>
-            <button class="btn btn-gold full-width checkout-btn" data-plan-type="starter" data-user-type="starter" data-access-type="starter">Start Starter Trial</button>
+            <button class="btn btn-gold full-width checkout-btn" data-plan-type="starter" data-user-type="starter" data-access-type="starter" id="starter-cta">Start Starter Trial</button>
             <p class="mini-note">No charge today. Billing starts after your free trial.</p>
           </div>
 
           <div class="pricing-card pricing-card-pro">
             <div class="pricing-topline">
-              <div class="pricing-badge">Pro</div>
-              <div class="plan-cap">25 posts/day</div>
+              <div class="pricing-badge" id="pro-badge">Pro</div>
+              <div class="plan-cap" id="pro-cap">25 posts/day</div>
             </div>
-            <h3>Pro</h3>
-            <div class="price-line">$79<span>/month</span></div>
+            <h3 id="pro-title">Pro</h3>
+            <div class="price-line"><span id="pro-price">$79</span><span>/month</span></div>
             <p>Built for higher-volume operators who need stronger daily output and more room to run inventory consistently.</p>
             <ul>
-              <li>7-day free trial</li>
+              <li id="pro-trial-line">7-day free trial</li>
               <li>25 posts per day after trial</li>
               <li>Everything in Starter</li>
               <li>Higher daily posting capacity</li>
               <li>Better fit for power users and team-level volume</li>
               <li>Expansion path into premium modules</li>
             </ul>
-            <button class="btn btn-outline full-width checkout-btn" data-plan-type="pro" data-user-type="pro" data-access-type="pro">Start Pro Trial</button>
+            <button class="btn btn-outline full-width checkout-btn" data-plan-type="pro" data-user-type="pro" data-access-type="pro" id="pro-cta">Start Pro Trial</button>
             <p class="mini-note">Best fit for higher-volume operators who want more daily capacity.</p>
           </div>
         </div>
@@ -504,7 +504,7 @@
           </details>
           <details class="faq-item">
             <summary>Do I get charged today?</summary>
-            <div class="faq-answer">No. The current offer is a 7-day free trial. You can test the live workflow first, then continue on the plan that matches your output needs.</div>
+            <div class="faq-answer" id="faq-trial-answer">No. Start with the current free trial offer, test the live workflow first, then continue on the plan that matches your output needs.</div>
           </details>
         </div>
       </div>
@@ -533,8 +533,8 @@
 
   <div class="mobile-sticky-cta">
     <div class="mobile-sticky-copy">
-      <strong>Start your 7-day free trial</strong>
-      <span>Starter $49 • Pro $79</span>
+      <strong id="mobile-cta-title">Start your free trial</strong>
+      <span id="mobile-cta-subtitle">Starter $49 • Pro $79</span>
     </div>
     <a href="#pricing" class="btn btn-gold">Start</a>
   </div>
