@@ -2,6 +2,10 @@
   const NS = (window.ElevateDashboard = window.ElevateDashboard || {});
   if (NS.modules?.phase3canonical) return;
 
+  let canonicalApplyInFlight = false;
+  let lastCanonicalDigest = "";
+  let bootInterval = null;
+
   function clean(value) {
     return String(value || "").replace(/\s+/g, " ").trim();
   }
@@ -166,30 +170,14 @@
     const email = clean(window.currentUser?.email || current?.user?.email || snapshot?.email).toLowerCase();
     const forceTesting = email === "damian044@icloud.com";
 
-    const plan = first(
-      sub.plan,
-      sub.normalized_plan,
-      planAccess.plan_label,
-      snapshot.plan,
-      "Founder Beta"
-    ) || "Founder Beta";
+    const plan = first(sub.plan, sub.normalized_plan, planAccess.plan_label, snapshot.plan, "Founder Beta") || "Founder Beta";
 
     const postingLimit = forceTesting
       ? Math.max(25, num(sub.posting_limit || sub.daily_posting_limit || planAccess.posting_limit || snapshot.posting_limit))
       : Math.max(num(sub.posting_limit || sub.daily_posting_limit), num(planAccess.posting_limit), num(snapshot.posting_limit));
 
-    const postsToday = Math.max(
-      num(sub.posts_today),
-      num(snapshot.posts_today ?? snapshot.posts_used_today),
-      num(summary?.posts_today)
-    );
-
-    const postsRemaining = Math.max(
-      num(sub.posts_remaining),
-      num(snapshot.posts_remaining),
-      Math.max(postingLimit - postsToday, 0)
-    );
-
+    const postsToday = Math.max(num(sub.posts_today), num(snapshot.posts_today ?? snapshot.posts_used_today), num(summary?.posts_today));
+    const postsRemaining = Math.max(num(sub.posts_remaining), num(snapshot.posts_remaining), Math.max(postingLimit - postsToday, 0));
     const rawStatus = first(sub.normalized_status, sub.status, snapshot.status, forceTesting ? "active" : "inactive");
     const active = Boolean(
       forceTesting ||
@@ -222,20 +210,8 @@
     const profileSnapshot = summary?.profile_snapshot || {};
     const accountSnapshot = summary?.account_snapshot || {};
 
-    const province = first(
-      currentProfile.province,
-      sessionProfile.province,
-      dealership.province,
-      profileSnapshot.province,
-      accountSnapshot.province
-    );
-
-    const complianceMode = first(
-      currentProfile.compliance_mode,
-      sessionProfile.compliance_mode,
-      profileSnapshot.compliance_mode,
-      province
-    );
+    const province = first(currentProfile.province, sessionProfile.province, dealership.province, profileSnapshot.province, accountSnapshot.province);
+    const complianceMode = first(currentProfile.compliance_mode, sessionProfile.compliance_mode, profileSnapshot.compliance_mode, province);
 
     return {
       full_name: first(currentProfile.full_name, sessionProfile.full_name, sessionProfile.salesperson_name, profileSnapshot.full_name, window.currentUser?.email),
@@ -330,16 +306,10 @@
       daily_limit: Math.max(num(existing.daily_limit), subscription.posting_limit),
       can_post: canonicalAccess.can_post,
       account_snapshot: accountSnapshot,
-      profile_snapshot: {
-        ...(existing.profile_snapshot || {}),
-        ...profile
-      },
+      profile_snapshot: { ...(existing.profile_snapshot || {}), ...profile },
       setup_status: setupStatus,
       canonical_access: canonicalAccess,
-      plan_access: {
-        ...(existing.plan_access || {}),
-        ...canonicalAccess
-      },
+      plan_access: { ...(existing.plan_access || {}), ...canonicalAccess },
       state_provenance: {
         posts_today: "canonical.subscription.posts_today",
         posts_remaining: "canonical.subscription.posts_remaining",
@@ -352,6 +322,24 @@
     };
 
     return { summary: next, subscription, profile };
+  }
+
+  function buildDigest(summary, subscription, profile) {
+    return JSON.stringify({
+      plan: clean(subscription.plan),
+      status: clean(subscription.status),
+      access: Boolean(subscription.active),
+      posting_limit: num(subscription.posting_limit),
+      posts_remaining: num(subscription.posts_remaining),
+      posts_today: num(subscription.posts_today),
+      email: clean(window.currentUser?.email || ""),
+      full_name: clean(profile.full_name),
+      dealership: clean(profile.dealership),
+      queue_count: num(summary.queue_count),
+      review_queue_count: num(summary.review_queue_count),
+      active_listings: num(summary.active_listings),
+      total_listings: num((window.dashboardListings || []).length)
+    });
   }
 
   function syncIntoState(summary, subscription, profile) {
@@ -370,39 +358,48 @@
     try { window.applyListingFiltersAndRender?.(); } catch {}
   }
 
-  function applyCanonicalTruth() {
-    const { summary, subscription, profile } = buildCanonicalSummary();
-    window.dashboardSummary = summary;
-    window.currentNormalizedSession = {
-      ...(window.currentNormalizedSession || {}),
-      subscription,
-      profile,
-      dealership: {
-        ...(window.currentNormalizedSession?.dealership || {}),
-        name: first(window.currentNormalizedSession?.dealership?.name, profile.dealership),
-        dealer_name: first(window.currentNormalizedSession?.dealership?.dealer_name, profile.dealership),
-        website: first(window.currentNormalizedSession?.dealership?.website, profile.dealer_website),
-        inventory_url: first(window.currentNormalizedSession?.dealership?.inventory_url, profile.inventory_url),
-        province: first(window.currentNormalizedSession?.dealership?.province, profile.province),
-        scanner_type: first(window.currentNormalizedSession?.dealership?.scanner_type, profile.scanner_type),
-        phone: first(window.currentNormalizedSession?.dealership?.phone, profile.dealer_phone),
-        email: first(window.currentNormalizedSession?.dealership?.email, profile.dealer_email)
+  function applyCanonicalTruth({ force = false } = {}) {
+    if (canonicalApplyInFlight && !force) return window.dashboardSummary || {};
+    canonicalApplyInFlight = true;
+    try {
+      const { summary, subscription, profile } = buildCanonicalSummary();
+      const digest = buildDigest(summary, subscription, profile);
+      if (!force && digest === lastCanonicalDigest) {
+        return summary;
       }
-    };
-    window.currentProfile = {
-      ...(window.currentProfile || {}),
-      ...profile
-    };
-    window.SYSTEM_STATE = window.SYSTEM_STATE || {};
-    window.SYSTEM_STATE.summary = summary;
-    window.SYSTEM_STATE.profile = profile;
-    window.SYSTEM_STATE.session = window.currentNormalizedSession;
-    window.SYSTEM_STATE.subscription = subscription;
-    window.SYSTEM_STATE.setup = summary.setup_status || {};
+      lastCanonicalDigest = digest;
 
-    syncIntoState(summary, subscription, profile);
-    rerender();
-    return summary;
+      window.dashboardSummary = summary;
+      window.currentNormalizedSession = {
+        ...(window.currentNormalizedSession || {}),
+        subscription,
+        profile,
+        dealership: {
+          ...(window.currentNormalizedSession?.dealership || {}),
+          name: first(window.currentNormalizedSession?.dealership?.name, profile.dealership),
+          dealer_name: first(window.currentNormalizedSession?.dealership?.dealer_name, profile.dealership),
+          website: first(window.currentNormalizedSession?.dealership?.website, profile.dealer_website),
+          inventory_url: first(window.currentNormalizedSession?.dealership?.inventory_url, profile.inventory_url),
+          province: first(window.currentNormalizedSession?.dealership?.province, profile.province),
+          scanner_type: first(window.currentNormalizedSession?.dealership?.scanner_type, profile.scanner_type),
+          phone: first(window.currentNormalizedSession?.dealership?.phone, profile.dealer_phone),
+          email: first(window.currentNormalizedSession?.dealership?.email, profile.dealer_email)
+        }
+      };
+      window.currentProfile = { ...(window.currentProfile || {}), ...profile };
+      window.SYSTEM_STATE = window.SYSTEM_STATE || {};
+      window.SYSTEM_STATE.summary = summary;
+      window.SYSTEM_STATE.profile = profile;
+      window.SYSTEM_STATE.session = window.currentNormalizedSession;
+      window.SYSTEM_STATE.subscription = subscription;
+      window.SYSTEM_STATE.setup = summary.setup_status || {};
+
+      syncIntoState(summary, subscription, profile);
+      rerender();
+      return summary;
+    } finally {
+      canonicalApplyInFlight = false;
+    }
   }
 
   function wrapFunction(name) {
@@ -423,18 +420,25 @@
     wrapFunction("loadAccountData");
   }
 
+  function stopBootInterval() {
+    if (bootInterval) {
+      clearInterval(bootInterval);
+      bootInterval = null;
+    }
+  }
+
   function boot() {
     installHooks();
     let ticks = 0;
-    const maxTicks = 18;
-    const interval = setInterval(() => {
+    const maxTicks = 6;
+    bootInterval = setInterval(() => {
       ticks += 1;
       try { applyCanonicalTruth(); } catch {}
-      if (ticks >= maxTicks) clearInterval(interval);
-    }, 450);
+      if (window.ElevateDashboard?.truthReady || ticks >= maxTicks) stopBootInterval();
+    }, 700);
 
     setTimeout(() => {
-      try { applyCanonicalTruth(); } catch {}
+      try { applyCanonicalTruth({ force: true }); } catch {}
     }, 0);
 
     window.addEventListener("elevate:sync-refreshed", () => {
@@ -442,6 +446,7 @@
     });
 
     NS.events?.addEventListener?.("state:set", () => {
+      if (window.ElevateDashboard?.truthReady) return;
       try { applyCanonicalTruth(); } catch {}
     });
   }
