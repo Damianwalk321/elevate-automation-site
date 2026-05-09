@@ -11,7 +11,7 @@ import {
 const CORS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type, Authorization, x-elevate-client',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization, x-elevate-client, x-request-id',
 };
 
 function clean(value) {
@@ -20,6 +20,27 @@ function clean(value) {
 
 function normalizeEmail(value) {
   return clean(value).toLowerCase();
+}
+
+function buildRequestId(req) {
+  return clean(req.headers['x-request-id'] || '') || `profile_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function buildDiagnostics({ req, requestId, identity, profile = null, phase = 'read', verifiedUser = null }) {
+  return {
+    request_id: requestId,
+    endpoint: 'api/profile',
+    phase,
+    method: req.method,
+    canonical_table: CANONICAL_PROFILE_TABLE,
+    identity_source: identity?.identity_source || 'unknown',
+    matched_by: identity?.matched_by || 'unknown',
+    matched_profile: Boolean(profile),
+    matched_profile_id: clean(profile?.id || ''),
+    resolved_email: normalizeEmail(profile?.email || identity?.email || verifiedUser?.email || ''),
+    verified_user_present: Boolean(verifiedUser?.id),
+    timestamp: new Date().toISOString(),
+  };
 }
 
 function pickAllowedUpdates(body = {}) {
@@ -39,7 +60,7 @@ function pickAllowedUpdates(body = {}) {
   return updates;
 }
 
-function buildProfileResponse({ verifiedUser = null, trustedIdentity = null, profile = null, requestedId = '', requestedEmail = '' } = {}) {
+function buildProfileResponse({ req, requestId, verifiedUser = null, trustedIdentity = null, profile = null, requestedId = '', requestedEmail = '', phase = 'read' } = {}) {
   const identity = canonicalIdentityMeta({
     verifiedUser,
     trustedIdentity,
@@ -61,6 +82,14 @@ function buildProfileResponse({ verifiedUser = null, trustedIdentity = null, pro
     identity_source: identity.identity_source,
     matched_by: identity.matched_by,
     setup_fields: canonicalProfile ? profileSetupFields(canonicalProfile) : null,
+    diagnostics: buildDiagnostics({
+      req,
+      requestId,
+      identity,
+      profile: canonicalProfile,
+      phase,
+      verifiedUser,
+    }),
   };
 }
 
@@ -72,8 +101,11 @@ export default async function handler(req, res) {
   Object.entries(CORS).forEach(([k, v]) => res.setHeader(k, v));
   res.setHeader('Content-Type', 'application/json');
 
+  const requestId = buildRequestId(req);
+  res.setHeader('x-request-id', requestId);
+
   if (req.method !== 'GET' && req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method not allowed' });
+    return res.status(405).json({ error: 'Method not allowed', diagnostics: { request_id: requestId, endpoint: 'api/profile', method: req.method } });
   }
 
   try {
@@ -101,7 +133,10 @@ export default async function handler(req, res) {
     });
 
     if (!identity.id && !identity.email) {
-      return res.status(400).json({ error: 'No identity provided' });
+      return res.status(400).json({
+        error: 'No identity provided',
+        diagnostics: buildDiagnostics({ req, requestId, identity, phase: 'missing_identity', verifiedUser })
+      });
     }
 
     if (req.method === 'GET') {
@@ -117,27 +152,40 @@ export default async function handler(req, res) {
 
       if (error) {
         console.error('[profile GET] Supabase error:', error.message);
-        return res.status(500).json({ error: error.message });
+        return res.status(500).json({
+          error: error.message,
+          diagnostics: buildDiagnostics({ req, requestId, identity, phase: 'read_error', verifiedUser })
+        });
       }
 
       return res.status(200).json(
         buildProfileResponse({
+          req,
+          requestId,
           verifiedUser,
           trustedIdentity: trusted,
           profile: data || null,
           requestedId,
           requestedEmail: identity.email,
+          phase: 'read'
         })
       );
     }
 
     const updates = pickAllowedUpdates(req.body || {});
     if (Object.keys(updates).length === 0) {
-      return res.status(400).json({ error: 'No valid fields to update' });
+      return res.status(400).json({
+        error: 'No valid fields to update',
+        diagnostics: buildDiagnostics({ req, requestId, identity, phase: 'no_updates', verifiedUser })
+      });
     }
 
     if (!identity.id) {
-      return res.status(401).json({ error: 'Unauthorized', requires_auth: true });
+      return res.status(401).json({
+        error: 'Unauthorized',
+        requires_auth: true,
+        diagnostics: buildDiagnostics({ req, requestId, identity, phase: 'missing_auth_id', verifiedUser })
+      });
     }
 
     updates.updated_at = new Date().toISOString();
@@ -156,22 +204,31 @@ export default async function handler(req, res) {
 
     if (error) {
       console.error('[profile POST] Supabase error:', error.message);
-      return res.status(500).json({ error: error.message });
+      return res.status(500).json({
+        error: error.message,
+        diagnostics: buildDiagnostics({ req, requestId, identity, phase: 'write_error', verifiedUser })
+      });
     }
 
     console.log(`[profile POST] Saved canonical profile for ${identity.email || identity.id} at ${data.updated_at}`);
     return res.status(200).json({
       success: true,
       ...buildProfileResponse({
+        req,
+        requestId,
         verifiedUser,
         trustedIdentity: trusted,
         profile: data,
         requestedId,
         requestedEmail: identity.email,
+        phase: 'write'
       })
     });
   } catch (error) {
     console.error('[profile] fatal error:', error.message);
-    return res.status(500).json({ error: error.message || 'Internal server error' });
+    return res.status(500).json({
+      error: error.message || 'Internal server error',
+      diagnostics: { request_id: requestId, endpoint: 'api/profile', phase: 'fatal', timestamp: new Date().toISOString() }
+    });
   }
 }
