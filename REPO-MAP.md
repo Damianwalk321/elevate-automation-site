@@ -14,7 +14,7 @@ These are the primary live surfaces that should be treated as authoritative befo
 ### API runtime
 - `api/` — deployed Vercel API surface
 - `api/_shared/` — shared server helpers
-- `_shared/` — shared account/access logic mirrored into API via re-export files
+- `_shared/` — shared account/access logic used by API endpoints
 
 ### Schema/runtime docs
 - `supabase/migrations/` — migration snapshots committed during stabilization bundles
@@ -26,12 +26,12 @@ These are the primary live surfaces that should be treated as authoritative befo
 - Bundle 4 — schema authority + RLS hardening
 - Bundle 5 — dashboard metrics correctness
 - Bundle 6 — repo hygiene + validation safety nets
+- Final cleanup bundle — root artifact removal + backend listing/meta cleanup
 
 ## Cleanup guidance
 ### Treat as deprecated / review-before-use
 - `dashboard-phase21-shell-cleanup.js` — historical artifact, known-invalid/unsafe candidate until replaced or removed cleanly
 - `dashboard-legacy.js` — legacy compatibility layer, not preferred for new work
-- root `auth.js` and root `account-access.js` — suspicious root-level server artifacts; review for deletion or relocation
 - any ZIP artifacts checked into the repo root
 - `stabilization/` historical bundle copies
 
