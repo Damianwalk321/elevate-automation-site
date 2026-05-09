@@ -32,10 +32,6 @@ export function normalizeStatusValue(value, fallback = "inactive") {
   return status;
 }
 
-export function hasTestingLimitOverride(email) {
-  return new Set(["damian044@icloud.com"]).has(normalizeEmail(email));
-}
-
 export function resolveAccountAccess({
   plan,
   status,
@@ -50,12 +46,12 @@ export function resolveAccountAccess({
   latestVersion = "",
   extensionVersion = ""
 } = {}) {
+  const normalizedEmail = normalizeEmail(email);
   const normalizedPlan = normalizePlanLabel(plan);
   const normalizedStatus = normalizeStatusValue(status, "inactive");
   const baseLimit = Number.isFinite(Number(postingLimit)) && Number(postingLimit) > 0 ? Number(postingLimit) : inferPostingLimitFromPlan(normalizedPlan);
   const extraPostingLimit = Math.max(0, Number(creditExtraPosts) || 0);
-  const computedLimit = baseLimit + extraPostingLimit;
-  const finalLimit = hasTestingLimitOverride(email) ? Math.max(25, computedLimit) : computedLimit;
+  const finalLimit = baseLimit + extraPostingLimit;
   const used = Math.max(0, Number(postsToday) || 0);
   const remaining = Math.max(0, finalLimit - used);
   const active = normalizedStatus === "active";
@@ -63,6 +59,8 @@ export function resolveAccountAccess({
   return {
     plan: normalizedPlan,
     plan_label: normalizedPlan,
+    canonical_source: "shared_account_access",
+    email: normalizedEmail,
     is_pro: normalizedPlan.toLowerCase().includes("pro"),
     status: normalizedStatus,
     base_posting_limit: baseLimit,
@@ -85,4 +83,8 @@ export function resolveAccountAccess({
       latest_version: latestVersion || minimumVersion || ""
     }
   };
+}
+
+export function buildCanonicalAccessState(args = {}) {
+  return resolveAccountAccess(args);
 }
