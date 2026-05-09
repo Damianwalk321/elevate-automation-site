@@ -7,6 +7,7 @@
   NS.version = "phase25-bundle-e";
   NS.modules = NS.modules || {};
   NS.events = NS.events || new EventTarget();
+  NS.loaderState = NS.loaderState && typeof NS.loaderState === "object" ? NS.loaderState : {};
 
   const MODULES = [
     "/dashboard-state.js?v=20260406p12a",
@@ -55,7 +56,13 @@
 
   let compatBootTriggered = false;
   function clean(value) { return String(value || "").replace(/\s+/g, " ").trim(); }
-  function setLoaderState(state) { try { document.body?.setAttribute("data-ea-loader", state); } catch {} }
+  function setLoaderState(state) {
+    try {
+      document.body?.setAttribute("data-ea-loader", state);
+      NS.loaderState.state = state;
+      NS.loaderState.updatedAt = new Date().toISOString();
+    } catch {}
+  }
   function setFriendlyStatus(message) {
     const bootStatus = document.getElementById("bootStatus");
     if (bootStatus) bootStatus.textContent = "";
@@ -64,6 +71,14 @@
     const current = clean(welcomeText.textContent || "");
     const looksLoading = !current || /loading|booting|starting/i.test(current);
     if (message && looksLoading) welcomeText.textContent = message;
+  }
+  function updateProgress(index, src) {
+    try {
+      NS.loaderState.totalModules = MODULES.length;
+      NS.loaderState.loadedModules = index;
+      NS.loaderState.currentModule = src || "";
+      document.body?.setAttribute("data-ea-loader-progress", `${index}/${MODULES.length}`);
+    } catch {}
   }
   function installLateDOMContentLoadedCompat() {
     if (window.__ELEVATE_LATE_DOMCONTENTLOADED_COMPAT__) return;
@@ -77,30 +92,62 @@
       return originalAddEventListener(type, listener, options);
     };
   }
+  function hasCanonicalTruth() {
+    const truth = window.ElevateDashboard?.accountTruth || null;
+    if (truth && truth.user_id) return true;
+    try {
+      const raw = localStorage.getItem("elevate.account_truth.v1");
+      if (!raw) return false;
+      const parsed = JSON.parse(raw);
+      return Boolean(parsed && (parsed.user_id || parsed.email) && parsed.canonical_profile_table);
+    } catch {
+      return false;
+    }
+  }
   function userLooksHydrated() {
     const emailText = clean(document.querySelector(".user-email")?.textContent || "");
-    return Boolean(window.currentUser?.id || (emailText && !/loading/i.test(emailText)));
+    return Boolean(window.currentUser?.id || hasCanonicalTruth() || (emailText && !/loading/i.test(emailText)));
   }
   function kickLegacyBoot() {
     if (compatBootTriggered) return;
     compatBootTriggered = true;
-    try { document.dispatchEvent(new Event("DOMContentLoaded", { bubbles: true, cancelable: true })); } catch (error) { console.error("[Elevate Dashboard] Compatibility boot failed:", error); }
+    try {
+      document.dispatchEvent(new Event("DOMContentLoaded", { bubbles: true, cancelable: true }));
+      NS.events?.dispatchEvent?.(new CustomEvent("loader:compat-boot", { detail: { at: Date.now() } }));
+    } catch (error) {
+      console.error("[Elevate Dashboard] Compatibility boot failed:", error);
+    }
   }
   function installControlledBootKick() {
     if (window.__ELEVATE_CONTROLLED_BOOT_KICK__) return;
     window.__ELEVATE_CONTROLLED_BOOT_KICK__ = true;
-    setTimeout(() => { if (!userLooksHydrated()) kickLegacyBoot(); }, 600);
+    setTimeout(() => {
+      if (!userLooksHydrated() && !hasCanonicalTruth()) kickLegacyBoot();
+    }, 600);
+    setTimeout(() => {
+      if (!userLooksHydrated() && !hasCanonicalTruth()) {
+        setLoaderState("waiting-for-data");
+        setFriendlyStatus("Finalizing your workspace data...");
+      }
+    }, 1800);
   }
   function loadScriptSequentially(index = 0) {
     if (index >= MODULES.length) return Promise.resolve();
     const src = MODULES[index];
+    updateProgress(index, src);
     return new Promise((resolve, reject) => {
       const existing = Array.from(document.scripts).find((s) => s.src && s.src.includes(src.split("?")[0]));
-      if (existing) return resolve();
+      if (existing) {
+        updateProgress(index + 1, src);
+        return resolve();
+      }
       const script = document.createElement("script");
       script.src = src;
       script.async = false;
-      script.onload = () => resolve();
+      script.onload = () => {
+        updateProgress(index + 1, src);
+        resolve();
+      };
       script.onerror = () => reject(new Error(`Failed to load ${src}`));
       document.head.appendChild(script);
     }).then(() => loadScriptSequentially(index + 1));
@@ -109,11 +156,12 @@
   installLateDOMContentLoadedCompat();
   setLoaderState("loading");
   setFriendlyStatus("Loading your operator workspace...");
+  updateProgress(0, MODULES[0]);
 
   loadScriptSequentially()
     .then(() => {
       installControlledBootKick();
-      setLoaderState("modules-loaded");
+      setLoaderState(hasCanonicalTruth() ? "truth-ready" : "modules-loaded");
     })
     .catch((error) => {
       console.error("[Elevate Dashboard] Loader error:", error);
