@@ -189,7 +189,7 @@
   }
 
   async function syncTruth() {
-    const response = await apiFetch("/api/get-dashboard-summary");
+    const response = await apiFetch("/api/get-dashboard-summary-canonical");
     const data = await parseJson(response);
     if (!response.ok || !data?.data) {
       throw new Error(data?.error || "Failed to load dashboard summary");
