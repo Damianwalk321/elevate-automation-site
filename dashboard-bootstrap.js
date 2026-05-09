@@ -46,12 +46,26 @@
     if (state.stages.length > 12) state.stages = state.stages.slice(-12);
   }
 
+  function readCanonicalTruth() {
+    if (NS.accountTruth && typeof NS.accountTruth === "object") return NS.accountTruth;
+    try {
+      const raw = localStorage.getItem("elevate.account_truth.v1");
+      if (!raw) return null;
+      const parsed = JSON.parse(raw);
+      return parsed && typeof parsed === "object" ? parsed : null;
+    } catch {
+      return null;
+    }
+  }
+
   function getIndicators() {
     const userEmailText = clean(qs(".user-email")?.textContent || "");
     const welcomeText = clean(document.getElementById("welcomeText")?.textContent || "");
-    const hasUser = Boolean(window.currentUser?.id) || Boolean(userEmailText && !/loading/i.test(userEmailText));
-    const hasSession = Boolean(window.currentNormalizedSession?.subscription || window.currentAccountData);
-    const hasSummary = Boolean(window.dashboardSummary && typeof window.dashboardSummary === "object");
+    const canonicalTruth = readCanonicalTruth();
+    const hasCanonicalTruth = Boolean(canonicalTruth && (canonicalTruth.user_id || canonicalTruth.email));
+    const hasUser = Boolean(window.currentUser?.id) || hasCanonicalTruth || Boolean(userEmailText && !/loading/i.test(userEmailText));
+    const hasSession = Boolean(window.currentNormalizedSession?.subscription || window.currentAccountData || hasCanonicalTruth);
+    const hasSummary = Boolean(window.dashboardSummary && typeof window.dashboardSummary === "object") || hasCanonicalTruth;
     const listingsReady = Array.isArray(window.dashboardListings);
     const activeSectionVisible = Array.from(document.querySelectorAll(".dashboard-section")).some((section) => section.style.display === "block");
     const visibleDashboardContent = Boolean(
@@ -65,6 +79,7 @@
       hasUser,
       hasSession,
       hasSummary,
+      hasCanonicalTruth,
       listingsReady,
       activeSectionVisible,
       visibleDashboardContent,
@@ -83,6 +98,9 @@
   function finalizeReady(detailMessage) {
     setWorkspaceState("true");
     NS.phase2render?.markReady?.("ready");
+    const state = ensureBootstrapState();
+    state.ready = true;
+    state.readyAt = new Date().toISOString();
 
     const bootStatus = document.getElementById("bootStatus");
     if (bootStatus) bootStatus.textContent = "";
@@ -119,10 +137,12 @@
       }
 
       const readyNow =
-        indicators.hasUser &&
-        indicators.hasSession &&
-        indicators.hasSummary &&
-        (indicators.listingsReady || indicators.visibleDashboardContent || indicators.activeSectionVisible);
+        indicators.hasCanonicalTruth || (
+          indicators.hasUser &&
+          indicators.hasSession &&
+          indicators.hasSummary &&
+          (indicators.listingsReady || indicators.visibleDashboardContent || indicators.activeSectionVisible)
+        );
 
       if (readyNow) {
         readyCount += 1;
@@ -131,14 +151,14 @@
       }
 
       if (readyCount >= 2) {
-        pushStage("Ready", "Core dashboard hydration completed.");
+        pushStage("Ready", indicators.hasCanonicalTruth ? "Canonical dashboard truth detected." : "Core dashboard hydration completed.");
         finalizeReady("Workspace ready.");
         clearInterval(intervalId);
         return;
       }
 
       if (Date.now() - startedAt > RETRY_TIMEOUT_MS) {
-        if (indicators.visibleDashboardContent || (indicators.hasUser && indicators.hasSession && indicators.hasSummary)) {
+        if (indicators.hasCanonicalTruth || indicators.visibleDashboardContent || (indicators.hasUser && indicators.hasSession && indicators.hasSummary)) {
           pushStage("Ready", "Dashboard is usable; soft timeout ignored.");
           finalizeReady("Workspace ready.");
         } else {
@@ -158,6 +178,7 @@
     const state = ensureBootstrapState();
     if (state.started) return;
     state.started = true;
+    state.startedAt = new Date().toISOString();
     startWatch();
   }
 
