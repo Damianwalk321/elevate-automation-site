@@ -7,6 +7,10 @@ import { CANONICAL_LISTINGS_TABLE, CANONICAL_PROFILE_TABLE, LEGACY_LISTINGS_TABL
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
 const BUSINESS_TIMEZONE = "America/Edmonton";
 
+function buildRequestId(req) {
+  return clean(req.headers['x-request-id'] || '') || `summary_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+}
+
 function normalizeProvince(value) {
   const raw = clean(value).toUpperCase();
   if (!raw) return "";
@@ -89,9 +93,34 @@ function buildSetupStatus(profileSnapshot = {}) {
   };
 }
 
+function buildDiagnostics({ requestId, identity, user = null, profile = null, subscription = null, postingUsage = null, phase = 'read' }) {
+  return {
+    request_id: requestId,
+    endpoint: 'api/get-dashboard-summary-canonical',
+    phase,
+    identity_source: identity?.identity_source || 'unknown',
+    matched_by: identity?.matched_by || 'unknown',
+    resolved_user_id: clean(user?.id || identity?.id || ''),
+    resolved_email: normalizeEmail(user?.email || identity?.email || ''),
+    matched_profile: Boolean(profile),
+    matched_subscription: Boolean(subscription),
+    matched_posting_usage: Boolean(postingUsage),
+    summary_source: 'canonical',
+    timestamp: new Date().toISOString(),
+  };
+}
+
 export default async function handler(req, res) {
   res.setHeader("Content-Type", "application/json");
-  if (req.method !== "GET") return res.status(405).json({ error: "Method not allowed" });
+  const requestId = buildRequestId(req);
+  res.setHeader("x-request-id", requestId);
+
+  if (req.method !== "GET") {
+    return res.status(405).json({
+      error: "Method not allowed",
+      diagnostics: { request_id: requestId, endpoint: 'api/get-dashboard-summary-canonical', method: req.method }
+    });
+  }
 
   try {
     const verifiedUser = await getVerifiedRequestUser(req);
@@ -109,7 +138,12 @@ export default async function handler(req, res) {
     const finalUserId = clean(user?.id || requestUserId || "");
     const finalEmail = normalizeEmail(user?.email || requestEmail || "");
 
-    if (!finalUserId && !finalEmail) return res.status(400).json({ error: "Missing userId or email" });
+    if (!finalUserId && !finalEmail) {
+      return res.status(400).json({
+        error: "Missing userId or email",
+        diagnostics: buildDiagnostics({ requestId, identity, phase: 'missing_identity' })
+      });
+    }
 
     const [subscriptionRow, postingUsageRow, profileRow] = await Promise.all([
       getSubscription(finalUserId, finalEmail),
@@ -186,11 +220,23 @@ export default async function handler(req, res) {
           can_post: Boolean(accessState.can_post),
           billing: accessState.billing || {},
           extension: accessState.extension || {}
-        }
+        },
+        diagnostics: buildDiagnostics({
+          requestId,
+          identity,
+          user,
+          profile: profileRow,
+          subscription: subscriptionRow,
+          postingUsage: postingUsageRow,
+          phase: 'read'
+        })
       }
     });
   } catch (error) {
     console.error("[get-dashboard-summary-canonical] fatal error:", error);
-    return res.status(500).json({ error: error?.message || "Internal server error" });
+    return res.status(500).json({
+      error: error?.message || "Internal server error",
+      diagnostics: { request_id: requestId, endpoint: 'api/get-dashboard-summary-canonical', phase: 'fatal', timestamp: new Date().toISOString() }
+    });
   }
 }
