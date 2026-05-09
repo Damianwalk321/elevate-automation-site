@@ -135,6 +135,10 @@
       return false;
     }
   }
+  function authStillSettling() {
+    const bootstrap = window.ElevateDashboard?.bootstrapState || {};
+    return Boolean(bootstrap.authSettling) || !Boolean(window.ElevateDashboard?.authSettled);
+  }
   function userLooksHydrated() {
     const emailText = clean(document.querySelector(".user-email")?.textContent || "");
     return Boolean(window.currentUser?.id || hasCanonicalTruth() || (emailText && !/loading/i.test(emailText)));
@@ -153,15 +157,15 @@
     if (window.__ELEVATE_CONTROLLED_BOOT_KICK__) return;
     window.__ELEVATE_CONTROLLED_BOOT_KICK__ = true;
     setTimeout(() => {
-      if (!userLooksHydrated() && !hasCanonicalTruth()) kickLegacyBoot();
-    }, 600);
+      if (!authStillSettling() && !userLooksHydrated() && !hasCanonicalTruth()) kickLegacyBoot();
+    }, 900);
     setTimeout(() => {
-      if (!userLooksHydrated() && !hasCanonicalTruth()) {
+      if (!authStillSettling() && !userLooksHydrated() && !hasCanonicalTruth()) {
         setLoaderState("waiting-for-data");
         setFriendlyStatus("Finalizing your workspace data...");
         setBootStatus("Waiting on canonical account data...");
       }
-    }, 1800);
+    }, 2200);
   }
   function loadScriptSequentially(index = 0) {
     if (index >= MODULES.length) return Promise.resolve();
@@ -195,7 +199,7 @@
       installControlledBootKick();
       setLoaderState(hasCanonicalTruth() ? "truth-ready" : "modules-loaded");
       if (hasCanonicalTruth()) setBootStatus("Canonical account data loaded.");
-      else setBootStatus("Modules loaded. Waiting for canonical account data...");
+      else setBootStatus(authStillSettling() ? "Modules loaded. Waiting for auth settle..." : "Modules loaded. Waiting for canonical account data...");
     })
     .catch((error) => {
       console.error("[Elevate Dashboard] Loader error:", error);
