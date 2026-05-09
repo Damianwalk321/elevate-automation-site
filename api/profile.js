@@ -1,5 +1,12 @@
 import { supabase } from '../lib/supabase.js';
 import { requireVerifiedDashboardUser, getTrustedIdentity, requireVerifiedUser } from './_shared/auth.js';
+import {
+  CANONICAL_PROFILE_TABLE,
+  LEGACY_PROFILE_TABLES,
+  canonicalIdentityMeta,
+  buildCanonicalProfileSnapshot,
+  profileSetupFields,
+} from '../_shared/canonical-state.js';
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -32,6 +39,31 @@ function pickAllowedUpdates(body = {}) {
   return updates;
 }
 
+function buildProfileResponse({ verifiedUser = null, trustedIdentity = null, profile = null, requestedId = '', requestedEmail = '' } = {}) {
+  const identity = canonicalIdentityMeta({
+    verifiedUser,
+    trustedIdentity,
+    requestedId,
+    requestedEmail,
+  });
+
+  const canonicalProfile = profile
+    ? buildCanonicalProfileSnapshot({
+        id: identity.id || verifiedUser?.id || '',
+        email: identity.email || verifiedUser?.email || '',
+      }, profile)
+    : null;
+
+  return {
+    profile: canonicalProfile,
+    canonical_profile_table: CANONICAL_PROFILE_TABLE,
+    legacy_profile_tables: [...LEGACY_PROFILE_TABLES],
+    identity_source: identity.identity_source,
+    matched_by: identity.matched_by,
+    setup_fields: canonicalProfile ? profileSetupFields(canonicalProfile) : null,
+  };
+}
+
 export default async function handler(req, res) {
   if (req.method === 'OPTIONS') {
     return res.status(200).set(CORS).end();
@@ -59,21 +91,26 @@ export default async function handler(req, res) {
       query: req.query || {}
     });
 
-    const authUid = clean(trusted.id || '');
-    const email = normalizeEmail(trusted.email || '');
     const requestedId = clean(req.query.id || req.body?.id || req.body?.user_id || '');
+    const requestedEmail = normalizeEmail(req.query.email || req.body?.email || '');
+    const identity = canonicalIdentityMeta({
+      verifiedUser,
+      trustedIdentity: trusted,
+      requestedId,
+      requestedEmail,
+    });
+
+    if (!identity.id && !identity.email) {
+      return res.status(400).json({ error: 'No identity provided' });
+    }
 
     if (req.method === 'GET') {
-      let query = supabase.from('profiles').select('*');
+      let query = supabase.from(CANONICAL_PROFILE_TABLE).select('*');
 
-      if (authUid) {
-        query = query.eq('id', authUid);
-      } else if (requestedId) {
-        query = query.eq('id', requestedId);
-      } else if (email) {
-        query = query.ilike('email', email);
+      if (identity.matched_by === 'id' && identity.id) {
+        query = query.eq('id', identity.id);
       } else {
-        return res.status(400).json({ error: 'No identity provided' });
+        query = query.ilike('email', identity.email);
       }
 
       const { data, error } = await query.maybeSingle();
@@ -83,7 +120,15 @@ export default async function handler(req, res) {
         return res.status(500).json({ error: error.message });
       }
 
-      return res.status(200).json({ profile: data || null });
+      return res.status(200).json(
+        buildProfileResponse({
+          verifiedUser,
+          trustedIdentity: trusted,
+          profile: data || null,
+          requestedId,
+          requestedEmail: identity.email,
+        })
+      );
     }
 
     const updates = pickAllowedUpdates(req.body || {});
@@ -91,20 +136,20 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'No valid fields to update' });
     }
 
-    if (!authUid) {
+    if (!identity.id) {
       return res.status(401).json({ error: 'Unauthorized', requires_auth: true });
     }
 
     updates.updated_at = new Date().toISOString();
 
     const upsertData = {
-      id: authUid,
-      email,
+      id: identity.id,
+      email: identity.email,
       ...updates,
     };
 
     const { data, error } = await supabase
-      .from('profiles')
+      .from(CANONICAL_PROFILE_TABLE)
       .upsert(upsertData, { onConflict: 'id' })
       .select()
       .single();
@@ -114,8 +159,17 @@ export default async function handler(req, res) {
       return res.status(500).json({ error: error.message });
     }
 
-    console.log(`[profile POST] Saved profile for ${email || authUid} at ${data.updated_at}`);
-    return res.status(200).json({ success: true, profile: data });
+    console.log(`[profile POST] Saved canonical profile for ${identity.email || identity.id} at ${data.updated_at}`);
+    return res.status(200).json({
+      success: true,
+      ...buildProfileResponse({
+        verifiedUser,
+        trustedIdentity: trusted,
+        profile: data,
+        requestedId,
+        requestedEmail: identity.email,
+      })
+    });
   } catch (error) {
     console.error('[profile] fatal error:', error.message);
     return res.status(500).json({ error: error.message || 'Internal server error' });
