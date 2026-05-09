@@ -3,7 +3,10 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "check:conflicts": "bash scripts/check-conflict-markers.sh"
+    "check:conflicts": "bash scripts/check-conflict-markers.sh",
+    "check:dashboard-safety": "node scripts/check-dashboard-safety.mjs",
+    "check:repo-hygiene": "node scripts/check-repo-hygiene.mjs",
+    "validate": "npm run check:conflicts && npm run check:dashboard-safety && npm run check:repo-hygiene"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.43.4",
