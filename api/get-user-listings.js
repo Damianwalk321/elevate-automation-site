@@ -1,7 +1,11 @@
-
 import { createClient } from "@supabase/supabase-js";
 import { randomUUID } from "node:crypto";
-import { getVerifiedRequestUser, getTrustedIdentity, requireVerifiedDashboardUser, isDashboardClient } from "./_shared/auth.js";
+import {
+  getVerifiedRequestUser,
+  getTrustedIdentity,
+  requireVerifiedDashboardUser,
+  isDashboardClient
+} from "./_shared/auth.js";
 import {
   clean,
   normalizeEmail,
@@ -137,7 +141,11 @@ function preferListingRow(current, incoming) {
 }
 
 function makeRequestId() {
-  try { return randomUUID(); } catch { return `req_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 9)}`; }
+  try {
+    return randomUUID();
+  } catch {
+    return `req_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 9)}`;
+  }
 }
 
 async function resolveIdentityCandidates({ userId, email }) {
@@ -156,8 +164,14 @@ async function fetchTableRows(tableName, userIds = [], emails = []) {
   const seen = new Set();
 
   for (const userId of userIds) {
-    const { data } = await supabase.from(tableName).select("*").eq("user_id", userId).order("updated_at", { ascending: false }).limit(300);
-    for (const row of (Array.isArray(data) ? data : [])) {
+    const { data } = await supabase
+      .from(tableName)
+      .select("*")
+      .eq("user_id", userId)
+      .order("updated_at", { ascending: false })
+      .limit(300);
+
+    for (const row of Array.isArray(data) ? data : []) {
       const key = clean(row?.id || "") || `${clean(row?.marketplace_listing_id || "")}|${clean(row?.posted_at || row?.created_at || "")}`;
       if (!key || seen.has(key)) continue;
       seen.add(key);
@@ -166,8 +180,14 @@ async function fetchTableRows(tableName, userIds = [], emails = []) {
   }
 
   for (const email of emails) {
-    const { data } = await supabase.from(tableName).select("*").ilike("email", email).order("updated_at", { ascending: false }).limit(300);
-    for (const row of (Array.isArray(data) ? data : [])) {
+    const { data } = await supabase
+      .from(tableName)
+      .select("*")
+      .ilike("email", email)
+      .order("updated_at", { ascending: false })
+      .limit(300);
+
+    for (const row of Array.isArray(data) ? data : []) {
       const key = clean(row?.id || "") || `${clean(row?.marketplace_listing_id || "")}|${clean(row?.posted_at || row?.created_at || "")}`;
       if (!key || seen.has(key)) continue;
       seen.add(key);
@@ -182,19 +202,35 @@ function matchesFilter(row, { status, lifecycleStatus, reviewBucket, search, pre
   const normalizedStatus = normalizeStatus(row.status);
   const normalizedLifecycle = normalizeLifecycleStatus(row.lifecycle_status, row.review_bucket);
   const normalizedBucket = normalizeReviewBucket(row.review_bucket);
+
   if (status) {
     if (status === "review") {
       if (!["review_delete", "review_price_update", "review_new"].includes(normalizedLifecycle)) return false;
-    } else if (normalizedStatus !== status) return false;
+    } else if (normalizedStatus !== status) {
+      return false;
+    }
   }
+
   if (lifecycleStatus && normalizedLifecycle !== lifecycleStatus) return false;
   if (reviewBucket && normalizedBucket !== reviewBucket) return false;
   if (preset === "price" && normalizedLifecycle !== "review_price_update" && normalizedBucket !== "pricechanges") return false;
   if (preset === "unresolved_price" && row.price_resolved) return false;
+
   if (search) {
-    const haystack = [row.title, row.make, row.model, row.trim, row.vin, row.stock_number, row.body_style, row.price_source, row.mileage_source].map((v) => clean(v).toLowerCase()).join(" ");
+    const haystack = [
+      row.title,
+      row.make,
+      row.model,
+      row.trim,
+      row.vin,
+      row.stock_number,
+      row.body_style,
+      row.price_source,
+      row.mileage_source
+    ].map((v) => clean(v).toLowerCase()).join(" ");
     if (!haystack.includes(search)) return false;
   }
+
   return true;
 }
 
@@ -211,7 +247,9 @@ export default async function handler(req, res) {
   res.setHeader("Content-Type", "application/json");
   res.setHeader("x-request-id", requestId);
 
-  if (req.method !== "GET") return res.status(405).json({ error: "Method not allowed", request_id: requestId });
+  if (req.method !== "GET") {
+    return res.status(405).json({ error: "Method not allowed", request_id: requestId });
+  }
 
   try {
     const dashboardClient = isDashboardClient(req);
@@ -224,7 +262,6 @@ export default async function handler(req, res) {
     }
 
     const trusted = getTrustedIdentity({ verifiedUser, body: req.body || {}, query: req.query || {} });
-
     const userId = clean(trusted.id || req.query?.userId || req.query?.user_id || "");
     const email = normalizeEmail(trusted.email || req.query?.email || "");
 
@@ -239,6 +276,7 @@ export default async function handler(req, res) {
     const search = clean(req.query?.search || "").toLowerCase();
     const sort = clean(req.query?.sort || "newest").toLowerCase();
     const limit = Math.min(Math.max(Number(req.query?.limit || 100), 1), 300);
+    const offset = Math.max(Number(req.query?.offset || 0), 0);
 
     const identity = await resolveIdentityCandidates({ userId, email });
     const [userRows, legacyRows] = await Promise.all([
@@ -256,19 +294,31 @@ export default async function handler(req, res) {
       mergedMap.set(normalized.identity_key, preferListingRow(mergedMap.get(normalized.identity_key), normalized));
     }
 
-    let rows = [...mergedMap.values()].filter((row) => matchesFilter(row, { status, lifecycleStatus, reviewBucket, search, preset }));
-    rows = sortRows(rows, sort).slice(0, limit);
+    const filteredRows = sortRows(
+      [...mergedMap.values()].filter((row) => matchesFilter(row, { status, lifecycleStatus, reviewBucket, search, preset })),
+      sort
+    );
+
+    const totalFiltered = filteredRows.length;
+    const pagedRows = filteredRows.slice(offset, offset + limit);
 
     return res.status(200).json({
       success: true,
       request_id: requestId,
-      data: rows,
+      data: pagedRows,
       meta: {
-        total: rows.length,
-        unresolved_price_count: rows.filter((row) => !row.price_resolved).length,
+        total: totalFiltered,
+        returned_count: pagedRows.length,
+        unresolved_price_count: filteredRows.filter((row) => !row.price_resolved).length,
         limit,
+        offset,
+        has_more: offset + pagedRows.length < totalFiltered,
         auth_mode: verifiedUser ? "verified_bearer" : "query_identity",
-        sources: { user_listings: userRows.length, listings: legacyRows.length, merged: mergedMap.size }
+        sources: {
+          user_listings: userRows.length,
+          listings: legacyRows.length,
+          merged: mergedMap.size
+        }
       }
     });
   } catch (error) {
