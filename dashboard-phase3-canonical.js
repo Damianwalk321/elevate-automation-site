@@ -19,6 +19,32 @@
     return "";
   }
 
+  function normalizeStatus(status) {
+    const normalized = clean(status).toLowerCase();
+    if (["sold", "deleted", "inactive", "failed", "stale"].includes(normalized)) return normalized;
+    if (["posted", "active", "live", "approved", "relisted", "promote_now"].includes(normalized)) return "active";
+    return normalized || "active";
+  }
+
+  function normalizeReviewBucket(bucket) {
+    const normalized = clean(bucket).toLowerCase().replace(/[\s_-]+/g, "");
+    if (!normalized) return "";
+    if (["removedvehicles", "removed", "reviewdelete"].includes(normalized)) return "removedvehicles";
+    if (["pricechanges", "pricechange", "reviewpriceupdate"].includes(normalized)) return "pricechanges";
+    if (["newvehicles", "new", "reviewnew"].includes(normalized)) return "newvehicles";
+    return normalized;
+  }
+
+  function normalizeLifecycleStatus(status, reviewBucket = "") {
+    const normalized = clean(status).toLowerCase();
+    const bucket = normalizeReviewBucket(reviewBucket);
+    if (normalized) return normalized;
+    if (bucket === "removedvehicles") return "review_delete";
+    if (bucket === "pricechanges") return "review_price_update";
+    if (bucket === "newvehicles") return "review_new";
+    return "active";
+  }
+
   function isNegativeStatus(status) {
     const normalized = clean(status).toLowerCase();
     return ["canceled", "cancelled", "unpaid", "past_due", "expired", "suspended", "inactive"].includes(normalized);
@@ -30,6 +56,13 @@
     return stateListings.length ? stateListings : globalListings;
   }
 
+  function buildTopListingTitle(candidates, fallback) {
+    const top = [...candidates]
+      .sort((a, b) => num(b?.popularity_score) - num(a?.popularity_score))
+      .find((item) => clean(item?.title));
+    return clean(top?.title || fallback || "None yet");
+  }
+
   function computeCounts(listings, summary) {
     let active = 0;
     let views = 0;
@@ -37,26 +70,63 @@
     let stale = 0;
     let weak = 0;
     let needsAction = 0;
+    let unresolvedPrice = 0;
     let reviewDelete = 0;
     let reviewPrice = 0;
     let reviewNew = 0;
+    let likelySold = 0;
+    let lowPerformance = 0;
+    let promoteToday = 0;
+    let repostToday = 0;
+    let reviewToday = 0;
+    let queueCount = 0;
+
+    const activeCandidates = [];
 
     for (const item of listings) {
-      const status = clean(item?.status).toLowerCase();
-      const lifecycle = clean(item?.lifecycle_status).toLowerCase();
-      const bucket = clean(item?.review_bucket).toLowerCase().replace(/[\s_-]+/g, "");
+      const status = normalizeStatus(item?.status);
+      const lifecycle = normalizeLifecycleStatus(item?.lifecycle_status, item?.review_bucket);
+      const bucket = normalizeReviewBucket(item?.review_bucket);
+      const itemViews = num(item?.views_count ?? item?.views);
+      const itemMessages = num(item?.messages_count ?? item?.messages);
+      const itemWeak = Boolean(item?.weak);
+      const itemNeedsAction = Boolean(item?.needs_action);
+      const itemPromoteNow = Boolean(item?.promote_now);
+      const itemLikelySold = Boolean(item?.likely_sold) || lifecycle === "review_delete" || bucket === "removedvehicles";
+      const itemPriceResolved = item?.price_resolved !== false;
+      const itemLowPerformance = itemWeak && !itemLikelySold && !itemPromoteNow;
+      const itemActive = !["sold", "deleted", "inactive", "stale"].includes(status) && lifecycle !== "review_delete";
+      const itemStale = status === "stale" || lifecycle === "stale" || lifecycle === "review_delete" || bucket === "removedvehicles";
+      const itemReviewDelete = lifecycle === "review_delete" || bucket === "removedvehicles";
+      const itemReviewPrice = lifecycle === "review_price_update" || bucket === "pricechanges";
+      const itemReviewNew = lifecycle === "review_new" || bucket === "newvehicles";
+      const itemReview = itemReviewDelete || itemReviewPrice || itemReviewNew;
+      const itemActionable = itemNeedsAction || !itemPriceResolved || itemReview || itemWeak || itemPromoteNow;
 
-      if (!["sold", "deleted", "inactive"].includes(status)) active += 1;
-      views += num(item?.views_count ?? item?.views);
-      messages += num(item?.messages_count ?? item?.messages);
+      if (itemActive) {
+        active += 1;
+        activeCandidates.push(item);
+      }
+      if (itemStale) stale += 1;
+      if (itemWeak) weak += 1;
+      if (itemNeedsAction) needsAction += 1;
+      if (!itemPriceResolved) unresolvedPrice += 1;
+      if (itemReviewDelete) reviewDelete += 1;
+      if (itemReviewPrice) reviewPrice += 1;
+      if (itemReviewNew) reviewNew += 1;
+      if (itemLikelySold) likelySold += 1;
+      if (itemLowPerformance) lowPerformance += 1;
+      if (itemPromoteNow) promoteToday += 1;
+      if (itemWeak && !itemReview && !itemLikelySold) repostToday += 1;
+      if (itemReview || !itemPriceResolved) reviewToday += 1;
+      if (itemActionable) queueCount += 1;
 
-      if (lifecycle === "stale" || status === "stale") stale += 1;
-      if (lifecycle === "review_delete" || bucket === "removedvehicles") reviewDelete += 1;
-      if (lifecycle === "review_price_update" || bucket === "pricechanges") reviewPrice += 1;
-      if (lifecycle === "review_new" || bucket === "newvehicles") reviewNew += 1;
-      if (item?.weak) weak += 1;
-      if (item?.needs_action) needsAction += 1;
+      views += itemViews;
+      messages += itemMessages;
     }
+
+    const computedReviewQueue = reviewDelete + reviewPrice + reviewNew;
+    const computedQueue = Math.max(queueCount, computedReviewQueue + repostToday + promoteToday);
 
     return {
       active_listings: Math.max(active, num(summary?.active_listings)),
@@ -65,18 +135,26 @@
       stale_listings: Math.max(stale, num(summary?.stale_listings)),
       weak_listings: Math.max(weak, num(summary?.weak_listings)),
       needs_action_count: Math.max(needsAction, num(summary?.needs_action_count)),
+      unresolved_price_count: Math.max(unresolvedPrice, num(summary?.unresolved_price_count)),
       review_delete_count: Math.max(reviewDelete, num(summary?.review_delete_count)),
       review_price_change_count: Math.max(reviewPrice, num(summary?.review_price_change_count)),
       review_new_count: Math.max(reviewNew, num(summary?.review_new_count)),
-      review_queue_count: Math.max(
-        reviewDelete + reviewPrice + reviewNew,
-        num(summary?.review_queue_count)
-      ),
+      review_queue_count: Math.max(computedReviewQueue, num(summary?.review_queue_count)),
       queue_count: Math.max(
+        computedQueue,
         num(summary?.queue_count),
         num(summary?.daily_ops_queues?.ready_queue),
         num(summary?.action_center?.ready_queue)
-      )
+      ),
+      top_listing_title: buildTopListingTitle(activeCandidates, summary?.top_listing_title),
+      action_center: {
+        ...(summary?.action_center || {}),
+        repost_today: Math.max(repostToday, num(summary?.action_center?.repost_today)),
+        review_today: Math.max(reviewToday, num(summary?.action_center?.review_today)),
+        promote_today: Math.max(promoteToday, num(summary?.action_center?.promote_today)),
+        likely_sold: Math.max(likelySold, num(summary?.action_center?.likely_sold)),
+        low_performance: Math.max(lowPerformance, num(summary?.action_center?.low_performance))
+      }
     };
   }
 
@@ -191,10 +269,10 @@
     const listingLocation = pushGap("listing_location", Boolean(profile.listing_location), "listing location");
     const complianceMode = pushGap("compliance_mode", Boolean(profile.compliance_mode || profile.province), "compliance mode");
     const fullName = pushGap("full_name", Boolean(profile.full_name), "salesperson name");
-    const dealership = pushGap("dealership", Boolean(profile.dealership), "dealership");
+    const dealershipReady = pushGap("dealership", Boolean(profile.dealership), "dealership");
     const access = pushGap("access", Boolean(subscription.active), "account access");
 
-    const checklist = [dealerWebsite, inventoryUrl, scannerType, listingLocation, complianceMode, fullName, dealership, access];
+    const checklist = [dealerWebsite, inventoryUrl, scannerType, listingLocation, complianceMode, fullName, dealershipReady, access];
     const completed = checklist.filter(Boolean).length;
 
     return {
@@ -206,8 +284,8 @@
       compliance_mode_present: complianceMode,
       salesperson_name_present: fullName,
       full_name_present: fullName,
-      dealership_name_present: dealership,
-      dealership_present: dealership,
+      dealership_name_present: dealershipReady,
+      dealership_present: dealershipReady,
       profile_complete: completed >= 7,
       setup_gaps: gaps
     };
@@ -223,9 +301,12 @@
 
     const canonicalAccess = {
       plan: subscription.plan,
+      plan_label: subscription.plan,
       status: subscription.status,
       posting_limit: subscription.posting_limit,
-      posts_remaining: subscription.posts_remaining
+      posts_remaining: subscription.posts_remaining,
+      can_post: subscription.active && subscription.posts_remaining > 0,
+      is_pro: clean(subscription.plan).toLowerCase().includes("pro")
     };
 
     const accountSnapshot = {
@@ -244,6 +325,10 @@
       ...existing,
       ...counts,
       posts_today: Math.max(num(existing.posts_today), subscription.posts_today),
+      posts_remaining: Math.max(num(existing.posts_remaining), subscription.posts_remaining),
+      effective_posting_limit: Math.max(num(existing.effective_posting_limit), subscription.posting_limit),
+      daily_limit: Math.max(num(existing.daily_limit), subscription.posting_limit),
+      can_post: canonicalAccess.can_post,
       account_snapshot: accountSnapshot,
       profile_snapshot: {
         ...(existing.profile_snapshot || {}),
@@ -251,12 +336,18 @@
       },
       setup_status: setupStatus,
       canonical_access: canonicalAccess,
+      plan_access: {
+        ...(existing.plan_access || {}),
+        ...canonicalAccess
+      },
       state_provenance: {
         posts_today: "canonical.subscription.posts_today",
+        posts_remaining: "canonical.subscription.posts_remaining",
         plan: "canonical.subscription.plan",
         status: "canonical.subscription.status",
         posting_limit: "canonical.subscription.posting_limit",
-        setup_status: "canonical.profile+subscription"
+        setup_status: "canonical.profile+subscription",
+        counts: "canonical.listings"
       }
     };
 
