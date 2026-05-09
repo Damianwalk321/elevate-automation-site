@@ -54,6 +54,15 @@
     "/dashboard-bundle-e-review-actions.js?v=20260412e1"
   ];
 
+  const MODULE_STAGE_GROUPS = [
+    { upto: 3, label: "Core shell" },
+    { upto: 10, label: "Workspace modules" },
+    { upto: 17, label: "Boot and readiness" },
+    { upto: 24, label: "Overview and listings" },
+    { upto: 32, label: "Intelligence and entities" },
+    { upto: MODULES.length, label: "Hardening and review actions" }
+  ];
+
   let compatBootTriggered = false;
   function clean(value) { return String(value || "").replace(/\s+/g, " ").trim(); }
   function setLoaderState(state) {
@@ -61,23 +70,45 @@
       document.body?.setAttribute("data-ea-loader", state);
       NS.loaderState.state = state;
       NS.loaderState.updatedAt = new Date().toISOString();
+      publishLoaderDiagnostics();
     } catch {}
   }
   function setFriendlyStatus(message) {
     const bootStatus = document.getElementById("bootStatus");
-    if (bootStatus) bootStatus.textContent = "";
+    if (bootStatus && /waiting|loading|boot/i.test(clean(bootStatus.textContent || ""))) bootStatus.textContent = "";
     const welcomeText = document.getElementById("welcomeText");
     if (!welcomeText) return;
     const current = clean(welcomeText.textContent || "");
     const looksLoading = !current || /loading|booting|starting/i.test(current);
     if (message && looksLoading) welcomeText.textContent = message;
   }
+  function setBootStatus(message) {
+    const bootStatus = document.getElementById("bootStatus");
+    if (bootStatus) bootStatus.textContent = message || "";
+  }
+  function stageLabelForIndex(index) {
+    const oneBased = Math.max(1, Number(index) || 1);
+    const group = MODULE_STAGE_GROUPS.find((item) => oneBased <= item.upto);
+    return group?.label || "Finalizing workspace";
+  }
+  function publishLoaderDiagnostics() {
+    try {
+      NS.events?.dispatchEvent?.(new CustomEvent("loader:state", { detail: { ...NS.loaderState } }));
+    } catch {}
+  }
   function updateProgress(index, src) {
     try {
+      const loaded = Math.max(0, index);
+      const stageLabel = stageLabelForIndex(loaded + 1);
       NS.loaderState.totalModules = MODULES.length;
-      NS.loaderState.loadedModules = index;
+      NS.loaderState.loadedModules = loaded;
       NS.loaderState.currentModule = src || "";
-      document.body?.setAttribute("data-ea-loader-progress", `${index}/${MODULES.length}`);
+      NS.loaderState.stageLabel = stageLabel;
+      document.body?.setAttribute("data-ea-loader-progress", `${loaded}/${MODULES.length}`);
+      if (loaded < MODULES.length) {
+        setBootStatus(`Loading stage: ${stageLabel} • ${loaded}/${MODULES.length}`);
+      }
+      publishLoaderDiagnostics();
     } catch {}
   }
   function installLateDOMContentLoadedCompat() {
@@ -128,6 +159,7 @@
       if (!userLooksHydrated() && !hasCanonicalTruth()) {
         setLoaderState("waiting-for-data");
         setFriendlyStatus("Finalizing your workspace data...");
+        setBootStatus("Waiting on canonical account data...");
       }
     }, 1800);
   }
@@ -162,10 +194,14 @@
     .then(() => {
       installControlledBootKick();
       setLoaderState(hasCanonicalTruth() ? "truth-ready" : "modules-loaded");
+      if (hasCanonicalTruth()) setBootStatus("Canonical account data loaded.");
+      else setBootStatus("Modules loaded. Waiting for canonical account data...");
     })
     .catch((error) => {
       console.error("[Elevate Dashboard] Loader error:", error);
+      NS.loaderState.lastError = error?.message || String(error);
       setLoaderState("error");
       setFriendlyStatus("Workspace load hit an issue. Refresh the page or use Refresh Access.");
+      setBootStatus(`Loader error: ${NS.loaderState.lastError}`);
     });
 })();
