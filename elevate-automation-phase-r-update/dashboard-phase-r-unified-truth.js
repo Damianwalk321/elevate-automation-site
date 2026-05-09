@@ -62,6 +62,9 @@
     const planAccess = summary.plan_access || {};
     const setup = summary.setup_status || {};
     const profile = summary.profile_snapshot || {};
+    const canonicalProfileTable = clean(summary.canonical_profile_table || "profiles");
+    const canonicalListingsTable = clean(summary.canonical_listings_table || "user_listings");
+    const legacyListingsTables = Array.isArray(summary.legacy_listings_tables) ? summary.legacy_listings_tables : [];
 
     const dailyLimit = n(
       summary.effective_posting_limit ??
@@ -73,6 +76,7 @@
 
     const postsUsed = n(
       summary.posts_today ??
+      planAccess.posts_today ??
       account.posts_today ??
       account.posts_used_today,
       0
@@ -80,11 +84,13 @@
 
     const postsRemaining = n(
       summary.posts_remaining ??
+      planAccess.posts_remaining ??
       account.posts_remaining,
       Math.max(dailyLimit - postsUsed, 0)
     );
 
     const rawStatus = clean(
+      planAccess.status ||
       account.status ||
       summary.account_status ||
       (summary.can_post ? "active" : "inactive")
@@ -97,6 +103,11 @@
       synced_at: new Date().toISOString(),
       email: clean(account.email || ""),
       user_id: clean(account.user_id || ""),
+      identity_source: clean(summary.identity_source || ""),
+      matched_by: clean(summary.matched_by || ""),
+      canonical_profile_table: canonicalProfileTable,
+      canonical_listings_table: canonicalListingsTable,
+      legacy_listings_tables: legacyListingsTables,
       plan_key: plan.plan_key,
       plan_name: plan.plan_name,
       monthly_price: plan.monthly_price,
@@ -104,10 +115,10 @@
       posts_used_today: postsUsed,
       posts_remaining_today: Math.max(0, postsRemaining),
       can_post: Boolean(summary.can_post),
-      active: Boolean(account.active !== false),
+      active: Boolean(planAccess.active ?? account.active !== false),
       access_state,
       trial_ends_at: clean(account.trial_end || "2026-04-20T00:00:00Z"),
-      current_period_end: account.current_period_end || null,
+      current_period_end: account.current_period_end || planAccess.billing?.current_period_end || null,
       profile_complete: Boolean(setup.profile_complete),
       compliance_ready: Boolean(setup.compliance_mode_present && setup.dealership_name_present && setup.salesperson_name_present),
       inventory_url: clean(profile.inventory_url || account.inventory_url || ""),
