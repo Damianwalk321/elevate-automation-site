@@ -106,12 +106,39 @@
       const loginBtn = document.getElementById("loginBtn");
       let isSubmitting = false;
       let redirected = false;
+      let autoRedirectTimer = null;
+      const LOGIN_RECOVERY_DELAY_MS = 900;
+      const RECENT_DASHBOARD_BOUNCE_MS = 4000;
 
-      function redirectToDashboard(reasonText) {
+      function clean(value) {
+        return String(value || "").trim();
+      }
+
+      function readRecentDashboardBounce() {
+        try {
+          const raw = sessionStorage.getItem("elevate.dashboard.last_boot");
+          if (!raw) return 0;
+          const parsed = JSON.parse(raw);
+          return Number(parsed?.at || 0) || 0;
+        } catch {
+          return 0;
+        }
+      }
+
+      function hasRecentDashboardBounce() {
+        const last = readRecentDashboardBounce();
+        return last > 0 && (Date.now() - last) < RECENT_DASHBOARD_BOUNCE_MS;
+      }
+
+      function scheduleRedirectToDashboard(reasonText) {
         if (redirected) return;
-        redirected = true;
+        clearTimeout(autoRedirectTimer);
         message.textContent = reasonText || "Opening dashboard...";
-        window.location.replace("/dashboard.html");
+        autoRedirectTimer = setTimeout(() => {
+          if (redirected) return;
+          redirected = true;
+          window.location.replace("/dashboard.html");
+        }, hasRecentDashboardBounce() ? LOGIN_RECOVERY_DELAY_MS : 120);
       }
 
       async function checkExistingSession() {
@@ -120,7 +147,7 @@
           const { data, error } = await window.supabaseClient.auth.getSession();
           if (error) return;
           if (data?.session?.user) {
-            redirectToDashboard("Existing session found. Opening dashboard...");
+            scheduleRedirectToDashboard("Existing session found. Opening dashboard...");
           }
         } catch (error) {
           console.warn("login session check warning:", error);
@@ -131,8 +158,9 @@
 
       if (window.supabaseClient?.auth?.onAuthStateChange) {
         window.supabaseClient.auth.onAuthStateChange((event, session) => {
-          if (session?.user && (event === "SIGNED_IN" || event === "INITIAL_SESSION" || event === "TOKEN_REFRESHED")) {
-            redirectToDashboard("Session active. Opening dashboard...");
+          if (!session?.user) return;
+          if (event === "SIGNED_IN" || event === "TOKEN_REFRESHED") {
+            scheduleRedirectToDashboard("Session active. Opening dashboard...");
           }
         });
       }
@@ -154,7 +182,7 @@
           }
 
           await window.signInWithEmail(email, password);
-          redirectToDashboard("Login successful. Opening dashboard...");
+          scheduleRedirectToDashboard("Login successful. Opening dashboard...");
         } catch (err) {
           console.error("Login error:", err);
           message.textContent = err.message || "Login failed.";
