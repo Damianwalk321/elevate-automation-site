@@ -27,7 +27,7 @@
 
   function setFriendlyStatus(message) {
     const bootStatus = document.getElementById("bootStatus");
-    if (bootStatus) bootStatus.textContent = "";
+    if (bootStatus && /waiting|loading|boot/i.test(clean(bootStatus.textContent || ""))) bootStatus.textContent = "";
 
     const welcomeText = document.getElementById("welcomeText");
     if (!welcomeText || !message) return;
@@ -39,10 +39,16 @@
     }
   }
 
+  function setBootStatus(message) {
+    const bootStatus = document.getElementById("bootStatus");
+    if (bootStatus) bootStatus.textContent = message || "";
+  }
+
   function pushStage(label, detail = "") {
     const state = ensureBootstrapState();
     const line = detail ? `${label}: ${detail}` : label;
     state.stages.push(line);
+    state.lastStage = line;
     if (state.stages.length > 12) state.stages = state.stages.slice(-12);
   }
 
@@ -87,6 +93,14 @@
     };
   }
 
+  function waitingStage(indicators) {
+    if (!indicators.hasUser) return "Waiting on auth session";
+    if (!indicators.hasCanonicalTruth && !indicators.hasSummary) return "Waiting on summary data";
+    if (!indicators.hasSession) return "Waiting on account access";
+    if (!indicators.listingsReady && !indicators.visibleDashboardContent && !indicators.activeSectionVisible) return "Waiting on dashboard sections";
+    return "Hydration in progress";
+  }
+
   function maybeRenderPhase5() {
     try {
       NS.phase5workflow?.renderSalesOS?.();
@@ -125,6 +139,9 @@
 
     const tick = () => {
       const indicators = getIndicators();
+      const stageText = waitingStage(indicators);
+      ensureBootstrapState().waitingStage = stageText;
+      setBootStatus(stageText);
 
       if (indicators.hasUser && !indicators.hasSummary) {
         setFriendlyStatus("Loading your workspace data...");
@@ -165,6 +182,7 @@
           setWorkspaceState("timeout");
           NS.phase2render?.markReady?.("timeout");
           setFriendlyStatus("Workspace is taking longer than normal. Refresh Access if needed.");
+          setBootStatus(`${stageText} • timed out`);
         }
         clearInterval(intervalId);
       }
