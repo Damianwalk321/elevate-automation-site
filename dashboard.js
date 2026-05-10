@@ -63,8 +63,10 @@
     { upto: MODULES.length, label: "Hardening and review actions" }
   ];
 
-  let compatBootTriggered = false;
-  function clean(value) { return String(value || "").replace(/\s+/g, " ").trim(); }
+  function clean(value) {
+    return String(value || "").replace(/\s+/g, " ").trim();
+  }
+
   function setLoaderState(state) {
     try {
       document.body?.setAttribute("data-ea-loader", state);
@@ -73,29 +75,38 @@
       publishLoaderDiagnostics();
     } catch {}
   }
+
   function setFriendlyStatus(message) {
     const bootStatus = document.getElementById("bootStatus");
-    if (bootStatus && /waiting|loading|boot/i.test(clean(bootStatus.textContent || ""))) bootStatus.textContent = "";
+    if (bootStatus && /waiting|loading|boot/i.test(clean(bootStatus.textContent || ""))) {
+      bootStatus.textContent = "";
+    }
     const welcomeText = document.getElementById("welcomeText");
     if (!welcomeText) return;
     const current = clean(welcomeText.textContent || "");
     const looksLoading = !current || /loading|booting|starting/i.test(current);
-    if (message && looksLoading) welcomeText.textContent = message;
+    if (message && looksLoading) {
+      welcomeText.textContent = message;
+    }
   }
+
   function setBootStatus(message) {
     const bootStatus = document.getElementById("bootStatus");
     if (bootStatus) bootStatus.textContent = message || "";
   }
+
   function stageLabelForIndex(index) {
     const oneBased = Math.max(1, Number(index) || 1);
     const group = MODULE_STAGE_GROUPS.find((item) => oneBased <= item.upto);
     return group?.label || "Finalizing workspace";
   }
+
   function publishLoaderDiagnostics() {
     try {
       NS.events?.dispatchEvent?.(new CustomEvent("loader:state", { detail: { ...NS.loaderState } }));
     } catch {}
   }
+
   function updateProgress(index, src) {
     try {
       const loaded = Math.max(0, index);
@@ -111,18 +122,7 @@
       publishLoaderDiagnostics();
     } catch {}
   }
-  function installLateDOMContentLoadedCompat() {
-    if (window.__ELEVATE_LATE_DOMCONTENTLOADED_COMPAT__) return;
-    window.__ELEVATE_LATE_DOMCONTENTLOADED_COMPAT__ = true;
-    const originalAddEventListener = document.addEventListener.bind(document);
-    document.addEventListener = function (type, listener, options) {
-      if (type === "DOMContentLoaded" && typeof listener === "function" && document.readyState !== "loading") {
-        try { queueMicrotask(() => listener.call(document, new Event("DOMContentLoaded"))); } catch { setTimeout(() => listener.call(document, new Event("DOMContentLoaded")), 0); }
-        if (options && typeof options === "object" && options.once) return;
-      }
-      return originalAddEventListener(type, listener, options);
-    };
-  }
+
   function hasCanonicalTruth() {
     const truth = window.ElevateDashboard?.accountTruth || null;
     if (truth && truth.user_id) return true;
@@ -135,38 +135,12 @@
       return false;
     }
   }
+
   function authStillSettling() {
     const bootstrap = window.ElevateDashboard?.bootstrapState || {};
     return Boolean(bootstrap.authSettling) || !Boolean(window.ElevateDashboard?.authSettled);
   }
-  function userLooksHydrated() {
-    const emailText = clean(document.querySelector(".user-email")?.textContent || "");
-    return Boolean(window.currentUser?.id || hasCanonicalTruth() || (emailText && !/loading/i.test(emailText)));
-  }
-  function kickLegacyBoot() {
-    if (compatBootTriggered) return;
-    compatBootTriggered = true;
-    try {
-      document.dispatchEvent(new Event("DOMContentLoaded", { bubbles: true, cancelable: true }));
-      NS.events?.dispatchEvent?.(new CustomEvent("loader:compat-boot", { detail: { at: Date.now() } }));
-    } catch (error) {
-      console.error("[Elevate Dashboard] Compatibility boot failed:", error);
-    }
-  }
-  function installControlledBootKick() {
-    if (window.__ELEVATE_CONTROLLED_BOOT_KICK__) return;
-    window.__ELEVATE_CONTROLLED_BOOT_KICK__ = true;
-    setTimeout(() => {
-      if (!authStillSettling() && !userLooksHydrated() && !hasCanonicalTruth()) kickLegacyBoot();
-    }, 900);
-    setTimeout(() => {
-      if (!authStillSettling() && !userLooksHydrated() && !hasCanonicalTruth()) {
-        setLoaderState("waiting-for-data");
-        setFriendlyStatus("Finalizing your workspace data...");
-        setBootStatus("Waiting on canonical account data...");
-      }
-    }, 2200);
-  }
+
   function loadScriptSequentially(index = 0) {
     if (index >= MODULES.length) return Promise.resolve();
     const src = MODULES[index];
@@ -189,17 +163,18 @@
     }).then(() => loadScriptSequentially(index + 1));
   }
 
-  installLateDOMContentLoadedCompat();
   setLoaderState("loading");
   setFriendlyStatus("Loading your operator workspace...");
   updateProgress(0, MODULES[0]);
 
   loadScriptSequentially()
     .then(() => {
-      installControlledBootKick();
       setLoaderState(hasCanonicalTruth() ? "truth-ready" : "modules-loaded");
-      if (hasCanonicalTruth()) setBootStatus("Canonical account data loaded.");
-      else setBootStatus(authStillSettling() ? "Modules loaded. Waiting for auth settle..." : "Modules loaded. Waiting for canonical account data...");
+      if (hasCanonicalTruth()) {
+        setBootStatus("Canonical account data loaded.");
+      } else {
+        setBootStatus(authStillSettling() ? "Modules loaded. Waiting for auth settle..." : "Modules loaded. Waiting for canonical account data...");
+      }
     })
     .catch((error) => {
       console.error("[Elevate Dashboard] Loader error:", error);
