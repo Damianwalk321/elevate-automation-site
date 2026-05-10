@@ -29,6 +29,33 @@
     carfax_mention: ["carfax_mention"]
   };
 
+  const FIELD_LABELS = {
+    full_name: ["full name", "salesperson name", "name"],
+    phone: ["phone", "your phone", "salesperson phone"],
+    email: ["email", "display email"],
+    dealership: ["dealership / company", "dealership", "company", "dealer name"],
+    city: ["city"],
+    province: ["province"],
+    dealer_phone: ["dealer phone"],
+    dealer_email: ["dealer email"],
+    dealer_website: ["dealer website", "website", "dealership website"],
+    inventory_url: ["inventory url", "inventory"],
+    scanner_type: ["scanner type", "scanner"],
+    listing_location: ["listing location", "location"],
+    license_number: ["license number", "license"],
+    compliance_mode: ["compliance mode", "compliance"],
+    booking_link: ["booking link"],
+    instagram_handle: ["instagram handle", "instagram"],
+    primary_cta: ["primary cta", "cta"],
+    default_seller_name: ["default seller name"],
+    active_disclaimer: ["active disclaimer", "disclaimer"],
+    logo_url: ["logo url", "logo"],
+    trades_welcome: ["trades welcome"],
+    financing_cta: ["financing cta", "financing"],
+    delivery_available: ["delivery available", "delivery"],
+    carfax_mention: ["carfax mention", "carfax"]
+  };
+
   const REQUIRED_SETUP_FIELDS = {
     salesperson_name_present: ["salesperson name", "salesperson", "full name", "name"],
     dealership_name_present: ["dealership", "dealer name"],
@@ -42,6 +69,7 @@
   let currentProfile = null;
   let currentSetupFields = null;
   let saveBound = false;
+  let lifecycleBound = false;
   let loadingPromise = null;
   let saving = false;
 
@@ -57,13 +85,33 @@
     return document.getElementById(id) || document.querySelector(`[name="${id}"]`) || null;
   }
 
+  function findFieldByLabel(fieldName) {
+    const labels = FIELD_LABELS[fieldName] || [];
+    if (!labels.length) return null;
+    const nodes = Array.from(document.querySelectorAll("label, .field label, .setup label"));
+    for (const node of nodes) {
+      const text = lower(node.textContent || "");
+      if (!text) continue;
+      if (!labels.some((label) => text.includes(label))) continue;
+      const fieldWrap = node.closest(".field, .form-group, .input-group, .setup-field") || node.parentElement;
+      const selector = 'input, select, textarea';
+      let input = null;
+      const forId = clean(node.getAttribute?.("for") || "");
+      if (forId) input = document.getElementById(forId);
+      if (!input && fieldWrap) input = fieldWrap.querySelector(selector);
+      if (!input) input = node.parentElement?.querySelector?.(selector) || null;
+      if (input) return input;
+    }
+    return null;
+  }
+
   function findFieldElement(fieldName) {
     const ids = FIELD_IDS[fieldName] || [fieldName];
     for (const id of ids) {
       const el = findById(id);
       if (el) return el;
     }
-    return null;
+    return findFieldByLabel(fieldName);
   }
 
   function setFieldValue(fieldName, value) {
@@ -73,6 +121,10 @@
       el.checked = !!value;
     } else {
       el.value = value == null ? "" : String(value);
+      try {
+        el.dispatchEvent(new Event("input", { bubbles: true }));
+        el.dispatchEvent(new Event("change", { bubbles: true }));
+      } catch {}
     }
     return true;
   }
@@ -88,6 +140,17 @@
     for (const id of ids) {
       const el = document.getElementById(id);
       if (el) el.textContent = value;
+    }
+  }
+
+  function setSidebarValueByLabel(labelMatchers, value) {
+    const labels = Array.from(document.querySelectorAll('.sidebar-card-label'));
+    for (const label of labels) {
+      const text = lower(label.textContent || '');
+      if (!labelMatchers.some((matcher) => text.includes(matcher))) continue;
+      const card = label.closest('.sidebar-card');
+      const valueNode = card?.querySelector('.sidebar-card-value');
+      if (valueNode) valueNode.textContent = value;
     }
   }
 
@@ -136,6 +199,7 @@
       ["Name", profile.full_name || "—"],
       ["Dealership", profile.dealership || "—"],
       ["Phone", profile.phone || "—"],
+      ["Dealer Email", profile.dealer_email || profile.email || "—"],
       ["Dealer Website", profile.dealer_website || "—"],
       ["Inventory URL", profile.inventory_url || "—"],
       ["Scanner", profile.scanner_type || "—"],
@@ -172,7 +236,8 @@
       }
     }
 
-    const percent = Math.round((Object.values(setupFields).filter(Boolean).length / Math.max(Object.keys(REQUIRED_SETUP_FIELDS).length, 1)) * 100);
+    const total = Math.max(Object.keys(REQUIRED_SETUP_FIELDS).length, 1);
+    const percent = Math.round((Object.values(setupFields).filter(Boolean).length / total) * 100);
     setTextByCandidates(["setupProgressValue", "setupPercentValue", "overviewSetupChip"], `${percent}%`);
   }
 
@@ -208,6 +273,8 @@
     setTextByCandidates(["profileRecordStatus"], "Loaded");
     setTextByCandidates(["dealershipContext"], [profile.dealership, profile.city].filter(Boolean).join(" • ") || "—");
     setTextByCandidates(["complianceContext"], [profile.province, profile.compliance_mode].filter(Boolean).join(" • ") || "—");
+    setSidebarValueByLabel(["logged in", "session", "email"], profile.email || "—");
+    setSidebarValueByLabel(["company", "dealership"], profile.dealership || "—");
   }
 
   function collectPayload() {
@@ -255,13 +322,40 @@
     }
   }
 
+  async function waitForAuthReady(maxAttempts = 8, delayMs = 450) {
+    for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+      const token = await NS.api.getAuthAccessToken();
+      if (token) return token;
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
+    }
+    return "";
+  }
+
+  async function requestProfile(method = "GET", body = null, attempts = 4) {
+    let lastError = null;
+    for (let attempt = 1; attempt <= attempts; attempt += 1) {
+      await waitForAuthReady(Math.min(3, attempt + 1), 350);
+      const response = await NS.api.apiFetch("/api/profile", {
+        method,
+        headers: body ? { "Content-Type": "application/json" } : undefined,
+        body: body ? JSON.stringify(body) : undefined
+      });
+      const result = await NS.api.parseJsonSafe(response);
+      if (response.ok) return result;
+      lastError = new Error(result?.error || `${method} /api/profile failed`);
+      const message = lower(lastError.message);
+      const retryable = response.status === 401 || response.status === 403 || message.includes("unauthorized") || message.includes("jwt") || message.includes("session");
+      if (!retryable || attempt === attempts) throw lastError;
+      await new Promise((resolve) => setTimeout(resolve, 500 * attempt));
+    }
+    throw lastError || new Error("Profile request failed.");
+  }
+
   async function loadProfile() {
     if (loadingPromise) return loadingPromise;
     loadingPromise = (async () => {
       showStatus("Loading saved profile...", "info");
-      const response = await NS.api.apiFetch("/api/profile", { method: "GET" });
-      const result = await NS.api.parseJsonSafe(response);
-      if (!response.ok) throw new Error(result?.error || "Failed to load profile.");
+      const result = await requestProfile("GET", null, 5);
       const profile = result?.profile || result?.data?.profile || null;
       const setupFields = result?.setup_fields || result?.data?.setup_fields || null;
       if (profile) populateForm(profile);
@@ -285,13 +379,7 @@
     showStatus("Saving profile...", "info");
     try {
       const payload = collectPayload();
-      const response = await NS.api.apiFetch("/api/profile", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload)
-      });
-      const result = await NS.api.parseJsonSafe(response);
-      if (!response.ok) throw new Error(result?.error || "Failed to save profile.");
+      const result = await requestProfile("POST", payload, 5);
       const profile = result?.profile || result?.data?.profile || currentProfile || payload;
       const setupFields = result?.setup_fields || result?.data?.setup_fields || currentSetupFields || null;
       populateForm(profile);
@@ -321,9 +409,13 @@
   }
 
   function bindLifecycle() {
+    if (lifecycleBound) return;
+    lifecycleBound = true;
     document.addEventListener("click", () => bindSaveButtons(), { passive: true });
     window.addEventListener("elevate:account-truth", () => {
-      if (!currentProfile) loadProfile().catch((error) => console.warn("[dashboard-profile] reload warning:", error));
+      if (!currentProfile && !loadingPromise) {
+        loadProfile().catch((error) => console.warn("[dashboard-profile] reload warning:", error));
+      }
     });
   }
 
