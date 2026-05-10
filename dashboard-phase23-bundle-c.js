@@ -141,6 +141,18 @@
     document.head.appendChild(style);
   }
 
+  function ensurePhase21Shim() {
+    if (window.__ELEVATE_PHASE21_SHIM_REQUESTED__) return;
+    window.__ELEVATE_PHASE21_SHIM_REQUESTED__ = true;
+    if (window.ElevateDashboard?.modules?.phase21shellshim) return;
+    const existing = Array.from(document.scripts).find((s) => s.src && s.src.includes('/dashboard-phase21-shell-shim.js'));
+    if (existing) return;
+    const script = document.createElement('script');
+    script.src = '/dashboard-phase21-shell-shim.js?v=20260509shim1';
+    script.async = false;
+    document.head.appendChild(script);
+  }
+
   function ensureCompactToggle() {
     const toolbar = document.querySelector("#overviewListingsCard .toolbar");
     const grid = document.getElementById("recentListingsGrid");
@@ -263,6 +275,7 @@
   }
 
   function boot() {
+    ensurePhase21Shim();
     injectStyle();
     patchFetchDiagnostics();
     ensureCompactToggle();
