@@ -159,7 +159,7 @@
       if (window.supabaseClient?.auth?.onAuthStateChange) {
         window.supabaseClient.auth.onAuthStateChange((event, session) => {
           if (!session?.user) return;
-          if (event === "SIGNED_IN" || event === "TOKEN_REFRESHED") {
+          if (event === "SIGNED_IN") {
             scheduleRedirectToDashboard("Session active. Opening dashboard...");
           }
         });
