@@ -6,9 +6,6 @@
 // - normalize visible plan/access/limit truth
 // - publish canonical account truth from the live summary API
 // - write bridge payloads to localStorage for extension sync
-//
-// Intended load order in dashboard.html:
-// existing dashboard bundles first, then this file last.
 
 (() => {
   if (window.__ELEVATE_PHASE_R_DASHBOARD_UNIFIED__) return;
@@ -207,6 +204,7 @@
     }
 
     const runner = (async () => {
+      console.info("[Phase R] summary sync start", { startup });
       const response = await apiFetch("/api/get-dashboard-summary-canonical");
       const data = await parseJson(response);
       if (!response.ok || !data?.data) {
@@ -218,6 +216,7 @@
       publishTruth(truth);
       applyTruth(truth);
       startupSyncCompleted = true;
+      console.info("[Phase R] summary sync complete", { startup, requestId: truth.last_sync_request_id || "" });
       return truth;
     })();
 
@@ -237,8 +236,7 @@
       if (!btn || btn.dataset.phaseRBound === "true") return;
       btn.dataset.phaseRBound = "true";
       btn.addEventListener("click", () => {
-        setTimeout(() => { syncTruth({ startup: false }).catch(console.error); }, 400);
-        setTimeout(() => { syncTruth({ startup: false }).catch(console.error); }, 1600);
+        syncTruth({ startup: false }).catch((error) => console.error("[Phase R] manual refresh failed:", error));
       });
     });
   }
@@ -253,11 +251,4 @@
   } else {
     run();
   }
-
-  setTimeout(() => {
-    if (!startupSyncCompleted) syncTruth({ startup: true }).catch(console.error);
-  }, 1200);
-  setTimeout(() => {
-    if (!startupSyncCompleted) syncTruth({ startup: true }).catch(console.error);
-  }, 3200);
 })();
