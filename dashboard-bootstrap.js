@@ -2,14 +2,8 @@
   const NS = (window.ElevateDashboard = window.ElevateDashboard || {});
   if (NS.modules?.bootstrap) return;
 
-  const RETRY_TIMEOUT_MS = 12000;
-  const POLL_MS = 350;
   const AUTH_SETTLE_MS = 2200;
-  const REQUIRED_FAILED_AUTH_TICKS = 2;
-
-  function qs(selector, root = document) {
-    return root.querySelector(selector);
-  }
+  const FINAL_TIMEOUT_MS = 12000;
 
   function clean(value) {
     return String(value || "").replace(/\s+/g, " ").trim();
@@ -18,7 +12,6 @@
   function ensureBootstrapState() {
     NS.bootstrapState = NS.bootstrapState && typeof NS.bootstrapState === "object" ? NS.bootstrapState : {};
     if (!Array.isArray(NS.bootstrapState.stages)) NS.bootstrapState.stages = [];
-    NS.bootstrapState.failedAuthTicks = Number(NS.bootstrapState.failedAuthTicks || 0);
     return NS.bootstrapState;
   }
 
@@ -30,7 +23,9 @@
 
   function setFriendlyStatus(message) {
     const bootStatus = document.getElementById("bootStatus");
-    if (bootStatus && /waiting|loading|boot/i.test(clean(bootStatus.textContent || ""))) bootStatus.textContent = "";
+    if (bootStatus && /waiting|loading|boot/i.test(clean(bootStatus.textContent || ""))) {
+      bootStatus.textContent = "";
+    }
 
     const welcomeText = document.getElementById("welcomeText");
     if (!welcomeText || !message) return;
@@ -52,7 +47,10 @@
     const line = detail ? `${label}: ${detail}` : label;
     state.stages.push(line);
     state.lastStage = line;
-    if (state.stages.length > 12) state.stages = state.stages.slice(-12);
+    if (state.stages.length > 20) state.stages = state.stages.slice(-20);
+    try {
+      console.info("[Elevate Bootstrap]", line);
+    } catch {}
   }
 
   function readCanonicalTruth() {
@@ -67,72 +65,30 @@
     }
   }
 
-  function hasVisibleAuthenticatedUser() {
-    const userEmailText = clean(qs(".user-email")?.textContent || "");
-    const loggedInBanner = clean(document.body?.textContent?.includes("LOGGED IN") ? "LOGGED IN" : "");
-    return Boolean(
-      window.currentUser?.id ||
-      (userEmailText && !/loading/i.test(userEmailText)) ||
-      loggedInBanner
-    );
+  function hasAuthenticatedUser() {
+    const truth = readCanonicalTruth();
+    if (truth?.user_id || truth?.email) return true;
+    const emailText = clean(document.querySelector(".user-email")?.textContent || "");
+    if (emailText && !/loading/i.test(emailText)) return true;
+    return Boolean(window.currentUser?.id || window.currentAccountData || window.currentNormalizedSession?.subscription);
   }
 
-  function getIndicators() {
-    const userEmailText = clean(qs(".user-email")?.textContent || "");
-    const welcomeText = clean(document.getElementById("welcomeText")?.textContent || "");
-    const canonicalTruth = readCanonicalTruth();
-    const hasCanonicalTruth = Boolean(canonicalTruth && (canonicalTruth.user_id || canonicalTruth.email));
-    const hasUser = Boolean(window.currentUser?.id) || hasCanonicalTruth || Boolean(userEmailText && !/loading/i.test(userEmailText));
-    const hasSession = Boolean(window.currentNormalizedSession?.subscription || window.currentAccountData || hasCanonicalTruth);
-    const hasSummary = Boolean(window.dashboardSummary && typeof window.dashboardSummary === "object") || hasCanonicalTruth;
-    const listingsReady = Array.isArray(window.dashboardListings);
-    const activeSectionVisible = Array.from(document.querySelectorAll(".dashboard-section")).some((section) => section.style.display === "block");
-    const visibleDashboardContent = Boolean(
-      document.getElementById("recentListingsGrid")?.children?.length ||
-      document.getElementById("overview")?.textContent?.includes("Operate the highest") ||
-      activeSectionVisible
-    );
-    const shellLoading = /loading/i.test(userEmailText) || /loading workspace|loading operator/i.test(welcomeText);
-    const authSettled = Boolean(NS.authSettled || canonicalTruth?.auth_settled || canonicalTruth?.truth_ready);
-
-    return {
-      hasUser,
-      hasSession,
-      hasSummary,
-      hasCanonicalTruth,
-      listingsReady,
-      activeSectionVisible,
-      visibleDashboardContent,
-      shellLoading,
-      authSettled,
-      hasVisibleAuthenticatedUser: hasVisibleAuthenticatedUser()
-    };
+  function hasSummaryOrTruth() {
+    const truth = readCanonicalTruth();
+    if (truth?.truth_ready || truth?.user_id || truth?.email) return true;
+    return Boolean(window.dashboardSummary && typeof window.dashboardSummary === "object");
   }
 
-  function waitingStage(indicators) {
-    if (!indicators.hasUser) return "Waiting on auth session";
-    if (!indicators.hasCanonicalTruth && !indicators.hasSummary) return "Waiting on summary data";
-    if (!indicators.hasSession) return "Waiting on account access";
-    if (!indicators.listingsReady && !indicators.visibleDashboardContent && !indicators.activeSectionVisible) return "Waiting on dashboard sections";
-    return "Hydration in progress";
-  }
-
-  function maybeRenderPhase5() {
-    try {
-      NS.phase5workflow?.renderSalesOS?.();
-    } catch (error) {
-      console.warn("[Elevate Dashboard] Phase 5 render warning:", error);
-    }
-  }
-
-  function finalizeReady(detailMessage) {
-    setWorkspaceState("true");
-    NS.phase2render?.markReady?.("ready");
+  function markReady(message = "Workspace ready.") {
     const state = ensureBootstrapState();
+    if (state.ready) return;
     state.ready = true;
     state.readyAt = new Date().toISOString();
     state.authSettled = true;
     NS.authSettled = true;
+
+    setWorkspaceState("true");
+    NS.phase2render?.markReady?.("ready");
 
     const bootStatus = document.getElementById("bootStatus");
     if (bootStatus) bootStatus.textContent = "";
@@ -141,92 +97,71 @@
     if (welcomeText) {
       const current = clean(welcomeText.textContent || "");
       if (!current || /loading|booting|starting|workspace is taking longer/i.test(current)) {
-        welcomeText.textContent = detailMessage || "Workspace ready.";
+        welcomeText.textContent = message;
       }
     }
+
+    pushStage("Ready", "Canonical startup finished.");
   }
 
-  function startWatch() {
+  function markFailed(message, detail = "") {
     const state = ensureBootstrapState();
-    setWorkspaceState("false");
-    NS.phase2render?.prepare?.();
-    pushStage("Bootstrap", "Watching startup silently in production mode.");
+    if (state.ready) return;
+    state.failed = true;
+    state.failedAt = new Date().toISOString();
+    setWorkspaceState("timeout");
+    NS.phase2render?.markReady?.("timeout");
+    setFriendlyStatus(message || "Workspace is taking longer than normal. Refresh Access if needed.");
+    setBootStatus(detail || "Startup timed out");
+    pushStage("Failed", detail || message || "Startup timed out.");
+  }
 
-    const startedAt = Date.now();
-    let readyCount = 0;
+  function attemptReady(source = "check") {
+    const state = ensureBootstrapState();
+    if (state.ready) return true;
 
-    const tick = () => {
-      const indicators = getIndicators();
-      const elapsed = Date.now() - startedAt;
-      const stageText = waitingStage(indicators);
-      state.waitingStage = stageText;
-      state.authSettling = elapsed < AUTH_SETTLE_MS && !indicators.authSettled;
-      setBootStatus(state.authSettling ? `${stageText} • settling auth...` : stageText);
+    const truth = readCanonicalTruth();
+    const authSettled = Boolean(NS.authSettled || truth?.auth_settled || truth?.truth_ready);
+    const hasUser = hasAuthenticatedUser();
+    const hasSummary = hasSummaryOrTruth();
 
-      if (indicators.hasCanonicalTruth || indicators.hasSession || indicators.hasVisibleAuthenticatedUser) {
-        state.failedAuthTicks = 0;
-      } else if (!state.authSettling) {
-        state.failedAuthTicks += 1;
-      }
+    if (hasUser && hasSummary) {
+      pushStage("Ready check", `passed via ${source}`);
+      markReady("Workspace ready.");
+      return true;
+    }
 
-      if (indicators.hasUser && !indicators.hasSummary) {
-        setFriendlyStatus("Loading your workspace data...");
-      } else if (indicators.hasSummary && !indicators.hasSession) {
-        setFriendlyStatus("Finalizing account access...");
-      }
+    if (authSettled && !hasUser) {
+      pushStage("Auth", `settled unauthenticated via ${source}`);
+      setWorkspaceState("auth-settled");
+      setFriendlyStatus("Session not active. Please log in.");
+      setBootStatus("Auth settled without active session.");
+      return false;
+    }
 
-      if (indicators.hasSummary && indicators.hasSession) {
-        maybeRenderPhase5();
-      }
+    pushStage("Waiting", `${source} • user=${hasUser} summary=${hasSummary} authSettled=${authSettled}`);
+    setBootStatus(authSettled ? "Waiting on dashboard summary..." : "Waiting on auth settle...");
+    if (hasUser && !hasSummary) setFriendlyStatus("Loading your workspace data...");
+    return false;
+  }
 
-      const readyNow =
-        indicators.hasCanonicalTruth || (
-          indicators.hasUser &&
-          indicators.hasSession &&
-          indicators.hasSummary &&
-          (indicators.listingsReady || indicators.visibleDashboardContent || indicators.activeSectionVisible)
-        );
+  function bindStartupListeners() {
+    if (window.__ELEVATE_BOOTSTRAP_LISTENERS_BOUND__) return;
+    window.__ELEVATE_BOOTSTRAP_LISTENERS_BOUND__ = true;
 
-      if (readyNow) {
-        readyCount += 1;
-      } else {
-        readyCount = 0;
-      }
-
-      if (readyCount >= 2) {
-        pushStage("Ready", indicators.hasCanonicalTruth ? "Canonical dashboard truth detected." : "Core dashboard hydration completed.");
-        finalizeReady("Workspace ready.");
-        clearInterval(intervalId);
-        return;
-      }
-
-      if (
-        !state.authSettling &&
-        state.failedAuthTicks >= REQUIRED_FAILED_AUTH_TICKS &&
-        !indicators.hasCanonicalTruth &&
-        !indicators.hasVisibleAuthenticatedUser
-      ) {
-        pushStage("Auth", "Stable unauthenticated state detected.");
-        state.authSettled = true;
-        NS.authSettled = true;
-      }
-
-      if (Date.now() - startedAt > RETRY_TIMEOUT_MS) {
-        if (indicators.hasCanonicalTruth || indicators.visibleDashboardContent || (indicators.hasUser && indicators.hasSession && indicators.hasSummary)) {
-          pushStage("Ready", "Dashboard is usable; soft timeout ignored.");
-          finalizeReady("Workspace ready.");
-        } else {
-          setWorkspaceState("timeout");
-          NS.phase2render?.markReady?.("timeout");
-          setFriendlyStatus("Workspace is taking longer than normal. Refresh Access if needed.");
-          setBootStatus(`${stageText} • timed out`);
-        }
-        clearInterval(intervalId);
+    const rerun = (source) => {
+      try {
+        attemptReady(source);
+      } catch (error) {
+        console.warn("[Elevate Bootstrap] readiness check warning:", error);
       }
     };
 
-    const intervalId = setInterval(tick, POLL_MS);
-    tick();
+    window.addEventListener("elevate:account-truth", () => rerun("account-truth-event"));
+    window.addEventListener("elevate:enforcement-bridge", () => rerun("enforcement-bridge-event"));
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "visible") rerun("visibility-visible");
+    });
   }
 
   function boot() {
@@ -234,7 +169,33 @@
     if (state.started) return;
     state.started = true;
     state.startedAt = new Date().toISOString();
-    startWatch();
+    state.authSettling = true;
+
+    setWorkspaceState("false");
+    NS.phase2render?.prepare?.();
+    setFriendlyStatus("Loading your operator workspace...");
+    setBootStatus("Waiting on auth settle...");
+    pushStage("Bootstrap", "Event-driven startup watcher armed.");
+    bindStartupListeners();
+
+    setTimeout(() => {
+      state.authSettling = false;
+      NS.authSettled = Boolean(NS.authSettled || readCanonicalTruth()?.auth_settled || readCanonicalTruth()?.truth_ready);
+      pushStage("Auth settle", "Initial auth settle window completed.");
+      attemptReady("auth-settle-window");
+    }, AUTH_SETTLE_MS);
+
+    setTimeout(() => {
+      attemptReady("mid-startup-check");
+    }, 3000);
+
+    setTimeout(() => {
+      if (!attemptReady("final-timeout-check")) {
+        markFailed("Workspace is taking longer than normal. Refresh Access if needed.", "Canonical summary did not stabilize before timeout.");
+      }
+    }, FINAL_TIMEOUT_MS);
+
+    attemptReady("initial");
   }
 
   if (document.readyState === "loading") {
