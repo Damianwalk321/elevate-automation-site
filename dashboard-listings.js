@@ -15,13 +15,15 @@
     const views = Number(item.views || item.views_count || 0);
     const messages = Number(item.messages || item.messages_count || 0);
     const status = clean(item.status).toLowerCase();
+    const lifecycle = clean(item.lifecycle_status).toLowerCase();
+    const reviewBucket = clean(item.review_bucket).toLowerCase();
     const previousPrice = clean(item.previous_price);
     const currentPrice = clean(item.current_price || item.price);
     const hasViewLift = events.some((evt) => evt.type === "view_update" && Number(evt.meta?.delta || 0) >= 5);
     const hasMessageLift = events.some((evt) => evt.type === "message_update" && Number(evt.meta?.delta || 0) >= 1);
     const lastSeenMins = minutesSince(item.last_seen_at);
 
-    if (status === "removed") return "removed";
+    if (status === "removed" || lifecycle === "review_delete" || reviewBucket === "removedvehicles") return "removed";
     if (status === "sold") return "sold";
     if (hasMessageLift && messages >= 2) return "fresh_traction";
     if (messages >= 3) return "message_leader";
@@ -38,9 +40,60 @@
   function confidenceFor(item) {
     const sync = clean(item.sync_confidence || "").toLowerCase();
     if (sync) return sync;
+    if (item.source === "api_get_user_listings") return "synced";
     if (item.source === "recent_listings_grid") return "tracked";
     if (item.source === "summary_fallback") return "estimated";
     return "mixed";
+  }
+
+  function normalizeApiListing(item = {}) {
+    return {
+      ...item,
+      id: clean(item.identity_key || item.id || item.marketplace_listing_id || item.vin || item.stock_number),
+      title: clean(item.title || `${clean(item.year)} ${clean(item.make)} ${clean(item.model)}`.trim()),
+      price: item.display_price_text || item.current_price || item.price || "",
+      current_price: item.display_price_text || item.current_price || item.price || "",
+      views: Number(item.views || item.views_count || 0),
+      views_count: Number(item.views || item.views_count || 0),
+      messages: Number(item.messages || item.messages_count || 0),
+      messages_count: Number(item.messages || item.messages_count || 0),
+      image_url: item.image_url || "",
+      source: "api_get_user_listings",
+      sync_source: "api_get_user_listings",
+      sync_confidence: "synced",
+      last_seen_at: item.last_seen_at || item.updated_at || item.posted_at || new Date().toISOString(),
+      posted_at: item.posted_at || item.created_at || item.updated_at || null,
+      status: item.status || "active",
+      lifecycle_status: item.lifecycle_status || "active",
+      review_bucket: item.review_bucket || "",
+      previous_price: item.previous_price || "",
+      source_table: item.source_table || "user_listings"
+    };
+  }
+
+  async function fetchListingsFromApi() {
+    if (!NS.api?.apiFetch || !NS.api?.parseJsonSafe) return null;
+    try {
+      const response = await NS.api.apiFetch("/api/get-user-listings?limit=200&sort=newest", { method: "GET" });
+      const result = await NS.api.parseJsonSafe(response);
+      if (!response.ok) {
+        console.warn("[dashboard-listings] api load failed:", result?.error || response.statusText);
+        return null;
+      }
+      const rows = Array.isArray(result?.data) ? result.data : [];
+      return {
+        source: "api_get_user_listings",
+        confidence: rows.length ? "synced" : "empty",
+        ingested_at: new Date().toISOString(),
+        version: "v1",
+        issues: [],
+        listings: rows.map(normalizeApiListing),
+        events: []
+      };
+    } catch (error) {
+      console.warn("[dashboard-listings] api exception:", error);
+      return null;
+    }
   }
 
   function readListingCardsFromDOM() {
@@ -130,74 +183,26 @@
     const actionQueue = [];
 
     if ((sync.issues || []).length) {
-      actionQueue.push({
-        id: "sync_issue",
-        title: "Sync truth needs attention",
-        copy: (sync.issues || []).slice(0, 2).join(" "),
-        reason: "Recommendations may rely on fallback tracking until sync is healthy.",
-        tone: "cleanup",
-        section: "tools",
-        focus: "listingSearchInput"
-      });
+      actionQueue.push({ id: "sync_issue", title: "Sync truth needs attention", copy: (sync.issues || []).slice(0, 2).join(" "), reason: "Recommendations may rely on fallback tracking until sync is healthy.", tone: "cleanup", section: "tools", focus: "listingSearchInput" });
     }
     if (buckets.fresh_traction.length) {
       const leader = buckets.fresh_traction[0];
-      actionQueue.push({
-        id: "fresh_traction",
-        title: `${buckets.fresh_traction.length} listing${buckets.fresh_traction.length === 1 ? "" : "s"} have fresh traction`,
-        copy: `${leader.title || "A listing"} just gained message activity. Promote or keep it visible while momentum is fresh.`,
-        reason: "Backed by recent message-update history.",
-        tone: "growth",
-        section: "overview",
-        focus: "listingSearchInput"
-      });
+      actionQueue.push({ id: "fresh_traction", title: `${buckets.fresh_traction.length} listing${buckets.fresh_traction.length === 1 ? "" : "s"} have fresh traction`, copy: `${leader.title || "A listing"} just gained message activity. Promote or keep it visible while momentum is fresh.`, reason: "Backed by recent message-update history.", tone: "growth", section: "overview", focus: "listingSearchInput" });
     }
     if (buckets.high_views_low_messages.length) {
       const leader = buckets.high_views_low_messages[0];
-      actionQueue.push({
-        id: "high_views_low_messages",
-        title: `${buckets.high_views_low_messages.length} listing${buckets.high_views_low_messages.length === 1 ? "" : "s"} have traction without conversion`,
-        copy: `${leader.title || "Top listing"} is pulling views without messages. Review price, CTA, and media.`,
-        reason: "High views with flat message velocity is a conversion leak.",
-        tone: "revenue",
-        section: "tools",
-        focus: "listingSearchInput"
-      });
+      actionQueue.push({ id: "high_views_low_messages", title: `${buckets.high_views_low_messages.length} listing${buckets.high_views_low_messages.length === 1 ? "" : "s"} have traction without conversion`, copy: `${leader.title || "Top listing"} is pulling views without messages. Review price, CTA, and media.`, reason: "High views with flat message velocity is a conversion leak.", tone: "revenue", section: "tools", focus: "listingSearchInput" });
     }
     if (buckets.weak_conversion.length) {
       const leader = buckets.weak_conversion[0];
-      actionQueue.push({
-        id: "weak_conversion",
-        title: `${buckets.weak_conversion.length} weak converter${buckets.weak_conversion.length === 1 ? "" : "s"} need rescue`,
-        copy: `${leader.title || "A listing"} has enough attention to matter, but not enough response to stay unchanged.`,
-        reason: "Weak conversion compared with current tracked attention.",
-        tone: "cleanup",
-        section: "tools",
-        focus: "listingSearchInput"
-      });
+      actionQueue.push({ id: "weak_conversion", title: `${buckets.weak_conversion.length} weak converter${buckets.weak_conversion.length === 1 ? "" : "s"} need rescue`, copy: `${leader.title || "A listing"} has enough attention to matter, but not enough response to stay unchanged.`, reason: "Weak conversion compared with current tracked attention.", tone: "cleanup", section: "tools", focus: "listingSearchInput" });
     }
     if (buckets.price_attention.length) {
       const leader = buckets.price_attention[0];
-      actionQueue.push({
-        id: "price_attention",
-        title: `${buckets.price_attention.length} listing${buckets.price_attention.length === 1 ? "" : "s"} need price attention`,
-        copy: `${leader.title || "A listing"} changed price. Check whether traction improved or if more intervention is needed.`,
-        reason: "Price change should be followed by traction review.",
-        tone: "cleanup",
-        section: "tools",
-        focus: "listingSearchInput"
-      });
+      actionQueue.push({ id: "price_attention", title: `${buckets.price_attention.length} listing${buckets.price_attention.length === 1 ? "" : "s"} need price attention`, copy: `${leader.title || "A listing"} changed price. Check whether traction improved or if more intervention is needed.`, reason: "Price change should be followed by traction review.", tone: "cleanup", section: "tools", focus: "listingSearchInput" });
     }
     if (!actionQueue.length) {
-      actionQueue.push({
-        id: "sync_quiet",
-        title: "Unified sync layer is live",
-        copy: "As more synced listing payloads and events arrive, recommendation quality should continue improving.",
-        reason: "Current state is stable but signal volume is still building.",
-        tone: "growth",
-        section: "tools",
-        focus: null
-      });
+      actionQueue.push({ id: "sync_quiet", title: "Unified sync layer is live", copy: "As more synced listing payloads and events arrive, recommendation quality should continue improving.", reason: "Current state is stable but signal volume is still building.", tone: "growth", section: "tools", focus: null });
     }
 
     const countType = (type) => events.filter((evt) => evt.type === type).length;
@@ -236,7 +241,7 @@
     return payload;
   }
 
-  function rebuildRegistry() {
+  function rebuildRegistryFromFallback() {
     const state = NS.state;
     if (!state?.upsertListing) return;
     let items = readListingCardsFromDOM();
@@ -278,33 +283,44 @@
     return true;
   }
 
+  async function hydrateListings() {
+    const apiPayload = await fetchListingsFromApi();
+    if (apiPayload?.listings?.length) {
+      ingestRemotePayload(apiPayload);
+      return true;
+    }
+    const remote = getWindowRemotePayload();
+    if (remote) {
+      ingestRemotePayload(remote);
+      return true;
+    }
+    rebuildRegistryFromFallback();
+    return false;
+  }
+
   function bindRefresh() {
     const btn = document.getElementById("refreshListingsBtn");
     if (!btn || btn.dataset.packageFBound === "true") return;
     btn.dataset.packageFBound = "true";
-    btn.addEventListener("click", () => {
-      const remote = getWindowRemotePayload();
-      if (remote) ingestRemotePayload(remote);
-      else rebuildRegistry();
+    btn.addEventListener("click", async () => {
+      await hydrateListings();
       window.dispatchEvent(new CustomEvent("elevate:tracking-refreshed"));
     });
   }
 
-  function boot() {
-    const remote = getWindowRemotePayload();
-    if (remote) ingestRemotePayload(remote);
-    else rebuildRegistry();
+  async function boot() {
+    await hydrateListings();
     bindRefresh();
-    setTimeout(() => { const payload = getWindowRemotePayload(); if (payload) ingestRemotePayload(payload); else rebuildRegistry(); }, 1200);
+    setTimeout(() => { hydrateListings(); }, 1200);
     setTimeout(() => { const payload = getWindowRemotePayload(); if (payload) ingestRemotePayload(payload); }, 3200);
   }
 
   window.addEventListener("elevate:remote-sync", (event) => { if (event?.detail) ingestRemotePayload(event.detail); });
 
-  NS.listings = { rebuildRegistry, buildAnalyticsFromRegistry, ingestRemotePayload };
+  NS.listings = { rebuildRegistry: rebuildRegistryFromFallback, buildAnalyticsFromRegistry, ingestRemotePayload, hydrateListings };
   NS.modules = NS.modules || {};
   NS.modules.listings = true;
 
-  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", boot, { once: true });
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", () => { boot(); }, { once: true });
   else boot();
 })();
