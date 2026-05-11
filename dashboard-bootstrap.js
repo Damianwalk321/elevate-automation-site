@@ -47,7 +47,7 @@
     const line = detail ? `${label}: ${detail}` : label;
     state.stages.push(line);
     state.lastStage = line;
-    if (state.stages.length > 20) state.stages = state.stages.slice(-20);
+    if (state.stages.length > 30) state.stages = state.stages.slice(-30);
     try {
       console.info("[Elevate Bootstrap]", line);
     } catch {}
@@ -79,6 +79,15 @@
     return Boolean(window.dashboardSummary && typeof window.dashboardSummary === "object");
   }
 
+  async function hasVerifiedToken() {
+    try {
+      const token = await NS.api?.getAuthAccessToken?.({ waitForRestore: false });
+      return Boolean(clean(token));
+    } catch {
+      return false;
+    }
+  }
+
   function markReady(message = "Workspace ready.") {
     const state = ensureBootstrapState();
     if (state.ready) return;
@@ -101,7 +110,7 @@
       }
     }
 
-    pushStage("Ready", "Canonical startup finished.");
+    pushStage("Ready", "Canonical startup finished with verified auth.");
   }
 
   function markFailed(message, detail = "") {
@@ -116,7 +125,7 @@
     pushStage("Failed", detail || message || "Startup timed out.");
   }
 
-  function attemptReady(source = "check") {
+  async function attemptReady(source = "check") {
     const state = ensureBootstrapState();
     if (state.ready) return true;
 
@@ -124,11 +133,20 @@
     const authSettled = Boolean(NS.authSettled || truth?.auth_settled || truth?.truth_ready);
     const hasUser = hasAuthenticatedUser();
     const hasSummary = hasSummaryOrTruth();
+    const tokenReady = await hasVerifiedToken();
 
-    if (hasUser && hasSummary) {
+    if (hasUser && hasSummary && tokenReady) {
       pushStage("Ready check", `passed via ${source}`);
       markReady("Workspace ready.");
       return true;
+    }
+
+    if (authSettled && !tokenReady) {
+      pushStage("Waiting", `${source} • awaiting verified token`);
+      setWorkspaceState("auth-pending");
+      setFriendlyStatus("Restoring secure session...");
+      setBootStatus("Waiting on verified session token...");
+      return false;
     }
 
     if (authSettled && !hasUser) {
@@ -139,8 +157,8 @@
       return false;
     }
 
-    pushStage("Waiting", `${source} • user=${hasUser} summary=${hasSummary} authSettled=${authSettled}`);
-    setBootStatus(authSettled ? "Waiting on dashboard summary..." : "Waiting on auth settle...");
+    pushStage("Waiting", `${source} • user=${hasUser} summary=${hasSummary} authSettled=${authSettled} token=${tokenReady}`);
+    setBootStatus(authSettled ? "Waiting on secure dashboard startup..." : "Waiting on auth settle...");
     if (hasUser && !hasSummary) setFriendlyStatus("Loading your workspace data...");
     return false;
   }
@@ -150,17 +168,33 @@
     window.__ELEVATE_BOOTSTRAP_LISTENERS_BOUND__ = true;
 
     const rerun = (source) => {
-      try {
-        attemptReady(source);
-      } catch (error) {
-        console.warn("[Elevate Bootstrap] readiness check warning:", error);
-      }
+      Promise.resolve()
+        .then(() => attemptReady(source))
+        .catch((error) => {
+          console.warn("[Elevate Bootstrap] readiness check warning:", error);
+        });
     };
 
     window.addEventListener("elevate:account-truth", () => rerun("account-truth-event"));
     window.addEventListener("elevate:enforcement-bridge", () => rerun("enforcement-bridge-event"));
+    window.addEventListener("elevate:auth-ready", () => rerun("auth-ready-event"));
     document.addEventListener("visibilitychange", () => {
       if (document.visibilityState === "visible") rerun("visibility-visible");
+    });
+  }
+
+  function bindAuthWatcher() {
+    const client = NS.api?.getSupabaseClient?.();
+    if (!client?.auth?.onAuthStateChange || window.__ELEVATE_BOOTSTRAP_AUTH_BOUND__) return;
+    window.__ELEVATE_BOOTSTRAP_AUTH_BOUND__ = true;
+    client.auth.onAuthStateChange((event, session) => {
+      if (session?.access_token || event === "SIGNED_IN" || event === "TOKEN_REFRESHED") {
+        try {
+          window.dispatchEvent(new CustomEvent("elevate:auth-ready", {
+            detail: { event, has_token: Boolean(session?.access_token) }
+          }));
+        } catch {}
+      }
     });
   }
 
@@ -177,6 +211,7 @@
     setBootStatus("Waiting on auth settle...");
     pushStage("Bootstrap", "Event-driven startup watcher armed.");
     bindStartupListeners();
+    bindAuthWatcher();
 
     setTimeout(() => {
       state.authSettling = false;
@@ -190,9 +225,11 @@
     }, 3000);
 
     setTimeout(() => {
-      if (!attemptReady("final-timeout-check")) {
-        markFailed("Workspace is taking longer than normal. Refresh Access if needed.", "Canonical summary did not stabilize before timeout.");
-      }
+      Promise.resolve(attemptReady("final-timeout-check")).then((ready) => {
+        if (!ready) {
+          markFailed("Workspace is taking longer than normal. Refresh Access if needed.", "Protected dashboard auth did not stabilize before timeout.");
+        }
+      });
     }, FINAL_TIMEOUT_MS);
 
     attemptReady("initial");
