@@ -1,7 +1,13 @@
 import { createClient } from "@supabase/supabase-js";
 
-const SUPABASE_URL = process.env.SUPABASE_URL;
-const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_PUBLIC_ANON_KEY || "";
+const SUPABASE_URL = process.env.SUPABASE_URL || "https://teixblbxkoershwgqpym.supabase.co";
+const SUPABASE_PUBLISHABLE_KEY =
+  process.env.SUPABASE_PUBLISHABLE_KEY ||
+  process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
+  process.env.SUPABASE_ANON_KEY ||
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
+  process.env.SUPABASE_PUBLIC_ANON_KEY ||
+  "sb_publishable_low3Lfh2rAsN-kqBlwHF2Q_Kc6OhQLB";
 
 function clean(value) {
   return String(value || "").trim();
@@ -15,20 +21,29 @@ export function isDashboardClient(req) {
   return clean(req?.headers?.["x-elevate-client"] || req?.headers?.["X-ELEVATE-CLIENT"] || "").toLowerCase() === "dashboard";
 }
 
+function getServerVerificationClient(token) {
+  if (!token || !SUPABASE_URL || !SUPABASE_PUBLISHABLE_KEY) return null;
+  return createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
+    global: { headers: { Authorization: `Bearer ${token}` } },
+    auth: { persistSession: false, autoRefreshToken: false }
+  });
+}
+
 export async function getVerifiedRequestUser(req) {
   try {
     const authHeader = clean(req.headers?.authorization || "");
     if (!authHeader.toLowerCase().startsWith("bearer ")) return null;
     const token = authHeader.slice(7).trim();
-    if (!token || !SUPABASE_URL || !SUPABASE_ANON_KEY) return null;
-    const client = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-      global: { headers: { Authorization: `Bearer ${token}` } },
-      auth: { persistSession: false, autoRefreshToken: false }
-    });
+    const client = getServerVerificationClient(token);
+    if (!client) return null;
     const { data, error } = await client.auth.getUser(token);
-    if (error || !data?.user) return null;
+    if (error || !data?.user) {
+      console.warn("[shared-auth] bearer verification failed:", error?.message || "no user");
+      return null;
+    }
     return data.user;
-  } catch {
+  } catch (error) {
+    console.warn("[shared-auth] bearer verification exception:", error?.message || error);
     return null;
   }
 }
