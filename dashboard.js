@@ -4,7 +4,7 @@
   window.__ELEVATE_DASHBOARD_PHASE18_20_LOADER__ = true;
 
   const NS = (window.ElevateDashboard = window.ElevateDashboard || {});
-  NS.version = "phase25-bundle-e";
+  NS.version = "bundle2-core-runtime";
   NS.modules = NS.modules || {};
   NS.events = NS.events || new EventTarget();
   NS.loaderState = NS.loaderState && typeof NS.loaderState === "object" ? NS.loaderState : {};
@@ -20,47 +20,14 @@
     "/dashboard-analytics.js?v=20260412p22e",
     "/dashboard-affiliate.js?v=20260406p12a",
     "/dashboard-billing.js?v=20260406p12a",
-    "/dashboard-legacy.js?v=20260406p12a",
-    "/dashboard-phase4-boot.js?v=20260406p12a",
-    "/dashboard-bootstrap.js?v=20260406p12a",
-    "/dashboard-phase2-render.js?v=20260411p2",
-    "/dashboard-phase3-canonical.js?v=20260411p3",
-    "/dashboard-phase4-readiness.js?v=20260411p4",
-    "/dashboard-phase4_2-cleanup.js?v=20260411p42",
-    "/dashboard-phase5-command.js?v=20260411p5",
-    "/dashboard-phase5_2-hotfix.js?v=20260411p52",
-    "/dashboard-phase5_3-listings-shell.js?v=20260411p53",
-    "/dashboard-phase5_4-overview-listings.js?v=20260411p54",
-    "/dashboard-phase5_5-overview-sync.js?v=20260411p55",
-    "/dashboard-phase5_6-overview-promote.js?v=20260411p56",
-    "/dashboard-phase5_7R-layout-only.js?v=20260411p57r",
-    "/dashboard-phase6-intelligence.js?v=20260411p6",
-    "/dashboard-phase7-events.js?v=20260411p7",
-    "/dashboard-phase8R-containment.js?v=20260411p8r",
-    "/dashboard-phase9-commercial.js?v=20260411p9",
-    "/dashboard-phase10-moat.js?v=20260411p10",
-    "/dashboard-phase11R-safe-consolidation.js?v=20260411p11r",
-    "/dashboard-phase12-summary.js?v=20260411p12",
-    "/dashboard-phase13-entities.js?v=20260411p13",
-    "/dashboard-phase14-registry-authority.js?v=20260411p14",
-    "/dashboard-phase15-attribution-v2.js?v=20260411p15",
-    "/dashboard-phase16-optimization-v2.js?v=20260411p16",
-    "/dashboard-phase17-team-command-v2.js?v=20260411p17",
-    "/dashboard-phase18-commercial-v2.js?v=20260411p18",
-    "/dashboard-phase19-language-compression.js?v=20260411p19",
-    "/dashboard-phase20-rc-hardening.js?v=20260411p20",
-    "/dashboard-phase21-shell-repair.js?v=20260412p23",
-    "/dashboard-phase23-bundle-c.js?v=20260412c1",
-    "/dashboard-bundle-e-review-actions.js?v=20260412e1"
+    "/dashboard-bootstrap.js?v=20260406p12a"
   ];
 
   const MODULE_STAGE_GROUPS = [
     { upto: 3, label: "Core shell" },
-    { upto: 10, label: "Workspace modules" },
-    { upto: 17, label: "Boot and readiness" },
-    { upto: 24, label: "Overview and listings" },
-    { upto: 32, label: "Intelligence and entities" },
-    { upto: MODULES.length, label: "Hardening and review actions" }
+    { upto: 7, label: "Workspace modules" },
+    { upto: 10, label: "Operator panels" },
+    { upto: MODULES.length, label: "Bootstrap" }
   ];
 
   function clean(value) {
