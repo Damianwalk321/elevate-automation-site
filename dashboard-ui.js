@@ -14,13 +14,9 @@
     qsa(`#${id}`).forEach((el) => { el.textContent = text || ""; });
   }
 
-  function resolveSectionId(sectionId) {
-    const requested = clean(sectionId);
-    if (!requested) return requested;
-    if (document.getElementById(requested)) return requested;
-
-    const aliases = {
-      reviewCenter: ["review-center", "reviewCenter", "review_center"],
+  function sectionAliases() {
+    return {
+      reviewCenter: ["reviewCenter", "review-center", "review_center"],
       listings: ["listings", "listingSection", "listing-section"],
       analytics: ["analytics", "analyticsSection", "analytics-section"],
       overview: ["overview", "overviewSection", "overview-section"],
@@ -30,23 +26,87 @@
       partners: ["partners", "partnersSection", "partners-section"],
       billing: ["billing", "billingSection", "billing-section"]
     };
+  }
 
+  function resolveSectionId(sectionId) {
+    const requested = clean(sectionId);
+    if (!requested) return requested;
+    if (document.getElementById(requested)) return requested;
+    const aliases = sectionAliases();
     const candidates = aliases[requested] || [requested];
     return candidates.find((id) => document.getElementById(id)) || requested;
   }
 
-  function showSection(sectionId) {
-    const resolvedSectionId = resolveSectionId(sectionId);
-    qsa(".dashboard-section").forEach((section) => {
-      section.style.display = section.id === resolvedSectionId ? "block" : "none";
-    });
+  function getDashboardSections() {
+    return qsa(".dashboard-section").filter(Boolean);
+  }
 
+  function findSectionElement(sectionId) {
+    const resolvedId = resolveSectionId(sectionId);
+    if (resolvedId) {
+      const direct = document.getElementById(resolvedId);
+      if (direct) return direct;
+    }
+
+    const aliases = sectionAliases();
+    const candidates = aliases[clean(sectionId)] || [clean(sectionId)];
+    const sections = getDashboardSections();
+    for (const candidate of candidates) {
+      const matched = sections.find((section) => clean(section.id) === candidate);
+      if (matched) return matched;
+    }
+
+    const loweredCandidates = candidates.map((value) => clean(value).toLowerCase()).filter(Boolean);
+    const headingMatch = sections.find((section) => {
+      const heading = clean(section.querySelector("h1, h2, h3")?.textContent || "").toLowerCase();
+      return loweredCandidates.some((candidate) => heading.includes(candidate.replace(/[-_]/g, " ")));
+    });
+    return headingMatch || null;
+  }
+
+  function markActiveNav(sectionId, sectionEl = null) {
+    const resolved = clean(sectionEl?.id || resolveSectionId(sectionId));
     qsa("[data-section]").forEach((button) => {
-      const buttonSection = resolveSectionId(button.getAttribute("data-section") || "");
-      button.classList.toggle("active", buttonSection === resolvedSectionId);
+      const buttonResolved = clean(resolveSectionId(button.getAttribute("data-section") || ""));
+      button.classList.toggle("active", Boolean(resolved) && buttonResolved === resolved);
+    });
+  }
+
+  function revealFallbackSections() {
+    const sections = getDashboardSections();
+    if (!sections.length) return;
+    sections.forEach((section, index) => {
+      section.style.display = index === 0 ? "block" : "none";
+    });
+    markActiveNav(sections[0].id || "", sections[0]);
+    NS.state?.set?.("ui.activeSection", clean(sections[0].id || "overview"));
+  }
+
+  function showSection(sectionId, options = {}) {
+    const target = findSectionElement(sectionId);
+    const sections = getDashboardSections();
+
+    if (!sections.length) return false;
+
+    if (!target) {
+      revealFallbackSections();
+      return false;
+    }
+
+    sections.forEach((section) => {
+      section.style.display = section === target ? "block" : "none";
     });
 
-    NS.state?.set?.("ui.activeSection", resolvedSectionId);
+    markActiveNav(sectionId, target);
+    const activeId = clean(target.id || resolveSectionId(sectionId) || sectionId);
+    if (activeId) NS.state?.set?.("ui.activeSection", activeId);
+
+    if (options.scroll !== false) {
+      try {
+        target.scrollIntoView({ block: "start", behavior: options.behavior || "auto" });
+      } catch {}
+    }
+    return true;
   }
 
   function injectStyleOnce(id, css) {
@@ -62,7 +122,7 @@
   }
 
   function existingNavSectionIds() {
-    return new Set(qsa("[data-section]").map((button) => clean(button.getAttribute("data-section") || "")).filter(Boolean));
+    return new Set(qsa("[data-section]").map((button) => clean(resolveSectionId(button.getAttribute("data-section") || ""))).filter(Boolean));
   }
 
   function createNavButton(label, sectionId) {
@@ -71,7 +131,7 @@
     button.type = "button";
     button.setAttribute("data-section", sectionId);
     button.textContent = label;
-    button.addEventListener("click", () => showSection(sectionId));
+    button.addEventListener("click", () => showSection(sectionId, { scroll: false }));
     return button;
   }
 
@@ -87,16 +147,16 @@
     const existing = existingNavSectionIds();
 
     toEnsure.forEach((item) => {
-      const resolved = resolveSectionId(item.preferredId);
-      const sectionEl = document.getElementById(resolved);
+      const sectionEl = findSectionElement(item.preferredId);
       if (!sectionEl) return;
-      if (existing.has(item.preferredId) || existing.has(resolved)) return;
+      const resolved = clean(sectionEl.id || resolveSectionId(item.preferredId));
+      if (!resolved || existing.has(resolved)) return;
 
       const button = createNavButton(item.label, resolved);
       const navButtons = qsa("[data-section]", nav);
       const afterButton = navButtons.find((btn) => {
-        const btnSection = clean(btn.getAttribute("data-section") || "");
-        return btnSection === item.after || resolveSectionId(btnSection) === resolveSectionId(item.after);
+        const btnSection = clean(resolveSectionId(btn.getAttribute("data-section") || ""));
+        return btnSection === clean(resolveSectionId(item.after));
       });
 
       if (afterButton?.nextSibling) nav.insertBefore(button, afterButton.nextSibling);
@@ -107,11 +167,14 @@
 
   function bootSidebarNavRepair() {
     ensureSidebarEntries();
-    const active = NS.state?.get?.("ui.activeSection") || "overview";
-    showSection(active);
+    const sections = getDashboardSections();
+    if (!sections.length) return;
+    const active = NS.state?.get?.("ui.activeSection") || sections[0].id || "overview";
+    const shown = showSection(active, { scroll: false });
+    if (!shown) revealFallbackSections();
   }
 
-  NS.ui = { qs, qsa, clean, setText, setStatus, showSection, injectStyleOnce, ensureSidebarEntries };
+  NS.ui = { qs, qsa, clean, setText, setStatus, showSection, injectStyleOnce, ensureSidebarEntries, findSectionElement };
   window.showSection = window.showSection || showSection;
   NS.modules = NS.modules || {};
   NS.modules.ui = true;
