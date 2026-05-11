@@ -66,8 +66,9 @@
 
   function markActiveNav(sectionId, sectionEl = null) {
     const resolved = clean(sectionEl?.id || resolveSectionId(sectionId));
-    qsa("[data-section]").forEach((button) => {
-      const buttonResolved = clean(resolveSectionId(button.getAttribute("data-section") || ""));
+    qsa("[data-section], .nav-btn").forEach((button) => {
+      const raw = button.getAttribute("data-section") || button.dataset.section || "";
+      const buttonResolved = clean(resolveSectionId(raw));
       button.classList.toggle("active", Boolean(resolved) && buttonResolved === resolved);
     });
   }
@@ -131,8 +132,21 @@
     button.type = "button";
     button.setAttribute("data-section", sectionId);
     button.textContent = label;
-    button.addEventListener("click", () => showSection(sectionId, { scroll: false }));
     return button;
+  }
+
+  function bindExistingNavButtons() {
+    qsa("[data-section], .nav-btn").forEach((button) => {
+      if (button.dataset.eaBound === "true") return;
+      const sectionId = clean(button.getAttribute("data-section") || button.dataset.section || "");
+      if (!sectionId) return;
+      button.dataset.eaBound = "true";
+      button.addEventListener("click", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        showSection(sectionId, { scroll: false });
+      });
+    });
   }
 
   function ensureSidebarEntries() {
@@ -163,10 +177,13 @@
       else nav.appendChild(button);
       existing.add(resolved);
     });
+
+    bindExistingNavButtons();
   }
 
   function bootSidebarNavRepair() {
     ensureSidebarEntries();
+    bindExistingNavButtons();
     const sections = getDashboardSections();
     if (!sections.length) return;
     const active = NS.state?.get?.("ui.activeSection") || sections[0].id || "overview";
@@ -174,8 +191,8 @@
     if (!shown) revealFallbackSections();
   }
 
-  NS.ui = { qs, qsa, clean, setText, setStatus, showSection, injectStyleOnce, ensureSidebarEntries, findSectionElement };
-  window.showSection = window.showSection || showSection;
+  NS.ui = { qs, qsa, clean, setText, setStatus, showSection, injectStyleOnce, ensureSidebarEntries, findSectionElement, bindExistingNavButtons };
+  window.showSection = showSection;
   NS.modules = NS.modules || {};
   NS.modules.ui = true;
 
