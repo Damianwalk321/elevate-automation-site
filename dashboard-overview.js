@@ -34,10 +34,12 @@
     @media (max-width: 700px){.ea-cc-stats,.ea-cc-secondary{grid-template-columns:1fr}.ea-cc-action{align-items:flex-start;flex-direction:column}.ea-cc-btn{width:100%}}
   `;
 
+  const MODE_KEY = 'elevate.command_centre.mode.v1';
+
   function injectStyle() {
-    if (document.getElementById('elevate-command-centre-shell-v3')) return;
+    if (document.getElementById('elevate-command-centre-bundle1')) return;
     const style = document.createElement('style');
-    style.id = 'elevate-command-centre-shell-v3';
+    style.id = 'elevate-command-centre-bundle1';
     style.textContent = CSS;
     document.head.appendChild(style);
   }
@@ -67,11 +69,31 @@
     };
   }
 
-  function updateOverviewHeader() {
+  function persistedMode() {
+    try {
+      const mode = localStorage.getItem(MODE_KEY);
+      return mode === 'operator' ? 'operator' : 'activation';
+    } catch {
+      return 'activation';
+    }
+  }
+
+  function persistMode(mode) {
+    try {
+      localStorage.setItem(MODE_KEY, mode);
+      NS.commandCentreMode = mode;
+    } catch {}
+  }
+
+  function updateOverviewHeader(mode) {
     const heading = document.querySelector('.main-header h1');
     const welcome = document.getElementById('welcomeText');
     if (heading) heading.textContent = 'Command Centre';
-    if (welcome) welcome.textContent = 'Your operator view for setup, posting, review, and compliance.';
+    if (welcome) {
+      welcome.textContent = mode === 'operator'
+        ? 'Your operator view for posting, review, and compliance.'
+        : 'Your operator view for setup, posting, review, and compliance.';
+    }
   }
 
   function findProvince() {
@@ -109,9 +131,34 @@
     return ready === 'true' ? 'Active' : 'Needs Attention';
   }
 
+  function activationSignals(base) {
+    const accessReady = base.access === 'Active';
+    const complianceReady = base.compliance !== 'Needs Review';
+    const setupReady = base.setup >= 100 || base.activityCount > 0;
+    const firstPostReady = base.firstPostDone;
+    return {
+      accessReady,
+      complianceReady,
+      setupReady,
+      firstPostReady,
+      shouldSwitchToOperator: accessReady && complianceReady && firstPostReady
+    };
+  }
+
+  function resolveMode(signals) {
+    const stored = persistedMode();
+    if (stored === 'operator') return 'operator';
+    if (signals.shouldSwitchToOperator) {
+      persistMode('operator');
+      return 'operator';
+    }
+    persistMode('activation');
+    return 'activation';
+  }
+
   function metrics() {
     const data = summaryData();
-    const setup = Math.round((Number(data.setup_status?.profile_completion_score || 0)) * 100);
+    const setupRaw = Math.round((Number(data.setup_status?.profile_completion_score || 0)) * 100);
     const active = num(data.active_listings);
     const review = num(data.review_queue_count);
     const needsAction = num(data.needs_action_count);
@@ -119,18 +166,26 @@
     const queue = num(data.queue_count);
     const activityCount = active + review + needsAction + weak + queue;
     const firstPostDone = active > 0 || review > 0 || needsAction > 0 || weak > 0;
-    const activationMode = !firstPostDone && setup < 100;
-    return {
+    const setup = setupRaw || (activityCount > 0 ? 100 : 0);
+    const base = {
       access: accessLabel(data),
-      setup: setup || (activityCount > 0 ? 100 : 0),
+      setup,
       active,
       review,
       needsAction,
       weak,
       queue,
+      activityCount,
       firstPostDone,
-      activationMode,
       compliance: findProvince()
+    };
+    const signals = activationSignals(base);
+    const mode = resolveMode(signals);
+    return {
+      ...base,
+      ...signals,
+      mode,
+      activationMode: mode !== 'operator'
     };
   }
 
@@ -153,19 +208,35 @@
 
   function currentPriority(m) {
     if (m.activationMode) {
+      if (!m.accessReady) {
+        return {
+          eyebrow: 'Activation Priority',
+          title: 'Stabilize workspace access first',
+          copy: 'Make sure the operator workspace and current session are fully active before moving into posting work.',
+          note: 'Activation mode should stay focused on real blockers only, starting with access when access is not ready.'
+        };
+      }
+      if (!m.complianceReady) {
+        return {
+          eyebrow: 'Activation Priority',
+          title: 'Complete compliance profile before first posting cycle',
+          copy: 'Set the correct publishing rule profile so your first clean posting cycle is grounded to the right province and disclosures.',
+          note: 'This should resolve before the system switches into operator mode.'
+        };
+      }
       if (m.setup < 100) {
         return {
           eyebrow: 'Activation Priority',
           title: 'Complete setup before pushing your first post',
           copy: 'Finish the core setup items first so the operator workspace is ready for clean posting, review, and compliance handling.',
-          note: `Setup progress is currently ${m.setup}%. Once setup and first post are complete, this area should shift into live operating priorities.`
+          note: `Setup progress is currently ${m.setup}%. Once the first clean cycle is complete, this account should move into operator mode.`
         };
       }
       return {
         eyebrow: 'Activation Priority',
         title: 'Queue and publish the first clean listing',
-        copy: 'The next best move is to run one vehicle through the full flow so the Command Centre can shift from activation into operator mode.',
-        note: 'Use this stage to confirm tools access, compliance readiness, and one successful posting cycle.'
+        copy: 'The next best move is to run one vehicle through the full flow so the Command Centre can leave activation and lock into operator mode.',
+        note: 'Bundle 1 should make this switch accurate and persistent once the first posting milestone is truly complete.'
       };
     }
 
@@ -174,7 +245,7 @@
         eyebrow: 'Current Priority',
         title: `Review ${m.needsAction} listing${m.needsAction === 1 ? '' : 's'} needing action`,
         copy: 'Clear the immediate action queue before adding more execution pressure. Keep the machine clean first, then move volume.',
-        note: `There ${m.needsAction === 1 ? 'is' : 'are'} ${m.needsAction} active item${m.needsAction === 1 ? '' : 's'} waiting for attention.`
+        note: 'Operator mode is now locked for this account and should not fall back into activation.'
       };
     }
 
@@ -183,23 +254,23 @@
         eyebrow: 'Current Priority',
         title: `Work through the ${m.review}-item review queue`,
         copy: 'Use the review queue as the next operator move so listings stay controlled and clean as activity scales.',
-        note: 'This area should always show the single highest-leverage move, not a mixed dashboard dump.'
+        note: 'Operator mode is now locked for this account and should not fall back into activation.'
       };
     }
 
     return {
       eyebrow: 'Current Priority',
       title: 'Maintain posting rhythm and keep review clean',
-      copy: 'Core setup is out of the way. The Command Centre should now stay focused on execution, review, and compliance quality.',
-      note: 'When no immediate pressure exists, this area should still reinforce the clean next move.'
+      copy: 'Core setup is complete. The Command Centre should now stay focused on execution, review, and compliance quality.',
+      note: 'Operator mode is now locked for this account and should not fall back into activation.'
     };
   }
 
   function pressurePoints(m) {
     if (m.activationMode) {
       return [
+        { title: 'Access', copy: m.accessReady ? 'Workspace access is active.' : 'Workspace access still needs attention before posting flow should be trusted.' },
         { title: 'Setup Progress', copy: `${m.setup}% complete. Finish the missing setup items before relying on this as a full operator surface.` },
-        { title: 'First Post Status', copy: m.firstPostDone ? 'First posting milestone is complete.' : 'No successful first post is recorded yet.' },
         { title: 'Compliance Readiness', copy: `Current rule profile is ${m.compliance}. Confirm all required profile information is in place.` }
       ];
     }
@@ -240,8 +311,9 @@
   function renderShell() {
     const m = metrics();
     const priority = currentPriority(m);
+    updateOverviewHeader(m.mode);
     return `
-      <div class="ea-cc-shell">
+      <div class="ea-cc-shell" data-command-centre-mode="${m.mode}">
         <div class="ea-cc-stats">
           ${statCards(m).map((card) => `
             <div class="ea-cc-stat">
@@ -326,7 +398,6 @@
     const overview = document.getElementById('overview');
     if (!overview) return;
     injectStyle();
-    updateOverviewHeader();
     overview.innerHTML = renderShell();
     bindButtons(overview);
   }
@@ -341,7 +412,7 @@
   window.addEventListener('elevate:auth-ready', renderCommandCentre);
   window.addEventListener('elevate:account-truth', renderCommandCentre);
 
-  NS.overview = { renderCommandCentre };
+  NS.overview = { renderCommandCentre, metrics, persistedMode };
   NS.modules = NS.modules || {};
   NS.modules.overview = true;
 
