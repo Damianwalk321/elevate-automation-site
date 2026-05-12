@@ -34,12 +34,10 @@
     @media (max-width: 700px){.ea-cc-stats,.ea-cc-secondary{grid-template-columns:1fr}.ea-cc-action{align-items:flex-start;flex-direction:column}.ea-cc-btn{width:100%}}
   `;
 
-  const MODE_KEY = 'elevate.command_centre.mode.v1';
-
   function injectStyle() {
-    if (document.getElementById('elevate-command-centre-bundle2')) return;
+    if (document.getElementById('elevate-command-centre-bundle3')) return;
     const style = document.createElement('style');
-    style.id = 'elevate-command-centre-bundle2';
+    style.id = 'elevate-command-centre-bundle3';
     style.textContent = CSS;
     document.head.appendChild(style);
   }
@@ -58,304 +56,166 @@
     return data?.data || data || {};
   }
 
-  function profileState() {
-    return {
-      user: NS.state?.get?.('user', {}) || {},
-      profile: NS.state?.get?.('profile', {}) || {},
-      session: NS.state?.get?.('session', {}) || {},
-      summary: summaryData(),
-      currentUser: window.currentUser || {},
-      truth: NS.accountTruth || {}
-    };
-  }
-
-  function persistedMode() {
-    try {
-      const mode = localStorage.getItem(MODE_KEY);
-      return mode === 'operator' ? 'operator' : 'activation';
-    } catch {
-      return 'activation';
-    }
-  }
-
-  function persistMode(mode) {
-    try {
-      localStorage.setItem(MODE_KEY, mode);
-      NS.commandCentreMode = mode;
-    } catch {}
-  }
-
   function updateOverviewHeader(mode) {
     const heading = document.querySelector('.main-header h1');
     const welcome = document.getElementById('welcomeText');
-    if (heading) heading.textContent = 'Command Centre';
+    if (heading) {
+      heading.textContent = mode === 'operator' ? 'Operator Command Centre' : 'Activation Command Centre';
+    }
     if (welcome) {
       welcome.textContent = mode === 'operator'
-        ? 'Your operator view for posting, review, and compliance.'
-        : 'Your operator view for setup, posting, review, and compliance.';
+        ? 'Run the machine. Protect the machine. Increase output.'
+        : 'Complete setup, get live, and unlock operator mode.';
     }
   }
 
-  function findProvince() {
-    const s = profileState();
+  function provinceFromSummary(data) {
     const candidates = [
-      s.profile.province,
-      s.profile.province_code,
-      s.profile.compliance_mode,
-      s.profile.compliance_province,
-      s.summary.profile_snapshot?.province,
-      s.summary.profile_snapshot?.province_code,
-      s.summary.profile_snapshot?.compliance_mode,
-      s.summary.account_snapshot?.province,
-      s.summary.account_snapshot?.province_code,
-      s.truth.province,
-      s.truth.province_code,
-      s.session.province,
-      s.currentUser.user_metadata?.province,
-      s.currentUser.user_metadata?.province_code
+      data?.profile_snapshot?.compliance_mode,
+      data?.profile_snapshot?.province,
+      data?.account_snapshot?.compliance_mode,
+      data?.account_snapshot?.province
     ].map(clean).filter(Boolean);
 
-    const direct = candidates.find((value) => /^(AB|BC|AB\/BC|Alberta|British Columbia)$/i.test(value));
-    if (direct) {
-      if (/alberta/i.test(direct)) return 'AB';
-      if (/british columbia/i.test(direct)) return 'BC';
-      return direct.toUpperCase();
-    }
-    return 'Needs Review';
-  }
-
-  function accessLabel(data) {
-    const account = data.account_snapshot || {};
-    const ready = document.body?.getAttribute('data-dashboard-ready');
-    if (account.access_granted === true) return 'Active';
-    return ready === 'true' ? 'Active' : 'Needs Attention';
-  }
-
-  function activationSignals(base) {
-    const accessReady = base.access === 'Active';
-    const complianceReady = base.compliance !== 'Needs Review';
-    const setupReady = base.setup >= 100 || base.activityCount > 0;
-    const firstPostReady = base.firstPostDone;
-    return {
-      accessReady,
-      complianceReady,
-      setupReady,
-      firstPostReady,
-      shouldSwitchToOperator: accessReady && complianceReady && firstPostReady
-    };
-  }
-
-  function resolveMode(signals) {
-    const stored = persistedMode();
-    if (stored === 'operator') return 'operator';
-    if (signals.shouldSwitchToOperator) {
-      persistMode('operator');
-      return 'operator';
-    }
-    persistMode('activation');
-    return 'activation';
+    const direct = candidates.find((value) => /^(AB|BC|ALBERTA|BRITISH COLUMBIA)$/i.test(value));
+    if (!direct) return 'Needs Review';
+    if (/ALBERTA/i.test(direct)) return 'AB';
+    if (/BRITISH COLUMBIA/i.test(direct)) return 'BC';
+    return direct.toUpperCase();
   }
 
   function metrics() {
     const data = summaryData();
-    const setupRaw = Math.round((Number(data.setup_status?.profile_completion_score || 0)) * 100);
-    const active = num(data.active_listings);
-    const review = num(data.review_queue_count);
-    const needsAction = num(data.needs_action_count);
-    const weak = num(data.weak_listings);
-    const queue = num(data.queue_count);
-    const postsRemaining = num(data.posts_remaining);
-    const postingLimit = num(data.effective_posting_limit || data.daily_limit);
-    const activityCount = active + review + needsAction + weak + queue;
-    const firstPostDone = active > 0 || review > 0 || needsAction > 0 || weak > 0;
-    const setup = setupRaw || (activityCount > 0 ? 100 : 0);
-    const base = {
-      access: accessLabel(data),
-      setup,
-      active,
-      review,
-      needsAction,
-      weak,
-      queue,
-      postsRemaining,
-      postingLimit,
-      canPost: Boolean(data.can_post),
-      activityCount,
-      firstPostDone,
-      compliance: findProvince()
-    };
-    const signals = activationSignals(base);
-    const mode = resolveMode(signals);
+    const mode = clean(data.dashboard_mode || 'activation').toLowerCase() === 'operator' ? 'operator' : 'activation';
+    const command = data.command_center || {};
+    const kpis = command.kpis || {};
+    const queues = command.work_queues || {};
+    const setup = data.setup_status || {};
+
     return {
-      ...base,
-      ...signals,
       mode,
-      activationMode: mode !== 'operator'
+      access: data.account_snapshot?.access_granted ? 'Active' : (data.account_snapshot?.status || 'Needs Attention'),
+      setupScore: num(data.activation_score),
+      active: num(kpis.active_listings ?? data.active_listings),
+      postedToday: num(kpis.posted_today ?? data.posts_today),
+      remainingToday: num(kpis.remaining_today ?? data.posts_remaining),
+      review: num(kpis.in_review ?? data.review_queue_count),
+      needsAction: num(kpis.needs_action ?? data.needs_action_count),
+      atRisk: num(kpis.at_risk ?? data.weak_listings),
+      queue: num(queues.ready_to_post ?? data.queue_count),
+      staleReview: num(queues.stale_review ?? data.review_delete_count),
+      complianceBlocked: num(queues.compliance_blocked ?? 0),
+      canPost: Boolean(data.can_post),
+      compliance: provinceFromSummary(data),
+      profileComplete: Boolean(setup.profile_complete),
+      firstPostComplete: Boolean(setup.first_post_complete),
+      primaryCommand: command.primary_command || null
     };
   }
 
-  function statCards(m) {
-    if (m.activationMode) {
-      return [
-        { label: 'Access', value: m.access, copy: 'Current workspace and session state.' },
-        { label: 'Setup', value: `${m.setup}%`, copy: 'Progress toward posting readiness.' },
-        { label: 'First Post', value: m.firstPostDone ? 'Complete' : 'Not Started', copy: 'First posting milestone for this operator.' },
-        { label: 'Compliance', value: m.compliance, copy: 'Current publishing rule profile.' }
-      ];
-    }
+  function activationStatCards(m) {
     return [
-      { label: 'Posting', value: m.canPost ? 'Ready' : 'Needs Attention', copy: m.canPost ? 'Posting flow is currently available.' : 'Posting flow needs review before pushing more volume.' },
-      { label: 'Queue', value: String(m.queue), copy: 'Vehicles currently ready or waiting in queue.' },
-      { label: 'Posts Remaining', value: String(m.postsRemaining), copy: m.postingLimit ? `Capacity remaining out of ${m.postingLimit} today.` : 'Remaining posting capacity today.' },
+      { label: 'Access', value: m.access, copy: 'Current workspace and session state.' },
+      { label: 'Setup', value: `${m.setupScore}%`, copy: 'Progress toward activation completion.' },
+      { label: 'First Post', value: m.firstPostComplete ? 'Complete' : 'Not Started', copy: 'First clean posting milestone.' },
       { label: 'Compliance', value: m.compliance, copy: 'Current publishing rule profile.' }
     ];
   }
 
-  function currentPriority(m) {
-    if (m.activationMode) {
-      if (!m.accessReady) {
-        return {
-          eyebrow: 'Activation Priority',
-          title: 'Stabilize workspace access first',
-          copy: 'Make sure the operator workspace and current session are fully active before moving into posting work.',
-          note: 'Activation mode should stay focused on real blockers only, starting with access when access is not ready.'
-        };
-      }
-      if (!m.complianceReady) {
-        return {
-          eyebrow: 'Activation Priority',
-          title: 'Complete compliance profile before first posting cycle',
-          copy: 'Set the correct publishing rule profile so your first clean posting cycle is grounded to the right province and disclosures.',
-          note: 'This should resolve before the system switches into operator mode.'
-        };
-      }
-      if (m.setup < 100) {
-        return {
-          eyebrow: 'Activation Priority',
-          title: 'Complete setup before pushing your first post',
-          copy: 'Finish the core setup items first so the operator workspace is ready for clean posting, review, and compliance handling.',
-          note: `Setup progress is currently ${m.setup}%. Once the first clean cycle is complete, this account should move into operator mode.`
-        };
-      }
-      return {
-        eyebrow: 'Activation Priority',
-        title: 'Queue and publish the first clean listing',
-        copy: 'The next best move is to run one vehicle through the full flow so the Command Centre can leave activation and lock into operator mode.',
-        note: 'Bundle 1 made this switch accurate and persistent once the first posting milestone is truly complete.'
-      };
-    }
-
-    if (!m.canPost) {
-      return {
-        eyebrow: 'Current Priority',
-        title: 'Restore posting readiness before adding more volume',
-        copy: 'Posting is not currently clear. Confirm access, session stability, and any live blockers before pushing the next listing cycle.',
-        note: 'Operator mode stays active, but the current directive shifts to readiness until posting is clean again.'
-      };
-    }
-
-    if (m.needsAction > 0) {
-      return {
-        eyebrow: 'Current Priority',
-        title: `Review ${m.needsAction} listing${m.needsAction === 1 ? '' : 's'} needing action`,
-        copy: 'Clear the immediate action queue before adding more execution pressure. Keep the machine clean first, then move volume.',
-        note: 'This area should always show the single highest-leverage move for the operator right now.'
-      };
-    }
-
-    if (m.review > 0) {
-      return {
-        eyebrow: 'Current Priority',
-        title: `Work through the ${m.review}-item review queue`,
-        copy: 'Use the review queue as the next operator move so listings stay controlled and clean as activity scales.',
-        note: 'Operator mode is live. The Command Centre should now prioritize active review pressure before fresh posting.'
-      };
-    }
-
-    if (m.queue > 0 && m.postsRemaining > 0) {
-      return {
-        eyebrow: 'Current Priority',
-        title: `Push ${Math.min(m.queue, m.postsRemaining)} queued vehicle${Math.min(m.queue, m.postsRemaining) === 1 ? '' : 's'} live next`,
-        copy: 'Queue and posting capacity are available. Use the next clean window to move ready units forward without creating review drag.',
-        note: `There ${m.queue === 1 ? 'is' : 'are'} ${m.queue} queued unit${m.queue === 1 ? '' : 's'} and ${m.postsRemaining} posting slot${m.postsRemaining === 1 ? '' : 's'} remaining today.`
-      };
-    }
-
-    if (m.postsRemaining > 0) {
-      return {
-        eyebrow: 'Current Priority',
-        title: 'Queue the next best unit for posting',
-        copy: 'You still have clean posting capacity. The next move is to prepare the strongest next vehicle instead of leaving capacity idle.',
-        note: `You currently have ${m.postsRemaining} posting slot${m.postsRemaining === 1 ? '' : 's'} remaining today.`
-      };
-    }
-
-    return {
-      eyebrow: 'Current Priority',
-      title: 'Maintain listing quality and hold a clean operator rhythm',
-      copy: 'Core setup is complete, the queue is under control, and today’s capacity is largely used. Stay focused on review quality and listing health.',
-      note: 'Operator mode is active and should remain the default state for this account going forward.'
-    };
+  function operatorStatCards(m) {
+    return [
+      { label: 'Active Listings', value: String(m.active), copy: 'Current live portfolio count.' },
+      { label: 'Posted Today', value: String(m.postedToday), copy: 'Units posted in the current business day.' },
+      { label: 'Remaining Today', value: String(m.remainingToday), copy: 'Posting capacity still available today.' },
+      { label: 'In Review', value: String(m.review), copy: 'Items currently waiting in review.' }
+    ];
   }
 
   function pressurePoints(m) {
-    if (m.activationMode) {
+    if (m.mode !== 'operator') {
       return [
-        { title: 'Access', copy: m.accessReady ? 'Workspace access is active.' : 'Workspace access still needs attention before posting flow should be trusted.' },
-        { title: 'Setup Progress', copy: `${m.setup}% complete. Finish the missing setup items before relying on this as a full operator surface.` },
-        { title: 'Compliance Readiness', copy: `Current rule profile is ${m.compliance}. Confirm all required profile information is in place.` }
+        { title: 'Setup', copy: `Activation is currently ${m.setupScore}% complete.` },
+        { title: 'Compliance', copy: `Current publish profile is ${m.compliance}.` },
+        { title: 'First Live Cycle', copy: m.firstPostComplete ? 'First clean posting cycle is complete.' : 'First clean posting cycle still needs to happen.' }
       ];
     }
-
     return [
       { title: 'Review Queue', copy: `${m.review} item${m.review === 1 ? '' : 's'} currently waiting in review.` },
       { title: 'Needs Action', copy: `${m.needsAction} listing${m.needsAction === 1 ? '' : 's'} currently require action.` },
-      { title: 'Weak / At Risk', copy: `${m.weak} listing${m.weak === 1 ? '' : 's'} currently sitting in a weak or at-risk state.` }
+      { title: 'At Risk', copy: `${m.atRisk} listing${m.atRisk === 1 ? '' : 's'} currently sit in a weak or at-risk state.` }
     ];
   }
 
   function quickActions(m) {
-    if (m.activationMode) {
+    if (m.mode !== 'operator') {
       return [
         { title: 'Open Setup', copy: 'Complete profile and activation items.', section: 'setup' },
-        { title: 'Open Compliance', copy: 'Review current publishing rule profile.', section: 'compliance' },
-        { title: 'Open Tools', copy: 'Access posting, queue, and extension tools.', section: 'tools' },
+        { title: 'Open Compliance', copy: 'Review publish rule profile.', section: 'compliance' },
+        { title: 'Open Tools', copy: 'Access posting and queue tools.', section: 'tools' },
         { title: 'Refresh Access', copy: 'Recheck workspace and session state.', action: 'refresh-access' }
       ];
     }
     return [
       { title: 'Open Tools', copy: 'Work queue, posting, and extension flow.', section: 'tools' },
       { title: 'Open Analytics', copy: 'View listings, review, and performance.', section: 'analytics' },
-      { title: 'Open Compliance', copy: 'Review current publish profile and disclosures.', section: 'compliance' },
+      { title: 'Open Compliance', copy: 'Review publish profile and disclosures.', section: 'compliance' },
       { title: 'Refresh Access', copy: 'Recheck workspace and session state.', action: 'refresh-access' }
     ];
   }
 
   function secondaryStrip(m) {
-    if (m.activationMode) {
+    if (m.mode !== 'operator') {
       return [
         { label: 'Active', value: String(m.active), copy: 'Live portfolio count.' },
         { label: 'Review', value: String(m.review), copy: 'Items waiting in review.' },
         { label: 'Needs Action', value: String(m.needsAction), copy: 'Listings requiring action.' },
-        { label: 'Weak / At Risk', value: String(m.weak), copy: 'Listings needing stronger attention.' }
+        { label: 'At Risk', value: String(m.atRisk), copy: 'Listings needing stronger attention.' }
       ];
     }
     return [
-      { label: 'Active Listings', value: String(m.active), copy: 'Current live portfolio count.' },
       { label: 'Queue Ready', value: String(m.queue), copy: 'Units prepared for next posting work.' },
-      { label: 'Review Pressure', value: String(m.review + m.needsAction), copy: 'Combined review and action load.' },
-      { label: 'Weak / At Risk', value: String(m.weak), copy: 'Listings needing stronger attention.' }
+      { label: 'Stale Review', value: String(m.staleReview), copy: 'Listings needing stale/remove review.' },
+      { label: 'Compliance Blocked', value: String(m.complianceBlocked), copy: 'Items blocked on publish compliance.' },
+      { label: 'Can Post', value: m.canPost ? 'Ready' : 'Blocked', copy: 'Current posting flow readiness.' }
     ];
+  }
+
+  function buildPriority(m) {
+    const fallback = m.mode === 'operator'
+      ? {
+          eyebrow: 'Current Priority',
+          title: 'Maintain listing quality and operator rhythm',
+          copy: 'The account is live and operator mode is active. Stay focused on review quality and listing health.',
+          note: 'Operator mode should now remain the default state for this account.'
+        }
+      : {
+          eyebrow: 'Activation Priority',
+          title: 'Complete setup and run the first clean posting cycle',
+          copy: 'Finish the activation items and publish the first clean vehicle so the dashboard can lock into operator mode.',
+          note: 'Activation mode should end once the operator qualification conditions are met.'
+        };
+
+    const pc = m.primaryCommand;
+    if (!pc) return fallback;
+
+    return {
+      eyebrow: m.mode === 'operator' ? 'Current Priority' : 'Activation Priority',
+      title: clean(pc.title || fallback.title),
+      copy: clean(pc.message || fallback.copy),
+      note: `Primary action: ${clean(pc.primary_action || 'open_tools')} • Secondary action: ${clean(pc.secondary_action || 'open_analytics')}`
+    };
   }
 
   function renderShell() {
     const m = metrics();
-    const priority = currentPriority(m);
+    const priority = buildPriority(m);
     updateOverviewHeader(m.mode);
+    const statCards = m.mode === 'operator' ? operatorStatCards(m) : activationStatCards(m);
+
     return `
       <div class="ea-cc-shell" data-command-centre-mode="${m.mode}">
         <div class="ea-cc-stats">
-          ${statCards(m).map((card) => `
+          ${statCards.map((card) => `
             <div class="ea-cc-stat">
               <div class="ea-cc-stat-label">${card.label}</div>
               <div class="ea-cc-stat-value">${card.value}</div>
@@ -452,7 +312,7 @@
   window.addEventListener('elevate:auth-ready', renderCommandCentre);
   window.addEventListener('elevate:account-truth', renderCommandCentre);
 
-  NS.overview = { renderCommandCentre, metrics, persistedMode };
+  NS.overview = { renderCommandCentre, metrics };
   NS.modules = NS.modules || {};
   NS.modules.overview = true;
 
