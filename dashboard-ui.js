@@ -123,6 +123,10 @@
     return qs(".sidebar-nav") || qs("[data-sidebar-nav]") || null;
   }
 
+  function desiredNavOrder() {
+    return ['overview', 'tools', 'analytics', 'compliance', 'partners', 'setup', 'billing'];
+  }
+
   function sidebarNavMeta() {
     return {
       overview: {
@@ -284,7 +288,27 @@
     `;
   }
 
+  function stampSidebarNavSlots() {
+    const nav = findSidebarNav();
+    if (!nav) return;
+    const slots = desiredNavOrder();
+    qsa('.nav-btn, [data-section]', nav)
+      .filter((button, index, array) => array.indexOf(button) === index)
+      .forEach((button, index) => {
+        if (!button.dataset.eaNavSlot) {
+          button.dataset.eaNavSlot = String(index);
+        }
+        if (!button.dataset.eaOriginalSection) {
+          button.dataset.eaOriginalSection = clean(button.getAttribute('data-section') || button.dataset.section || '');
+        }
+        if (!button.dataset.eaNavKey && slots[index]) {
+          button.dataset.eaNavKey = slots[index];
+        }
+      });
+  }
+
   function bindExistingNavButtons() {
+    stampSidebarNavSlots();
     qsa('[data-section], .nav-btn').forEach((button) => {
       if (button.dataset.eaBound === 'true') return;
       const sectionId = clean(button.getAttribute('data-section') || button.dataset.section || button.dataset.eaNavKey || '');
@@ -302,7 +326,11 @@
     const locked = clean(button.dataset.eaNavKey || '');
     if (locked) return locked;
 
-    const raw = clean(button.getAttribute('data-section') || button.dataset.section || '');
+    const slot = Number(button.dataset.eaNavSlot);
+    const order = desiredNavOrder();
+    if (Number.isInteger(slot) && order[slot]) return order[slot];
+
+    const raw = clean(button.dataset.eaOriginalSection || button.getAttribute('data-section') || button.dataset.section || '');
     const resolved = clean(resolveSectionId(raw));
     if (resolved === 'overview') return 'overview';
     if (resolved === 'extension' || resolved === 'tools') return 'tools';
@@ -314,8 +342,8 @@
 
     const text = lower(button.textContent || '');
     if (text.includes('command centre') || text === 'overview') return 'overview';
-    if (text.includes('tools')) return 'tools';
     if (text.includes('analytics')) return 'analytics';
+    if (text.includes('tools')) return 'tools';
     if (text.includes('compliance')) return 'compliance';
     if (text.includes('partners')) return 'partners';
     if (text.includes('setup')) return 'setup';
@@ -326,14 +354,17 @@
 
   function enhanceSidebarNavVisuals() {
     injectStyleOnce('elevate-sidebar-upgrade', sidebarChromeCss());
+    stampSidebarNavSlots();
     const meta = sidebarNavMeta();
     qsa('.sidebar-nav .nav-btn').forEach((button) => {
       const key = canonicalNavKey(button);
       const item = meta[key];
       if (!item) return;
       const currentActive = button.classList.contains('active');
+      const originalSection = clean(button.dataset.eaOriginalSection || button.getAttribute('data-section') || button.dataset.section || key);
       button.classList.add('ea-nav-enhanced');
       button.dataset.eaNavKey = key;
+      button.setAttribute('data-section', originalSection || key);
       button.setAttribute('aria-label', item.label);
       button.innerHTML = `
         <span class="ea-nav-inner">
@@ -351,23 +382,36 @@
   function reorderSidebarNav() {
     const nav = findSidebarNav();
     if (!nav) return;
+    stampSidebarNavSlots();
 
-    const desiredOrder = ['overview', 'tools', 'analytics', 'compliance', 'partners', 'setup', 'billing'];
+    const order = desiredNavOrder();
     const buttons = qsa('.nav-btn, [data-section]', nav).filter((button, index, array) => array.indexOf(button) === index);
-    const buckets = new Map();
+    const keyed = new Map();
+    const leftovers = [];
 
     buttons.forEach((button) => {
       const key = canonicalNavKey(button);
-      if (!buckets.has(key)) buckets.set(key, []);
-      buckets.get(key).push(button);
+      if (order.includes(key) && !keyed.has(key)) {
+        keyed.set(key, button);
+      } else {
+        leftovers.push(button);
+      }
     });
 
-    desiredOrder.forEach((key) => {
-      (buckets.get(key) || []).forEach((button) => nav.appendChild(button));
-      buckets.delete(key);
+    order.forEach((key) => {
+      const button = keyed.get(key);
+      if (button) nav.appendChild(button);
     });
 
-    Array.from(buckets.values()).flat().forEach((button) => nav.appendChild(button));
+    leftovers.forEach((button) => nav.appendChild(button));
+
+    const analyticsButtons = buttons.filter((button) => canonicalNavKey(button) === 'analytics');
+    const extraTools = buttons.filter((button) => canonicalNavKey(button) === 'tools').slice(1);
+    if (!analyticsButtons.length && extraTools.length) {
+      const rescue = extraTools[0];
+      rescue.dataset.eaNavKey = 'analytics';
+      rescue.dataset.eaOriginalSection = 'analytics';
+    }
   }
 
   function pinSidebarOrder() {
