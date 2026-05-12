@@ -76,7 +76,7 @@
   function hasSummaryOrTruth() {
     const truth = readCanonicalTruth();
     if (truth?.truth_ready || truth?.user_id || truth?.email) return true;
-    return Boolean(window.dashboardSummary && typeof window.dashboardSummary === "object");
+    return Boolean(window.dashboardSummary && typeof window.dashboardSummary === "object" && Object.keys(window.dashboardSummary || {}).length);
   }
 
   async function hasVerifiedToken() {
@@ -84,6 +84,19 @@
       const token = await NS.api?.getAuthAccessToken?.({ waitForRestore: false });
       return Boolean(clean(token));
     } catch {
+      return false;
+    }
+  }
+
+  async function hydrateSummaryIfNeeded(source = "hydrate") {
+    if (!NS.api?.fetchDashboardSummary) return false;
+    if (hasSummaryOrTruth()) return true;
+    try {
+      pushStage("Summary", `fetching via ${source}`);
+      await NS.api.fetchDashboardSummary();
+      return true;
+    } catch (error) {
+      pushStage("Summary", `fetch failed via ${source}: ${error?.message || error}`);
       return false;
     }
   }
@@ -132,8 +145,13 @@
     const truth = readCanonicalTruth();
     const authSettled = Boolean(NS.authSettled || truth?.auth_settled || truth?.truth_ready);
     const hasUser = hasAuthenticatedUser();
-    const hasSummary = hasSummaryOrTruth();
     const tokenReady = await hasVerifiedToken();
+
+    if (hasUser && tokenReady && !hasSummaryOrTruth()) {
+      await hydrateSummaryIfNeeded(source);
+    }
+
+    const hasSummary = hasSummaryOrTruth();
 
     if (hasUser && hasSummary && tokenReady) {
       pushStage("Ready check", `passed via ${source}`);
@@ -178,6 +196,7 @@
     window.addEventListener("elevate:account-truth", () => rerun("account-truth-event"));
     window.addEventListener("elevate:enforcement-bridge", () => rerun("enforcement-bridge-event"));
     window.addEventListener("elevate:auth-ready", () => rerun("auth-ready-event"));
+    window.addEventListener("elevate:summary-ready", () => rerun("summary-ready-event"));
     document.addEventListener("visibilitychange", () => {
       if (document.visibilityState === "visible") rerun("visibility-visible");
     });
@@ -198,6 +217,46 @@
     });
   }
 
+  function bindActionButtons() {
+    if (window.__ELEVATE_BOOTSTRAP_ACTIONS_BOUND__) return;
+    window.__ELEVATE_BOOTSTRAP_ACTIONS_BOUND__ = true;
+
+    const bindByText = (matcher, handler) => {
+      Array.from(document.querySelectorAll("button")).forEach((button) => {
+        const text = clean(button.textContent || "").toLowerCase();
+        if (!matcher(text)) return;
+        if (button.dataset.eaBootstrapBound === "true") return;
+        button.dataset.eaBootstrapBound = "true";
+        button.addEventListener("click", async (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          await handler(button);
+        });
+      });
+    };
+
+    bindByText((text) => text === "refresh access", async (button) => {
+      const original = button.textContent;
+      button.disabled = true;
+      button.textContent = "Refreshing...";
+      try {
+        setBootStatus("Refreshing access...");
+        await NS.api?.refreshAccess?.();
+        setBootStatus("Access refreshed.");
+        await attemptReady("refresh-access-click");
+      } catch (error) {
+        setBootStatus(error?.message || "Refresh access failed.");
+      } finally {
+        button.disabled = false;
+        button.textContent = original;
+      }
+    });
+
+    bindByText((text) => text === "logout" || text === "log out", async () => {
+      await NS.api?.signOut?.();
+    });
+  }
+
   function boot() {
     const state = ensureBootstrapState();
     if (state.started) return;
@@ -212,6 +271,7 @@
     pushStage("Bootstrap", "Event-driven startup watcher armed.");
     bindStartupListeners();
     bindAuthWatcher();
+    bindActionButtons();
 
     setTimeout(() => {
       state.authSettling = false;
@@ -222,6 +282,7 @@
 
     setTimeout(() => {
       attemptReady("mid-startup-check");
+      bindActionButtons();
     }, 3000);
 
     setTimeout(() => {
