@@ -37,9 +37,9 @@
   const MODE_KEY = 'elevate.command_centre.mode.v1';
 
   function injectStyle() {
-    if (document.getElementById('elevate-command-centre-bundle1')) return;
+    if (document.getElementById('elevate-command-centre-bundle2')) return;
     const style = document.createElement('style');
-    style.id = 'elevate-command-centre-bundle1';
+    style.id = 'elevate-command-centre-bundle2';
     style.textContent = CSS;
     document.head.appendChild(style);
   }
@@ -164,6 +164,8 @@
     const needsAction = num(data.needs_action_count);
     const weak = num(data.weak_listings);
     const queue = num(data.queue_count);
+    const postsRemaining = num(data.posts_remaining);
+    const postingLimit = num(data.effective_posting_limit || data.daily_limit);
     const activityCount = active + review + needsAction + weak + queue;
     const firstPostDone = active > 0 || review > 0 || needsAction > 0 || weak > 0;
     const setup = setupRaw || (activityCount > 0 ? 100 : 0);
@@ -175,6 +177,9 @@
       needsAction,
       weak,
       queue,
+      postsRemaining,
+      postingLimit,
+      canPost: Boolean(data.can_post),
       activityCount,
       firstPostDone,
       compliance: findProvince()
@@ -199,9 +204,9 @@
       ];
     }
     return [
-      { label: 'Active Listings', value: String(m.active), copy: 'Listings currently live in the portfolio.' },
-      { label: 'Review', value: String(m.review), copy: 'Items waiting for review or intervention.' },
-      { label: 'Needs Action', value: String(m.needsAction), copy: 'Listings needing operator attention.' },
+      { label: 'Posting', value: m.canPost ? 'Ready' : 'Needs Attention', copy: m.canPost ? 'Posting flow is currently available.' : 'Posting flow needs review before pushing more volume.' },
+      { label: 'Queue', value: String(m.queue), copy: 'Vehicles currently ready or waiting in queue.' },
+      { label: 'Posts Remaining', value: String(m.postsRemaining), copy: m.postingLimit ? `Capacity remaining out of ${m.postingLimit} today.` : 'Remaining posting capacity today.' },
       { label: 'Compliance', value: m.compliance, copy: 'Current publishing rule profile.' }
     ];
   }
@@ -236,7 +241,16 @@
         eyebrow: 'Activation Priority',
         title: 'Queue and publish the first clean listing',
         copy: 'The next best move is to run one vehicle through the full flow so the Command Centre can leave activation and lock into operator mode.',
-        note: 'Bundle 1 should make this switch accurate and persistent once the first posting milestone is truly complete.'
+        note: 'Bundle 1 made this switch accurate and persistent once the first posting milestone is truly complete.'
+      };
+    }
+
+    if (!m.canPost) {
+      return {
+        eyebrow: 'Current Priority',
+        title: 'Restore posting readiness before adding more volume',
+        copy: 'Posting is not currently clear. Confirm access, session stability, and any live blockers before pushing the next listing cycle.',
+        note: 'Operator mode stays active, but the current directive shifts to readiness until posting is clean again.'
       };
     }
 
@@ -245,7 +259,7 @@
         eyebrow: 'Current Priority',
         title: `Review ${m.needsAction} listing${m.needsAction === 1 ? '' : 's'} needing action`,
         copy: 'Clear the immediate action queue before adding more execution pressure. Keep the machine clean first, then move volume.',
-        note: 'Operator mode is now locked for this account and should not fall back into activation.'
+        note: 'This area should always show the single highest-leverage move for the operator right now.'
       };
     }
 
@@ -254,15 +268,33 @@
         eyebrow: 'Current Priority',
         title: `Work through the ${m.review}-item review queue`,
         copy: 'Use the review queue as the next operator move so listings stay controlled and clean as activity scales.',
-        note: 'Operator mode is now locked for this account and should not fall back into activation.'
+        note: 'Operator mode is live. The Command Centre should now prioritize active review pressure before fresh posting.'
+      };
+    }
+
+    if (m.queue > 0 && m.postsRemaining > 0) {
+      return {
+        eyebrow: 'Current Priority',
+        title: `Push ${Math.min(m.queue, m.postsRemaining)} queued vehicle${Math.min(m.queue, m.postsRemaining) === 1 ? '' : 's'} live next`,
+        copy: 'Queue and posting capacity are available. Use the next clean window to move ready units forward without creating review drag.',
+        note: `There ${m.queue === 1 ? 'is' : 'are'} ${m.queue} queued unit${m.queue === 1 ? '' : 's'} and ${m.postsRemaining} posting slot${m.postsRemaining === 1 ? '' : 's'} remaining today.`
+      };
+    }
+
+    if (m.postsRemaining > 0) {
+      return {
+        eyebrow: 'Current Priority',
+        title: 'Queue the next best unit for posting',
+        copy: 'You still have clean posting capacity. The next move is to prepare the strongest next vehicle instead of leaving capacity idle.',
+        note: `You currently have ${m.postsRemaining} posting slot${m.postsRemaining === 1 ? '' : 's'} remaining today.`
       };
     }
 
     return {
       eyebrow: 'Current Priority',
-      title: 'Maintain posting rhythm and keep review clean',
-      copy: 'Core setup is complete. The Command Centre should now stay focused on execution, review, and compliance quality.',
-      note: 'Operator mode is now locked for this account and should not fall back into activation.'
+      title: 'Maintain listing quality and hold a clean operator rhythm',
+      copy: 'Core setup is complete, the queue is under control, and today’s capacity is largely used. Stay focused on review quality and listing health.',
+      note: 'Operator mode is active and should remain the default state for this account going forward.'
     };
   }
 
@@ -292,18 +324,26 @@
       ];
     }
     return [
-      { title: 'Open Analytics', copy: 'View listings, review, and performance.', section: 'analytics' },
       { title: 'Open Tools', copy: 'Work queue, posting, and extension flow.', section: 'tools' },
+      { title: 'Open Analytics', copy: 'View listings, review, and performance.', section: 'analytics' },
       { title: 'Open Compliance', copy: 'Review current publish profile and disclosures.', section: 'compliance' },
       { title: 'Refresh Access', copy: 'Recheck workspace and session state.', action: 'refresh-access' }
     ];
   }
 
   function secondaryStrip(m) {
+    if (m.activationMode) {
+      return [
+        { label: 'Active', value: String(m.active), copy: 'Live portfolio count.' },
+        { label: 'Review', value: String(m.review), copy: 'Items waiting in review.' },
+        { label: 'Needs Action', value: String(m.needsAction), copy: 'Listings requiring action.' },
+        { label: 'Weak / At Risk', value: String(m.weak), copy: 'Listings needing stronger attention.' }
+      ];
+    }
     return [
-      { label: 'Active', value: String(m.active), copy: 'Live portfolio count.' },
-      { label: 'Review', value: String(m.review), copy: 'Items waiting in review.' },
-      { label: 'Needs Action', value: String(m.needsAction), copy: 'Listings requiring action.' },
+      { label: 'Active Listings', value: String(m.active), copy: 'Current live portfolio count.' },
+      { label: 'Queue Ready', value: String(m.queue), copy: 'Units prepared for next posting work.' },
+      { label: 'Review Pressure', value: String(m.review + m.needsAction), copy: 'Combined review and action load.' },
       { label: 'Weak / At Risk', value: String(m.weak), copy: 'Listings needing stronger attention.' }
     ];
   }
