@@ -2,7 +2,7 @@
   const NS = (window.ElevateDashboard = window.ElevateDashboard || {});
   if (NS.modules?.overview) return;
 
-  const STYLE_ID = 'elevate-operator-command-centre-v3';
+  const STYLE_ID = 'elevate-operator-command-centre-v4';
   const CSS = `
     .ea-ops-shell{display:grid;gap:18px}
     .ea-ops-card{background:linear-gradient(180deg,rgba(255,255,255,.02),rgba(255,255,255,0));border:1px solid var(--line);border-radius:18px;padding:20px;box-shadow:var(--shadow)}
@@ -15,13 +15,8 @@
     .ea-ops-subtitle{margin:0;font-size:14px;line-height:1.65;color:var(--muted)}
     .ea-ops-chip-row{display:flex;flex-wrap:wrap;gap:10px;margin-top:16px}
     .ea-ops-chip{display:inline-flex;align-items:center;gap:8px;min-height:38px;padding:0 14px;border-radius:999px;background:#151515;border:1px solid rgba(255,255,255,.07);font-size:12px;font-weight:800;color:#f0f0f0}
-    .ea-ops-chip.ready{border-color:rgba(157,232,168,.18)}
-    .ea-ops-chip.attn{border-color:rgba(255,180,180,.18)}
-    .ea-ops-chip.warn{border-color:rgba(255,217,122,.18)}
-    .ea-ops-dot{width:8px;height:8px;border-radius:50%;display:inline-block;flex:0 0 8px;background:#8f8f8f}
-    .ea-ops-dot.good{background:var(--success)}
-    .ea-ops-dot.bad{background:var(--danger)}
-    .ea-ops-dot.warn{background:#ffd97a}
+    .ea-ops-chip.ready{border-color:rgba(157,232,168,.18)}.ea-ops-chip.attn{border-color:rgba(255,180,180,.18)}.ea-ops-chip.warn{border-color:rgba(255,217,122,.18)}
+    .ea-ops-dot{width:8px;height:8px;border-radius:50%;display:inline-block;flex:0 0 8px;background:#8f8f8f}.ea-ops-dot.good{background:var(--success)}.ea-ops-dot.bad{background:var(--danger)}.ea-ops-dot.warn{background:#ffd97a}
     .ea-ops-stat-grid,.ea-ops-health-grid,.ea-ops-kpis,.ea-ops-list,.ea-ops-targets{display:grid;gap:12px}
     .ea-ops-stat-grid,.ea-ops-health-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
     .ea-ops-kpis{grid-template-columns:repeat(6,minmax(0,1fr))}
@@ -32,20 +27,25 @@
     .ea-ops-primary-title{margin:0 0 12px;font-size:24px;line-height:1.1;font-weight:900;color:var(--text)}
     .ea-ops-primary-copy{margin:0 0 18px;font-size:14px;line-height:1.7;color:#ddd}
     .ea-ops-btn-row{display:flex;flex-wrap:wrap;gap:10px}
-    .ea-ops-btn{appearance:none;border:1px solid rgba(255,255,255,.08);background:#191919;color:#f2f2f2;border-radius:12px;padding:12px 14px;font-size:13px;font-weight:800;cursor:pointer}
+    .ea-ops-btn{appearance:none;border:1px solid rgba(255,255,255,.08);background:#191919;color:#f2f2f2;border-radius:12px;padding:12px 14px;font-size:13px;font-weight:800;cursor:pointer;transition:.18s ease}
     .ea-ops-btn:hover{border-color:rgba(212,175,55,.22);background:#202020}
     .ea-ops-btn.is-primary{background:var(--gold);color:#111;border-color:var(--gold)}
     .ea-ops-target{display:flex;justify-content:space-between;gap:12px;align-items:center}
     .ea-ops-target strong,.ea-ops-row strong,.ea-ops-warning strong{display:block;font-size:14px;line-height:1.3;color:var(--text)}
     .ea-ops-target span,.ea-ops-row span,.ea-ops-warning span{display:block;margin-top:4px;font-size:12px;line-height:1.5;color:var(--muted)}
     .ea-ops-target-value{font-size:20px;font-weight:900;color:var(--text)}
-    .ea-ops-queue{display:grid;grid-template-columns:minmax(0,1fr) 64px 140px 140px;gap:10px;align-items:center}
-    .ea-ops-pill{display:inline-flex;align-items:center;justify-content:center;min-width:44px;height:38px;padding:0 12px;border-radius:999px;background:#191919;border:1px solid rgba(255,255,255,.07);font-size:12px;font-weight:900;color:#f1f1f1;justify-self:end}
+    .ea-ops-queue{display:grid;grid-template-columns:minmax(0,1fr) 72px 150px 150px;gap:12px;align-items:center;min-height:104px}
+    .ea-ops-queue-copy{display:grid;gap:4px;align-content:center}
+    .ea-ops-pill{display:inline-flex;align-items:center;justify-content:center;width:48px;height:48px;border-radius:999px;background:#171717;border:1px solid rgba(255,255,255,.08);font-size:13px;font-weight:900;color:#f1f1f1;justify-self:center}
+    .ea-ops-row-btn{width:100%;height:44px;display:flex;align-items:center;justify-content:center;text-align:center}
     .ea-ops-outcome{display:flex;justify-content:space-between;gap:12px;align-items:flex-start}
-    .ea-ops-health-item strong{display:flex;align-items:center;gap:8px;font-size:13px;line-height:1.35;color:var(--text)}
+    .ea-ops-health-item{min-height:94px;display:grid;align-content:start;gap:8px}
+    .ea-ops-health-head{display:flex;align-items:center;gap:8px;font-size:13px;line-height:1.35;color:var(--text);font-weight:800}
+    .ea-ops-health-state{font-size:22px;line-height:1;font-weight:900;color:var(--text)}
+    .ea-ops-health-sub{font-size:12px;line-height:1.4;color:var(--muted)}
     .ea-ops-empty{font-size:13px;line-height:1.6;color:var(--muted)}
     @media (max-width:1220px){.ea-ops-header,.ea-ops-primary,.ea-ops-grid{grid-template-columns:1fr}.ea-ops-kpis{grid-template-columns:repeat(3,minmax(0,1fr))}}
-    @media (max-width:860px){.ea-ops-stat-grid,.ea-ops-health-grid,.ea-ops-kpis{grid-template-columns:1fr}.ea-ops-queue{grid-template-columns:1fr}.ea-ops-pill{justify-self:start}}
+    @media (max-width:860px){.ea-ops-stat-grid,.ea-ops-health-grid,.ea-ops-kpis{grid-template-columns:1fr}.ea-ops-queue{grid-template-columns:1fr}.ea-ops-pill{justify-self:start}.ea-ops-row-btn{height:42px}}
   `;
 
   const clean = (v) => String(v || '').replace(/\s+/g, ' ').trim();
@@ -117,11 +117,11 @@
 
   function resolvePrimaryCommand(m) {
     if (m.complianceBlocked > 0) return { title:'Resolve compliance blockers before posting', message:'The machine is not safe to push until compliance readiness is restored.', primary_action:'open_compliance', secondary_action:'refresh-access' };
-    if (m.staleReview > 0) return { title:`Review ${m.staleReview} stale or removed listings`, message:'Clear stale inventory pressure first so the machine stays accurate before you add more volume.', primary_action:'open_analytics', secondary_action:'open_tools' };
-    if (m.review > 0) return { title:`Clear ${m.review} listings from review queue`, message:'The highest-priority task is operator review. Reduce queue pressure before new output.', primary_action:'open_review_queue', secondary_action:'refresh-access' };
-    if (m.needsAction > 0) return { title:`Resolve ${m.needsAction} listings needing action`, message:'Listings need direct operator correction before the machine can be fully trusted.', primary_action:'open_analytics', secondary_action:'open_compliance' };
+    if (m.review > 0) return { title:`Clear ${m.review} listings from review queue`, message:'Reduce review pressure before adding more output.', primary_action:'open_review_queue', secondary_action:'refresh-access' };
+    if (m.needsAction > 0) return { title:`Resolve ${m.needsAction} listings needing action`, message:'Listings need direct correction before the machine can be fully trusted.', primary_action:'open_analytics', secondary_action:'open_compliance' };
+    if (m.staleReview > 0) return { title:`Review ${m.staleReview} stale or removed listings`, message:'Clear stale inventory pressure so the machine stays accurate.', primary_action:'open_analytics', secondary_action:'open_tools' };
     if (m.queue > 0 && m.postingReady) return { title:`Run the next posting cycle for ${m.queue} queued vehicles`, message:'The machine is ready. Push the next cycle while maintaining listing quality.', primary_action:'open_tools', secondary_action:'open_analytics' };
-    return { title:'Machine is clear. Maintain operator rhythm.', message:'No major blockers are on the surface right now. Protect trust and keep output controlled.', primary_action:'open_tools', secondary_action:'open_analytics' };
+    return { title:'Machine is clear. Maintain operator rhythm.', message:'No major blockers are on the surface right now.', primary_action:'open_tools', secondary_action:'open_analytics' };
   }
 
   function buildTargets(m) {
@@ -135,21 +135,21 @@
   function buildQueue(m) {
     return [
       { title:'Compliance blocked', count:m.complianceBlocked, copy:'Posting is blocked by missing compliance readiness or required setup.', primary:['Open Compliance','open_compliance'], secondary:['Refresh','refresh-access'] },
-      { title:'Stale or removed review', count:m.staleReview, copy:'Listings flagged as stale or removed are waiting for operator review.', primary:['Open Analytics','open_analytics'], secondary:['Open Tools','open_tools'] },
       { title:'Review queue', count:m.review, copy:'Listings are waiting in review and need operator clearing.', primary:['Open Analytics','open_review_queue'], secondary:['Refresh','refresh-access'] },
       { title:'Needs action', count:m.needsAction, copy:'Listings have price, content, or lifecycle issues needing direct action.', primary:['Open Analytics','open_analytics'], secondary:['Open Compliance','open_compliance'] },
+      { title:'Stale or removed review', count:m.staleReview, copy:'Listings flagged as stale or removed are waiting for operator review.', primary:['Open Analytics','open_analytics'], secondary:['Open Tools','open_tools'] },
       { title:'Queue ready', count:m.queue, copy:'Vehicles are ready for the next posting cycle.', primary:['Open Tools','open_tools'], secondary:['Open Analytics','open_analytics'] }
     ].filter((i) => i.count > 0).slice(0, 5);
   }
 
   function buildHealth(m) {
     return [
-      { title:'Posting ready', value:m.postingReady ? 'Ready' : 'Needs Attention', dot:m.postingReady ? 'good' : 'bad', copy:m.postingReady ? 'The machine is currently clear to post.' : 'Do not push more volume until posting readiness is restored.' },
-      { title:'Session state', value:m.accessGranted ? 'Valid' : 'Check Required', dot:m.accessGranted ? 'good' : 'bad', copy:m.accessGranted ? 'Workspace access is active.' : 'Refresh access before trusting the machine.' },
-      { title:'Compliance engine', value:m.complianceReady ? 'Ready' : 'Blocked', dot:m.complianceReady ? 'good' : 'bad', copy:m.complianceReady ? 'Compliance profile is present and readable.' : 'Missing compliance readiness is blocking trust.' },
-      { title:'Queue pressure', value:m.review + m.needsAction > 0 ? 'Loaded' : (m.queue > 0 ? 'Ready' : 'Clear'), dot:m.review + m.needsAction > 0 ? 'warn' : (m.queue > 0 ? 'good' : 'good'), copy:m.review + m.needsAction > 0 ? `${m.review + m.needsAction} review/action items are live.` : (m.queue > 0 ? `${m.queue} vehicles are ready for the next cycle.` : 'No active queue pressure is currently visible.') },
-      { title:'Last successful post', value:m.lastOutcomeLabel, dot:m.lastOutcomeLabel === 'Recorded' ? 'good' : 'warn', copy:m.lastOutcomeCopy },
-      { title:'Plan capacity', value:m.remainingToday > 0 ? 'Available' : 'Used Up', dot:m.remainingToday > 0 ? 'good' : 'bad', copy:m.postingLimit > 0 ? `${m.postedToday} of ${m.postingLimit} used today.` : 'Current plan limit not available.' }
+      { title:'Posting ready', value:m.postingReady ? 'Ready' : 'Blocked', dot:m.postingReady ? 'good' : 'bad', sub:m.postingReady ? 'Safe to post' : 'Hold posting' },
+      { title:'Session state', value:m.accessGranted ? 'Valid' : 'Check', dot:m.accessGranted ? 'good' : 'bad', sub:m.accessGranted ? 'Access active' : 'Refresh required' },
+      { title:'Compliance engine', value:m.complianceReady ? 'Ready' : 'Blocked', dot:m.complianceReady ? 'good' : 'bad', sub:m.complianceReady ? 'Profile loaded' : 'Profile missing' },
+      { title:'Queue pressure', value:m.review + m.needsAction > 0 ? 'Loaded' : (m.queue > 0 ? 'Ready' : 'Clear'), dot:m.review + m.needsAction > 0 ? 'warn' : 'good', sub:m.review + m.needsAction > 0 ? `${m.review + m.needsAction} live items` : (m.queue > 0 ? `${m.queue} queued` : 'No pressure') },
+      { title:'Last successful post', value:m.lastOutcomeLabel, dot:m.lastOutcomeLabel === 'Recorded' ? 'good' : 'warn', sub:m.lastOutcomeLabel === 'Recorded' ? 'Recent result logged' : 'No recent result' },
+      { title:'Plan capacity', value:m.remainingToday > 0 ? 'Available' : 'Used Up', dot:m.remainingToday > 0 ? 'good' : 'bad', sub:m.postingLimit > 0 ? `${m.postedToday}/${m.postingLimit} used` : 'Plan limit unknown' }
     ];
   }
 
@@ -179,7 +179,7 @@
           <p class="ea-ops-subtitle">${m.dealership} • ${m.mode === 'operator' ? 'Operator mode active' : 'Activation mode active'}</p>
           <div class="ea-ops-chip-row">
             <span class="ea-ops-chip"><span class="ea-ops-dot"></span>${m.plan}</span>
-            <span class="ea-ops-chip ${m.postingReady ? 'ready' : 'attn'}"><span class="ea-ops-dot ${m.postingReady ? 'good' : 'bad'}"></span>${m.postingReady ? 'Posting Ready' : 'Posting Needs Attention'}</span>
+            <span class="ea-ops-chip ${m.postingReady ? 'ready' : 'attn'}"><span class="ea-ops-dot ${m.postingReady ? 'good' : 'bad'}"></span>${m.postingReady ? 'Posting Ready' : 'Posting Blocked'}</span>
             <span class="ea-ops-chip ${m.accessGranted ? 'ready' : 'attn'}"><span class="ea-ops-dot ${m.accessGranted ? 'good' : 'bad'}"></span>${m.accessLabel}</span>
             <span class="ea-ops-chip ${m.complianceReady ? 'ready' : 'attn'}"><span class="ea-ops-dot ${m.complianceReady ? 'good' : 'bad'}"></span>${m.complianceReady ? 'Compliance Ready' : 'Compliance Blocked'}</span>
           </div>
@@ -222,14 +222,14 @@
       <div class="ea-ops-card">
         <div class="ea-ops-eyebrow">Action Queue</div>
         <div class="ea-ops-list">
-          ${queue.length ? queue.map((i) => `<div class="ea-ops-queue ea-ops-row"><div><strong>${i.title}</strong><span>${i.copy}</span></div><span class="ea-ops-pill">${i.count}</span><button class="ea-ops-btn is-primary" type="button" ${mapActionAttr(i.primary[1], 'analytics')}>${i.primary[0]}</button><button class="ea-ops-btn" type="button" ${mapActionAttr(i.secondary[1], 'tools')}>${i.secondary[0]}</button></div>`).join('') : `<div class="ea-ops-empty">No active queue pressure right now. The machine is currently clear.</div>`}
+          ${queue.length ? queue.map((i) => `<div class="ea-ops-queue ea-ops-row"><div class="ea-ops-queue-copy"><strong>${i.title}</strong><span>${i.copy}</span></div><span class="ea-ops-pill">${i.count}</span><button class="ea-ops-btn is-primary ea-ops-row-btn" type="button" ${mapActionAttr(i.primary[1], 'analytics')}>${i.primary[0]}</button><button class="ea-ops-btn ea-ops-row-btn" type="button" ${mapActionAttr(i.secondary[1], 'tools')}>${i.secondary[0]}</button></div>`).join('') : `<div class="ea-ops-empty">No active queue pressure right now. The machine is currently clear.</div>`}
         </div>
       </div>`;
 
     const healthBlock = `
       <div class="ea-ops-card">
         <div class="ea-ops-eyebrow">Machine Health</div>
-        <div class="ea-ops-health-grid">${health.map((i) => `<div class="ea-ops-health-item"><strong><span class="ea-ops-dot ${i.dot}"></span>${i.title}: ${i.value}</strong><span>${i.copy}</span></div>`).join('')}</div>
+        <div class="ea-ops-health-grid">${health.map((i) => `<div class="ea-ops-health-item"><div class="ea-ops-health-head"><span class="ea-ops-dot ${i.dot}"></span>${i.title}</div><div class="ea-ops-health-state">${i.value}</div><div class="ea-ops-health-sub">${i.sub}</div></div>`).join('')}</div>
         <div class="ea-ops-eyebrow" style="margin-top:16px">Warnings</div>
         <div class="ea-ops-list">${warnings.length ? warnings.map((i) => `<div class="ea-ops-warning"><strong>${i[0]}</strong><span>${i[1]}</span></div>`).join('') : `<div class="ea-ops-empty">No warnings are currently forcing attention.</div>`}</div>
       </div>`;
