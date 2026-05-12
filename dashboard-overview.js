@@ -1,4 +1,3 @@
-
 (() => {
   const NS = (window.ElevateDashboard = window.ElevateDashboard || {});
   if (NS.modules?.overview) return;
@@ -31,6 +30,12 @@
     .ea-ov-mini-btn:hover{border-color:rgba(212,175,55,.22);background:#212121}
     .ea-ov-context-muted{opacity:.94}
     .ea-ov-context-muted .section-head h2,.ea-ov-context-muted h2{font-size:20px}
+    .ea-ov-pulse-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin:14px 0}
+    .ea-ov-pulse-stat{background:#171717;border:1px solid rgba(255,255,255,.06);border-radius:14px;padding:14px}
+    .ea-ov-pulse-stat strong{display:block;font-size:22px;line-height:1.1;margin-top:6px}
+    .ea-ov-pulse-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-top:14px}
+    @media (max-width: 900px){.ea-ov-pulse-grid,.ea-ov-pulse-actions{grid-template-columns:1fr 1fr}}
+    @media (max-width: 640px){.ea-ov-pulse-grid,.ea-ov-pulse-actions{grid-template-columns:1fr}}
   `;
 
   function ensureStyle() {
@@ -45,6 +50,14 @@
   function todayKey() {
     const d = new Date();
     return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  }
+
+  function clean(value) {
+    return String(value || '').replace(/\s+/g, ' ').trim();
+  }
+
+  function text(id) {
+    return clean(document.getElementById(id)?.textContent || '0');
   }
 
   function initWorkflowMemory() {
@@ -155,9 +168,9 @@
   function masterActions() {
     return [
       { id: 'posting.review_readiness', title: 'Review posting readiness', copy: 'Verify access, compliance, queue, and posting capacity before pushing volume.', section: 'extension' },
-      { id: 'listing.resolve_intervention', title: 'Resolve listing intervention items', copy: 'Clean up weak, stale, or flagged listings before adding more execution pressure.', section: 'tools', focus: 'listingSearchInput' },
+      { id: 'listing.resolve_intervention', title: 'Resolve listing intervention items', copy: 'Clean up weak, stale, or flagged listings before adding more execution pressure.', section: 'tools', focus: 'analyticsListingSearchInput' },
       { id: 'partner.follow_up', title: 'Run one partner follow-up', copy: 'Move one user toward paid, reactivation, or a manager introduction.', section: 'affiliate' },
-      { id: 'billing.review_upgrade_logic', title: 'Review workflow bottleneck', copy: 'Upgrades should follow real friction and real leverage.', section: 'billing' }
+      { id: 'billing.review_upgrade_logic', title: 'Review billing state', copy: 'Keep billing and access clean without surfacing internal upgrade mechanics in overview.', section: 'billing' }
     ];
   }
 
@@ -237,6 +250,35 @@
     `;
   }
 
+  function buildListingPulseCard() {
+    const active = text('kpiActiveListings');
+    const review = text('kpiReviewQueue');
+    const needsAction = text('kpiNeedsAction');
+    const weak = text('kpiWeakListings');
+
+    return `
+      <div class="card" id="eaOverviewListingPulse">
+        <div class="section-head">
+          <div>
+            <div class="ea-ov-tag">Listing Pulse</div>
+            <h2 style="margin-top:6px;">Portfolio status at a glance</h2>
+            <div class="subtext">Detailed listings and review workflow now live inside Analytics.</div>
+          </div>
+        </div>
+        <div class="ea-ov-pulse-grid">
+          <div class="ea-ov-pulse-stat"><div class="stat-label">Active</div><strong>${active}</strong></div>
+          <div class="ea-ov-pulse-stat"><div class="stat-label">Review</div><strong>${review}</strong></div>
+          <div class="ea-ov-pulse-stat"><div class="stat-label">Needs Action</div><strong>${needsAction}</strong></div>
+          <div class="ea-ov-pulse-stat"><div class="stat-label">Weak / At Risk</div><strong>${weak}</strong></div>
+        </div>
+        <div class="ea-ov-pulse-actions">
+          <button class="action-btn" type="button" data-open-section="tools" data-focus-field="analyticsWorkspace">Open Analytics</button>
+          <button class="action-btn" type="button" data-open-section="tools" data-focus-field="analyticsListingSearchInput">Open Listings & Review</button>
+        </div>
+      </div>
+    `;
+  }
+
   function bindOpenButtons(root = document) {
     root.querySelectorAll('[data-open-section]').forEach((button) => {
       if (button.dataset.boundEaOpen === 'true') return;
@@ -245,7 +287,26 @@
         const section = button.getAttribute('data-open-section');
         const focusId = button.getAttribute('data-focus-field');
         if (typeof window.showSection === 'function') window.showSection(section);
-        if (focusId) setTimeout(() => document.getElementById(focusId)?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 220);
+        if (focusId) {
+          setTimeout(() => {
+            const target = document.getElementById(focusId);
+            target?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            try { target?.focus?.(); } catch {}
+          }, 220);
+        }
+      });
+    });
+
+    Array.from(root.querySelectorAll('button')).forEach((button) => {
+      const label = clean(button.textContent).toLowerCase();
+      if (label !== 'review listings') return;
+      if (button.dataset.boundReviewRedirect === 'true') return;
+      button.dataset.boundReviewRedirect = 'true';
+      button.addEventListener('click', (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        if (typeof window.showSection === 'function') window.showSection('tools');
+        setTimeout(() => document.getElementById('analyticsListingSearchInput')?.focus(), 240);
       });
     });
   }
@@ -259,10 +320,13 @@
     const operatorStrip = overview.querySelector('.operator-strip');
     const priorityGrid = document.getElementById('overviewPriorityGrid');
     const kpiGrid = document.getElementById('overviewPerformanceGrid');
-    const listingsCard = document.getElementById('overviewListingsCard');
     const accountGrid = document.getElementById('overviewAccountGrid');
+    if (!commandGrid || !operatorStrip || !priorityGrid || !accountGrid) return;
+
+    const listingsCard = document.getElementById('overviewListingsCard');
     const upgradeCard = document.getElementById('overviewUpgradeCard');
-    if (!commandGrid || !operatorStrip || !priorityGrid || !listingsCard || !accountGrid || !upgradeCard) return;
+    if (listingsCard) listingsCard.style.display = 'none';
+    if (upgradeCard) upgradeCard.style.display = 'none';
 
     let shell = document.getElementById('eaOverviewShell');
     if (!shell) {
@@ -274,7 +338,6 @@
           <div><span class="ea-ov-tag">Operator Focus</span></div>
           <div class="ea-ov-segment" id="eaOverviewSegment">
             <button type="button" data-mode="core" class="active">Core</button>
-            <button type="button" data-mode="listings">Listings</button>
             <button type="button" data-mode="context">Context</button>
             <button type="button" data-mode="all">All</button>
           </div>
@@ -285,13 +348,18 @@
 
     let core = document.getElementById('eaOverviewCore');
     if (!core) { core = document.createElement('div'); core.id = 'eaOverviewCore'; core.className = 'ea-ov-group'; shell.appendChild(core); }
-    let listings = document.getElementById('eaOverviewListings');
-    if (!listings) { listings = document.createElement('div'); listings.id = 'eaOverviewListings'; listings.className = 'ea-ov-group'; shell.appendChild(listings); }
     let context = document.getElementById('eaOverviewContext');
     if (!context) { context = document.createElement('div'); context.id = 'eaOverviewContext'; context.className = 'ea-ov-group ea-ov-context-muted'; shell.appendChild(context); }
 
     [commandGrid, operatorStrip, priorityGrid, kpiGrid].filter(Boolean).forEach((node) => core.appendChild(node));
-    listings.appendChild(listingsCard);
+
+    let pulseMount = document.getElementById('eaOverviewPulseMount');
+    if (!pulseMount) {
+      pulseMount = document.createElement('div');
+      pulseMount.id = 'eaOverviewPulseMount';
+      core.appendChild(pulseMount);
+    }
+    pulseMount.innerHTML = buildListingPulseCard();
 
     let contextWrap = document.getElementById('eaOverviewContextWrap');
     if (!contextWrap) {
@@ -301,7 +369,6 @@
     }
     contextWrap.innerHTML = '';
     contextWrap.appendChild(accountGrid);
-    contextWrap.appendChild(upgradeCard);
 
     let memoryMount = document.getElementById('eaOverviewMemoryMount');
     if (!memoryMount) {
@@ -326,11 +393,11 @@
     if (segment && segment.dataset.boundEaSegment !== 'true') {
       segment.dataset.boundEaSegment = 'true';
       const buttons = Array.from(segment.querySelectorAll('button'));
-      const groups = { core: [core], listings: [listings], context: [context], all: [core, listings, context] };
+      const groups = { core: [core], context: [context], all: [core, context] };
       buttons.forEach((button) => {
         button.addEventListener('click', () => {
           buttons.forEach((btn) => btn.classList.toggle('active', btn === button));
-          [core, listings, context].forEach((group) => group.classList.add('ea-ov-hidden'));
+          [core, context].forEach((group) => group.classList.add('ea-ov-hidden'));
           (groups[button.dataset.mode] || groups.all).forEach((group) => group.classList.remove('ea-ov-hidden'));
         });
       });
