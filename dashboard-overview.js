@@ -35,9 +35,9 @@
   `;
 
   function injectStyle() {
-    if (document.getElementById('elevate-command-centre-shell-v2')) return;
+    if (document.getElementById('elevate-command-centre-shell-v3')) return;
     const style = document.createElement('style');
-    style.id = 'elevate-command-centre-shell-v2';
+    style.id = 'elevate-command-centre-shell-v3';
     style.textContent = CSS;
     document.head.appendChild(style);
   }
@@ -47,16 +47,13 @@
   }
 
   function num(value) {
-    const parsed = Number(String(value || '').replace(/[^0-9.-]/g, ''));
+    const parsed = Number(String(value ?? '').replace(/[^0-9.-]/g, ''));
     return Number.isFinite(parsed) ? parsed : 0;
   }
 
-  function text(id) {
-    return clean(document.getElementById(id)?.textContent || '');
-  }
-
-  function bodyText() {
-    return clean(document.body?.innerText || '');
+  function summaryData() {
+    const data = window.dashboardSummary || NS.state?.get?.('summary_v2', {}) || {};
+    return data?.data || data || {};
   }
 
   function profileState() {
@@ -64,10 +61,17 @@
       user: NS.state?.get?.('user', {}) || {},
       profile: NS.state?.get?.('profile', {}) || {},
       session: NS.state?.get?.('session', {}) || {},
-      summary: window.dashboardSummary || NS.state?.get?.('summary_v2', {}) || {},
+      summary: summaryData(),
       currentUser: window.currentUser || {},
       truth: NS.accountTruth || {}
     };
+  }
+
+  function updateOverviewHeader() {
+    const heading = document.querySelector('.main-header h1');
+    const welcome = document.getElementById('welcomeText');
+    if (heading) heading.textContent = 'Command Centre';
+    if (welcome) welcome.textContent = 'Your operator view for setup, posting, review, and compliance.';
   }
 
   function findProvince() {
@@ -75,14 +79,16 @@
     const candidates = [
       s.profile.province,
       s.profile.province_code,
+      s.profile.compliance_mode,
       s.profile.compliance_province,
-      s.profile.jurisdiction,
-      s.session.province,
-      s.summary.province,
-      s.summary.province_code,
-      s.summary.compliance_province,
+      s.summary.profile_snapshot?.province,
+      s.summary.profile_snapshot?.province_code,
+      s.summary.profile_snapshot?.compliance_mode,
+      s.summary.account_snapshot?.province,
+      s.summary.account_snapshot?.province_code,
       s.truth.province,
       s.truth.province_code,
+      s.session.province,
       s.currentUser.user_metadata?.province,
       s.currentUser.user_metadata?.province_code
     ].map(clean).filter(Boolean);
@@ -93,41 +99,35 @@
       if (/british columbia/i.test(direct)) return 'BC';
       return direct.toUpperCase();
     }
-
-    const body = bodyText();
-    const match = body.match(/\b(AB\/BC|AB|BC)\b/);
-    return match ? match[1] : 'Needs Review';
+    return 'Needs Review';
   }
 
-  function setupPercent(activityCount) {
-    if (activityCount > 0) return 100;
-    const direct = num(text('setupProgressValue'));
-    if (direct) return Math.max(0, Math.min(100, direct));
-    const match = bodyText().match(/setup\s*(\d{1,3})%/i);
-    return match ? Math.max(0, Math.min(100, Number(match[1]))) : 0;
-  }
-
-  function accessLabel() {
+  function accessLabel(data) {
+    const account = data.account_snapshot || {};
     const ready = document.body?.getAttribute('data-dashboard-ready');
+    if (account.access_granted === true) return 'Active';
     return ready === 'true' ? 'Active' : 'Needs Attention';
   }
 
   function metrics() {
-    const active = num(text('kpiActiveListings'));
-    const review = num(text('kpiReviewQueue'));
-    const needsAction = num(text('kpiNeedsAction'));
-    const weak = num(text('kpiWeakListings'));
-    const activityCount = active + review + needsAction + weak;
-    const firstPostDone = activityCount > 0;
-    const setup = setupPercent(activityCount);
+    const data = summaryData();
+    const setup = Math.round((Number(data.setup_status?.profile_completion_score || 0)) * 100);
+    const active = num(data.active_listings);
+    const review = num(data.review_queue_count);
+    const needsAction = num(data.needs_action_count);
+    const weak = num(data.weak_listings);
+    const queue = num(data.queue_count);
+    const activityCount = active + review + needsAction + weak + queue;
+    const firstPostDone = active > 0 || review > 0 || needsAction > 0 || weak > 0;
     const activationMode = !firstPostDone && setup < 100;
     return {
-      access: accessLabel(),
-      setup,
+      access: accessLabel(data),
+      setup: setup || (activityCount > 0 ? 100 : 0),
       active,
       review,
       needsAction,
       weak,
+      queue,
       firstPostDone,
       activationMode,
       compliance: findProvince()
@@ -326,6 +326,7 @@
     const overview = document.getElementById('overview');
     if (!overview) return;
     injectStyle();
+    updateOverviewHeader();
     overview.innerHTML = renderShell();
     bindButtons(overview);
   }
