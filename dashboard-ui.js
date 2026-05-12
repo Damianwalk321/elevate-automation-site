@@ -68,7 +68,7 @@
   function markActiveNav(sectionId, sectionEl = null) {
     const resolved = clean(sectionEl?.id || resolveSectionId(sectionId));
     qsa("[data-section], .nav-btn").forEach((button) => {
-      const raw = button.getAttribute("data-section") || button.dataset.section || "";
+      const raw = button.getAttribute("data-section") || button.dataset.section || button.dataset.eaNavKey || "";
       const buttonResolved = clean(resolveSectionId(raw));
       button.classList.toggle("active", Boolean(resolved) && buttonResolved === resolved);
     });
@@ -174,11 +174,12 @@
       .ea-brand-overline{color:var(--gold);font-size:11px;font-weight:800;letter-spacing:.22em;text-transform:uppercase;margin-bottom:8px}
       .ea-brand-title{font-size:20px;font-weight:800;line-height:1.06;letter-spacing:-.02em;color:var(--text)}
       .ea-brand-subtitle{margin-top:10px;color:var(--muted);font-size:13px;line-height:1.55}
-      .sidebar-card.ea-session-card{border-radius:18px;padding:16px;background:linear-gradient(180deg, rgba(255,255,255,.02), rgba(255,255,255,0));border:1px solid rgba(212,175,55,.16)}
+      .sidebar-card.ea-session-card{border-radius:18px;padding:16px;background:linear-gradient(180deg, rgba(255,255,255,.02), rgba(255,255,255,0));border:1px solid rgba(212,175,55,.16);position:relative}
       .ea-session-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:10px}
       .ea-session-label{font-size:12px;color:var(--gold);text-transform:uppercase;letter-spacing:1.4px;font-weight:800}
       .ea-live-dot{width:9px;height:9px;border-radius:999px;background:#62d26f;box-shadow:0 0 0 4px rgba(98,210,111,.12)}
-      .ea-session-email{font-size:14px;color:var(--text);word-break:break-word}
+      .ea-session-email,.user-email{font-size:14px;color:var(--text);word-break:break-word}
+      .ea-hidden-identity{position:absolute !important;left:-9999px !important;top:auto !important;width:1px !important;height:1px !important;overflow:hidden !important;opacity:0 !important;pointer-events:none !important}
       .sidebar-nav{gap:10px}
       .nav-btn.ea-nav-enhanced{display:block;padding:0;overflow:hidden;border-radius:18px;border:1px solid rgba(255,255,255,.06);background:#121212;min-height:0}
       .nav-btn.ea-nav-enhanced:hover{background:#161616;border-color:rgba(212,175,55,.18)}
@@ -222,25 +223,28 @@
       return value === 'logged in' || value === 'operator';
     });
     const card = label?.closest('.sidebar-card');
-    const email = clean(card?.querySelector('.sidebar-card-value, .ea-session-email')?.textContent || '');
-    if (!card || !email) return;
+    if (!card) return;
+
+    const email = clean(card.querySelector('.user-email, .sidebar-card-value, .ea-session-email')?.textContent || 'Loading...');
     card.classList.add('ea-session-card');
     card.innerHTML = `
       <div class="ea-session-head">
         <div class="ea-session-label">Operator</div>
         <span class="ea-live-dot" aria-hidden="true"></span>
       </div>
-      <div class="ea-session-email">${email}</div>
+      <div class="ea-session-email user-email">${email}</div>
+      <div class="sidebar-card-label ea-hidden-identity">Operator</div>
+      <div class="sidebar-card-value user-email ea-hidden-identity">${email}</div>
     `;
   }
 
   function bindExistingNavButtons() {
-    qsa("[data-section], .nav-btn").forEach((button) => {
-      if (button.dataset.eaBound === "true") return;
-      const sectionId = clean(button.getAttribute("data-section") || button.dataset.section || "");
+    qsa('[data-section], .nav-btn').forEach((button) => {
+      if (button.dataset.eaBound === 'true') return;
+      const sectionId = clean(button.getAttribute('data-section') || button.dataset.section || button.dataset.eaNavKey || '');
       if (!sectionId) return;
-      button.dataset.eaBound = "true";
-      button.addEventListener("click", (event) => {
+      button.dataset.eaBound = 'true';
+      button.addEventListener('click', (event) => {
         event.preventDefault();
         event.stopPropagation();
         showSection(sectionId, { scroll: false });
@@ -249,24 +253,28 @@
   }
 
   function canonicalNavKey(button) {
-    const text = lower(button.textContent || "");
-    if (text.includes("command centre") || text === "overview") return "overview";
-    if (text === "tools") return "tools";
-    if (text === "analytics") return "analytics";
-    if (text === "compliance") return "compliance";
-    if (text === "partners") return "partners";
-    if (text === "setup") return "setup";
-    if (text === "billing") return "billing";
+    const locked = clean(button.dataset.eaNavKey || '');
+    if (locked) return locked;
 
-    const raw = clean(button.getAttribute("data-section") || button.dataset.section || "");
+    const raw = clean(button.getAttribute('data-section') || button.dataset.section || '');
     const resolved = clean(resolveSectionId(raw));
-    if (resolved === "overview") return "overview";
-    if (resolved === "extension" || resolved === "tools") return "tools";
-    if (resolved === "analytics") return "analytics";
-    if (resolved === "compliance") return "compliance";
-    if (resolved === "affiliate" || resolved === "partners") return "partners";
-    if (resolved === "profile" || resolved === "setup") return "setup";
-    if (resolved === "billing") return "billing";
+    if (resolved === 'overview') return 'overview';
+    if (resolved === 'extension' || resolved === 'tools') return 'tools';
+    if (resolved === 'analytics') return 'analytics';
+    if (resolved === 'compliance') return 'compliance';
+    if (resolved === 'affiliate' || resolved === 'partners') return 'partners';
+    if (resolved === 'profile' || resolved === 'setup') return 'setup';
+    if (resolved === 'billing') return 'billing';
+
+    const text = lower(button.textContent || '');
+    if (text.includes('command centre') || text === 'overview') return 'overview';
+    if (text.includes('tools')) return 'tools';
+    if (text.includes('analytics')) return 'analytics';
+    if (text.includes('compliance')) return 'compliance';
+    if (text.includes('partners')) return 'partners';
+    if (text.includes('setup')) return 'setup';
+    if (text.includes('billing')) return 'billing';
+
     return raw || resolved || text;
   }
 
@@ -279,6 +287,7 @@
       if (!item) return;
       const currentActive = button.classList.contains('active');
       button.classList.add('ea-nav-enhanced');
+      button.dataset.eaNavKey = key;
       button.setAttribute('aria-label', item.label);
       button.innerHTML = `
         <span class="ea-nav-inner">
@@ -297,8 +306,8 @@
     const nav = findSidebarNav();
     if (!nav) return;
 
-    const desiredOrder = ["overview", "tools", "analytics", "compliance", "partners", "setup", "billing"];
-    const buttons = qsa(".nav-btn, [data-section]", nav).filter((button, index, array) => array.indexOf(button) === index);
+    const desiredOrder = ['overview', 'tools', 'analytics', 'compliance', 'partners', 'setup', 'billing'];
+    const buttons = qsa('.nav-btn, [data-section]', nav).filter((button, index, array) => array.indexOf(button) === index);
     const buckets = new Map();
 
     buttons.forEach((button) => {
@@ -317,8 +326,8 @@
 
   function pinSidebarOrder() {
     const nav = findSidebarNav();
-    if (!nav || nav.dataset.eaPinned === "true") return;
-    nav.dataset.eaPinned = "true";
+    if (!nav || nav.dataset.eaPinned === 'true') return;
+    nav.dataset.eaPinned = 'true';
     let runs = 0;
     const interval = setInterval(() => {
       reorderSidebarNav();
@@ -343,7 +352,7 @@
     setTimeout(() => { reorderSidebarNav(); enhanceSidebarBrand(); enhanceSessionCard(); enhanceSidebarNavVisuals(); }, 2500);
     const sections = getDashboardSections();
     if (!sections.length) return;
-    const active = NS.state?.get?.("ui.activeSection") || sections[0].id || "overview";
+    const active = NS.state?.get?.('ui.activeSection') || sections[0].id || 'overview';
     const shown = showSection(active, { scroll: false });
     if (!shown) revealFallbackSections();
   }
@@ -367,8 +376,8 @@
   NS.modules = NS.modules || {};
   NS.modules.ui = true;
 
-  if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", bootSidebarNavRepair, { once: true });
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', bootSidebarNavRepair, { once: true });
   } else {
     bootSidebarNavRepair();
   }
