@@ -88,6 +88,27 @@
     }
   }
 
+  async function hydrateCurrentUserIfNeeded(source = "hydrate-user") {
+    if (hasAuthenticatedUser()) return true;
+    if (!NS.api?.getCurrentUser) return false;
+    try {
+      pushStage("Auth", `hydrating current user via ${source}`);
+      const user = await NS.api.getCurrentUser();
+      if (user) {
+        window.currentUser = user;
+        try {
+          window.dispatchEvent(new CustomEvent("elevate:auth-ready", {
+            detail: { source, hydrated_user: true, email: user.email || "" }
+          }));
+        } catch {}
+        return true;
+      }
+    } catch (error) {
+      pushStage("Auth", `current user hydrate failed via ${source}: ${error?.message || error}`);
+    }
+    return false;
+  }
+
   async function hydrateSummaryIfNeeded(source = "hydrate") {
     if (!NS.api?.fetchDashboardSummary) return false;
     if (hasSummaryOrTruth()) return true;
@@ -144,8 +165,13 @@
 
     const truth = readCanonicalTruth();
     const authSettled = Boolean(NS.authSettled || truth?.auth_settled || truth?.truth_ready);
-    const hasUser = hasAuthenticatedUser();
+    let hasUser = hasAuthenticatedUser();
     const tokenReady = await hasVerifiedToken();
+
+    if (!hasUser && tokenReady) {
+      await hydrateCurrentUserIfNeeded(source);
+      hasUser = hasAuthenticatedUser();
+    }
 
     if (hasUser && tokenReady && !hasSummaryOrTruth()) {
       await hydrateSummaryIfNeeded(source);
