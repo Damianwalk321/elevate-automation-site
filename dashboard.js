@@ -13,7 +13,7 @@
     "/dashboard-state.js?v=20260406p12a",
     "/dashboard-ui.js?v=20260406p12a",
     "/dashboard-api.js?v=20260406p12a",
-    "/dashboard-overview.js?v=20260406p12a",
+    "/dashboard-overview.js?v=20260512cc2",
     "/dashboard-listings.js?v=20260406p12a",
     "/dashboard-profile.js?v=20260406p12a",
     "/dashboard-tools.js?v=20260406p12a",
