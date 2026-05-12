@@ -1,117 +1,52 @@
 (() => {
   const NS = (window.ElevateDashboard = window.ElevateDashboard || {});
   if (NS.modules?.overview) return;
-
+  const STYLE_ID = 'elevate-operator-command-centre-v2';
   const CSS = `
-    :root {
-      --accent: #d4af37;
-      --panel-soft: #141414;
-      --panel-deep: #101010;
-      --text-soft: #d6d6d6;
-    }
-    .phase4-shell { display:grid; gap:16px; }
-    .phase4-toolbar { display:flex; justify-content:space-between; gap:10px; align-items:center; flex-wrap:wrap; margin-bottom:8px; }
-    .phase4-segment { display:inline-flex; gap:8px; background:#111; border:1px solid rgba(212,175,55,0.12); border-radius:999px; padding:6px; }
-    .phase4-segment button { appearance:none; border:none; background:transparent; color:#d8d8d8; padding:10px 14px; border-radius:999px; cursor:pointer; font-weight:700; font-size:13px; }
-    .phase4-segment button.active { background:rgba(212,175,55,0.15); color:#f3ddb0; }
-    .phase4-group { display:grid; gap:16px; }
-    .phase4-hidden { display:none !important; }
-    .phase4-tag { display:inline-flex; align-items:center; padding:6px 10px; border-radius:999px; background:rgba(212,175,55,0.10); border:1px solid rgba(212,175,55,0.16); color:#f3ddb0; font-size:11px; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; }
-    .phase4-collapse { border:1px solid rgba(212,175,55,0.10); border-radius:16px; overflow:hidden; background:#111; }
-    .phase4-collapse-head { display:flex; justify-content:space-between; align-items:center; gap:12px; padding:14px 16px; cursor:pointer; background:rgba(255,255,255,0.02); }
-    .phase4-collapse-body { display:none; padding:16px; border-top:1px solid rgba(212,175,55,0.08); }
-    .phase4-collapse.open .phase4-collapse-body { display:block; }
+    .ea-ops-shell{display:grid;gap:18px}.ea-ops-card{background:linear-gradient(180deg,rgba(255,255,255,.02),rgba(255,255,255,0));border:1px solid var(--line);border-radius:18px;padding:20px;box-shadow:var(--shadow)}
+    .ea-ops-eyebrow{font-size:11px;text-transform:uppercase;letter-spacing:1.4px;color:var(--gold);font-weight:800;margin-bottom:14px}.ea-ops-header,.ea-ops-primary,.ea-ops-grid{display:grid;gap:18px}
+    .ea-ops-header{grid-template-columns:minmax(0,1.2fr) minmax(360px,.8fr)}.ea-ops-primary{grid-template-columns:minmax(0,1.2fr) minmax(320px,.8fr)}.ea-ops-grid{grid-template-columns:minmax(0,1.15fr) minmax(320px,.85fr)}
+    .ea-ops-title{margin:0 0 10px;font-size:30px;line-height:1.02;font-weight:900;color:var(--text)}.ea-ops-subtitle{margin:0;font-size:14px;line-height:1.65;color:var(--muted)}
+    .ea-ops-chip-row{display:flex;flex-wrap:wrap;gap:10px;margin-top:16px}.ea-ops-chip{display:inline-flex;align-items:center;gap:8px;min-height:38px;padding:0 14px;border-radius:999px;background:#151515;border:1px solid rgba(255,255,255,.07);font-size:12px;font-weight:800;color:#f0f0f0}
+    .ea-ops-dot{width:8px;height:8px;border-radius:50%;background:currentColor;display:inline-block}.ea-ops-good{color:var(--success)}.ea-ops-bad{color:var(--danger)}.ea-ops-warn{color:#ffd97a}
+    .ea-ops-stat-grid,.ea-ops-health-grid,.ea-ops-kpis,.ea-ops-list,.ea-ops-targets{display:grid;gap:12px}.ea-ops-stat-grid,.ea-ops-health-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.ea-ops-kpis{grid-template-columns:repeat(6,minmax(0,1fr))}
+    .ea-ops-stat,.ea-ops-kpi,.ea-ops-health-item,.ea-ops-row,.ea-ops-warning,.ea-ops-empty{padding:14px 16px;border-radius:14px;background:#141414;border:1px solid rgba(255,255,255,.06)}
+    .ea-ops-label{font-size:11px;text-transform:uppercase;letter-spacing:1.2px;color:var(--gold);font-weight:800}.ea-ops-value{margin-top:8px;font-size:24px;line-height:1.05;font-weight:900;color:var(--text)}.ea-ops-copy{margin-top:8px;font-size:12px;line-height:1.55;color:var(--muted)}
+    .ea-ops-primary-title{margin:0 0 12px;font-size:24px;line-height:1.1;font-weight:900;color:var(--text)}.ea-ops-primary-copy{margin:0 0 18px;font-size:14px;line-height:1.7;color:#ddd}.ea-ops-btn-row{display:flex;flex-wrap:wrap;gap:10px}
+    .ea-ops-btn{appearance:none;border:1px solid rgba(255,255,255,.08);background:#191919;color:#f2f2f2;border-radius:12px;padding:12px 14px;font-size:13px;font-weight:800;cursor:pointer}.ea-ops-btn.is-primary{background:var(--gold);color:#111;border-color:var(--gold)}
+    .ea-ops-target{display:flex;justify-content:space-between;gap:12px;align-items:center}.ea-ops-target strong,.ea-ops-row strong{display:block;font-size:14px;line-height:1.3;color:var(--text)}.ea-ops-target span,.ea-ops-row span{display:block;margin-top:4px;font-size:12px;line-height:1.5;color:var(--muted)}
+    .ea-ops-target-value{font-size:20px;font-weight:900;color:var(--text)}.ea-ops-queue{display:grid;grid-template-columns:minmax(0,1fr) 64px 140px 140px;gap:10px;align-items:center}.ea-ops-pill{display:inline-flex;align-items:center;justify-content:center;min-width:44px;height:38px;padding:0 12px;border-radius:999px;background:#191919;border:1px solid rgba(255,255,255,.07);font-size:12px;font-weight:900;color:#f1f1f1;justify-self:end}
+    .ea-ops-outcome{display:flex;justify-content:space-between;gap:12px;align-items:flex-start}.ea-ops-empty{font-size:13px;line-height:1.6;color:var(--muted)}
+    @media (max-width:1220px){.ea-ops-header,.ea-ops-primary,.ea-ops-grid{grid-template-columns:1fr}.ea-ops-kpis{grid-template-columns:repeat(3,minmax(0,1fr))}}
+    @media (max-width:860px){.ea-ops-stat-grid,.ea-ops-health-grid,.ea-ops-kpis{grid-template-columns:1fr}.ea-ops-queue{grid-template-columns:1fr}.ea-ops-pill{justify-self:start}}
   `;
-
-  function applyOverviewHierarchy() {
-    const { qs } = NS.ui || {};
-    const overview = qs ? qs("#overview") : document.getElementById("overview");
-    if (!overview || overview.dataset.phase4HierarchyBuilt === "true") return;
-    overview.dataset.phase4HierarchyBuilt = "true";
-
-    NS.ui.injectStyleOnce("elevate-dashboard-phase4-overview", CSS);
-
-    const commandGrid = overview.querySelector(".command-center-grid");
-    const operatorStrip = overview.querySelector(".operator-strip");
-    const overviewChildren = Array.from(overview.children);
-    const actionGrid = overviewChildren.find((el) => el.classList?.contains("grid-2"));
-    const upgradeCard = overview.querySelector(".upgrade-card");
-    const kpiGrid = overviewChildren.find((el) => el.classList?.contains("grid-4"));
-    const listingsCard = Array.from(overview.querySelectorAll(".card")).find((card) => card.querySelector("#recentListingsGrid"));
-    const bottomGrid = Array.from(overview.querySelectorAll(".grid-2")).find((grid) => grid.querySelector("#snapshotSetupSummary") || grid.querySelector("#setupReadinessSummary"));
-
-    const shell = document.createElement("div");
-    shell.className = "phase4-shell";
-    shell.innerHTML = `
-      <div class="phase4-toolbar">
-        <div><span class="phase4-tag">Operator Focus</span></div>
-        <div class="phase4-segment" id="phase4OverviewSegment">
-          <button type="button" data-mode="core" class="active">Core</button>
-          <button type="button" data-mode="listings">Listings</button>
-          <button type="button" data-mode="secondary">Secondary</button>
-          <button type="button" data-mode="all">All</button>
-        </div>
-      </div>
-    `;
-
-    const core = document.createElement("div");
-    core.className = "phase4-group";
-    core.dataset.group = "core";
-
-    const listings = document.createElement("div");
-    listings.className = "phase4-group";
-    listings.dataset.group = "listings";
-
-    const secondary = document.createElement("div");
-    secondary.className = "phase4-group";
-    secondary.dataset.group = "secondary";
-
-    overview.prepend(shell);
-    shell.appendChild(core);
-    shell.appendChild(listings);
-    shell.appendChild(secondary);
-
-    [commandGrid, operatorStrip, actionGrid, kpiGrid].filter(Boolean).forEach((el) => core.appendChild(el));
-    [listingsCard].filter(Boolean).forEach((el) => listings.appendChild(el));
-    if (upgradeCard) secondary.appendChild(upgradeCard);
-
-    if (bottomGrid) {
-      const collapse = document.createElement("div");
-      collapse.className = "phase4-collapse open";
-      collapse.innerHTML = `
-        <div class="phase4-collapse-head">
-          <div>
-            <div class="phase4-tag">Secondary Detail</div>
-            <strong>Account Snapshot & Setup Readiness</strong>
-          </div>
-          <div class="subtext">Collapse</div>
-        </div>
-        <div class="phase4-collapse-body"></div>
-      `;
-      collapse.querySelector(".phase4-collapse-body").appendChild(bottomGrid);
-      collapse.querySelector(".phase4-collapse-head").addEventListener("click", () => {
-        collapse.classList.toggle("open");
-        const sub = collapse.querySelector(".subtext");
-        if (sub) sub.textContent = collapse.classList.contains("open") ? "Collapse" : "Expand";
-      });
-      secondary.appendChild(collapse);
-    }
-
-    const segment = shell.querySelector("#phase4OverviewSegment");
-    if (segment) {
-      const buttons = Array.from(segment.querySelectorAll("button"));
-      const groups = { core: [core], listings: [listings], secondary: [secondary], all: [core, listings, secondary] };
-      buttons.forEach((button) => {
-        button.addEventListener("click", () => {
-          buttons.forEach((b) => b.classList.toggle("active", b === button));
-          [core, listings, secondary].forEach((group) => group.classList.add("phase4-hidden"));
-          (groups[button.dataset.mode || "all"] || groups.all).forEach((group) => group.classList.remove("phase4-hidden"));
-        });
-      });
-    }
+  const clean = (v) => String(v || '').replace(/\s+/g, ' ').trim();
+  const num = (v) => { const n = Number(String(v ?? '').replace(/[^0-9.-]/g, '')); return Number.isFinite(n) ? n : 0; };
+  const titleCase = (v) => clean(v).replace(/[_-]+/g, ' ').toLowerCase().replace(/\b\w/g, (m) => m.toUpperCase());
+  const summaryData = () => { const d = window.dashboardSummary || NS.state?.get?.('summary_v2', {}) || {}; return d?.data || d || {}; };
+  function injectStyle(){ if(document.getElementById(STYLE_ID)) return; const s=document.createElement('style'); s.id=STYLE_ID; s.textContent=CSS; document.head.appendChild(s); }
+  function updateOverviewHeader(mode){ const h=document.querySelector('.main-header h1'); const w=document.getElementById('welcomeText'); if(h) h.textContent=mode==='operator'?'Operator Command Centre':'Activation Command Centre'; if(w) w.textContent=mode==='operator'?'What matters now. What is blocked. What to do next.':'Complete setup, get live, and qualify into operator mode.'; }
+  function mapActionAttr(action,isPrimary){ const a=clean(action).toLowerCase(); const map={open_tools:'tools',post_next:'tools',open_analytics:'analytics',open_review_queue:'analytics',open_compliance:'compliance',open_setup:'setup'}; if(a==='refresh_sync'||a==='refresh-access') return 'data-ea-action="refresh-access"'; return `data-open-section="${map[a] || (isPrimary?'tools':'analytics')}"`; }
+  function metrics(){ const data=summaryData(); const c=data.command_center||{}; const k=c.kpis||{}; const q=c.work_queues||{}; const s=data.setup_status||{}; const recent=Array.isArray(data.recent_listings)?data.recent_listings:[]; const latest=recent[0]||null; return { data, mode:clean(data.dashboard_mode).toLowerCase()==='operator'?'operator':'activation', operatorName:clean(data.profile_snapshot?.salesperson_name||data.profile_snapshot?.full_name||'Operator'), dealership:clean(data.profile_snapshot?.dealership||data.profile_snapshot?.dealer_name||'Elevate Workspace'), plan:clean(data.plan_access?.plan_label||data.account_snapshot?.plan||'Founder Beta'), accessGranted:Boolean(data.account_snapshot?.access_granted), accessLabel:Boolean(data.account_snapshot?.access_granted)?'Access Active':titleCase(data.account_snapshot?.status||'Needs Attention'), postingReady:Boolean(data.can_post), complianceReady:Boolean(s.compliance_mode_present), profileReady:Boolean(s.profile_complete), firstPostComplete:Boolean(s.first_post_complete), setupScore:num(data.activation_score), postingLimit:num(data.effective_posting_limit??data.daily_limit), active:num(k.active_listings??data.active_listings), postedToday:num(k.posted_today??data.posts_today), remainingToday:num(k.remaining_today??data.posts_remaining), review:num(k.in_review??data.review_queue_count), needsAction:num(k.needs_action??data.needs_action_count), atRisk:num(k.at_risk??data.weak_listings), queue:num(q.ready_to_post??data.queue_count), staleReview:num(q.stale_review??data.review_delete_count), complianceBlocked:Boolean(s.compliance_mode_present)?0:1, primaryCommand:c.primary_command||null, lastOutcomeLabel:latest?'Recorded':'No Data', lastOutcomeCopy:latest?`${clean(latest.title||'Listing')} • ${num(latest.views_count)} views • ${num(latest.messages_count)} messages`:'No recent successful post recorded yet.' }; }
+  const buildWarnings=(d)=>{ const s=d.setup_status||{}; const out=[]; if(!s.compliance_mode_present) out.push(['Compliance mode missing','Set the correct province/compliance profile before trusting unattended posting.']); if(!s.dealer_website_present) out.push(['Dealer website missing','Dealer website is still missing from the profile surface.']); if(!s.listing_location_present) out.push(['Listing location missing','Listing location is not yet locked into the current workspace.']); if(!s.scanner_type_present) out.push(['Scanner type missing','Scanner type should be defined so readiness remains stable across sessions.']); return out.slice(0,4); };
+  const buildTargets=(m)=>[[ 'Posts used today', m.postingLimit>0?`${m.postedToday} of ${m.postingLimit} posting slots used.`:`${m.postedToday} posts used today.`, `${m.postedToday}/${m.postingLimit||0}`],[ 'Review pressure', `${m.review+m.needsAction} open review and action items are currently on the surface.`, String(m.review+m.needsAction)],[ 'Backlog remaining', `${m.staleReview+m.complianceBlocked} stale or compliance blockers still need attention.`, String(m.staleReview+m.complianceBlocked) ]];
+  const buildQueue=(m)=>[{t:'Compliance blocked',c:m.complianceBlocked,x:'Posting is blocked by missing compliance readiness or required setup.',p:['Open Compliance','compliance'],s:['Refresh','refresh-access']},{t:'Stale or removed review',c:m.staleReview,x:'Listings flagged as stale or removed are waiting for operator review.',p:['Open Analytics','analytics'],s:['Open Tools','tools']},{t:'Review queue',c:m.review,x:'Listings are waiting in review and need operator clearing.',p:['Open Analytics','analytics'],s:['Refresh','refresh-access']},{t:'Needs action',c:m.needsAction,x:'Listings have price, content, or lifecycle issues needing direct action.',p:['Open Analytics','analytics'],s:['Open Compliance','compliance']},{t:'Queue ready',c:m.queue,x:'Vehicles are ready for the next posting cycle.',p:['Open Tools','tools'],s:['Open Analytics','analytics']}].filter(i=>i.c>0).slice(0,5);
+  const buildHealth=(m)=>[{t:'Posting ready',v:m.postingReady?'Ready':'Needs Attention',cls:m.postingReady?'ea-ops-good':'ea-ops-bad',x:m.postingReady?'The machine is currently clear to post.':'Do not push more volume until posting readiness is restored.'},{t:'Session state',v:m.accessGranted?'Valid':'Check Required',cls:m.accessGranted?'ea-ops-good':'ea-ops-bad',x:m.accessGranted?'Workspace access is active.':'Refresh access before trusting the machine.'},{t:'Compliance engine',v:m.complianceReady?'Ready':'Blocked',cls:m.complianceReady?'ea-ops-good':'ea-ops-bad',x:m.complianceReady?'Compliance profile is present and readable.':'Missing compliance readiness is blocking trust.'},{t:'Queue pressure',v:m.queue>0?'Loaded':'Clear',cls:m.queue>0?'ea-ops-good':'ea-ops-warn',x:m.queue>0?`${m.queue} vehicles are ready for the next cycle.`:'No queued vehicles are currently prepared.'},{t:'Review surface',v:m.review+m.needsAction>0?'Active':'Clear',cls:m.review+m.needsAction>0?'ea-ops-warn':'ea-ops-good',x:m.review+m.needsAction>0?`${m.review+m.needsAction} open review/action items are live.`:'No open review pressure is currently visible.'},{t:'Last successful post',v:m.lastOutcomeLabel,cls:m.lastOutcomeLabel==='Recorded'?'ea-ops-good':'ea-ops-warn',x:m.lastOutcomeCopy}];
+  function render(){ const m=metrics(); const warnings=buildWarnings(m.data); updateOverviewHeader(m.mode); const pc=m.primaryCommand||{title:m.mode==='operator'?'Maintain listing quality and operator rhythm':'Complete setup and run the first clean posting cycle',message:m.mode==='operator'?'The account is live. Protect trust, clear blockers, and keep output moving.':'Finish the activation requirements and complete the first clean post to qualify into operator mode.',primary_action:'open_tools',secondary_action:'open_setup'}; const outcomes=(Array.isArray(m.data.recent_listings)?m.data.recent_listings:[]).slice(0,4).map(i=>`<div class="ea-ops-outcome ea-ops-row"><div><strong>${clean(i.title||'Listing')}</strong><span>${i.price_resolved===false?'Price needs review before this listing should be trusted.':`${num(i.views_count)} views • ${num(i.messages_count)} messages`}</span></div><span class="ea-ops-pill">${titleCase(i.lifecycle_status||i.status||'live')}</span></div>`).join('') || `<div class="ea-ops-empty">No recent outcomes are available yet.</div>`;
+    const header=`<div class="ea-ops-header"><div class="ea-ops-card"><div class="ea-ops-eyebrow">Command Header</div><h2 class="ea-ops-title">${m.operatorName}</h2><p class="ea-ops-subtitle">${m.dealership} • ${m.mode==='operator'?'Operator mode active':'Activation mode active'}</p><div class="ea-ops-chip-row"><span class="ea-ops-chip"><span class="ea-ops-dot"></span>${m.plan}</span><span class="ea-ops-chip ${m.postingReady?'ea-ops-good':'ea-ops-bad'}"><span class="ea-ops-dot"></span>${m.postingReady?'Posting Ready':'Posting Needs Attention'}</span><span class="ea-ops-chip ${m.accessGranted?'ea-ops-good':'ea-ops-bad'}"><span class="ea-ops-dot"></span>${m.accessLabel}</span><span class="ea-ops-chip ${m.complianceReady?'ea-ops-good':'ea-ops-bad'}"><span class="ea-ops-dot"></span>${m.complianceReady?'Compliance Ready':'Compliance Blocked'}</span></div></div><div class="ea-ops-stat-grid"><div class="ea-ops-stat"><div class="ea-ops-label">Posts Remaining</div><div class="ea-ops-value">${m.remainingToday}</div><div class="ea-ops-copy">${m.postingLimit>0?`${m.postedToday} of ${m.postingLimit} used today.`:'Current plan usage.'}</div></div><div class="ea-ops-stat"><div class="ea-ops-label">Priority Load</div><div class="ea-ops-value">${m.review+m.needsAction}</div><div class="ea-ops-copy">Open review plus action items currently on the surface.</div></div><div class="ea-ops-stat"><div class="ea-ops-label">Queue Ready</div><div class="ea-ops-value">${m.queue}</div><div class="ea-ops-copy">Vehicles prepared for the next posting cycle.</div></div><div class="ea-ops-stat"><div class="ea-ops-label">Stale Review</div><div class="ea-ops-value">${m.staleReview}</div><div class="ea-ops-copy">Listings flagged for stale or removed review.</div></div></div></div>`;
+    const primary=`<div class="ea-ops-primary"><div class="ea-ops-card"><div class="ea-ops-eyebrow">Primary Command</div><h3 class="ea-ops-primary-title">${clean(pc.title)}</h3><p class="ea-ops-primary-copy">${clean(pc.message)}</p><div class="ea-ops-btn-row"><button class="ea-ops-btn is-primary" type="button" ${mapActionAttr(pc.primary_action,true)}>Execute Primary</button><button class="ea-ops-btn" type="button" ${mapActionAttr(pc.secondary_action,false)}>Open Secondary</button></div></div><div class="ea-ops-card"><div class="ea-ops-eyebrow">Today’s Target</div><div class="ea-ops-targets">${buildTargets(m).map(i=>`<div class="ea-ops-target ea-ops-row"><div><strong>${i[0]}</strong><span>${i[1]}</span></div><div class="ea-ops-target-value">${i[2]}</div></div>`).join('')}</div></div></div>`;
+    const health=`<div class="ea-ops-card"><div class="ea-ops-eyebrow">Machine Health</div><div class="ea-ops-health-grid">${buildHealth(m).map(i=>`<div class="ea-ops-health-item"><strong><span class="ea-ops-dot ${i.cls}"></span>${i.t}: ${i.v}</strong><span>${i.x}</span></div>`).join('')}</div><div class="ea-ops-eyebrow" style="margin-top:16px">Warnings</div><div class="ea-ops-list">${warnings.length?warnings.map(i=>`<div class="ea-ops-warning"><strong>${i[0]}</strong><span>${i[1]}</span></div>`).join(''):`<div class="ea-ops-empty">No warnings are currently forcing attention.</div>`}</div></div>`;
+    const activation=`<div class="ea-ops-grid"><div class="ea-ops-card"><div class="ea-ops-eyebrow">Readiness</div><div class="ea-ops-list"><div class="ea-ops-row"><div><strong>Profile</strong><span>Complete the required operator profile fields.</span></div><div class="ea-ops-target-value">${m.profileReady?'Ready':'Open'}</div></div><div class="ea-ops-row"><div><strong>Compliance</strong><span>Set the correct province and compliance mode.</span></div><div class="ea-ops-target-value">${m.complianceReady?'Ready':'Open'}</div></div><div class="ea-ops-row"><div><strong>First post</strong><span>Complete one clean posting cycle to qualify into operator mode.</span></div><div class="ea-ops-target-value">${m.firstPostComplete?'Done':'Pending'}</div></div><div class="ea-ops-row"><div><strong>Activation score</strong><span>Current setup progress toward operator qualification.</span></div><div class="ea-ops-target-value">${m.setupScore}%</div></div></div></div>${health}</div>`;
+    const queue=`<div class="ea-ops-card"><div class="ea-ops-eyebrow">Action Queue</div><div class="ea-ops-list">${buildQueue(m).length?buildQueue(m).map(i=>`<div class="ea-ops-queue ea-ops-row"><div><strong>${i.t}</strong><span>${i.x}</span></div><span class="ea-ops-pill">${i.c}</span><button class="ea-ops-btn is-primary" type="button" ${i.p[1]==='refresh-access'?'data-ea-action="refresh-access"':`data-open-section="${i.p[1]}"`}>${i.p[0]}</button><button class="ea-ops-btn" type="button" ${i.s[1]==='refresh-access'?'data-ea-action="refresh-access"':`data-open-section="${i.s[1]}"`}>${i.s[0]}</button></div>`).join(''):`<div class="ea-ops-empty">No active queue pressure right now. The machine is currently clear.</div>`}</div></div>`;
+    const kpis=`<div class="ea-ops-kpis">${[['Active Listings',m.active,'Current live portfolio count.'],['In Review',m.review,'Listings waiting in review.'],['Needs Action',m.needsAction,'Listings requiring direct operator action.'],['Queued',m.queue,'Vehicles ready for the next cycle.'],['Posted Today',m.postedToday,'Units pushed today.'],['Remaining Today',m.remainingToday,'Posting capacity still available.']].map(i=>`<div class="ea-ops-kpi"><div class="ea-ops-label">${i[0]}</div><div class="ea-ops-value">${i[1]}</div><div class="ea-ops-copy">${i[2]}</div></div>`).join('')}</div>`;
+    return `<div class="ea-ops-shell" data-command-centre-mode="${m.mode}">${header}${primary}${m.mode==='operator'?`${kpis}<div class="ea-ops-grid">${queue}${health}</div><div class="ea-ops-card"><div class="ea-ops-eyebrow">Recent Outcomes</div><div class="ea-ops-list">${outcomes}</div></div>`:activation}</div>`;
   }
-
-  NS.overview = { applyOverviewHierarchy };
+  function bind(root){ root.querySelectorAll('[data-open-section]').forEach((b)=>{ if(b.dataset.eaBound==='true') return; b.dataset.eaBound='true'; b.addEventListener('click',()=>{ const s=b.getAttribute('data-open-section'); if(typeof window.showSection==='function') window.showSection(s,{scroll:false}); }); }); root.querySelectorAll('[data-ea-action="refresh-access"]').forEach((b)=>{ if(b.dataset.eaBound==='true') return; b.dataset.eaBound='true'; b.addEventListener('click', async()=>{ try{ await NS.api?.refreshAccess?.(); }catch{} }); }); }
+  function renderCommandCentre(){ const overview=document.getElementById('overview'); if(!overview) return; injectStyle(); overview.innerHTML=render(); bind(overview); }
+  function boot(){ renderCommandCentre(); setTimeout(renderCommandCentre,160); }
+  window.addEventListener('elevate:summary-ready', renderCommandCentre);
+  document.addEventListener('DOMContentLoaded', boot);
+  NS.overview = { renderCommandCentre };
   NS.modules = NS.modules || {};
   NS.modules.overview = true;
 })();
