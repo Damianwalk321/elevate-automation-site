@@ -5,6 +5,7 @@
   function qs(selector, root = document) { return root.querySelector(selector); }
   function qsa(selector, root = document) { return Array.from(root.querySelectorAll(selector)); }
   function clean(value) { return String(value || "").replace(/\s+/g, " ").trim(); }
+  function lower(value) { return clean(value).toLowerCase(); }
 
   function setText(id, text) {
     qsa(`#${id}`).forEach((el) => { el.textContent = text || ""; });
@@ -136,28 +137,48 @@
     });
   }
 
+  function canonicalNavKey(button) {
+    const text = lower(button.textContent || "");
+    if (text === "overview") return "overview";
+    if (text === "tools") return "tools";
+    if (text === "analytics") return "analytics";
+    if (text === "compliance") return "compliance";
+    if (text === "partners") return "partners";
+    if (text === "setup") return "setup";
+    if (text === "billing") return "billing";
+
+    const raw = clean(button.getAttribute("data-section") || button.dataset.section || "");
+    const resolved = clean(resolveSectionId(raw));
+    if (resolved === "overview") return "overview";
+    if (resolved === "extension" || resolved === "tools") return "tools";
+    if (resolved === "analytics") return "analytics";
+    if (resolved === "compliance") return "compliance";
+    if (resolved === "affiliate" || resolved === "partners") return "partners";
+    if (resolved === "profile" || resolved === "setup") return "setup";
+    if (resolved === "billing") return "billing";
+    return raw || resolved || text;
+  }
+
   function reorderSidebarNav() {
     const nav = findSidebarNav();
     if (!nav) return;
 
-    const desiredOrder = ["overview", "tools", "analytics", "compliance", "affiliate", "profile", "billing"];
+    const desiredOrder = ["overview", "tools", "analytics", "compliance", "partners", "setup", "billing"];
     const buttons = qsa("[data-section]", nav);
-    const orderedButtons = [];
-
-    desiredOrder.forEach((wanted) => {
-      const match = buttons.find((button) => {
-        const raw = clean(button.getAttribute("data-section") || button.dataset.section || "");
-        const resolved = clean(resolveSectionId(raw));
-        return raw === wanted || resolved === wanted || resolveSectionId(wanted) === resolved;
-      });
-      if (match && !orderedButtons.includes(match)) orderedButtons.push(match);
-    });
+    const buckets = new Map();
 
     buttons.forEach((button) => {
-      if (!orderedButtons.includes(button)) orderedButtons.push(button);
+      const key = canonicalNavKey(button);
+      if (!buckets.has(key)) buckets.set(key, []);
+      buckets.get(key).push(button);
     });
 
-    orderedButtons.forEach((button) => nav.appendChild(button));
+    desiredOrder.forEach((key) => {
+      (buckets.get(key) || []).forEach((button) => nav.appendChild(button));
+      buckets.delete(key);
+    });
+
+    Array.from(buckets.values()).flat().forEach((button) => nav.appendChild(button));
   }
 
   function bootSidebarNavRepair() {
@@ -165,6 +186,7 @@
     reorderSidebarNav();
     setTimeout(reorderSidebarNav, 50);
     setTimeout(reorderSidebarNav, 250);
+    setTimeout(reorderSidebarNav, 1000);
     const sections = getDashboardSections();
     if (!sections.length) return;
     const active = NS.state?.get?.("ui.activeSection") || sections[0].id || "overview";
