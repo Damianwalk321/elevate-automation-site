@@ -173,8 +173,12 @@
       .ea-brand-copy{min-width:0}
       .ea-brand-overline{color:var(--gold);font-size:11px;font-weight:800;letter-spacing:.22em;text-transform:uppercase;margin-bottom:8px}
       .ea-brand-title{font-size:20px;font-weight:800;line-height:1.06;letter-spacing:-.02em;color:var(--text)}
-      .ea-brand-subtitle{margin-top:10px;color:var(--muted);font-size:13px;line-height:1.6}
+      .ea-brand-subtitle{margin-top:10px;color:var(--muted);font-size:13px;line-height:1.55}
       .sidebar-card.ea-session-card{border-radius:18px;padding:16px;background:linear-gradient(180deg, rgba(255,255,255,.02), rgba(255,255,255,0));border:1px solid rgba(212,175,55,.16)}
+      .ea-session-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:10px}
+      .ea-session-label{font-size:12px;color:var(--gold);text-transform:uppercase;letter-spacing:1.4px;font-weight:800}
+      .ea-live-dot{width:9px;height:9px;border-radius:999px;background:#62d26f;box-shadow:0 0 0 4px rgba(98,210,111,.12)}
+      .ea-session-email{font-size:14px;color:var(--text);word-break:break-word}
       .sidebar-nav{gap:10px}
       .nav-btn.ea-nav-enhanced{display:block;padding:0;overflow:hidden;border-radius:18px;border:1px solid rgba(255,255,255,.06);background:#121212;min-height:0}
       .nav-btn.ea-nav-enhanced:hover{background:#161616;border-color:rgba(212,175,55,.18)}
@@ -206,16 +210,28 @@
         <div class="ea-brand-copy">
           <div class="ea-brand-overline">Elevate Automation</div>
           <div class="ea-brand-title">Elevate Operator Console</div>
-          <div class="ea-brand-subtitle">Operator center for access, setup, tools, analytics, compliance, posting control, and listing performance.</div>
+          <div class="ea-brand-subtitle">Sales automation command center</div>
         </div>
       </div>
     `;
   }
 
   function enhanceSessionCard() {
-    const label = qsa('.sidebar-card-label').find((el) => lower(el.textContent || '') === 'logged in');
+    const label = qsa('.sidebar-card-label').find((el) => {
+      const value = lower(el.textContent || '');
+      return value === 'logged in' || value === 'operator';
+    });
     const card = label?.closest('.sidebar-card');
-    if (card) card.classList.add('ea-session-card');
+    const email = clean(card?.querySelector('.sidebar-card-value, .ea-session-email')?.textContent || '');
+    if (!card || !email) return;
+    card.classList.add('ea-session-card');
+    card.innerHTML = `
+      <div class="ea-session-head">
+        <div class="ea-session-label">Operator</div>
+        <span class="ea-live-dot" aria-hidden="true"></span>
+      </div>
+      <div class="ea-session-email">${email}</div>
+    `;
   }
 
   function bindExistingNavButtons() {
