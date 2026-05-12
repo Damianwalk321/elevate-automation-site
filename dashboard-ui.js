@@ -139,27 +139,32 @@
   function reorderSidebarNav() {
     const nav = findSidebarNav();
     if (!nav) return;
+
     const desiredOrder = ["overview", "tools", "analytics", "compliance", "affiliate", "profile", "billing"];
     const buttons = qsa("[data-section]", nav);
-    const byKey = new Map();
+    const orderedButtons = [];
+
+    desiredOrder.forEach((wanted) => {
+      const match = buttons.find((button) => {
+        const raw = clean(button.getAttribute("data-section") || button.dataset.section || "");
+        const resolved = clean(resolveSectionId(raw));
+        return raw === wanted || resolved === wanted || resolveSectionId(wanted) === resolved;
+      });
+      if (match && !orderedButtons.includes(match)) orderedButtons.push(match);
+    });
 
     buttons.forEach((button) => {
-      const raw = clean(button.getAttribute("data-section") || button.dataset.section || "");
-      const resolved = clean(resolveSectionId(raw));
-      const key = raw || resolved;
-      byKey.set(key, button);
-      if (resolved && !byKey.has(resolved)) byKey.set(resolved, button);
+      if (!orderedButtons.includes(button)) orderedButtons.push(button);
     });
 
-    desiredOrder.forEach((key) => {
-      const button = byKey.get(key) || byKey.get(resolveSectionId(key));
-      if (button) nav.appendChild(button);
-    });
+    orderedButtons.forEach((button) => nav.appendChild(button));
   }
 
   function bootSidebarNavRepair() {
     bindExistingNavButtons();
     reorderSidebarNav();
+    setTimeout(reorderSidebarNav, 50);
+    setTimeout(reorderSidebarNav, 250);
     const sections = getDashboardSections();
     if (!sections.length) return;
     const active = NS.state?.get?.("ui.activeSection") || sections[0].id || "overview";
