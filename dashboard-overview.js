@@ -4,9 +4,6 @@
 
   const CSS = `
     .ea-cc-shell{display:grid;gap:18px}
-    .ea-cc-hero{display:grid;gap:8px;margin-bottom:4px}
-    .ea-cc-title{font-size:34px;line-height:1.06;font-weight:800;letter-spacing:-.03em}
-    .ea-cc-sub{font-size:14px;line-height:1.55;color:var(--muted)}
     .ea-cc-stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:18px}
     .ea-cc-stat{background:linear-gradient(180deg,rgba(255,255,255,.02),rgba(255,255,255,0));border:1px solid var(--line);border-radius:18px;padding:22px;box-shadow:var(--shadow);min-height:164px}
     .ea-cc-stat-label{font-size:12px;text-transform:uppercase;letter-spacing:1.3px;color:var(--gold);font-weight:800}
@@ -34,13 +31,13 @@
     .ea-cc-mini-value{font-size:20px;line-height:1.1;font-weight:800}
     .ea-cc-mini-copy{margin-top:8px;font-size:13px;line-height:1.5;color:var(--muted)}
     @media (max-width: 1180px){.ea-cc-main{grid-template-columns:1fr}.ea-cc-stats,.ea-cc-secondary{grid-template-columns:repeat(2,minmax(0,1fr))}}
-    @media (max-width: 700px){.ea-cc-title{font-size:28px}.ea-cc-stats,.ea-cc-secondary{grid-template-columns:1fr}.ea-cc-action{align-items:flex-start;flex-direction:column}.ea-cc-btn{width:100%}}
+    @media (max-width: 700px){.ea-cc-stats,.ea-cc-secondary{grid-template-columns:1fr}.ea-cc-action{align-items:flex-start;flex-direction:column}.ea-cc-btn{width:100%}}
   `;
 
   function injectStyle() {
-    if (document.getElementById('elevate-command-centre-shell-v1')) return;
+    if (document.getElementById('elevate-command-centre-shell-v2')) return;
     const style = document.createElement('style');
-    style.id = 'elevate-command-centre-shell-v1';
+    style.id = 'elevate-command-centre-shell-v2';
     style.textContent = CSS;
     document.head.appendChild(style);
   }
@@ -62,17 +59,52 @@
     return clean(document.body?.innerText || '');
   }
 
-  function setupPercent() {
+  function profileState() {
+    return {
+      user: NS.state?.get?.('user', {}) || {},
+      profile: NS.state?.get?.('profile', {}) || {},
+      session: NS.state?.get?.('session', {}) || {},
+      summary: window.dashboardSummary || NS.state?.get?.('summary_v2', {}) || {},
+      currentUser: window.currentUser || {},
+      truth: NS.accountTruth || {}
+    };
+  }
+
+  function findProvince() {
+    const s = profileState();
+    const candidates = [
+      s.profile.province,
+      s.profile.province_code,
+      s.profile.compliance_province,
+      s.profile.jurisdiction,
+      s.session.province,
+      s.summary.province,
+      s.summary.province_code,
+      s.summary.compliance_province,
+      s.truth.province,
+      s.truth.province_code,
+      s.currentUser.user_metadata?.province,
+      s.currentUser.user_metadata?.province_code
+    ].map(clean).filter(Boolean);
+
+    const direct = candidates.find((value) => /^(AB|BC|AB\/BC|Alberta|British Columbia)$/i.test(value));
+    if (direct) {
+      if (/alberta/i.test(direct)) return 'AB';
+      if (/british columbia/i.test(direct)) return 'BC';
+      return direct.toUpperCase();
+    }
+
+    const body = bodyText();
+    const match = body.match(/\b(AB\/BC|AB|BC)\b/);
+    return match ? match[1] : 'Needs Review';
+  }
+
+  function setupPercent(activityCount) {
+    if (activityCount > 0) return 100;
     const direct = num(text('setupProgressValue'));
     if (direct) return Math.max(0, Math.min(100, direct));
     const match = bodyText().match(/setup\s*(\d{1,3})%/i);
     return match ? Math.max(0, Math.min(100, Number(match[1]))) : 0;
-  }
-
-  function complianceLabel() {
-    const body = bodyText();
-    const match = body.match(/\b(AB\/BC|AB|BC)\b/);
-    return match ? match[1] : 'Needs Review';
   }
 
   function accessLabel() {
@@ -85,9 +117,10 @@
     const review = num(text('kpiReviewQueue'));
     const needsAction = num(text('kpiNeedsAction'));
     const weak = num(text('kpiWeakListings'));
-    const setup = setupPercent();
-    const firstPostDone = active > 0;
-    const activationMode = setup < 100 || !firstPostDone;
+    const activityCount = active + review + needsAction + weak;
+    const firstPostDone = activityCount > 0;
+    const setup = setupPercent(activityCount);
+    const activationMode = !firstPostDone && setup < 100;
     return {
       access: accessLabel(),
       setup,
@@ -97,7 +130,7 @@
       weak,
       firstPostDone,
       activationMode,
-      compliance: complianceLabel()
+      compliance: findProvince()
     };
   }
 
@@ -209,11 +242,6 @@
     const priority = currentPriority(m);
     return `
       <div class="ea-cc-shell">
-        <div class="ea-cc-hero">
-          <div class="ea-cc-title">Command Centre</div>
-          <div class="ea-cc-sub">Your operator view for setup, posting, review, and compliance.</div>
-        </div>
-
         <div class="ea-cc-stats">
           ${statCards(m).map((card) => `
             <div class="ea-cc-stat">
