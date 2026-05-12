@@ -180,7 +180,10 @@
       .ea-brand-subtitle{margin-top:10px;color:var(--muted);font-size:13px;line-height:1.55}
       .sidebar-card.ea-session-card{border-radius:18px;padding:16px;background:linear-gradient(180deg, rgba(255,255,255,.02), rgba(255,255,255,0));border:1px solid rgba(212,175,55,.16);position:relative}
       .ea-session-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:10px}
+      .ea-session-label-wrap{display:inline-flex;align-items:center;gap:7px;min-width:0}
       .ea-session-label{font-size:12px;color:var(--gold);text-transform:uppercase;letter-spacing:1.4px;font-weight:800}
+      .ea-session-crown{display:inline-flex;align-items:center;justify-content:center;color:var(--gold-soft);opacity:.95}
+      .ea-session-crown svg{width:12px;height:12px;display:block}
       .ea-live-dot{width:9px;height:9px;border-radius:999px;background:#62d26f;box-shadow:0 0 0 4px rgba(98,210,111,.12)}
       .ea-session-name{font-size:16px;color:var(--text);font-weight:700;word-break:break-word}
       .ea-session-email,.user-email{font-size:14px;color:var(--text);word-break:break-word}
@@ -279,7 +282,15 @@
     card.classList.add('ea-session-card');
     card.innerHTML = `
       <div class="ea-session-head">
-        <div class="ea-session-label">Operator</div>
+        <div class="ea-session-label-wrap">
+          <div class="ea-session-label">Operator</div>
+          <span class="ea-session-crown" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <path d="m3 8 4.5 4 4.5-7 4.5 7L21 8l-2 10H5L3 8Z"></path>
+              <path d="M5 18h14"></path>
+            </svg>
+          </span>
+        </div>
         <span class="ea-live-dot" aria-hidden="true"></span>
       </div>
       <div class="ea-session-name">${profile.firstName}</div>
