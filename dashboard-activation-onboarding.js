@@ -15,6 +15,11 @@
     return m ? Math.max(0, Math.min(100, Number(m[1]))) : 0;
   }
 
+  function parseIntLoose(value) {
+    const m = clean(value).replace(/,/g, '').match(/-?\d+/);
+    return m ? Number(m[0]) : 0;
+  }
+
   function isGoodStatus(id) {
     const el = document.getElementById(id);
     if (!el) return false;
@@ -42,6 +47,10 @@
     const setupPercent = parsePercent(text('commandSetupProgress') || text('setupReadinessPercent') || text('commandSetupChip'));
     const credits = text('kpiCreditsBalance') || text('commandCreditsBalance') || '0';
     const queue = text('kpiQueuedVehicles') || '0';
+    const postsUsedRaw = text('commandPostsUsed');
+    const activeListings = parseIntLoose(text('kpiActiveListings'));
+    const postsUsed = parseIntLoose(postsUsedRaw.split('/')[0] || postsUsedRaw);
+    const firstPostComplete = postsUsed > 0 || activeListings > 0;
 
     const checks = [
       { label: 'Dealer website saved', ok: isGoodStatus('setupDealerWebsite') || isGoodStatus('extSetupDealerWebsite') },
@@ -63,25 +72,45 @@
       !checks[5].ok ? { label: 'Refresh account access', section: 'extension', focus: null } :
       { label: 'Post your first vehicle', section: 'extension', focus: null };
 
-    return { setupPercent, credits, queue, checks, completeCount, firstPostReady, nextAction };
+    return { setupPercent, credits, queue, checks, completeCount, firstPostReady, nextAction, firstPostComplete };
   }
 
-  function render() {
-    const overview = document.getElementById('overview');
-    const tools = document.getElementById('extension');
-    if (!overview || !tools) return;
+  function renderLiveState(shell, state) {
+    shell.innerHTML = `
+      <div class="activation-grid">
+        <div class="activation-card">
+          <div class="activation-eyebrow">Live Operator State</div>
+          <div class="activation-title-row">
+            <div>
+              <h2>First post complete. Stay in execution mode.</h2>
+              <div class="activation-subtext">Onboarding is now out of the way. Use Tools for posting and Analytics for listings plus review.</div>
+            </div>
+            <div class="activation-badge">Live</div>
+          </div>
+          <div class="activation-checklist">
+            <div class="activation-check good"><span>Setup progress</span><strong>${state.setupPercent}%</strong></div>
+            <div class="activation-check good"><span>Queued vehicles</span><strong>${state.queue}</strong></div>
+            <div class="activation-check good"><span>Credits available</span><strong>${state.credits}</strong></div>
+          </div>
+          <div class="activation-actions">
+            <button id="activationLiveToolsBtn" class="btn-primary" type="button">Open Tools</button>
+            <button id="activationLiveAnalyticsBtn" class="action-btn" type="button">Open Analytics</button>
+          </div>
+        </div>
+      </div>
+    `;
 
-    const state = buildState();
+    document.getElementById('activationLiveToolsBtn')?.addEventListener('click', () => openSection('extension'));
+    document.getElementById('activationLiveAnalyticsBtn')?.addEventListener('click', () => {
+      openSection('tools');
+      setTimeout(() => {
+        const target = document.getElementById('analyticsWorkspace');
+        target?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, 240);
+    });
+  }
 
-    let shell = document.getElementById('activationShell');
-    if (!shell) {
-      shell = document.createElement('div');
-      shell.id = 'activationShell';
-      shell.className = 'activation-shell';
-      const anchor = document.querySelector('#overview .command-center-grid') || overview.firstElementChild;
-      if (anchor) anchor.insertAdjacentElement('afterend', shell);
-    }
-
+  function renderOnboardingState(shell, state) {
     shell.innerHTML = `
       <div class="activation-grid">
         <div class="activation-card">
@@ -232,6 +261,30 @@
 
     const helpCompliance = document.getElementById('activationHelpComplianceBtn');
     if (helpCompliance) helpCompliance.onclick = () => openSection('compliance');
+  }
+
+  function render() {
+    const overview = document.getElementById('overview');
+    const tools = document.getElementById('extension');
+    if (!overview || !tools) return;
+
+    const state = buildState();
+
+    let shell = document.getElementById('activationShell');
+    if (!shell) {
+      shell = document.createElement('div');
+      shell.id = 'activationShell';
+      shell.className = 'activation-shell';
+      const anchor = document.querySelector('#overview .command-center-grid') || overview.firstElementChild;
+      if (anchor) anchor.insertAdjacentElement('afterend', shell);
+    }
+
+    if (state.firstPostComplete) {
+      renderLiveState(shell, state);
+      return;
+    }
+
+    renderOnboardingState(shell, state);
   }
 
   function boot() {
