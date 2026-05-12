@@ -97,6 +97,27 @@
     if (el) el.textContent = value;
   }
 
+  function mergeSummaryPayload(baseSummary = {}, commandSummary = {}) {
+    const base = baseSummary?.data || baseSummary || {};
+    const command = commandSummary?.data || commandSummary || {};
+    return {
+      ...base,
+      dashboard_mode: command.dashboard_mode || base.dashboard_mode || "activation",
+      dashboard_mode_locked: Boolean(command.dashboard_mode_locked ?? base.dashboard_mode_locked),
+      operator_qualified: Boolean(command.operator_qualified ?? base.operator_qualified),
+      activation_complete: Boolean(command.activation_complete ?? base.activation_complete),
+      activation_score: Number(command.activation_score ?? base.activation_score ?? 0),
+      setup_status: {
+        ...(base.setup_status || {}),
+        ...(command.setup_status || {})
+      },
+      command_center: {
+        ...(base.command_center || {}),
+        ...(command.command_center || {})
+      }
+    };
+  }
+
   function hydrateSummaryIntoDom(summary = {}) {
     const data = summary?.data || summary || {};
     const setup = data.setup_status || {};
@@ -105,19 +126,19 @@
     const account = data.account_snapshot || {};
 
     setText("extensionAccessState", account.access_granted ? "Active" : (account.status || "Inactive"));
-    setText("extensionReviewQueue", String(data.review_queue_count ?? 0));
-    setText("extensionRemainingPosts", String(data.posts_remaining ?? data.daily_limit ?? 0));
+    setText("extensionReviewQueue", String(data.review_queue_count ?? data.command_center?.kpis?.in_review ?? 0));
+    setText("extensionRemainingPosts", String(data.posts_remaining ?? data.command_center?.kpis?.remaining_today ?? data.daily_limit ?? 0));
     setText("extensionComplianceMode", profile.compliance_mode || profile.province || "Unset");
 
-    setText("kpiActiveListings", String(data.active_listings ?? 0));
-    setText("kpiReviewQueue", String(data.review_queue_count ?? 0));
-    setText("kpiNeedsAction", String(data.needs_action_count ?? 0));
-    setText("kpiWeakListings", String(data.weak_listings ?? 0));
-    setText("kpiQueuedVehicles", String(data.queue_count ?? 0));
-    setText("kpiPostsRemaining", String(data.posts_remaining ?? 0));
+    setText("kpiActiveListings", String(data.active_listings ?? data.command_center?.kpis?.active_listings ?? 0));
+    setText("kpiReviewQueue", String(data.review_queue_count ?? data.command_center?.kpis?.in_review ?? 0));
+    setText("kpiNeedsAction", String(data.needs_action_count ?? data.command_center?.kpis?.needs_action ?? 0));
+    setText("kpiWeakListings", String(data.weak_listings ?? data.command_center?.kpis?.at_risk ?? 0));
+    setText("kpiQueuedVehicles", String(data.queue_count ?? data.command_center?.work_queues?.ready_to_post ?? 0));
+    setText("kpiPostsRemaining", String(data.posts_remaining ?? data.command_center?.kpis?.remaining_today ?? 0));
     setText("kpiCreditsBalance", String(data.credits?.balance ?? 0));
     setText("commandCreditsBalance", String(data.credits?.balance ?? 0));
-    setText("commandPostsUsed", `${Number(data.posts_today ?? 0)}/${Number(data.effective_posting_limit ?? data.daily_limit ?? 0)}`);
+    setText("commandPostsUsed", `${Number(data.posts_today ?? data.command_center?.kpis?.posted_today ?? 0)}/${Number(data.effective_posting_limit ?? data.daily_limit ?? 0)}`);
     setText("commandSetupProgress", `${Math.round((Number(setup.profile_completion_score || 0)) * 100)}%`);
     setText("setupReadinessPercent", `${Math.round((Number(setup.profile_completion_score || 0)) * 100)}%`);
 
@@ -134,13 +155,24 @@
   }
 
   async function fetchDashboardSummary() {
-    const response = await apiFetch("/api/get-dashboard-summary", { method: "GET" });
-    const result = await parseJsonSafe(response);
-    if (!response.ok) {
-      throw new Error(result?.error || result?.message || response.statusText || "Dashboard summary failed");
+    const [baseResponse, commandResponse] = await Promise.all([
+      apiFetch("/api/get-dashboard-summary", { method: "GET" }),
+      apiFetch("/api/get-command-centre-summary", { method: "GET" })
+    ]);
+
+    const baseResult = await parseJsonSafe(baseResponse);
+    const commandResult = await parseJsonSafe(commandResponse);
+
+    if (!baseResponse.ok) {
+      throw new Error(baseResult?.error || baseResult?.message || baseResponse.statusText || "Dashboard summary failed");
     }
-    const payload = result?.data ? result : { success: true, data: result };
-    window.dashboardSummary = payload.data || {};
+    if (!commandResponse.ok) {
+      throw new Error(commandResult?.error || commandResult?.message || commandResponse.statusText || "Command centre summary failed");
+    }
+
+    const basePayload = baseResult?.data ? baseResult : { success: true, data: baseResult };
+    const commandPayload = commandResult?.data ? commandResult : { success: true, data: commandResult };
+    window.dashboardSummary = mergeSummaryPayload(basePayload, commandPayload);
     hydrateSummaryIntoDom(window.dashboardSummary);
     try {
       window.dispatchEvent(new CustomEvent("elevate:summary-ready", { detail: window.dashboardSummary }));
@@ -190,7 +222,8 @@
     syncUserIfNeeded,
     refreshAccess,
     signOut,
-    hydrateSummaryIntoDom
+    hydrateSummaryIntoDom,
+    mergeSummaryPayload
   };
   NS.modules = NS.modules || {};
   NS.modules.api = true;
