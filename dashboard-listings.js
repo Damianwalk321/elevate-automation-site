@@ -183,10 +183,10 @@
     const trackedViews = listings.reduce((sum, item) => sum + Number(item.views || item.views_count || 0), 0);
     const trackedMessages = listings.reduce((sum, item) => sum + Number(item.messages || item.messages_count || 0), 0);
     const actionQueue = [];
-    if ((sync.issues || []).length) actionQueue.push({ id: "sync_issue", title: "Sync truth needs attention", copy: (sync.issues || []).slice(0, 2).join(" "), reason: "Recommendations may rely on fallback tracking until sync is healthy.", tone: "cleanup", section: "tools", focus: "listingSearchInput" });
+    if ((sync.issues || []).length) actionQueue.push({ id: "sync_issue", title: "Sync truth needs attention", copy: (sync.issues || []).slice(0, 2).join(" "), reason: "Recommendations may rely on fallback tracking until sync is healthy.", tone: "cleanup", section: "tools", focus: "analyticsListingSearchInput" });
     if (buckets.high_views_low_messages.length) {
       const leader = buckets.high_views_low_messages[0];
-      actionQueue.push({ id: "high_views_low_messages", title: `${buckets.high_views_low_messages.length} listing${buckets.high_views_low_messages.length === 1 ? "" : "s"} have traction without conversion`, copy: `${leader.title || "Top listing"} is pulling views without messages. Review price, CTA, and media.`, reason: "High views with flat message velocity is a conversion leak.", tone: "revenue", section: "tools", focus: "listingSearchInput" });
+      actionQueue.push({ id: "high_views_low_messages", title: `${buckets.high_views_low_messages.length} listing${buckets.high_views_low_messages.length === 1 ? "" : "s"} have traction without conversion`, copy: `${leader.title || "Top listing"} is pulling views without messages. Review price, CTA, and media.`, reason: "High views with flat message velocity is a conversion leak.", tone: "revenue", section: "tools", focus: "analyticsListingSearchInput" });
     }
     if (!actionQueue.length) actionQueue.push({ id: "sync_quiet", title: "Unified sync layer is live", copy: "Hydrated portfolio rows are now coming from the canonical listing registry.", reason: "Current state is stable and synced.", tone: "growth", section: "tools", focus: null });
 
@@ -292,24 +292,6 @@
     return out;
   }
 
-  function findSection(id, titleText) {
-    return document.getElementById(id) || Array.from(document.querySelectorAll('.dashboard-section, section, .card')).find((node) => {
-      const heading = node.querySelector('h1, h2, h3');
-      return clean(heading?.textContent).toLowerCase() === clean(titleText).toLowerCase();
-    }) || null;
-  }
-
-  function ensureMount(section, mountId) {
-    if (!section) return null;
-    let mount = section.querySelector(`#${mountId}`);
-    if (mount) return mount;
-    mount = document.createElement('div');
-    mount.id = mountId;
-    mount.style.marginTop = '18px';
-    section.appendChild(mount);
-    return mount;
-  }
-
   function cardBadge(item) {
     const lifecycle = clean(item.lifecycle_status).toLowerCase();
     if (lifecycle === 'review_delete') return '<span class="badge sold">Likely Sold</span>';
@@ -361,80 +343,67 @@
   }
 
   function renderListingsSection() {
-    const section = findSection('listings', 'Listings');
-    if (!section) return;
-    const mount = ensureMount(section, 'eaHydratedListingsMount');
+    const mount = document.getElementById('analyticsListingsGrid');
     if (!mount) return;
     const rows = applyFilter(allRegistryListings());
-    const statusNode = Array.from(section.querySelectorAll('*')).find((node) => clean(node.textContent).toLowerCase().includes('rows available'));
-    if (statusNode) statusNode.textContent = `${listingUi.filter.replace('_', ' ')} • ${rows.length} rows available`;
-    Array.from(section.querySelectorAll('.listing-empty')).forEach((node) => { node.style.display = rows.length ? 'none' : 'block'; });
+    const statusNode = document.getElementById('analyticsListingsStatus');
+    const gridStatus = document.getElementById('analyticsListingsGridStatus');
+    if (statusNode) statusNode.textContent = `${listingUi.filter.replace(/_/g, ' ')} • ${rows.length} rows available`;
+    if (gridStatus) gridStatus.textContent = rows.length ? `${rows.length} listing row${rows.length === 1 ? '' : 's'} loaded in analytics.` : 'No portfolio rows are available yet.';
     mount.innerHTML = rows.length ? `<div class="listing-grid">${rows.slice(0, 60).map(listingCard).join('')}</div>` : `<div class="listing-empty">No portfolio rows are available yet.</div>`;
   }
 
-  function setReviewMetric(labelMatchers, value) {
-    const labels = Array.from(document.querySelectorAll('.stat-label, .sidebar-card-label, .card h3, .card h2, .card div'));
-    labels.forEach((label) => {
-      const text = clean(label.textContent).toLowerCase();
-      if (!labelMatchers.some((matcher) => text.includes(matcher))) return;
-      const card = label.closest('.card');
-      const statValue = card?.querySelector('.stat-value');
-      if (statValue) statValue.textContent = String(value);
-    });
-  }
-
   function renderReviewCenter() {
-    const section = findSection('reviewCenter', 'Review Center') || findSection('review-center', 'Review Center');
-    if (!section) return;
-    const mount = ensureMount(section, 'eaHydratedReviewMount');
-    if (!mount) return;
+    const reviewMount = document.getElementById('analyticsReviewQueue');
+    const actionMount = document.getElementById('analyticsNeedsActionQueue');
+    const priceMount = document.getElementById('analyticsPriceWatchQueue');
+    if (!reviewMount && !actionMount && !priceMount) return;
+
     const reviewRows = allRegistryListings().filter(isReviewItem);
     const likelySold = reviewRows.filter((item) => !!item.likely_sold || clean(item.lifecycle_status).toLowerCase() === 'review_delete' || clean(item.review_bucket).toLowerCase() === 'removedvehicles');
-    const weakRows = allRegistryListings().filter((item) => !!item.weak || clean(item.health_state).toLowerCase() === 'weak_conversion');
     const priceWatch = reviewRows.filter((item) => clean(item.lifecycle_status).toLowerCase() === 'review_price_update' || clean(item.review_bucket).toLowerCase() === 'pricechanges');
-    const needsAttention = reviewRows.filter((item) => !!item.needs_action).slice(0, 6);
-    setReviewMetric(['review queue'], reviewRows.length);
-    setReviewMetric(['likely sold'], likelySold.length);
-    setReviewMetric(['weak listings'], weakRows.length);
-    setReviewMetric(['promote now'], allRegistryListings().filter((item) => clean(item.recommended_action).toLowerCase().includes('promote')).length);
-    mount.innerHTML = `
-      <div class="grid-2" style="margin-top:18px;">
-        <div class="card"><h3>Needs Attention</h3><div class="overview-action-list">${needsAttention.length ? needsAttention.map(reviewCard).join('') : '<div class="listing-empty">No critical items right now.</div>'}</div></div>
-        <div class="card"><h3>Price Watch</h3><div class="overview-action-list">${priceWatch.length ? priceWatch.slice(0, 6).map(reviewCard).join('') : '<div class="listing-empty">No price-watch items right now.</div>'}</div></div>
-      </div>
-      <div class="card" style="margin-top:18px;">
-        <h3>Priority Review Cards</h3>
-        <div class="overview-action-list">${reviewRows.length ? reviewRows.slice(0, 20).map(reviewCard).join('') : '<div class="listing-empty">No review cards are hydrated into this section yet.</div>'}</div>
-      </div>
-    `;
+    const needsAttention = reviewRows.filter((item) => !!item.needs_action || !!item.weak).slice(0, 8);
+
+    if (reviewMount) reviewMount.innerHTML = reviewRows.length ? reviewRows.slice(0, 20).map(reviewCard).join('') : '<div class="listing-empty">No review items right now.</div>';
+    if (actionMount) actionMount.innerHTML = needsAttention.length ? needsAttention.map(reviewCard).join('') : '<div class="listing-empty">No critical items right now.</div>';
+    if (priceMount) {
+      const merged = [...priceWatch, ...likelySold.filter((item) => !priceWatch.find((row) => row.id === item.id))].slice(0, 12);
+      priceMount.innerHTML = merged.length ? merged.map(reviewCard).join('') : '<div class="listing-empty">No price watch or sold-risk items right now.</div>';
+    }
   }
 
   function bindControls() {
-    const section = findSection('listings', 'Listings');
-    if (!section || section.dataset.hydratedBindings === 'true') return;
-    section.dataset.hydratedBindings = 'true';
-    const buttons = Array.from(section.querySelectorAll('button')).filter((btn) => ['all', 'active', 'review', 'weak', 'likely sold', 'needs action'].includes(clean(btn.textContent).toLowerCase()));
-    buttons.forEach((btn) => {
-      btn.addEventListener('click', () => {
-        const text = clean(btn.textContent).toLowerCase();
-        listingUi.filter = text.replace(' ', '_');
-        buttons.forEach((b) => b.classList.toggle('active', b === btn));
-        renderListingsSection();
+    const filterWrap = document.getElementById('analyticsListingQuickFilters');
+    const sortSelect = document.getElementById('analyticsListingSortSelect');
+    const search = document.getElementById('analyticsListingSearchInput');
+
+    if (filterWrap && filterWrap.dataset.hydratedBindings !== 'true') {
+      filterWrap.dataset.hydratedBindings = 'true';
+      const buttons = Array.from(filterWrap.querySelectorAll('button[data-filter]'));
+      buttons.forEach((btn) => {
+        btn.addEventListener('click', () => {
+          listingUi.filter = btn.getAttribute('data-filter') || 'all';
+          buttons.forEach((b) => b.classList.toggle('active', b === btn));
+          renderListingsSection();
+          renderReviewCenter();
+        });
       });
-    });
-    const select = section.querySelector('select');
-    if (select) {
-      select.addEventListener('change', () => {
-        const value = clean(select.value || select.options?.[select.selectedIndex]?.textContent).toLowerCase();
+    }
+
+    if (sortSelect && sortSelect.dataset.hydratedBindings !== 'true') {
+      sortSelect.dataset.hydratedBindings = 'true';
+      sortSelect.addEventListener('change', () => {
+        const value = clean(sortSelect.value || '').toLowerCase();
         if (value.includes('new')) listingUi.sort = 'newest';
-        else if (value.includes('high')) listingUi.sort = 'price_high';
-        else if (value.includes('low')) listingUi.sort = 'price_low';
+        else if (value.includes('price_high')) listingUi.sort = 'price_high';
+        else if (value.includes('price_low')) listingUi.sort = 'price_low';
         else listingUi.sort = 'popular';
         renderListingsSection();
       });
     }
-    const search = section.querySelector('input');
-    if (search) {
+
+    if (search && search.dataset.hydratedBindings !== 'true') {
+      search.dataset.hydratedBindings = 'true';
       search.addEventListener('input', () => {
         listingUi.search = search.value || '';
         renderListingsSection();
@@ -483,6 +452,7 @@
 
   window.addEventListener('elevate:remote-sync', (event) => { if (event?.detail) ingestRemotePayload(event.detail); });
   window.addEventListener('elevate:tracking-refreshed', renderHydratedViews);
+  window.addEventListener('elevate:analytics-workspace-mounted', renderHydratedViews);
 
   NS.listings = { rebuildRegistry: rebuildRegistryFromFallback, buildAnalyticsFromRegistry, ingestRemotePayload, hydrateListings, renderHydratedViews };
   NS.modules = NS.modules || {};
