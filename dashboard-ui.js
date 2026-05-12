@@ -178,6 +178,7 @@
       .ea-session-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:10px}
       .ea-session-label{font-size:12px;color:var(--gold);text-transform:uppercase;letter-spacing:1.4px;font-weight:800}
       .ea-live-dot{width:9px;height:9px;border-radius:999px;background:#62d26f;box-shadow:0 0 0 4px rgba(98,210,111,.12)}
+      .ea-session-name{font-size:16px;color:var(--text);font-weight:700;word-break:break-word}
       .ea-session-email,.user-email{font-size:14px;color:var(--text);word-break:break-word}
       .ea-hidden-identity{position:absolute !important;left:-9999px !important;top:auto !important;width:1px !important;height:1px !important;overflow:hidden !important;opacity:0 !important;pointer-events:none !important}
       .sidebar-nav{gap:10px}
@@ -217,6 +218,51 @@
     `;
   }
 
+  function pickOperatorProfile() {
+    const stateUser = NS.state?.get?.('user', {}) || {};
+    const stateProfile = NS.state?.get?.('profile', {}) || {};
+    const stateSession = NS.state?.get?.('session', {}) || {};
+    const summary = window.dashboardSummary || NS.state?.get?.('summary_v2', {}) || {};
+    const currentUser = window.currentUser || {};
+
+    const email = clean(
+      currentUser.email ||
+      stateUser.email ||
+      stateProfile.email ||
+      stateSession.email ||
+      summary.email ||
+      qs('.sidebar-card .user-email')?.textContent ||
+      ''
+    );
+
+    const fullName = clean(
+      currentUser.user_metadata?.full_name ||
+      currentUser.user_metadata?.name ||
+      currentUser.full_name ||
+      currentUser.name ||
+      stateProfile.full_name ||
+      stateProfile.name ||
+      stateUser.full_name ||
+      stateUser.name ||
+      stateSession.full_name ||
+      stateSession.name ||
+      summary.full_name ||
+      summary.name ||
+      ''
+    );
+
+    let firstName = clean(fullName.split(' ')[0] || '');
+    if (!firstName && email && !/loading/i.test(email)) {
+      firstName = clean(email.split('@')[0].split(/[._-]/)[0] || '');
+      firstName = firstName ? firstName.charAt(0).toUpperCase() + firstName.slice(1) : '';
+    }
+
+    return {
+      email: email || 'Loading...',
+      firstName: firstName || 'Loading...'
+    };
+  }
+
   function enhanceSessionCard() {
     const label = qsa('.sidebar-card-label').find((el) => {
       const value = lower(el.textContent || '');
@@ -225,16 +271,16 @@
     const card = label?.closest('.sidebar-card');
     if (!card) return;
 
-    const email = clean(card.querySelector('.user-email, .sidebar-card-value, .ea-session-email')?.textContent || 'Loading...');
+    const profile = pickOperatorProfile();
     card.classList.add('ea-session-card');
     card.innerHTML = `
       <div class="ea-session-head">
         <div class="ea-session-label">Operator</div>
         <span class="ea-live-dot" aria-hidden="true"></span>
       </div>
-      <div class="ea-session-email user-email">${email}</div>
+      <div class="ea-session-name">${profile.firstName}</div>
       <div class="sidebar-card-label ea-hidden-identity">Operator</div>
-      <div class="sidebar-card-value user-email ea-hidden-identity">${email}</div>
+      <div class="sidebar-card-value user-email ea-hidden-identity">${profile.email}</div>
     `;
   }
 
@@ -339,12 +385,23 @@
     }, 250);
   }
 
+  function bindSidebarIdentityRefresh() {
+    if (window.__ELEVATE_SIDEBAR_IDENTITY_BOUND__) return;
+    window.__ELEVATE_SIDEBAR_IDENTITY_BOUND__ = true;
+
+    const rerender = () => setTimeout(() => enhanceSessionCard(), 80);
+    window.addEventListener('elevate:summary-ready', rerender);
+    window.addEventListener('elevate:auth-ready', rerender);
+    window.addEventListener('elevate:account-truth', rerender);
+  }
+
   function bootSidebarNavRepair() {
     bindExistingNavButtons();
     reorderSidebarNav();
     enhanceSidebarBrand();
     enhanceSessionCard();
     enhanceSidebarNavVisuals();
+    bindSidebarIdentityRefresh();
     pinSidebarOrder();
     setTimeout(() => { reorderSidebarNav(); enhanceSidebarBrand(); enhanceSessionCard(); enhanceSidebarNavVisuals(); }, 50);
     setTimeout(() => { reorderSidebarNav(); enhanceSidebarBrand(); enhanceSessionCard(); enhanceSidebarNavVisuals(); }, 250);
@@ -370,7 +427,8 @@
     reorderSidebarNav,
     pinSidebarOrder,
     enhanceSidebarBrand,
-    enhanceSidebarNavVisuals
+    enhanceSidebarNavVisuals,
+    enhanceSessionCard
   };
   window.showSection = showSection;
   NS.modules = NS.modules || {};
