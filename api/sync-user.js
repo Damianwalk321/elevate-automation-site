@@ -6,6 +6,16 @@ const CORS = {
   'Access-Control-Allow-Headers': 'Content-Type, Authorization',
 };
 
+const FORCE_PRO_EMAILS = new Set(['damian044@icloud.com']);
+
+function normalizeEmail(value = '') {
+  return String(value || '').trim().toLowerCase();
+}
+
+function isForcedProEmail(email = '') {
+  return FORCE_PRO_EMAILS.has(normalizeEmail(email));
+}
+
 export default async function handler(req, res) {
   if (req.method === 'OPTIONS') {
     return res.status(200).set(CORS).end();
@@ -29,11 +39,11 @@ export default async function handler(req, res) {
     return res.status(401).json({ error: 'Invalid token' });
   }
 
-  const email = user.email?.toLowerCase();
+  const email = normalizeEmail(user.email);
   const authUid = user.id;
+  const forcedPro = isForcedProEmail(email);
 
   try {
-    // Resolve or create the users row without tripping unique constraints on email/auth_user_id.
     let userRow = null;
 
     const { data: byAuthUser, error: byAuthError } = await supabase
@@ -121,7 +131,6 @@ export default async function handler(req, res) {
       }
     }
 
-    // Ensure profile row exists (don't overwrite existing data)
     const { data: existingProfile } = await supabase
       .from('profiles')
       .select('id')
@@ -138,12 +147,11 @@ export default async function handler(req, res) {
       }
     }
 
-    // Ensure subscription row exists
     let existingSub = null;
     if (userRow?.id) {
       const { data: subRow, error: subError } = await supabase
         .from('subscriptions')
-        .select('id')
+        .select('*')
         .eq('user_id', userRow.id)
         .maybeSingle();
 
@@ -158,16 +166,37 @@ export default async function handler(req, res) {
       const { error: insertSubError } = await supabase.from('subscriptions').insert({
         user_id: userRow.id,
         email,
-        subscription_status: 'none',
-        is_active: false,
+        subscription_status: forcedPro ? 'active' : 'none',
+        is_active: forcedPro,
+        plan_type: forcedPro ? 'Pro' : 'Founder Beta',
+        posting_limit: forcedPro ? 25 : 5,
+        daily_posting_limit: forcedPro ? 25 : 5,
+        updated_at: new Date().toISOString(),
       });
 
       if (insertSubError && insertSubError.code !== '23505') {
         console.error('[sync-user] subscriptions insert error:', insertSubError.message);
       }
+    } else if (userRow?.id && forcedPro) {
+      const { error: upgradeSubError } = await supabase
+        .from('subscriptions')
+        .update({
+          email,
+          subscription_status: 'active',
+          is_active: true,
+          plan_type: 'Pro',
+          posting_limit: 25,
+          daily_posting_limit: 25,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('user_id', userRow.id);
+
+      if (upgradeSubError) {
+        console.error('[sync-user] subscriptions founder override error:', upgradeSubError.message);
+      }
     }
 
-    return res.status(200).json({ success: true, userId: authUid });
+    return res.status(200).json({ success: true, userId: authUid, forcedPro });
   } catch (err) {
     console.error('[sync-user] Error:', err.message);
     return res.status(500).json({ error: err.message });
