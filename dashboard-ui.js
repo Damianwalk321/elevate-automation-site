@@ -181,12 +181,26 @@
     Array.from(buckets.values()).flat().forEach((button) => nav.appendChild(button));
   }
 
+  function pinSidebarOrder() {
+    const nav = findSidebarNav();
+    if (!nav || nav.dataset.eaPinned === "true") return;
+    nav.dataset.eaPinned = "true";
+    let runs = 0;
+    const interval = setInterval(() => {
+      reorderSidebarNav();
+      runs += 1;
+      if (runs >= 40) clearInterval(interval);
+    }, 250);
+  }
+
   function bootSidebarNavRepair() {
     bindExistingNavButtons();
     reorderSidebarNav();
+    pinSidebarOrder();
     setTimeout(reorderSidebarNav, 50);
     setTimeout(reorderSidebarNav, 250);
     setTimeout(reorderSidebarNav, 1000);
+    setTimeout(reorderSidebarNav, 2500);
     const sections = getDashboardSections();
     if (!sections.length) return;
     const active = NS.state?.get?.("ui.activeSection") || sections[0].id || "overview";
@@ -194,7 +208,7 @@
     if (!shown) revealFallbackSections();
   }
 
-  NS.ui = { qs, qsa, clean, setText, setStatus, showSection, injectStyleOnce, findSectionElement, bindExistingNavButtons, reorderSidebarNav };
+  NS.ui = { qs, qsa, clean, setText, setStatus, showSection, injectStyleOnce, findSectionElement, bindExistingNavButtons, reorderSidebarNav, pinSidebarOrder };
   window.showSection = showSection;
   NS.modules = NS.modules || {};
   NS.modules.ui = true;
