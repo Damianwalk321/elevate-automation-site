@@ -20,10 +20,10 @@
       listings: ["listings", "listingSection", "listing-section"],
       analytics: ["analytics", "analyticsSection", "analytics-section"],
       overview: ["overview", "overviewSection", "overview-section"],
-      setup: ["setup", "setupSection", "setup-section"],
-      tools: ["tools", "toolsSection", "tools-section"],
+      setup: ["setup", "setupSection", "setup-section", "profile"],
+      tools: ["tools", "toolsSection", "tools-section", "extension"],
       compliance: ["compliance", "complianceSection", "compliance-section"],
-      partners: ["partners", "partnersSection", "partners-section"],
+      partners: ["partners", "partnersSection", "partners-section", "affiliate"],
       billing: ["billing", "billingSection", "billing-section"]
     };
   }
@@ -122,19 +122,6 @@
     return qs(".sidebar-nav") || qs("[data-sidebar-nav]") || null;
   }
 
-  function existingNavSectionIds() {
-    return new Set(qsa("[data-section]").map((button) => clean(resolveSectionId(button.getAttribute("data-section") || ""))).filter(Boolean));
-  }
-
-  function createNavButton(label, sectionId) {
-    const button = document.createElement("button");
-    button.className = "nav-btn";
-    button.type = "button";
-    button.setAttribute("data-section", sectionId);
-    button.textContent = label;
-    return button;
-  }
-
   function bindExistingNavButtons() {
     qsa("[data-section], .nav-btn").forEach((button) => {
       if (button.dataset.eaBound === "true") return;
@@ -149,41 +136,30 @@
     });
   }
 
-  function ensureSidebarEntries() {
+  function reorderSidebarNav() {
     const nav = findSidebarNav();
     if (!nav) return;
+    const desiredOrder = ["overview", "tools", "analytics", "compliance", "affiliate", "profile", "billing"];
+    const buttons = qsa("[data-section]", nav);
+    const byKey = new Map();
 
-    const toEnsure = [
-      { label: "Listings", preferredId: "listings", after: "tools" },
-      { label: "Review Center", preferredId: "reviewCenter", after: "listings" }
-    ];
-
-    const existing = existingNavSectionIds();
-
-    toEnsure.forEach((item) => {
-      const sectionEl = findSectionElement(item.preferredId);
-      if (!sectionEl) return;
-      const resolved = clean(sectionEl.id || resolveSectionId(item.preferredId));
-      if (!resolved || existing.has(resolved)) return;
-
-      const button = createNavButton(item.label, resolved);
-      const navButtons = qsa("[data-section]", nav);
-      const afterButton = navButtons.find((btn) => {
-        const btnSection = clean(resolveSectionId(btn.getAttribute("data-section") || ""));
-        return btnSection === clean(resolveSectionId(item.after));
-      });
-
-      if (afterButton?.nextSibling) nav.insertBefore(button, afterButton.nextSibling);
-      else nav.appendChild(button);
-      existing.add(resolved);
+    buttons.forEach((button) => {
+      const raw = clean(button.getAttribute("data-section") || button.dataset.section || "");
+      const resolved = clean(resolveSectionId(raw));
+      const key = raw || resolved;
+      byKey.set(key, button);
+      if (resolved && !byKey.has(resolved)) byKey.set(resolved, button);
     });
 
-    bindExistingNavButtons();
+    desiredOrder.forEach((key) => {
+      const button = byKey.get(key) || byKey.get(resolveSectionId(key));
+      if (button) nav.appendChild(button);
+    });
   }
 
   function bootSidebarNavRepair() {
-    ensureSidebarEntries();
     bindExistingNavButtons();
+    reorderSidebarNav();
     const sections = getDashboardSections();
     if (!sections.length) return;
     const active = NS.state?.get?.("ui.activeSection") || sections[0].id || "overview";
@@ -191,7 +167,7 @@
     if (!shown) revealFallbackSections();
   }
 
-  NS.ui = { qs, qsa, clean, setText, setStatus, showSection, injectStyleOnce, ensureSidebarEntries, findSectionElement, bindExistingNavButtons };
+  NS.ui = { qs, qsa, clean, setText, setStatus, showSection, injectStyleOnce, findSectionElement, bindExistingNavButtons, reorderSidebarNav };
   window.showSection = showSection;
   NS.modules = NS.modules || {};
   NS.modules.ui = true;
