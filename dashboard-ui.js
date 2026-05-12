@@ -164,7 +164,7 @@
     if (!nav) return;
 
     const desiredOrder = ["overview", "tools", "analytics", "compliance", "partners", "setup", "billing"];
-    const buttons = qsa("[data-section]", nav);
+    const buttons = qsa(".nav-btn, [data-section]", nav).filter((button, index, array) => array.indexOf(button) === index);
     const buckets = new Map();
 
     buttons.forEach((button) => {
