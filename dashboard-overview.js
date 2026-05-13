@@ -93,6 +93,24 @@
     return 'plan-starter';
   }
 
+  function desiredSidebarOrder() {
+    return ['overview', 'tools', 'analytics', 'compliance', 'partners', 'setup', 'billing'];
+  }
+
+  function repairSidebarRouting() {
+    const nav = document.querySelector('.sidebar-nav');
+    if (!nav) return;
+    const order = desiredSidebarOrder();
+    const buttons = Array.from(nav.querySelectorAll('.nav-btn')).filter((button, index, array) => array.indexOf(button) === index);
+    buttons.forEach((button, index) => {
+      const key = order[index] || clean(button.dataset.eaNavKey || button.getAttribute('data-section') || button.dataset.section || '');
+      if (!key) return;
+      button.dataset.eaNavKey = key;
+      button.dataset.section = key;
+      button.setAttribute('data-section', key);
+    });
+  }
+
   function metrics() {
     const data = summaryData();
     const c = data.command_center || {};
@@ -337,6 +355,18 @@
   }
 
   function bind(root) {
+    repairSidebarRouting();
+    document.querySelectorAll('.sidebar-nav .nav-btn').forEach((button) => {
+      if (button.dataset.eaSidebarBound === 'true') return;
+      button.dataset.eaSidebarBound = 'true';
+      button.addEventListener('click', (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        const target = clean(button.dataset.eaNavKey || button.getAttribute('data-section') || button.dataset.section || 'overview');
+        goToSection(target);
+      });
+    });
+
     root.querySelectorAll('[data-open-section]').forEach((b) => {
       if (b.dataset.eaBound === 'true') return;
       b.dataset.eaBound = 'true';
@@ -364,13 +394,19 @@
   }
 
   function boot() {
+    repairSidebarRouting();
     renderCommandCentre();
-    setTimeout(renderCommandCentre, 160);
+    setTimeout(() => { repairSidebarRouting(); renderCommandCentre(); }, 160);
+    setTimeout(repairSidebarRouting, 600);
+    setTimeout(repairSidebarRouting, 1400);
   }
 
-  window.addEventListener('elevate:summary-ready', renderCommandCentre);
+  window.addEventListener('elevate:summary-ready', () => {
+    repairSidebarRouting();
+    renderCommandCentre();
+  });
   document.addEventListener('DOMContentLoaded', boot);
-  NS.overview = { renderCommandCentre, goToSection };
+  NS.overview = { renderCommandCentre, goToSection, repairSidebarRouting };
   NS.modules = NS.modules || {};
   NS.modules.overview = true;
 })();
