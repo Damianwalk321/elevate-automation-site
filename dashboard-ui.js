@@ -19,10 +19,10 @@
     return {
       reviewCenter: ["reviewCenter", "review-center", "review_center"],
       listings: ["listings", "listingSection", "listing-section"],
-      analytics: ["analytics", "analyticsSection", "analytics-section"],
+      analytics: ["analytics", "analyticsSection", "analytics-section", "tools", "toolsSection", "tools-section"],
       overview: ["overview", "overviewSection", "overview-section"],
       setup: ["setup", "setupSection", "setup-section", "profile"],
-      tools: ["tools", "toolsSection", "tools-section", "extension"],
+      tools: ["extension", "extensionSection", "extension-section", "toolsPanel", "tools-panel", "tools", "toolsSection", "tools-section"],
       compliance: ["compliance", "complianceSection", "compliance-section"],
       partners: ["partners", "partnersSection", "partners-section", "affiliate"],
       billing: ["billing", "billingSection", "billing-section"]
@@ -32,7 +32,6 @@
   function resolveSectionId(sectionId) {
     const requested = clean(sectionId);
     if (!requested) return requested;
-    if (document.getElementById(requested)) return requested;
     const aliases = sectionAliases();
     const candidates = aliases[requested] || [requested];
     return candidates.find((id) => document.getElementById(id)) || requested;
