@@ -9,13 +9,13 @@
 
   const MODULES = [
     "/dashboard-state.js?v=20260406p12a",
-    "/dashboard-ui.js?v=20260513c1",
+    "/dashboard-ui.js?v=20260513d2",
     "/dashboard-api.js?v=20260406p12a",
     "/dashboard-overview.js?v=20260406p12a",
     "/dashboard-listings.js?v=20260406p12a",
     "/dashboard-profile.js?v=20260406p12a",
     "/dashboard-tools.js?v=20260406p12a",
-    "/dashboard-analytics.js?v=20260413d1",
+    "/dashboard-analytics.js?v=20260513d2",
     "/dashboard-affiliate.js?v=20260406p12a",
     "/dashboard-billing.js?v=20260406p12a",
     "/dashboard-legacy.js?v=20260406p12a",
