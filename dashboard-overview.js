@@ -89,26 +89,7 @@
 
   function planStyle(plan) {
     const x = clean(plan).toLowerCase();
-    if (x.includes('pro')) return 'plan-pro';
-    return 'plan-starter';
-  }
-
-  function desiredSidebarOrder() {
-    return ['overview', 'tools', 'analytics', 'compliance', 'partners', 'setup', 'billing'];
-  }
-
-  function repairSidebarRouting() {
-    const nav = document.querySelector('.sidebar-nav');
-    if (!nav) return;
-    const order = desiredSidebarOrder();
-    const buttons = Array.from(nav.querySelectorAll('.nav-btn')).filter((button, index, array) => array.indexOf(button) === index);
-    buttons.forEach((button, index) => {
-      const key = order[index] || clean(button.dataset.eaNavKey || button.getAttribute('data-section') || button.dataset.section || '');
-      if (!key) return;
-      button.dataset.eaNavKey = key;
-      button.dataset.section = key;
-      button.setAttribute('data-section', key);
-    });
+    return x.includes('pro') ? 'plan-pro' : 'plan-starter';
   }
 
   function metrics() {
@@ -158,48 +139,12 @@
   }
 
   function resolvePrimaryCommand(m) {
-    if (m.complianceBlocked > 0) return {
-      title:'Resolve compliance blockers before posting',
-      message:'The machine is not safe to push until compliance readiness is restored.',
-      note:'Why now: safe posting is blocked until compliance is complete.',
-      meta:[['Impact','Posting blocked'],['Live load',`${m.review + m.needsAction} open items`],['If ignored','Trust drops before next cycle']],
-      primary_action:'open_compliance', secondary_action:'refresh-access', primary_label:'Open Compliance', secondary_label:'Refresh'
-    };
-    if (m.review > 0) return {
-      title:`Clear ${m.review} listings from review queue`,
-      message:'Reduce review pressure before adding more output.',
-      note:'Why now: review queue is the highest-priority live workload on the machine.',
-      meta:[['Impact',`${m.review} in review`],['Live load',`${m.review + m.needsAction} total pressure`],['If ignored','Backlog continues building']],
-      primary_action:'open_review_queue', secondary_action:'refresh-access', primary_label:'Open Analytics', secondary_label:'Refresh'
-    };
-    if (m.needsAction > 0) return {
-      title:`Resolve ${m.needsAction} listings needing action`,
-      message:'Listings need direct correction before the machine can be fully trusted.',
-      note:'Why now: listings requiring action are affecting system trust and output quality.',
-      meta:[['Impact',`${m.needsAction} affected`],['Live load',`${m.review + m.needsAction} total pressure`],['If ignored','Quality risk stays live']],
-      primary_action:'open_analytics', secondary_action:'open_compliance', primary_label:'Open Analytics', secondary_label:'Open Compliance'
-    };
-    if (m.staleReview > 0) return {
-      title:`Review ${m.staleReview} stale or removed listings`,
-      message:'Clear stale inventory pressure so the machine stays accurate.',
-      note:'Why now: stale inventory weakens operator trust and listing accuracy.',
-      meta:[['Impact',`${m.staleReview} stale items`],['Live load','Inventory accuracy'],['If ignored','Old inventory stays live']],
-      primary_action:'open_analytics', secondary_action:'open_tools', primary_label:'Open Analytics', secondary_label:'Open Tools'
-    };
-    if (m.queue > 0 && m.postingReady) return {
-      title:`Run the next posting cycle for ${m.queue} queued vehicles`,
-      message:'The machine is ready. Push the next cycle while maintaining listing quality.',
-      note:'Why now: queue is prepared and the machine is currently safe to operate.',
-      meta:[['Impact',`${m.queue} queued`],['Live load','Machine clear'],['If ignored','Output stays idle']],
-      primary_action:'open_tools', secondary_action:'open_analytics', primary_label:'Open Tools', secondary_label:'Open Analytics'
-    };
-    return {
-      title:'Machine is clear. Maintain operator rhythm.',
-      message:'No major blockers are on the surface right now.',
-      note:'Why now: machine trust is stable and no major live queue pressure is blocking output.',
-      meta:[['Impact','No blockers'],['Live load',`${m.review + m.needsAction} open items`],['If ignored','Momentum slows']],
-      primary_action:'open_tools', secondary_action:'open_analytics', primary_label:'Open Tools', secondary_label:'Open Analytics'
-    };
+    if (m.complianceBlocked > 0) return { title:'Resolve compliance blockers before posting', message:'The machine is not safe to push until compliance readiness is restored.', note:'Why now: safe posting is blocked until compliance is complete.', meta:[['Impact','Posting blocked'],['Live load',`${m.review + m.needsAction} open items`],['If ignored','Trust drops before next cycle']], primary_action:'open_compliance', secondary_action:'refresh-access', primary_label:'Open Compliance', secondary_label:'Refresh' };
+    if (m.review > 0) return { title:`Clear ${m.review} listings from review queue`, message:'Reduce review pressure before adding more output.', note:'Why now: review queue is the highest-priority live workload on the machine.', meta:[['Impact',`${m.review} in review`],['Live load',`${m.review + m.needsAction} total pressure`],['If ignored','Backlog continues building']], primary_action:'open_review_queue', secondary_action:'refresh-access', primary_label:'Open Analytics', secondary_label:'Refresh' };
+    if (m.needsAction > 0) return { title:`Resolve ${m.needsAction} listings needing action`, message:'Listings need direct correction before the machine can be fully trusted.', note:'Why now: listings requiring action are affecting system trust and output quality.', meta:[['Impact',`${m.needsAction} affected`],['Live load',`${m.review + m.needsAction} total pressure`],['If ignored','Quality risk stays live']], primary_action:'open_analytics', secondary_action:'open_compliance', primary_label:'Open Analytics', secondary_label:'Open Compliance' };
+    if (m.staleReview > 0) return { title:`Review ${m.staleReview} stale or removed listings`, message:'Clear stale inventory pressure so the machine stays accurate.', note:'Why now: stale inventory weakens operator trust and listing accuracy.', meta:[['Impact',`${m.staleReview} stale items`],['Live load','Inventory accuracy'],['If ignored','Old inventory stays live']], primary_action:'open_analytics', secondary_action:'open_tools', primary_label:'Open Analytics', secondary_label:'Open Tools' };
+    if (m.queue > 0 && m.postingReady) return { title:`Run the next posting cycle for ${m.queue} queued vehicles`, message:'The machine is ready. Push the next cycle while maintaining listing quality.', note:'Why now: queue is prepared and the machine is currently safe to operate.', meta:[['Impact',`${m.queue} queued`],['Live load','Machine clear'],['If ignored','Output stays idle']], primary_action:'open_tools', secondary_action:'open_analytics', primary_label:'Open Tools', secondary_label:'Open Analytics' };
+    return { title:'Machine is clear. Maintain operator rhythm.', message:'No major blockers are on the surface right now.', note:'Why now: machine trust is stable and no major live queue pressure is blocking output.', meta:[['Impact','No blockers'],['Live load',`${m.review + m.needsAction} open items`],['If ignored','Momentum slows']], primary_action:'open_tools', secondary_action:'open_analytics', primary_label:'Open Tools', secondary_label:'Open Analytics' };
   }
 
   function buildTargets(m) {
@@ -233,11 +178,7 @@
 
   function buildOutcomes(data) {
     const recent = Array.isArray(data.recent_listings) ? data.recent_listings : [];
-    return recent.slice(0, 4).map((i) => ({
-      title: clean(i.title || 'Listing'),
-      copy: i.price_resolved === false ? 'Price needs review before this listing should be trusted.' : `${num(i.views_count)} views • ${num(i.messages_count)} messages`,
-      pill: humanizeStatus(i.lifecycle_status || i.status || 'live')
-    }));
+    return recent.slice(0, 4).map((i) => ({ title: clean(i.title || 'Listing'), copy: i.price_resolved === false ? 'Price needs review before this listing should be trusted.' : `${num(i.views_count)} views • ${num(i.messages_count)} messages`, pill: humanizeStatus(i.lifecycle_status || i.status || 'live') }));
   }
 
   function actionAttrs(action, fallbackSection) {
@@ -254,96 +195,19 @@
     const outcomes = buildOutcomes(m.data);
     updateOverviewHeader(m.mode);
 
-    const header = `
-      <div class="ea-ops-header">
-        <div class="ea-ops-card">
-          <div class="ea-ops-eyebrow">Operator</div>
-          <h2 class="ea-ops-title">${m.operatorName}</h2>
-          <p class="ea-ops-subtitle">${m.dealership} • ${m.mode === 'operator' ? 'Operator mode active' : 'Activation mode active'}</p>
-          <div class="ea-ops-chip-row">
-            <span class="ea-ops-chip"><span class="ea-ops-dot ${planStyle(m.plan)}"></span>${m.plan}</span>
-            <span class="ea-ops-chip"><span class="ea-ops-dot ${m.postingReady ? 'good' : 'bad'}"></span>${m.postingReady ? 'Posting Ready' : 'Posting Blocked'}</span>
-            <span class="ea-ops-chip"><span class="ea-ops-dot ${m.accessGranted ? 'good' : 'bad'}"></span>${m.accessLabel}</span>
-            <span class="ea-ops-chip"><span class="ea-ops-dot ${m.complianceReady ? 'good' : 'bad'}"></span>${m.complianceReady ? 'Compliance Ready' : 'Compliance Blocked'}</span>
-          </div>
-        </div>
-        <div class="ea-ops-stat-grid">
-          <div class="ea-ops-stat"><div class="ea-ops-label">Posts Remaining</div><div class="ea-ops-value">${m.remainingToday}</div><div class="ea-ops-copy">${m.postingLimit > 0 ? `${m.postedToday} of ${m.postingLimit} used today.` : 'Current plan usage.'}</div></div>
-          <div class="ea-ops-stat"><div class="ea-ops-label">Priority Load</div><div class="ea-ops-value">${m.review + m.needsAction}</div><div class="ea-ops-copy">Open review plus action items currently on the surface.</div></div>
-          <div class="ea-ops-stat"><div class="ea-ops-label">Queue Ready</div><div class="ea-ops-value">${m.queue}</div><div class="ea-ops-copy">Vehicles prepared for the next posting cycle.</div></div>
-          <div class="ea-ops-stat"><div class="ea-ops-label">Stale Review</div><div class="ea-ops-value">${m.staleReview}</div><div class="ea-ops-copy">Listings flagged for stale or removed review.</div></div>
-        </div>
-      </div>`;
-
-    const primaryBlock = `
-      <div class="ea-ops-primary">
-        <div class="ea-ops-card">
-          <div class="ea-ops-eyebrow">Primary Command</div>
-          <h3 class="ea-ops-primary-title">${primary.title}</h3>
-          <p class="ea-ops-primary-copy">${primary.message}</p>
-          <p class="ea-ops-primary-note">${primary.note}</p>
-          <div class="ea-ops-primary-meta">${primary.meta.map((item) => `<div class="ea-ops-meta-item"><strong>${item[0]}</strong><span>${item[1]}</span></div>`).join('')}</div>
-          <div class="ea-ops-btn-row">
-            <button class="ea-ops-btn is-primary" type="button" ${actionAttrs(primary.primary_action, 'tools')}>${primary.primary_label}</button>
-            <button class="ea-ops-btn" type="button" ${actionAttrs(primary.secondary_action, 'analytics')}>${primary.secondary_label}</button>
-          </div>
-        </div>
-        <div class="ea-ops-card">
-          <div class="ea-ops-eyebrow">Today’s Target</div>
-          <div class="ea-ops-targets">${buildTargets(m).map((i) => `<div class="ea-ops-target ea-ops-row"><div><strong>${i[0]}</strong><span>${i[1]}</span></div><div class="ea-ops-target-value">${i[2]}</div></div>`).join('')}</div>
-        </div>
-      </div>`;
-
-    const kpis = `<div class="ea-ops-kpis">${[
-      ['Active Listings',m.active,'Current live portfolio count.'],
-      ['In Review',m.review,'Listings waiting in review.'],
-      ['Needs Action',m.needsAction,'Listings requiring direct operator action.'],
-      ['Queued',m.queue,'Vehicles ready for the next cycle.'],
-      ['Posted Today',m.postedToday,'Units pushed today.'],
-      ['Remaining Today',m.remainingToday,'Posting capacity still available.']
-    ].map((i) => `<div class="ea-ops-kpi"><div class="ea-ops-label">${i[0]}</div><div class="ea-ops-value">${i[1]}</div><div class="ea-ops-copy">${i[2]}</div></div>`).join('')}</div>`;
-
-    const actionQueue = `
-      <div class="ea-ops-card">
-        <div class="ea-ops-eyebrow">Action Queue</div>
-        <div class="ea-ops-list">
-          ${queue.length ? queue.map((i) => `<div class="ea-ops-queue ea-ops-row"><div class="ea-ops-queue-copy"><strong>${i.title}</strong><span>${i.copy}</span></div><div class="ea-ops-pill">${i.count}</div><button class="ea-ops-btn is-primary ea-ops-row-btn" type="button" ${actionAttrs(i.primary[1], 'analytics')}>${i.primary[0]}</button><button class="ea-ops-btn ea-ops-row-btn" type="button" ${actionAttrs(i.secondary[1], 'tools')}>${i.secondary[0]}</button></div>`).join('') : `<div class="ea-ops-empty">No active queue pressure right now. The machine is currently clear.</div>`}
-        </div>
-      </div>`;
-
-    const healthBlock = `
-      <div class="ea-ops-card">
-        <div class="ea-ops-eyebrow">Machine Health</div>
-        <div class="ea-ops-health-grid">${health.map((i) => `<div class="ea-ops-health-item"><div class="ea-ops-health-head"><span class="ea-ops-dot ${stateDot(i.value, i.title === 'Queue pressure' && i.value === 'Loaded')}"></span>${i.title}</div><div class="ea-ops-health-state">${i.value}</div><div class="ea-ops-health-sub">${i.sub}</div></div>`).join('')}</div>
-        <div class="ea-ops-eyebrow" style="margin-top:16px">Warnings</div>
-        <div class="ea-ops-list">${warnings.length ? warnings.map((i) => `<div class="ea-ops-warning"><strong>${i[0]}</strong><span>${i[1]}</span></div>`).join('') : `<div class="ea-ops-empty">No warnings are currently forcing attention.</div>`}</div>
-      </div>`;
-
-    const activation = `
-      <div class="ea-ops-grid">
-        <div class="ea-ops-card">
-          <div class="ea-ops-eyebrow">Readiness</div>
-          <div class="ea-ops-list">
-            <div class="ea-ops-row"><div><strong>Profile</strong><span>Complete the required operator profile fields.</span></div><div class="ea-ops-target-value">${m.profileReady ? 'Ready' : 'Open'}</div></div>
-            <div class="ea-ops-row"><div><strong>Compliance</strong><span>Set the correct province and compliance mode.</span></div><div class="ea-ops-target-value">${m.complianceReady ? 'Ready' : 'Open'}</div></div>
-            <div class="ea-ops-row"><div><strong>First post</strong><span>Complete one clean posting cycle to qualify into operator mode.</span></div><div class="ea-ops-target-value">${m.firstPostComplete ? 'Done' : 'Pending'}</div></div>
-            <div class="ea-ops-row"><div><strong>Activation score</strong><span>Current setup progress toward operator qualification.</span></div><div class="ea-ops-target-value">${m.setupScore}%</div></div>
-          </div>
-        </div>
-        ${healthBlock}
-      </div>`;
-
-    const operator = `
-      ${kpis}
-      <div class="ea-ops-grid">${actionQueue}${healthBlock}</div>
-      <div class="ea-ops-card"><div class="ea-ops-eyebrow">Recent Outcomes</div><div class="ea-ops-list">${outcomes.length ? outcomes.map((i) => `<div class="ea-ops-outcome ea-ops-row"><div><strong>${i.title}</strong><span>${i.copy}</span></div><div class="ea-ops-pill">${i.pill}</div></div>`).join('') : `<div class="ea-ops-empty">No recent outcomes are available yet.</div>`}</div></div>`;
-
+    const header = `<div class="ea-ops-header"><div class="ea-ops-card"><div class="ea-ops-eyebrow">Operator</div><h2 class="ea-ops-title">${m.operatorName}</h2><p class="ea-ops-subtitle">${m.dealership} • ${m.mode === 'operator' ? 'Operator mode active' : 'Activation mode active'}</p><div class="ea-ops-chip-row"><span class="ea-ops-chip"><span class="ea-ops-dot ${planStyle(m.plan)}"></span>${m.plan}</span><span class="ea-ops-chip"><span class="ea-ops-dot ${m.postingReady ? 'good' : 'bad'}"></span>${m.postingReady ? 'Posting Ready' : 'Posting Blocked'}</span><span class="ea-ops-chip"><span class="ea-ops-dot ${m.accessGranted ? 'good' : 'bad'}"></span>${m.accessLabel}</span><span class="ea-ops-chip"><span class="ea-ops-dot ${m.complianceReady ? 'good' : 'bad'}"></span>${m.complianceReady ? 'Compliance Ready' : 'Compliance Blocked'}</span></div></div><div class="ea-ops-stat-grid"><div class="ea-ops-stat"><div class="ea-ops-label">Posts Remaining</div><div class="ea-ops-value">${m.remainingToday}</div><div class="ea-ops-copy">${m.postingLimit > 0 ? `${m.postedToday} of ${m.postingLimit} used today.` : 'Current plan usage.'}</div></div><div class="ea-ops-stat"><div class="ea-ops-label">Priority Load</div><div class="ea-ops-value">${m.review + m.needsAction}</div><div class="ea-ops-copy">Open review plus action items currently on the surface.</div></div><div class="ea-ops-stat"><div class="ea-ops-label">Queue Ready</div><div class="ea-ops-value">${m.queue}</div><div class="ea-ops-copy">Vehicles prepared for the next posting cycle.</div></div><div class="ea-ops-stat"><div class="ea-ops-label">Stale Review</div><div class="ea-ops-value">${m.staleReview}</div><div class="ea-ops-copy">Listings flagged for stale or removed review.</div></div></div></div>`;
+    const primaryBlock = `<div class="ea-ops-primary"><div class="ea-ops-card"><div class="ea-ops-eyebrow">Primary Command</div><h3 class="ea-ops-primary-title">${primary.title}</h3><p class="ea-ops-primary-copy">${primary.message}</p><p class="ea-ops-primary-note">${primary.note}</p><div class="ea-ops-primary-meta">${primary.meta.map((item) => `<div class="ea-ops-meta-item"><strong>${item[0]}</strong><span>${item[1]}</span></div>`).join('')}</div><div class="ea-ops-btn-row"><button class="ea-ops-btn is-primary" type="button" ${actionAttrs(primary.primary_action, 'tools')}>${primary.primary_label}</button><button class="ea-ops-btn" type="button" ${actionAttrs(primary.secondary_action, 'analytics')}>${primary.secondary_label}</button></div></div><div class="ea-ops-card"><div class="ea-ops-eyebrow">Today’s Target</div><div class="ea-ops-targets">${buildTargets(m).map((i) => `<div class="ea-ops-target ea-ops-row"><div><strong>${i[0]}</strong><span>${i[1]}</span></div><div class="ea-ops-target-value">${i[2]}</div></div>`).join('')}</div></div></div>`;
+    const kpis = `<div class="ea-ops-kpis">${[['Active Listings',m.active,'Current live portfolio count.'],['In Review',m.review,'Listings waiting in review.'],['Needs Action',m.needsAction,'Listings requiring direct operator action.'],['Queued',m.queue,'Vehicles ready for the next cycle.'],['Posted Today',m.postedToday,'Units pushed today.'],['Remaining Today',m.remainingToday,'Posting capacity still available.']].map((i) => `<div class="ea-ops-kpi"><div class="ea-ops-label">${i[0]}</div><div class="ea-ops-value">${i[1]}</div><div class="ea-ops-copy">${i[2]}</div></div>`).join('')}</div>`;
+    const actionQueue = `<div class="ea-ops-card"><div class="ea-ops-eyebrow">Action Queue</div><div class="ea-ops-list">${queue.length ? queue.map((i) => `<div class="ea-ops-queue ea-ops-row"><div class="ea-ops-queue-copy"><strong>${i.title}</strong><span>${i.copy}</span></div><div class="ea-ops-pill">${i.count}</div><button class="ea-ops-btn is-primary ea-ops-row-btn" type="button" ${actionAttrs(i.primary[1], 'analytics')}>${i.primary[0]}</button><button class="ea-ops-btn ea-ops-row-btn" type="button" ${actionAttrs(i.secondary[1], 'tools')}>${i.secondary[0]}</button></div>`).join('') : `<div class="ea-ops-empty">No active queue pressure right now. The machine is currently clear.</div>`}</div></div>`;
+    const healthBlock = `<div class="ea-ops-card"><div class="ea-ops-eyebrow">Machine Health</div><div class="ea-ops-health-grid">${health.map((i) => `<div class="ea-ops-health-item"><div class="ea-ops-health-head"><span class="ea-ops-dot ${stateDot(i.value, i.title === 'Queue pressure' && i.value === 'Loaded')}"></span>${i.title}</div><div class="ea-ops-health-state">${i.value}</div><div class="ea-ops-health-sub">${i.sub}</div></div>`).join('')}</div><div class="ea-ops-eyebrow" style="margin-top:16px">Warnings</div><div class="ea-ops-list">${warnings.length ? warnings.map((i) => `<div class="ea-ops-warning"><strong>${i[0]}</strong><span>${i[1]}</span></div>`).join('') : `<div class="ea-ops-empty">No warnings are currently forcing attention.</div>`}</div></div>`;
+    const activation = `<div class="ea-ops-grid"><div class="ea-ops-card"><div class="ea-ops-eyebrow">Readiness</div><div class="ea-ops-list"><div class="ea-ops-row"><div><strong>Profile</strong><span>Complete the required operator profile fields.</span></div><div class="ea-ops-target-value">${m.profileReady ? 'Ready' : 'Open'}</div></div><div class="ea-ops-row"><div><strong>Compliance</strong><span>Set the correct province and compliance mode.</span></div><div class="ea-ops-target-value">${m.complianceReady ? 'Ready' : 'Open'}</div></div><div class="ea-ops-row"><div><strong>First post</strong><span>Complete one clean posting cycle to qualify into operator mode.</span></div><div class="ea-ops-target-value">${m.firstPostComplete ? 'Done' : 'Pending'}</div></div><div class="ea-ops-row"><div><strong>Activation score</strong><span>Current setup progress toward operator qualification.</span></div><div class="ea-ops-target-value">${m.setupScore}%</div></div></div></div>${healthBlock}</div>`;
+    const operator = `${kpis}<div class="ea-ops-grid">${actionQueue}${healthBlock}</div><div class="ea-ops-card"><div class="ea-ops-eyebrow">Recent Outcomes</div><div class="ea-ops-list">${outcomes.length ? outcomes.map((i) => `<div class="ea-ops-outcome ea-ops-row"><div><strong>${i.title}</strong><span>${i.copy}</span></div><div class="ea-ops-pill">${i.pill}</div></div>`).join('') : `<div class="ea-ops-empty">No recent outcomes are available yet.</div>`}</div></div>`;
     return `<div class="ea-ops-shell" data-command-centre-mode="${m.mode}">${header}${primaryBlock}${m.mode === 'operator' ? operator : activation}</div>`;
   }
 
   function goToSection(section) {
     if (!section) return;
-    if (typeof window.showSection === 'function') {
+    if (typeof window.showSection === 'function' && window.showSection !== goToSection) {
       window.showSection(section, { scroll: false });
       return;
     }
@@ -355,18 +219,6 @@
   }
 
   function bind(root) {
-    repairSidebarRouting();
-    document.querySelectorAll('.sidebar-nav .nav-btn').forEach((button) => {
-      if (button.dataset.eaSidebarBound === 'true') return;
-      button.dataset.eaSidebarBound = 'true';
-      button.addEventListener('click', (event) => {
-        event.preventDefault();
-        event.stopPropagation();
-        const target = clean(button.dataset.eaNavKey || button.getAttribute('data-section') || button.dataset.section || 'overview');
-        goToSection(target);
-      });
-    });
-
     root.querySelectorAll('[data-open-section]').forEach((b) => {
       if (b.dataset.eaBound === 'true') return;
       b.dataset.eaBound = 'true';
@@ -394,19 +246,13 @@
   }
 
   function boot() {
-    repairSidebarRouting();
     renderCommandCentre();
-    setTimeout(() => { repairSidebarRouting(); renderCommandCentre(); }, 160);
-    setTimeout(repairSidebarRouting, 600);
-    setTimeout(repairSidebarRouting, 1400);
+    setTimeout(renderCommandCentre, 160);
   }
 
-  window.addEventListener('elevate:summary-ready', () => {
-    repairSidebarRouting();
-    renderCommandCentre();
-  });
+  window.addEventListener('elevate:summary-ready', renderCommandCentre);
   document.addEventListener('DOMContentLoaded', boot);
-  NS.overview = { renderCommandCentre, goToSection, repairSidebarRouting };
+  NS.overview = { renderCommandCentre, goToSection };
   NS.modules = NS.modules || {};
   NS.modules.overview = true;
 })();
