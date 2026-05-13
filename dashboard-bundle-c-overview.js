@@ -311,15 +311,32 @@
     overview.classList.add('bundle-c-live');
   }
 
+  function loadExecutionHubHardReplace() {
+    if (window.__ELEVATE_EXECUTION_HUB_HARD_REPLACE_LOADER__) return;
+    window.__ELEVATE_EXECUTION_HUB_HARD_REPLACE_LOADER__ = true;
+
+    const existing = document.querySelector('script[data-ea-execution-hub-hard-replace="true"]');
+    if (existing) return;
+
+    const script = document.createElement('script');
+    script.src = '/dashboard-execution-hub-hard-replace.js?v=20260513b2';
+    script.async = false;
+    script.defer = false;
+    script.dataset.eaExecutionHubHardReplace = 'true';
+    document.body.appendChild(script);
+  }
+
   function render() {
     const overview = document.getElementById('overview');
     if (!overview) return;
     applyHierarchy();
+    loadExecutionHubHardReplace();
     const model = buildModel();
     renderTakeover(model);
   }
 
   function boot() {
+    loadExecutionHubHardReplace();
     render();
     setTimeout(render, 700);
     setTimeout(render, 1800);
