@@ -148,36 +148,11 @@
     }
 
     const systemItems = [
-      {
-        label: 'Setup',
-        value: `${model.completeCount}/${model.totalCount} Complete`,
-        tone: model.completeCount === model.totalCount ? 'ready' : 'warn'
-      },
-      {
-        label: 'Access',
-        value: model.accessActive ? 'Active' : 'Needs Refresh',
-        tone: model.accessActive ? 'ready' : 'blocked'
-      },
-      {
-        label: 'Queue',
-        value: model.queueCount > 0 ? `${model.queueCount} Ready` : 'No Vehicle Queued',
-        tone: model.queueCount > 0 ? 'ready' : 'warn'
-      },
-      {
-        label: 'Compliance',
-        value: model.completeCount >= 5 ? 'Configured' : 'Needs Setup',
-        tone: model.completeCount >= 5 ? 'ready' : 'warn'
-      },
-      {
-        label: 'Posting',
-        value:
-          model.state === 'ready_for_first_post' ? 'Ready For First Post' :
-          model.state === 'activated' || model.state === 'activated_needs_action' ? 'Live' : 'Not Ready',
-        tone:
-          model.state === 'ready_for_first_post' || model.state === 'activated' || model.state === 'activated_needs_action'
-            ? 'ready'
-            : 'warn'
-      }
+      { label: 'Setup', value: `${model.completeCount}/${model.totalCount} Complete`, tone: model.completeCount === model.totalCount ? 'ready' : 'warn' },
+      { label: 'Access', value: model.accessActive ? 'Active' : 'Needs Refresh', tone: model.accessActive ? 'ready' : 'blocked' },
+      { label: 'Queue', value: model.queueCount > 0 ? `${model.queueCount} Ready` : 'No Vehicle Queued', tone: model.queueCount > 0 ? 'ready' : 'warn' },
+      { label: 'Compliance', value: model.completeCount >= 5 ? 'Configured' : 'Needs Setup', tone: model.completeCount >= 5 ? 'ready' : 'warn' },
+      { label: 'Posting', value: model.state === 'ready_for_first_post' ? 'Ready For First Post' : model.state === 'activated' || model.state === 'activated_needs_action' ? 'Live' : 'Not Ready', tone: model.state === 'ready_for_first_post' || model.state === 'activated' || model.state === 'activated_needs_action' ? 'ready' : 'warn' }
     ];
 
     const momentum = [
@@ -209,74 +184,17 @@
             <div class="bundle-c-badge-value">${escapeHtml(model.setupPercent)}% Ready</div>
           </div>
         </div>
-
-        <div class="bundle-c-system-row">
-          ${systemItems.map((item) => `
-            <div class="bundle-c-pill ${item.tone}">
-              <div class="mini">${escapeHtml(item.label)}</div>
-              <strong>${escapeHtml(item.value)}</strong>
-            </div>
-          `).join('')}
-        </div>
-
+        <div class="bundle-c-system-row">${systemItems.map((item) => `<div class="bundle-c-pill ${item.tone}"><div class="mini">${escapeHtml(item.label)}</div><strong>${escapeHtml(item.value)}</strong></div>`).join('')}</div>
         <div class="bundle-c-primary">
-          <div>
-            <div class="stat-label">Next Best Move</div>
-            <div class="bundle-c-primary-label">${escapeHtml(model.primaryLabel)}</div>
-            <div class="subtext">${escapeHtml(model.copy)}</div>
-          </div>
-          <div class="bundle-c-primary-actions">
-            <button id="bundleCPrimaryBtn" class="btn-primary" type="button">${escapeHtml(model.primaryLabel)}</button>
-            <button id="bundleCSecondaryBtn" class="action-btn" type="button">${escapeHtml(model.secondaryLabel)}</button>
-          </div>
+          <div><div class="stat-label">Next Best Move</div><div class="bundle-c-primary-label">${escapeHtml(model.primaryLabel)}</div><div class="subtext">${escapeHtml(model.copy)}</div></div>
+          <div class="bundle-c-primary-actions"><button id="bundleCPrimaryBtn" class="btn-primary" type="button">${escapeHtml(model.primaryLabel)}</button><button id="bundleCSecondaryBtn" class="action-btn" type="button">${escapeHtml(model.secondaryLabel)}</button></div>
         </div>
-
         <div class="bundle-c-bottom">
-          <div class="bundle-c-panel">
-            <div class="stat-label">Readiness</div>
-            <div class="bundle-c-checklist">
-              ${model.checks.map((item) => `
-                <div class="bundle-c-check-row">
-                  <strong>${escapeHtml(item.label)}</strong>
-                  <span class="bundle-c-check-status ${item.tone}">${escapeHtml(item.text)}</span>
-                </div>
-              `).join('')}
-            </div>
-          </div>
-          <div class="bundle-c-panel">
-            <div class="stat-label">Momentum</div>
-            <div class="bundle-c-muted-note">${model.state === 'activated' || model.state === 'activated_needs_action'
-              ? 'Activation is complete. Keep posting and referrals moving to build credits.'
-              : 'Credits should follow progress. Complete setup, queue a vehicle, and finish your first post.'}</div>
-            <div class="bundle-c-momentum" style="margin-top:12px;">
-              ${momentum.map(([label, value]) => `
-                <div class="bundle-c-momentum-row">
-                  <span>${escapeHtml(label)}</span>
-                  <strong>${value}</strong>
-                </div>
-              `).join('')}
-            </div>
-          </div>
+          <div class="bundle-c-panel"><div class="stat-label">Readiness</div><div class="bundle-c-checklist">${model.checks.map((item) => `<div class="bundle-c-check-row"><strong>${escapeHtml(item.label)}</strong><span class="bundle-c-check-status ${item.tone}">${escapeHtml(item.text)}</span></div>`).join('')}</div></div>
+          <div class="bundle-c-panel"><div class="stat-label">Momentum</div><div class="bundle-c-muted-note">${model.state === 'activated' || model.state === 'activated_needs_action' ? 'Activation is complete. Keep posting and referrals moving to build credits.' : 'Credits should follow progress. Complete setup, queue a vehicle, and finish your first post.'}</div><div class="bundle-c-momentum" style="margin-top:12px;">${momentum.map(([label, value]) => `<div class="bundle-c-momentum-row"><span>${escapeHtml(label)}</span><strong>${value}</strong></div>`).join('')}</div></div>
         </div>
       </div>
-
-      <div class="card">
-        <div class="section-head">
-          <div>
-            <div class="phase3-section-tag">First Post Sprint</div>
-            <h3>First-post path</h3>
-          </div>
-        </div>
-        <div class="bundle-c-walkthrough">
-          ${walkthrough.map(([n, title, copy]) => `
-            <div class="bundle-c-step">
-              <div class="bundle-c-step-num">${n}</div>
-              <h4>${escapeHtml(title)}</h4>
-              <p>${escapeHtml(copy)}</p>
-            </div>
-          `).join('')}
-        </div>
-      </div>
+      <div class="card"><div class="section-head"><div><div class="phase3-section-tag">First Post Sprint</div><h3>First-post path</h3></div></div><div class="bundle-c-walkthrough">${walkthrough.map(([n, title, copy]) => `<div class="bundle-c-step"><div class="bundle-c-step-num">${n}</div><h4>${escapeHtml(title)}</h4><p>${escapeHtml(copy)}</p></div>`).join('')}</div></div>
     `;
 
     document.getElementById('bundleCPrimaryBtn')?.addEventListener('click', () => runPrimaryAction(model.primaryAction));
@@ -311,32 +229,43 @@
     overview.classList.add('bundle-c-live');
   }
 
-  function loadExecutionHubHardReplace() {
-    if (window.__ELEVATE_EXECUTION_HUB_HARD_REPLACE_LOADER__) return;
-    window.__ELEVATE_EXECUTION_HUB_HARD_REPLACE_LOADER__ = true;
-
-    const existing = document.querySelector('script[data-ea-execution-hub-hard-replace="true"]');
-    if (existing) return;
-
+  function loadStaticScriptOnce(src, marker, callback) {
+    if (window[marker]) {
+      if (typeof callback === 'function') callback();
+      return;
+    }
+    window[marker] = true;
+    const base = src.split('?')[0];
+    const existing = Array.from(document.scripts).find((script) => script.src && script.src.includes(base));
+    if (existing) {
+      if (typeof callback === 'function') callback();
+      return;
+    }
     const script = document.createElement('script');
-    script.src = '/dashboard-execution-hub-hard-replace.js?v=20260513b2';
+    script.src = src;
     script.async = false;
     script.defer = false;
-    script.dataset.eaExecutionHubHardReplace = 'true';
+    if (typeof callback === 'function') script.onload = callback;
     document.body.appendChild(script);
+  }
+
+  function loadExecutionHubAssets() {
+    loadStaticScriptOnce('/dashboard-execution-hub-data-bridge.js?v=20260513b1', '__ELEVATE_EXECUTION_HUB_DATA_BRIDGE_LOADER__', () => {
+      loadStaticScriptOnce('/dashboard-execution-hub-hard-replace.js?v=20260513b3', '__ELEVATE_EXECUTION_HUB_HARD_REPLACE_LOADER__');
+    });
   }
 
   function render() {
     const overview = document.getElementById('overview');
     if (!overview) return;
     applyHierarchy();
-    loadExecutionHubHardReplace();
+    loadExecutionHubAssets();
     const model = buildModel();
     renderTakeover(model);
   }
 
   function boot() {
-    loadExecutionHubHardReplace();
+    loadExecutionHubAssets();
     render();
     setTimeout(render, 700);
     setTimeout(render, 1800);
