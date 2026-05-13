@@ -12,11 +12,11 @@
   const MODULES = [
     "/dashboard-state.js?v=20260406p12a",
     "/dashboard-ui.js?v=20260406p12a",
+    "/dashboard-section-governor.js?v=20260513live1",
     "/dashboard-api.js?v=20260406p12a",
     "/dashboard-overview.js?v=20260512cc3",
     "/dashboard-listings.js?v=20260406p12a",
     "/dashboard-profile.js?v=20260406p12a",
-    "/dashboard-tools.js?v=20260406p12a",
     "/dashboard-analytics.js?v=20260412p22e",
     "/dashboard-affiliate.js?v=20260406p12a",
     "/dashboard-billing.js?v=20260406p12a",
