@@ -20,13 +20,15 @@
     "/dashboard-analytics.js?v=20260412p22e",
     "/dashboard-affiliate.js?v=20260406p12a",
     "/dashboard-billing.js?v=20260406p12a",
+    "/dashboard-execution-hub-data-bridge.js?v=20260513b1",
+    "/dashboard-execution-hub-final-governor.js?v=20260513c2",
     "/dashboard-bootstrap.js?v=20260406p12a"
   ];
 
   const MODULE_STAGE_GROUPS = [
     { upto: 3, label: "Core shell" },
     { upto: 7, label: "Workspace modules" },
-    { upto: 10, label: "Operator panels" },
+    { upto: 12, label: "Operator panels" },
     { upto: MODULES.length, label: "Bootstrap" }
   ];
 
