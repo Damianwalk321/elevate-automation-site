@@ -15,12 +15,12 @@
     .ea-ops-subtitle{margin:0;font-size:14px;line-height:1.65;color:var(--muted)}
     .ea-ops-chip-row{display:flex;flex-wrap:wrap;gap:10px;margin-top:16px}
     .ea-ops-chip{display:inline-flex;align-items:center;gap:10px;min-height:38px;padding:0 14px;border-radius:999px;background:#151515;border:1px solid rgba(255,255,255,.07);font-size:12px;font-weight:800;color:#f0f0f0}
-    .ea-ops-chip.plan-pro{background:rgba(212,175,55,.12);border-color:rgba(212,175,55,.26);color:#f5e3a1}
-    .ea-ops-chip.plan-starter{background:rgba(76,139,245,.12);border-color:rgba(76,139,245,.26);color:#b9d4ff}
     .ea-ops-dot{width:9px;height:9px;border-radius:50%;display:inline-block;flex:0 0 9px;background:#676767}
     .ea-ops-dot.good{background:#6CFF91;box-shadow:0 0 10px rgba(108,255,145,.32)}
     .ea-ops-dot.bad{background:#FF6B6B;box-shadow:0 0 10px rgba(255,107,107,.26)}
     .ea-ops-dot.warn{background:#FFD76A;box-shadow:0 0 10px rgba(255,215,106,.22)}
+    .ea-ops-dot.plan-pro{background:#D4AF37;box-shadow:0 0 10px rgba(212,175,55,.26)}
+    .ea-ops-dot.plan-starter{background:#4C8BF5;box-shadow:0 0 10px rgba(76,139,245,.26)}
     .ea-ops-stat-grid,.ea-ops-health-grid,.ea-ops-kpis,.ea-ops-list,.ea-ops-targets,.ea-ops-primary-meta{display:grid;gap:12px}
     .ea-ops-stat-grid,.ea-ops-health-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
     .ea-ops-kpis{grid-template-columns:repeat(6,minmax(0,1fr))}
@@ -243,7 +243,7 @@
           <h2 class="ea-ops-title">${m.operatorName}</h2>
           <p class="ea-ops-subtitle">${m.dealership} • ${m.mode === 'operator' ? 'Operator mode active' : 'Activation mode active'}</p>
           <div class="ea-ops-chip-row">
-            <span class="ea-ops-chip ${planStyle(m.plan)}"><span class="ea-ops-dot"></span>${m.plan}</span>
+            <span class="ea-ops-chip"><span class="ea-ops-dot ${planStyle(m.plan)}"></span>${m.plan}</span>
             <span class="ea-ops-chip"><span class="ea-ops-dot ${m.postingReady ? 'good' : 'bad'}"></span>${m.postingReady ? 'Posting Ready' : 'Posting Blocked'}</span>
             <span class="ea-ops-chip"><span class="ea-ops-dot ${m.accessGranted ? 'good' : 'bad'}"></span>${m.accessLabel}</span>
             <span class="ea-ops-chip"><span class="ea-ops-dot ${m.complianceReady ? 'good' : 'bad'}"></span>${m.complianceReady ? 'Compliance Ready' : 'Compliance Blocked'}</span>
