@@ -69,46 +69,11 @@
     return ['overview', 'tools', 'analytics', 'compliance', 'partners', 'setup', 'billing'];
   }
 
-  function navKeyFromText(button) {
-    const text = lower(button.textContent || '');
-    if (text.includes('command centre') || text === 'overview') return 'overview';
-    if (text.includes('tools')) return 'tools';
-    if (text.includes('analytics')) return 'analytics';
-    if (text.includes('compliance')) return 'compliance';
-    if (text.includes('partners')) return 'partners';
-    if (text.includes('setup')) return 'setup';
-    if (text.includes('billing')) return 'billing';
-    return '';
-  }
-
-  function canonicalNavKey(button) {
-    const textKey = navKeyFromText(button);
-    if (textKey) return textKey;
-
-    const locked = clean(button.dataset.eaNavKey || '');
-    if (locked) return locked;
-
-    const raw = clean(button.dataset.eaOriginalSection || button.getAttribute('data-section') || button.dataset.section || '');
-    const resolved = clean(resolveSectionId(raw));
-    if (resolved === 'overview') return 'overview';
-    if (resolved === 'extension' || resolved === 'tools') return 'tools';
-    if (resolved === 'analytics') return 'analytics';
-    if (resolved === 'compliance') return 'compliance';
-    if (resolved === 'affiliate' || resolved === 'partners') return 'partners';
-    if (resolved === 'profile' || resolved === 'setup') return 'setup';
-    if (resolved === 'billing') return 'billing';
-
-    const slot = Number(button.dataset.eaNavSlot);
-    const order = desiredNavOrder();
-    if (Number.isInteger(slot) && order[slot]) return order[slot];
-
-    return raw || resolved || 'overview';
-  }
-
   function markActiveNav(sectionId, sectionEl = null) {
     const resolved = clean(sectionEl?.id || resolveSectionId(sectionId));
-    qsa("[data-section], .nav-btn").forEach((button) => {
-      const buttonResolved = clean(resolveSectionId(canonicalNavKey(button)) || canonicalNavKey(button));
+    qsa(".sidebar-nav .nav-btn").forEach((button) => {
+      const key = clean(button.dataset.eaNavKey || '');
+      const buttonResolved = clean(resolveSectionId(key) || key);
       button.classList.toggle("active", Boolean(resolved) && buttonResolved === resolved);
     });
   }
@@ -217,33 +182,38 @@
   function stampSidebarNavSlots() {
     const nav = findSidebarNav();
     if (!nav) return;
+    const order = desiredNavOrder();
     qsa('.nav-btn, [data-section]', nav).filter((button, index, array) => array.indexOf(button) === index).forEach((button, index) => {
-      if (!button.dataset.eaNavSlot) button.dataset.eaNavSlot = String(index);
+      button.dataset.eaNavSlot = String(index);
+      button.dataset.eaNavKey = order[index] || 'overview';
       if (!button.dataset.eaOriginalSection) button.dataset.eaOriginalSection = clean(button.getAttribute('data-section') || button.dataset.section || '');
     });
   }
 
-  function bindExistingNavButtons() {
-    stampSidebarNavSlots();
-    qsa('[data-section], .nav-btn').forEach((button) => {
-      if (button.dataset.eaBound === 'true') return;
-      button.dataset.eaBound = 'true';
-      button.addEventListener('click', (event) => {
-        const sectionId = clean(resolveSectionId(canonicalNavKey(button)) || canonicalNavKey(button));
-        if (!sectionId) return;
-        event.preventDefault();
-        event.stopImmediatePropagation();
-        showSection(sectionId, { scroll: false });
-      }, true);
-    });
+  function bindDelegatedSidebarRouting() {
+    const nav = findSidebarNav();
+    if (!nav || nav.dataset.eaDelegatedBound === 'true') return;
+    nav.dataset.eaDelegatedBound = 'true';
+    nav.addEventListener('click', (event) => {
+      const button = event.target.closest('.nav-btn');
+      if (!button || !nav.contains(button)) return;
+      const buttons = qsa('.nav-btn', nav).filter(Boolean);
+      const index = buttons.indexOf(button);
+      const order = desiredNavOrder();
+      const key = order[index] || clean(button.dataset.eaNavKey || 'overview');
+      const sectionId = clean(resolveSectionId(key) || key);
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      showSection(sectionId, { scroll: false });
+    }, true);
   }
 
   function enhanceSidebarNavVisuals() {
     injectStyleOnce('elevate-sidebar-upgrade', sidebarChromeCss());
     stampSidebarNavSlots();
     const meta = sidebarNavMeta();
-    qsa('.sidebar-nav .nav-btn').forEach((button) => {
-      const key = canonicalNavKey(button);
+    qsa('.sidebar-nav .nav-btn').forEach((button, index) => {
+      const key = desiredNavOrder()[index] || clean(button.dataset.eaNavKey || 'overview');
       const item = meta[key];
       if (!item) return;
       const currentActive = button.classList.contains('active');
@@ -265,8 +235,8 @@
     const buttons = qsa('.nav-btn, [data-section]', nav).filter((button, index, array) => array.indexOf(button) === index);
     const keyed = new Map();
     const leftovers = [];
-    buttons.forEach((button) => {
-      const key = canonicalNavKey(button);
+    buttons.forEach((button, index) => {
+      const key = order[index] || clean(button.dataset.eaNavKey || 'overview');
       if (order.includes(key) && !keyed.has(key)) keyed.set(key, button);
       else leftovers.push(button);
     });
@@ -288,7 +258,7 @@
     enhanceSidebarBrand();
     enhanceSessionCard();
     enhanceSidebarNavVisuals();
-    bindExistingNavButtons();
+    bindDelegatedSidebarRouting();
     bindSidebarIdentityRefresh();
     const sections = getDashboardSections();
     if (!sections.length) return;
@@ -297,7 +267,7 @@
     if (!shown) revealFallbackSections();
   }
 
-  NS.ui = { qs, qsa, clean, setText, setStatus, showSection, injectStyleOnce, findSectionElement, bindExistingNavButtons, reorderSidebarNav, enhanceSidebarBrand, enhanceSidebarNavVisuals, enhanceSessionCard };
+  NS.ui = { qs, qsa, clean, setText, setStatus, showSection, injectStyleOnce, findSectionElement, reorderSidebarNav, enhanceSidebarBrand, enhanceSidebarNavVisuals, enhanceSessionCard };
   window.showSection = showSection;
   NS.modules = NS.modules || {};
   NS.modules.ui = true;
