@@ -160,45 +160,7 @@
   }
 
   function ensureNavButtons() {
-    const nav = document.querySelector(".sidebar-nav");
-    if (!nav) return;
-
-    const current = Array.from(nav.querySelectorAll(".nav-btn"));
-    const labels = {
-      overview: "Overview",
-      profile: "Setup",
-      extension: "Tools",
-      tools: "Analytics",
-      compliance: "Compliance",
-      affiliate: "Partners",
-      billing: "Billing"
-    };
-
-    current.forEach((btn) => {
-      const id = btn.getAttribute("data-section");
-      if (labels[id]) btn.textContent = labels[id];
-    });
-
-    let listingsBtn = nav.querySelector('[data-section="listings"]');
-    if (!listingsBtn) {
-      listingsBtn = document.createElement("button");
-      listingsBtn.className = "nav-btn ea-nav-inserted";
-      listingsBtn.setAttribute("data-section", "listings");
-      listingsBtn.textContent = "Listings";
-      nav.insertBefore(listingsBtn, nav.querySelector('[data-section="tools"]'));
-    }
-
-    let reviewBtn = nav.querySelector('[data-section="review-center"]');
-    if (!reviewBtn) {
-      reviewBtn = document.createElement("button");
-      reviewBtn.className = "nav-btn ea-nav-inserted";
-      reviewBtn.setAttribute("data-section", "review-center");
-      reviewBtn.textContent = "Review Center";
-      nav.insertBefore(reviewBtn, nav.querySelector('[data-section="tools"]'));
-    }
-
-    bindSectionButton(listingsBtn, "listings");
-    bindSectionButton(reviewBtn, "review-center");
+    return;
   }
 
   function ensureSections() {
@@ -469,7 +431,6 @@
 
   function boot() {
     insertStyle();
-    ensureNavButtons();
     ensureSections();
     moveListingsSurface();
     renderReviewCenter();
