@@ -49,7 +49,8 @@
     "/dashboard-phase20-rc-hardening.js?v=20260411p20",
     "/dashboard-phase21-shell-repair.js?v=20260412p23",
     "/dashboard-phase23-bundle-c.js?v=20260412c1",
-    "/dashboard-bundle-d-ops.js?v=20260413d1"
+    "/dashboard-bundle-d-ops.js?v=20260413d1",
+    "/dashboard-nav-hotfix.js?v=20260512a1"
   ];
 
   let compatBootTriggered = false;
