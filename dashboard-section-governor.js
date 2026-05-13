@@ -77,7 +77,7 @@
 
   function sanitizeStaticSections(){ const extension=document.getElementById('extension'); if(extension && sectionIsClaimedBy('tools','execution_hub_native')){ Array.from(extension.children).forEach((child)=>child.classList.add('sg-hide')); } }
 
-  function bootExecutionHubOwnership(){ claimSection('tools','execution_hub_native'); NS.modules.tools=true; sanitizeStaticSections(); renderExecutionHubNative(); }
+  function bootExecutionHubOwnership(){ claimSection('tools','execution_hub_native'); NS.modules.tools=true; NS.modules.executionHubP3 = true; NS.modules.executionHubCleanup = true; NS.modules.executionHubHardReplace = true; sanitizeStaticSections(); renderExecutionHubNative(); }
 
   NS.sectionGovernor = { claimSection, sectionIsClaimedBy, applyNavLabels, renderExecutionHubNative };
   NS.modules = NS.modules || {};
