@@ -19,7 +19,7 @@
     return {
       reviewCenter: ["reviewCenter", "review-center", "review_center"],
       listings: ["listings", "listingSection", "listing-section"],
-      analytics: ["analytics", "analyticsSection", "analytics-section", "tools", "toolsSection", "tools-section"],
+      analytics: ["analytics", "analyticsSection", "analytics-section", "analyticsWorkspace"],
       overview: ["overview", "overviewSection", "overview-section"],
       setup: ["setup", "setupSection", "setup-section", "profile"],
       tools: ["extension", "extensionSection", "extension-section", "toolsPanel", "tools-panel", "tools", "toolsSection", "tools-section"],
