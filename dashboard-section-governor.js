@@ -4,18 +4,22 @@
 
   NS.modules = NS.modules || {};
   NS.sectionClaims = NS.sectionClaims || {};
-
-  function immediateClaimSection(sectionKey, ownerKey) {
-    NS.sectionClaims[sectionKey] = ownerKey;
-  }
-
-  // Critical: claim native ownership and mark legacy execution layers as handled
-  // immediately at file evaluation time so later-loaded legacy scripts short-circuit.
-  immediateClaimSection('tools', 'execution_hub_native');
+  NS.sectionClaims.tools = 'execution_hub_native';
   NS.modules.tools = true;
   NS.modules.executionHubP3 = true;
   NS.modules.executionHubCleanup = true;
   NS.modules.executionHubHardReplace = true;
+  NS.modules.executionHubFinalGovernor = true;
+
+  const MODULES = [
+    { key: 'vehicle_poster', label: 'Vehicle Poster', status: 'Live Now', title: 'Vehicle Poster', subtitle: 'Inventory-to-Marketplace execution for sales professionals. Clean handoff, controlled posting, and extension readiness from one command surface.' },
+    { key: 'reactivation_engine', label: 'Reactivation Engine', status: 'Planned', title: 'Reactivation Engine', subtitle: 'Revive old leads, trigger conversations, and push dormant pipeline back into motion.' },
+    { key: 'pipeline_engine', label: 'Pipeline Engine', status: 'Planned', title: 'Pipeline Engine', subtitle: 'Control deal movement, ownership, and lead stage pressure.' },
+    { key: 'follow_up_engine', label: 'Follow-Up Engine', status: 'Planned', title: 'Follow-Up Engine', subtitle: 'Automate persistence so warm opportunities do not die from manual drop-off.' },
+    { key: 'content_engine', label: 'Content Engine', status: 'Planned', title: 'Content Engine', subtitle: 'Generate platform-ready inventory and sales content faster.' },
+    { key: 'distribution_hub', label: 'Distribution Hub', status: 'Planned', title: 'Distribution Hub', subtitle: 'Expand beyond one posting surface and push distribution across more channels.' },
+    { key: 'market_intelligence', label: 'Market Intelligence', status: 'Analytics Only', title: 'Market Intelligence', subtitle: 'Analytics belongs inside Intelligence Centre, not the execution surface.' }
+  ];
 
   const NAV_LABELS = {
     overview: ['Command Centre', 'Overview'],
@@ -27,79 +31,208 @@
     billing: ['Plan & Access', 'Plan, access, usage']
   };
 
-  const EXECUTION_MODULES = [
-    { key: 'vehicle_poster', label: 'Vehicle Poster', status: 'Live Now', eyebrow: 'Live Execution Tool', title: 'Vehicle Poster', subtitle: 'Run posting, inventory handoff, extension actions, and publish readiness from one execution surface.' },
-    { key: 'reactivation_engine', label: 'Reactivation Engine', status: 'Planned', eyebrow: 'Preview Module', title: 'Reactivation Engine', subtitle: 'Revive old leads, trigger new conversations, and push dormant pipeline back into motion.', bullets: ['Target segmented lead lists with broadcast campaigns.', 'Trigger replies, callback requests, and appointment intent.', 'Use old opportunities as a new revenue source instead of letting them die.'] },
-    { key: 'pipeline_engine', label: 'Pipeline Engine', status: 'Planned', eyebrow: 'Preview Module', title: 'Pipeline Engine', subtitle: 'Control deal movement, ownership, and lead stage pressure from one operator workspace.', bullets: ['Track lead stage, ownership, notes, and urgency.', 'Give operators a cleaner sales workflow than scattered inboxes.', 'Turn follow-up pressure into visible pipeline control.'] },
-    { key: 'follow_up_engine', label: 'Follow-Up Engine', status: 'Planned', eyebrow: 'Preview Module', title: 'Follow-Up Engine', subtitle: 'Automate persistence so warm opportunities do not die from manual drop-off.', bullets: ['Timed reminders, follow-up sequences, and no-response nudges.', 'Appointment prompts and deal-stall recovery.', 'Fewer missed opportunities from inconsistent follow-up.'] },
-    { key: 'content_engine', label: 'Content Engine', status: 'Planned', eyebrow: 'Preview Module', title: 'Content Engine', subtitle: 'Generate platform-ready inventory and sales content faster with less manual writing.', bullets: ['Vehicle descriptions, captions, hooks, and content prompts.', 'Cleaner speed-to-posting for social and listing copy.', 'More content output without adding more friction.'] },
-    { key: 'distribution_hub', label: 'Distribution Hub', status: 'Planned', eyebrow: 'Preview Module', title: 'Distribution Hub', subtitle: 'Expand beyond one posting surface and push distribution across more channels.', bullets: ['Marketplace, groups, and future multi-platform distribution.', 'Reduce manual duplication across channels.', 'Create more reach from the same inventory movement.'] },
-    { key: 'market_intelligence', label: 'Market Intelligence', status: 'Planned', eyebrow: 'Preview Module', title: 'Market Intelligence', subtitle: 'See stale risk, pricing pressure, and listing performance before output drops.', bullets: ['Pricing pressure and stale-risk visibility.', 'Performance signals to guide title, price, and refresh decisions.', 'Operator insight that compounds into better posting decisions.'] }
-  ];
+  function clean(value) { return String(value ?? '').replace(/\s+/g, ' ').trim(); }
+  function escapeHtml(value) { return String(value ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
+  function num(value) { const parsed = Number(String(value ?? '').replace(/[^0-9.-]/g, '')); return Number.isFinite(parsed) ? parsed : 0; }
+  function isReal(value) { const v = clean(value); return Boolean(v) && !/^(loading\.?|unknown|undefined|null|unset|missing|review)$/i.test(v); }
 
-  const CSS = `
-    .sg-hide{display:none !important}
-    .eh-native-shell{display:grid;gap:16px;margin-bottom:18px}
-    .eh-native-card,.eh-native-band,.eh-native-panel{background:#121212;border:1px solid rgba(212,175,55,.14);border-radius:22px;box-shadow:0 10px 30px rgba(0,0,0,.28)}
-    .eh-native-band{display:grid;grid-template-columns:minmax(0,1fr) minmax(320px,.86fr);gap:16px;align-items:end;padding:18px 20px}
-    .eh-native-band h2{font-size:28px;line-height:1.05;margin-bottom:6px}
-    .eh-native-eyebrow{color:#d4af37;font-size:12px;font-weight:800;letter-spacing:1.3px;text-transform:uppercase;margin-bottom:10px}
-    .eh-native-copy{color:#a9a9a9;line-height:1.55}
-    .eh-native-select-wrap{display:grid;gap:8px}
-    .eh-native-select-row{display:flex;gap:12px;align-items:center;justify-content:flex-end;flex-wrap:wrap}
-    .eh-native-select{appearance:none;background:#1a1a1a;color:#f5f5f5;border:1px solid rgba(255,255,255,.08);border-radius:14px;padding:14px 16px;font-size:14px;outline:none;min-width:280px}
-    .eh-native-status{display:inline-flex;align-items:center;min-height:34px;padding:0 12px;border-radius:999px;border:1px solid rgba(212,175,55,.22);background:rgba(212,175,55,.1);color:#f3ddb0;font-size:12px;font-weight:700}
-    .eh-native-hero{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(320px,.92fr);gap:16px}
-    .eh-native-card{padding:20px}.eh-native-title{font-size:30px;line-height:1.06;margin-bottom:8px}.eh-native-actions{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-top:16px}.eh-native-note{font-size:13px;color:#a9a9a9}
-    .eh-native-kpis{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.eh-native-kpi{background:linear-gradient(180deg, rgba(255,255,255,.02), rgba(255,255,255,0));border:1px solid rgba(212,175,55,.12);border-radius:18px;padding:16px;min-height:116px}.eh-native-kpi-label{font-size:11px;text-transform:uppercase;letter-spacing:1.2px;color:#d4af37;font-weight:800;margin-bottom:10px}.eh-native-kpi-value{font-size:26px;font-weight:700;line-height:1.05}.eh-native-kpi-sub{margin-top:8px;font-size:13px;color:#a9a9a9;line-height:1.45}
-    .eh-native-panel{padding:18px}.eh-native-head{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;flex-wrap:wrap;margin-bottom:14px}.eh-native-head h3{font-size:26px;line-height:1.08;margin-bottom:6px}.eh-native-grid{display:grid;grid-template-columns:minmax(0,1.12fr) minmax(320px,.95fr);gap:16px}.eh-native-subgrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.eh-native-list{display:grid;gap:10px}.eh-native-row{display:flex;justify-content:space-between;gap:16px;align-items:flex-start;padding:12px 0;border-bottom:1px solid rgba(255,255,255,.05)}.eh-native-row:last-child{border-bottom:none;padding-bottom:0}.eh-native-label{font-size:14px;font-weight:700;color:#f4f4f4}.eh-native-value{font-size:14px;color:#f3ddb0;text-align:right;line-height:1.45;word-break:break-word}
-    .eh-native-readiness{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.eh-native-readiness-card,.eh-native-item,.eh-native-preview-metric{background:#171717;border:1px solid rgba(255,255,255,.05);border-radius:14px;padding:14px}.eh-native-readiness-value{font-size:18px;font-weight:700;line-height:1.1;margin-top:8px}.eh-native-readiness-sub,.eh-native-item-copy{margin-top:8px;color:#a9a9a9;font-size:12px;line-height:1.45}.eh-native-item-head{display:flex;justify-content:space-between;gap:12px;align-items:flex-start;margin-bottom:8px}.eh-native-item-title{font-size:14px;font-weight:700;line-height:1.35}
-    .eh-native-badge{display:inline-flex;align-items:center;min-height:28px;padding:0 10px;border-radius:999px;font-size:11px;font-weight:800;border:1px solid rgba(255,255,255,.08);background:#171717}.eh-native-badge.good{color:#9de8a8;border-color:rgba(157,232,168,.22)}.eh-native-badge.warn{color:#f3ddb0;border-color:rgba(212,175,55,.22)}.eh-native-badge.blocked{color:#ffb4b4;border-color:rgba(255,180,180,.22)}
-    .eh-native-preview{display:grid;grid-template-columns:minmax(0,1fr) minmax(280px,.78fr);gap:16px}.eh-native-preview-metric .value{font-size:24px;font-weight:700;line-height:1.05;margin-top:8px}.eh-native-empty{padding:20px;border-radius:16px;border:1px dashed rgba(212,175,55,.18);background:#111;color:#a9a9a9;text-align:center}
-    @media (max-width:1200px){.eh-native-band,.eh-native-hero,.eh-native-grid,.eh-native-preview{grid-template-columns:1fr}} @media (max-width:760px){.eh-native-kpis,.eh-native-subgrid,.eh-native-readiness{grid-template-columns:1fr}.eh-native-actions{display:grid}}
-  `;
+  function first(...values) {
+    for (const value of values) {
+      const v = clean(value);
+      if (isReal(v)) return v;
+    }
+    return '';
+  }
 
-  function ensureStyle(){ if(document.getElementById('dashboard-section-governor-style')) return; const s=document.createElement('style'); s.id='dashboard-section-governor-style'; s.textContent=CSS; document.head.appendChild(s); }
-  function clean(v){ return String(v||'').replace(/\s+/g,' ').trim(); }
-  function num(v){ const n=Number(String(v||'').replace(/[^\d.-]/g,'')); return Number.isFinite(n)?n:0; }
-  function escapeHtml(v){ return String(v||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
-  function money(v){ const n=Number(v||0); return Number.isFinite(n)?`$${Math.round(n).toLocaleString()}`:'$0'; }
-  function badge(v){ const n=clean(v).toLowerCase(); let c='warn'; if(/ready|active|connected|live|synced|healthy|yes/.test(n)) c='good'; if(/blocked|missing|disconnected|not ready|error|locked/.test(n)) c='blocked'; return `<span class="eh-native-badge ${c}">${escapeHtml(v||'Unknown')}</span>`; }
-  function getSummary(){ return window.dashboardSummary || {}; }
-  function getProfile(){ return getSummary().profile_snapshot || getSummary().account_snapshot || {}; }
-  function getListings(){ if(Array.isArray(window.dashboardListings)&&window.dashboardListings.length) return window.dashboardListings; if(Array.isArray(getSummary().recent_listings)&&getSummary().recent_listings.length) return getSummary().recent_listings; return []; }
-  function getSelectedModule(){ return clean(localStorage.getItem('ea_execution_module_v2')||'vehicle_poster')||'vehicle_poster'; }
-  function setSelectedModule(key){ try{ localStorage.setItem('ea_execution_module_v2',key);}catch{} }
-  function getModule(key){ return EXECUTION_MODULES.find((m)=>m.key===key)||EXECUTION_MODULES[0]; }
-  function getPlan(){ const s=getSummary(); const a=s.account_snapshot||{}; const p=s.plan_access||{}; const sub=(window.currentNormalizedSession&&window.currentNormalizedSession.subscription)||{}; const postingLimit=Math.max(num(p.posting_limit||sub.posting_limit||sub.daily_posting_limit||a.posting_limit||a.base_posting_limit),5); const usedToday=Math.max(num(sub.posts_today||a.posts_today||a.posts_used_today||s.posts_today),0); const remaining=Math.max(num(sub.posts_remaining||a.posts_remaining), Math.max(postingLimit-usedToday,0)); return { remaining }; }
-  function getExecutionState(){ const s=getSummary(); const p=getProfile(); const listings=getListings(); const reviewQueue=Math.max(num(s.review_queue||s.reviewQueue||s.review_queue_count), listings.filter((r)=>/review/i.test(clean(r.review_bucket||r.lifecycle_status||r.status))).length, 0); const staleListings=Math.max(num(s.stale_listings||s.staleListings||s.stale_count), listings.filter((r)=>/stale|weak/i.test(clean(r.status||r.lifecycle_status||r.review_bucket))).length,0); const plan=getPlan(); const dealerWebsite=clean(p.dealer_website||p.website||s.dealer_website||'Loading'); const inventoryUrl=clean(p.inventory_url||s.inventory_url||'Loading'); const listingLocation=clean(p.listing_location||p.city||s.listing_location||'Loading'); const complianceMode=clean(p.compliance_mode||p.province||s.compliance_mode||'Unset'); const accessState=clean(s.account_snapshot?.status||s.subscription_status||s.access_state||'Unknown'); const scannerType=clean(p.scanner_type||p.scannerType||s.scanner_type||'Loading'); const marketplaceBridge=/active|ready/i.test(accessState)?'Ready':'Review'; const dealerConnection=dealerWebsite && !/loading/i.test(dealerWebsite)?'Connected':'Review'; const setupCompletion=[dealerWebsite,inventoryUrl,listingLocation,complianceMode].filter((v)=>clean(v)&&!/loading|unset/i.test(v)).length; return { reviewQueue:String(reviewQueue), staleListings:String(staleListings), scannerType, dealerWebsite, inventoryUrl, listingLocation, complianceMode, accessState, remainingPosts:String(plan.remaining), marketplaceBridge, dealerConnection, setupCompletion:`${setupCompletion}/4`, reviewQueueNum:reviewQueue, remainingPostsNum:plan.remaining }; }
-  function getCommand(state){ if(/loading|unknown/i.test(state.accessState)) return { title:'Refresh extension state', copy:'Pull the latest access, connection, and runtime truth before attempting more execution.', actionLabel:'Refresh Execution State', actionKey:'refresh_extension_state' }; if(/blocked|inactive|disconnected|expired/i.test(clean(state.accessState).toLowerCase())) return { title:'Reconnect extension before posting', copy:'Extension access is not currently healthy. Reconnect the execution layer before opening Marketplace.', actionLabel:'Download Extension', actionKey:'download_extension' }; if(/loading|unset/i.test(clean(state.dealerWebsite).toLowerCase())||/loading|unset/i.test(clean(state.inventoryUrl).toLowerCase())||/loading|unset/i.test(clean(state.listingLocation).toLowerCase())) return { title:'Complete setup before opening Marketplace', copy:'Dealer and inventory truth are still incomplete. Finish the setup path so posting does not run blind.', actionLabel:'View Setup Steps', actionKey:'view_setup_steps' }; if(state.reviewQueueNum>=20) return { title:'Review queue pressure is building', copy:'The queue is already carrying live pressure. Clear or inspect the queue before adding more output.', actionLabel:'Open Inventory URL', actionKey:'open_inventory_url' }; if(state.remainingPostsNum<=0) return { title:'Posting capacity used for today', copy:'Daily execution capacity is fully used. Hold new output until posting capacity resets or plan access changes.', actionLabel:'Open Plan & Access', actionKey:'open_plan_access' }; return { title:'Post next vehicle', copy:'Execution conditions look strong enough to move the next unit. Open Marketplace and keep the posting engine moving.', actionLabel:'Open Marketplace', actionKey:'open_marketplace' }; }
-  function getKpis(state){ return [{label:'Posting Ready', value:/active|ready|connected/i.test(clean(state.accessState))?'Ready':'Review', sub:'Can the live poster be used right now?'},{label:'Access Active',value:state.accessState,sub:'Current extension and access state.'},{label:'Queue Ready',value:state.reviewQueue,sub:'Units already carrying review pressure.'},{label:'Remaining Today',value:state.remainingPosts,sub:'Posting capacity still available today.'}]; }
-  function getReadiness(state){ return [{label:'Compliance Ready',value:state.complianceMode,sub:'Current publish rule profile.'},{label:'Dealer Connected',value:state.dealerConnection,sub:'Dealer website and inventory routing.'},{label:'Marketplace Bridge',value:state.marketplaceBridge,sub:'Marketplace readiness state.'},{label:'Setup Completion',value:state.setupCompletion,sub:'Dealer and posting setup coverage.'}]; }
-  function getBlockers(state){ const items=[]; if(/blocked|inactive|disconnected|expired|unknown/i.test(clean(state.accessState).toLowerCase())) items.push({title:'Extension access needs review', copy:'Extension or access truth is not fully healthy. Refresh or reconnect before pushing new output.', badge:'Blocked', action:'Refresh Execution State', actionKey:'refresh_extension_state'}); if(/loading|unset/i.test(clean(state.dealerWebsite).toLowerCase())) items.push({title:'Dealer website not confirmed', copy:'Dealer website is still missing or unresolved inside the execution stack.', badge:'Review', action:'View Setup Steps', actionKey:'view_setup_steps'}); if(/loading|unset/i.test(clean(state.inventoryUrl).toLowerCase())) items.push({title:'Inventory URL not loaded', copy:'Inventory source routing should be confirmed before posting from the dashboard.', badge:'Review', action:'Open Inventory URL', actionKey:'open_inventory_url'}); if(/loading|unset/i.test(clean(state.listingLocation).toLowerCase())) items.push({title:'Listing location missing', copy:'Listing location should be confirmed to keep posting detail clean and compliant.', badge:'Review', action:'View Setup Steps', actionKey:'view_setup_steps'}); if(!items.length) items.push({title:'Execution stack looks clean', copy:'No major blockers are currently surfacing. The live Vehicle Poster can stay in motion.', badge:'Ready', action:'Open Marketplace', actionKey:'open_marketplace'}); return items.slice(0,4); }
-  function getRecentPosts(limit=4){ return getListings().slice().sort((a,b)=> new Date(b.posted_at||b.created_at||0)-new Date(a.posted_at||a.created_at||0)).slice(0,limit).map((row,i)=>({ title: clean(row.title || [row.year,row.make,row.model].filter(Boolean).join(' ') || `Listing ${i+1}`), subtitle: clean([row.stock_number||row.vin,row.location,row.status||row.lifecycle_status].filter(Boolean).join(' • ')) || 'Tracked listing', price: money(row.price||0) })); }
+  function getSummary() {
+    const summary = window.dashboardSummary?.data ? window.dashboardSummary.data : window.dashboardSummary;
+    return summary && typeof summary === 'object' ? summary : {};
+  }
 
-  function claimSection(sectionKey, ownerKey){ NS.sectionClaims[sectionKey]=ownerKey; }
-  function sectionIsClaimedBy(sectionKey, ownerKey){ return NS.sectionClaims[sectionKey]===ownerKey; }
+  function getProfile(summary) {
+    return { ...(summary.account_snapshot || {}), ...(summary.profile_snapshot || {}), ...(summary.profile || {}) };
+  }
 
-  function applyNavLabels(){ document.querySelectorAll('.sidebar-nav .nav-btn').forEach((btn)=>{ const key=clean(btn.dataset.eaNavKey||btn.dataset.section||btn.getAttribute('data-section')); const meta=NAV_LABELS[key]; if(!meta) return; const label=btn.querySelector('.ea-nav-label'); const detail=btn.querySelector('.ea-nav-detail'); if(label) label.textContent=meta[0]; if(detail) detail.textContent=meta[1]; if(!label){ btn.textContent=meta[0]; } btn.setAttribute('aria-label', meta[0]); }); }
+  function hostFromUrl(url, fallback) {
+    const value = clean(url || fallback);
+    if (!isReal(value)) return 'Inventory Source';
+    try { return new URL(value).hostname.replace(/^www\./, ''); } catch { return value; }
+  }
 
-  function triggerAction(action){ if(action==='download_extension'){ window.open('/downloads/elevate-automation-extension.zip','_blank','noopener,noreferrer'); return; } if(action==='open_marketplace'){ window.open('https://www.facebook.com/marketplace/create/vehicle','_blank','noopener,noreferrer'); return; } if(action==='open_inventory_url'){ const url=clean(getProfile().inventory_url||getSummary().inventory_url||''); if(url) window.open(url,'_blank','noopener,noreferrer'); return; } if(action==='refresh_extension_state'){ window.dispatchEvent(new Event('elevate:summary-ready')); window.dispatchEvent(new Event('elevate:tracking-refreshed')); renderExecutionHubNative(); return; } if(action==='view_setup_steps'){ if(typeof window.showSection==='function') window.showSection('profile',{scroll:false}); return; } if(action==='open_plan_access'){ if(typeof window.showSection==='function') window.showSection('billing',{scroll:false}); return; } if(action==='switch_vehicle_poster'){ setSelectedModule('vehicle_poster'); renderExecutionHubNative(); } }
+  function routeFromUrl(url) {
+    const value = clean(url);
+    if (!isReal(value)) return 'Inventory route not connected';
+    try { const parsed = new URL(value); return `${parsed.hostname}${parsed.pathname}`.replace(/\/$/, ''); }
+    catch { return value.length > 84 ? `${value.slice(0, 84)}...` : value; }
+  }
 
-  function bindNativeActions(root){ root.querySelectorAll('[data-eh-native-action]').forEach((btn)=>{ if(btn.dataset.boundEhNative==='true') return; btn.dataset.boundEhNative='true'; btn.addEventListener('click', ()=>triggerAction(btn.getAttribute('data-eh-native-action'))); }); const select=root.querySelector('#executionHubNativeSelect'); if(select && select.dataset.boundEhNativeSelect!=='true'){ select.dataset.boundEhNativeSelect='true'; select.addEventListener('change', ()=>{ setSelectedModule(select.value||'vehicle_poster'); renderExecutionHubNative(); }); } }
+  function getState() {
+    const s = getSummary();
+    const profile = getProfile(s);
+    const setup = s.setup_status || {};
+    const account = s.account_snapshot || {};
+    const plan = s.plan_access || {};
+    const command = s.command_center || {};
+    const kpis = command.kpis || {};
+    const queues = command.work_queues || {};
 
-  function renderExecutionHubNative(){ const section=document.getElementById('extension'); if(!section || !sectionIsClaimedBy('tools','execution_hub_native')) return; ensureStyle(); applyNavLabels(); const header=document.querySelector('.main-header h1'); if(header && /tools|operator console|execution hub/i.test(header.textContent)) header.textContent='Execution Hub'; const welcome=document.getElementById('welcomeText'); if(welcome && /loading|tools|operator console|execution hub/i.test(welcome.textContent)) welcome.textContent='Live execution surface for Vehicle Poster, posting readiness, and future platform modules.'; const state=getExecutionState(); const module=getModule(getSelectedModule()); const command=getCommand(state); const kpis=getKpis(state); const readiness=getReadiness(state); const blockers=getBlockers(state); const recentPosts=getRecentPosts(); section.innerHTML=`<div id="executionHubNativeShell" class="eh-native-shell"><div class="eh-native-band"><div><div class="eh-native-eyebrow">Execution Module</div><h2>Execution Hub</h2><div class="eh-native-copy">Select the execution layer you want to view. Vehicle Poster remains the live flagship tool.</div></div><div class="eh-native-select-wrap"><label for="executionHubNativeSelect" class="eh-native-eyebrow" style="margin-bottom:0;">Execution Module</label><div class="eh-native-select-row"><select id="executionHubNativeSelect" class="eh-native-select">${EXECUTION_MODULES.map((item)=>`<option value="${escapeHtml(item.key)}" ${item.key===module.key?'selected':''}>${escapeHtml(item.label)}</option>`).join('')}</select><div class="eh-native-status">${escapeHtml(module.status)}</div></div></div></div><div class="eh-native-hero"><div class="eh-native-card"><div class="eh-native-eyebrow">Execution Command</div><div class="eh-native-title">${escapeHtml(command.title)}</div><div class="eh-native-copy">${escapeHtml(command.copy)}</div><div class="eh-native-actions"><button class="btn-primary" type="button" data-eh-native-action="${escapeHtml(command.actionKey)}">${escapeHtml(command.actionLabel)}</button><button class="action-btn" type="button" data-eh-native-action="view_setup_steps">View Setup Steps</button><div class="eh-native-note">This section is now claimed before legacy scripts load, so future upgrades do not fight older renderers.</div></div></div><div class="eh-native-card"><div class="eh-native-eyebrow">Execution Status</div><div class="eh-native-kpis">${kpis.map((item)=>`<div class="eh-native-kpi"><div class="eh-native-kpi-label">${escapeHtml(item.label)}</div><div class="eh-native-kpi-value">${escapeHtml(item.value)}</div><div class="eh-native-kpi-sub">${escapeHtml(item.sub)}</div></div>`).join('')}</div></div></div>${module.key==='vehicle_poster' ? `<div class="eh-native-panel"><div class="eh-native-head"><div><div class="eh-native-eyebrow">${escapeHtml(module.eyebrow)}</div><h3>${escapeHtml(module.title)}</h3><div class="eh-native-copy">${escapeHtml(module.subtitle)}</div></div><div class="eh-native-status">${escapeHtml(module.status)}</div></div><div class="eh-native-grid"><div class="eh-native-panel"><div class="eh-native-eyebrow">Posting State</div><div class="eh-native-list"><div class="eh-native-row"><div class="eh-native-label">Review Queue</div><div class="eh-native-value">${escapeHtml(state.reviewQueue)}</div></div><div class="eh-native-row"><div class="eh-native-label">Stale Listings</div><div class="eh-native-value">${escapeHtml(state.staleListings)}</div></div><div class="eh-native-row"><div class="eh-native-label">Scanner Type</div><div class="eh-native-value">${escapeHtml(state.scannerType)}</div></div><div class="eh-native-row"><div class="eh-native-label">Dealer Website</div><div class="eh-native-value">${escapeHtml(state.dealerWebsite)}</div></div><div class="eh-native-row"><div class="eh-native-label">Inventory URL</div><div class="eh-native-value">${escapeHtml(state.inventoryUrl)}</div></div><div class="eh-native-row"><div class="eh-native-label">Listing Location</div><div class="eh-native-value">${escapeHtml(state.listingLocation)}</div></div><div class="eh-native-row"><div class="eh-native-label">Compliance Mode</div><div class="eh-native-value">${escapeHtml(state.complianceMode)}</div></div></div></div><div class="eh-native-panel"><div class="eh-native-eyebrow">Primary Actions</div><div class="eh-native-subgrid"><button class="action-btn" type="button" data-eh-native-action="download_extension">Download Extension</button><button class="action-btn" type="button" data-eh-native-action="open_marketplace">Open Marketplace</button><button class="action-btn" type="button" data-eh-native-action="open_inventory_url">Open Inventory URL</button><button class="action-btn" type="button" data-eh-native-action="refresh_extension_state">Refresh Execution State</button><button class="action-btn" type="button" data-eh-native-action="view_setup_steps">View Setup Steps</button><button class="action-btn" type="button" data-eh-native-action="open_plan_access">Plan & Access</button></div></div></div><div class="eh-native-panel" style="margin-top:16px;"><div class="eh-native-eyebrow">Execution Readiness</div><div class="eh-native-readiness">${readiness.map((item)=>`<div class="eh-native-readiness-card"><div class="eh-native-eyebrow">${escapeHtml(item.label)}</div><div class="eh-native-readiness-value">${escapeHtml(item.value)}</div><div class="eh-native-readiness-sub">${escapeHtml(item.sub)}</div></div>`).join('')}</div></div><div class="eh-native-grid" style="margin-top:16px;"><div class="eh-native-panel"><div class="eh-native-eyebrow">Active Blockers</div><div class="eh-native-list">${blockers.map((item)=>`<div class="eh-native-item"><div class="eh-native-item-head"><div class="eh-native-item-title">${escapeHtml(item.title)}</div>${badge(item.badge)}</div><div class="eh-native-item-copy">${escapeHtml(item.copy)}</div><div style="margin-top:12px;"><button class="action-btn" type="button" data-eh-native-action="${escapeHtml(item.actionKey)}">${escapeHtml(item.action)}</button></div></div>`).join('')}</div></div><div class="eh-native-panel"><div class="eh-native-eyebrow">Recent Post Results</div>${recentPosts.length ? `<div class="eh-native-list">${recentPosts.map((item)=>`<div class="eh-native-item"><div class="eh-native-item-head"><div class="eh-native-item-title">${escapeHtml(item.title)}</div><div class="eh-native-badge warn">${escapeHtml(item.price)}</div></div><div class="eh-native-item-copy">${escapeHtml(item.subtitle)}</div></div>`).join('')}</div>` : `<div class="eh-native-empty">No recent post results are flowing in yet.</div>`}</div></div></div>` : `<div class="eh-native-panel"><div class="eh-native-head"><div><div class="eh-native-eyebrow">${escapeHtml(module.eyebrow)}</div><h3>${escapeHtml(module.title)}</h3><div class="eh-native-copy">${escapeHtml(module.subtitle)}</div></div><div class="eh-native-status">${escapeHtml(module.status)}</div></div><div class="eh-native-preview"><div class="eh-native-panel"><div class="eh-native-eyebrow">Module Preview</div><div class="eh-native-list">${(module.bullets||[]).map((item)=>`<div class="eh-native-item"><div class="eh-native-item-copy">${escapeHtml(item)}</div></div>`).join('')}</div></div><div class="eh-native-panel"><div class="eh-native-preview-metric"><div class="eh-native-eyebrow">Commercial Value</div><div class="value">Execution Leverage</div><div class="eh-native-item-copy">This module is positioned to expand client value beyond the live Vehicle Poster workflow.</div></div><div class="eh-native-actions"><button class="action-btn" type="button" data-eh-native-action="switch_vehicle_poster">Return to Vehicle Poster</button><button class="action-btn" type="button" data-eh-native-action="open_plan_access">Open Plan & Access</button></div></div></div></div>`}</div>`; bindNativeActions(section); }
+    const dealerWebsite = first(profile.dealer_website, profile.dealerWebsite, profile.website, s.dealer_website, s.dealerWebsite, document.getElementById('extensionDealerWebsite')?.textContent);
+    const inventoryUrl = first(profile.inventory_url, profile.inventoryUrl, s.inventory_url, s.inventoryUrl, setup.inventory_url, document.getElementById('extensionInventoryUrl')?.textContent);
+    const scannerType = first(profile.scanner_type, profile.scannerType, s.scanner_type, s.scannerType, setup.scanner_type, setup.scanner_type_present ? 'vehicle-cards' : '', document.getElementById('extensionScannerType')?.textContent) || 'Review';
+    const listingLocation = first(profile.listing_location, profile.listingLocation, profile.city && profile.province ? `${profile.city}, ${profile.province}` : '', s.listing_location, s.listingLocation, document.getElementById('extensionListingLocation')?.textContent) || 'Location missing';
+    const complianceMode = first(profile.compliance_mode, profile.complianceMode, profile.province, s.compliance_mode, s.complianceMode, setup.compliance_mode, setup.compliance_mode_present ? 'Configured' : '', document.getElementById('extensionComplianceMode')?.textContent) || 'Unset';
+    const accessState = first(account.access_granted || s.can_post ? 'Active' : '', account.status, s.access_state, profile.access_state, document.getElementById('extensionAccessState')?.textContent) || 'Inactive';
 
-  function sanitizeStaticSections(){ const extension=document.getElementById('extension'); if(extension && sectionIsClaimedBy('tools','execution_hub_native')){ Array.from(extension.children).forEach((child)=>child.classList.add('sg-hide')); } }
+    const remaining = num(s.posts_remaining ?? kpis.remaining_today ?? plan.posts_remaining ?? document.getElementById('extensionRemainingPosts')?.textContent ?? 0);
+    const reviewQueue = num(s.review_queue_count ?? kpis.in_review ?? queues.review_queue ?? document.getElementById('extensionReviewQueue')?.textContent ?? 0);
+    const staleListings = num(s.review_delete_count ?? queues.stale_review ?? s.stale_listings_count ?? document.getElementById('staleQueueCount')?.textContent ?? 0);
 
-  function bootExecutionHubOwnership(){ claimSection('tools','execution_hub_native'); sanitizeStaticSections(); renderExecutionHubNative(); }
+    const accessReady = /active|ready|connected|live/i.test(accessState);
+    const setupReady = [dealerWebsite, inventoryUrl, listingLocation, complianceMode].filter(isReal).length;
+    const marketplaceBridge = first(s.marketplace_bridge, document.getElementById('extensionMarketplaceBridge')?.textContent, accessReady ? 'Ready' : 'Review');
 
-  NS.sectionGovernor = { claimSection, sectionIsClaimedBy, applyNavLabels, renderExecutionHubNative };
+    let commandTitle = 'Sync execution state';
+    let commandCopy = 'Pull the latest access, dealer, inventory, and compliance truth before posting.';
+    let commandAction = 'refresh_extension_state';
+    let commandLabel = 'Sync State';
+
+    if (!accessReady) {
+      commandTitle = 'Install or reconnect the extension';
+      commandCopy = 'The live poster needs a healthy extension connection before Marketplace execution.';
+      commandAction = 'install_extension';
+      commandLabel = 'Install Extension';
+    } else if (setupReady < 4) {
+      commandTitle = 'Complete activation before posting';
+      commandCopy = 'Dealer source, inventory route, listing location, and compliance region must be clean before execution.';
+      commandAction = 'view_setup_steps';
+      commandLabel = 'Activation';
+    } else if (remaining <= 0) {
+      commandTitle = 'Posting capacity is used today';
+      commandCopy = 'Daily posting capacity is consumed. Review Plan & Access before pushing more output.';
+      commandAction = 'open_plan_access';
+      commandLabel = 'Plan & Access';
+    } else {
+      commandTitle = 'Ready to execute';
+      commandCopy = 'Source, access, and compliance state are in position. Open Marketplace and move the next vehicle.';
+      commandAction = 'open_marketplace';
+      commandLabel = 'Open Marketplace';
+    }
+
+    return {
+      dealerWebsite,
+      inventoryUrl,
+      scannerType,
+      listingLocation,
+      complianceMode,
+      accessState,
+      remaining: String(remaining),
+      reviewQueue: String(reviewQueue),
+      staleListings: String(staleListings),
+      accessReady,
+      setupReady,
+      marketplaceBridge,
+      sourceHost: hostFromUrl(inventoryUrl, dealerWebsite),
+      sourceRoute: routeFromUrl(inventoryUrl),
+      commandTitle,
+      commandCopy,
+      commandAction,
+      commandLabel
+    };
+  }
+
+  function ensureStyle() {
+    if (document.getElementById('dashboard-section-governor-style')) return;
+    const style = document.createElement('style');
+    style.id = 'dashboard-section-governor-style';
+    style.textContent = `
+      #extension > :not(#executionHubNativeShell){display:none!important;}
+      #executionHubNativeShell{display:grid;gap:16px;margin-bottom:22px;}
+      .ehn-card,.ehn-panel{background:#121212;border:1px solid rgba(212,175,55,.14);border-radius:22px;box-shadow:0 10px 30px rgba(0,0,0,.28);padding:18px}.ehn-grid{display:grid;grid-template-columns:minmax(0,1.18fr) minmax(340px,.82fr);gap:16px}.ehn-two{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.ehn-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.ehn-title{font-size:30px;line-height:1.05;margin:0 0 8px}.ehn-copy{color:#a9a9a9;line-height:1.55}.ehn-eyebrow{color:#d4af37;font-size:12px;font-weight:900;letter-spacing:1.3px;text-transform:uppercase;margin-bottom:10px}.ehn-head{display:flex;justify-content:space-between;gap:16px;align-items:flex-start;flex-wrap:wrap}.ehn-status,.ehn-pill{display:inline-flex;align-items:center;min-height:32px;padding:0 12px;border-radius:999px;border:1px solid rgba(212,175,55,.22);background:rgba(212,175,55,.1);color:#f3ddb0;font-size:12px;font-weight:800}.ehn-kpi{background:#171717;border:1px solid rgba(255,255,255,.05);border-radius:16px;padding:15px}.ehn-kpi-value{font-size:22px;font-weight:800;line-height:1.08;word-break:break-word}.ehn-kpi-sub{font-size:12px;color:#a9a9a9;line-height:1.45;margin-top:7px}.ehn-source{background:linear-gradient(180deg,rgba(255,255,255,.025),rgba(255,255,255,0));border:1px solid rgba(212,175,55,.12);border-radius:18px;padding:16px;margin-bottom:14px}.ehn-source-title{font-size:24px;font-weight:900;margin-bottom:8px}.ehn-route{font-size:13px;color:#f3ddb0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.ehn-pills{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}.ehn-command-actions{display:flex;gap:12px;flex-wrap:wrap;margin-top:16px}.ehn-command-actions button,.ehn-actions button{min-height:50px}.ehn-details{margin-top:16px;border-top:1px solid rgba(255,255,255,.06);padding-top:14px}.ehn-details summary{cursor:pointer;color:#f3ddb0;font-size:13px;font-weight:900;letter-spacing:.5px;text-transform:uppercase}.ehn-row{display:flex;justify-content:space-between;gap:16px;padding:12px 0;border-bottom:1px solid rgba(255,255,255,.05)}.ehn-row:last-child{border-bottom:none}.ehn-label{font-weight:800}.ehn-value{text-align:right;color:#f3ddb0;word-break:break-word;line-height:1.45}.ehn-modal-backdrop{position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.78);display:flex;align-items:center;justify-content:center;padding:22px}.ehn-modal{width:min(720px,96vw);max-height:90vh;overflow:auto;background:#101010;border:1px solid rgba(212,175,55,.22);border-radius:24px;box-shadow:0 24px 80px rgba(0,0,0,.6);padding:22px}.ehn-step{background:#171717;border:1px solid rgba(255,255,255,.06);border-radius:16px;padding:14px;margin-top:10px;line-height:1.45}@media(max-width:1100px){.ehn-grid{grid-template-columns:1fr}}@media(max-width:720px){.ehn-two,.ehn-actions{grid-template-columns:1fr}.ehn-command-actions{display:grid}}
+    `;
+    document.head.appendChild(style);
+  }
+
+  function applyNavLabels() {
+    document.querySelectorAll('.sidebar-nav .nav-btn').forEach((btn) => {
+      const key = clean(btn.dataset.eaNavKey || btn.dataset.section || btn.getAttribute('data-section'));
+      const meta = NAV_LABELS[key];
+      if (!meta) return;
+      const label = btn.querySelector('.ea-nav-label');
+      const detail = btn.querySelector('.ea-nav-detail');
+      if (label) label.textContent = meta[0];
+      if (detail) detail.textContent = meta[1];
+      btn.setAttribute('aria-label', meta[0]);
+    });
+  }
+
+  function renderExecutionHubNative() {
+    const section = document.getElementById('extension');
+    if (!section) return;
+    ensureStyle();
+    applyNavLabels();
+
+    const state = getState();
+    let shell = document.getElementById('executionHubNativeShell');
+    if (!shell) {
+      shell = document.createElement('div');
+      shell.id = 'executionHubNativeShell';
+      section.prepend(shell);
+    }
+
+    shell.innerHTML = `
+      <div class="ehn-card"><div class="ehn-head"><div><div class="ehn-eyebrow">Execution Module</div><h2 class="ehn-title">Execution Hub</h2><div class="ehn-copy">Vehicle Poster is the live execution surface. Analytics stay inside Intelligence Centre.</div></div><div class="ehn-status">Vehicle Poster · Live Now</div></div></div>
+      <div class="ehn-grid"><div class="ehn-card"><div class="ehn-eyebrow">Execution Command</div><h2 class="ehn-title">${escapeHtml(state.commandTitle)}</h2><div class="ehn-copy">${escapeHtml(state.commandCopy)}</div><div class="ehn-command-actions"><button class="btn-primary" type="button" data-ehn-action="${escapeHtml(state.commandAction)}">${escapeHtml(state.commandLabel)}</button><button class="action-btn" type="button" data-ehn-action="install_extension">Install Extension</button></div></div><div class="ehn-card"><div class="ehn-eyebrow">Execution Status</div><div class="ehn-two"><div class="ehn-kpi"><div class="ehn-eyebrow">Poster Status</div><div class="ehn-kpi-value">${state.accessReady ? 'Ready' : 'Review'}</div><div class="ehn-kpi-sub">Can the poster be used right now?</div></div><div class="ehn-kpi"><div class="ehn-eyebrow">Access State</div><div class="ehn-kpi-value">${escapeHtml(state.accessState)}</div><div class="ehn-kpi-sub">Current account/extension truth.</div></div><div class="ehn-kpi"><div class="ehn-eyebrow">Compliance Region</div><div class="ehn-kpi-value">${escapeHtml(state.complianceMode)}</div><div class="ehn-kpi-sub">Active publish rule profile.</div></div><div class="ehn-kpi"><div class="ehn-eyebrow">Remaining Today</div><div class="ehn-kpi-value">${escapeHtml(state.remaining)}</div><div class="ehn-kpi-sub">Posting capacity available today.</div></div></div></div></div>
+      <div class="ehn-grid"><div class="ehn-panel"><div class="ehn-eyebrow">Inventory Source</div><div class="ehn-source"><div class="ehn-source-title">${escapeHtml(state.sourceHost)}</div><div class="ehn-route" title="${escapeHtml(state.inventoryUrl)}">${escapeHtml(state.sourceRoute)}</div><div class="ehn-pills"><span class="ehn-pill">${isReal(state.dealerWebsite) ? 'Connected' : 'Review'}</span><span class="ehn-pill">${escapeHtml(state.listingLocation)}</span><span class="ehn-pill">${escapeHtml(state.complianceMode)}</span></div></div><div class="ehn-command-actions" style="margin-top:0;"><button class="action-btn" type="button" data-ehn-action="open_inventory_url">Open Source</button><button class="action-btn" type="button" data-ehn-action="copy_inventory_url">Copy URL</button><button class="action-btn" type="button" data-ehn-action="view_setup_steps">Change Source</button></div><details class="ehn-details"><summary>Advanced Diagnostics</summary><div style="margin-top:12px;"><div class="ehn-row"><div class="ehn-label">Inventory Detection</div><div class="ehn-value">${escapeHtml(state.scannerType)}</div></div><div class="ehn-row"><div class="ehn-label">Dealer Source</div><div class="ehn-value">${escapeHtml(state.dealerWebsite || 'Review')}</div></div><div class="ehn-row"><div class="ehn-label">Raw Inventory Route</div><div class="ehn-value">${escapeHtml(state.inventoryUrl || 'Review')}</div></div><div class="ehn-row"><div class="ehn-label">Marketplace Bridge</div><div class="ehn-value">${escapeHtml(state.marketplaceBridge)}</div></div></div></details></div><div class="ehn-panel"><div class="ehn-eyebrow">Primary Actions</div><div class="ehn-actions"><button class="action-btn" type="button" data-ehn-action="install_extension">Install Extension</button><button class="action-btn" type="button" data-ehn-action="open_marketplace">Open Marketplace</button><button class="action-btn" type="button" data-ehn-action="open_inventory_url">Open Source</button><button class="action-btn" type="button" data-ehn-action="refresh_extension_state">Sync State</button><button class="action-btn" type="button" data-ehn-action="view_setup_steps">Activation</button><button class="action-btn" type="button" data-ehn-action="open_plan_access">Plan & Access</button></div><div class="ehn-copy" style="margin-top:14px;font-size:13px;">Install Extension opens guided instructions: download, unzip, Chrome Extensions, Developer Mode, Load Unpacked, then Sync State.</div></div></div>
+    `;
+    bindActions(shell);
+  }
+
+  function getDownloadUrl() { return `/downloads/elevate-automation-extension.zip?v=${Date.now()}`; }
+
+  function showInstallModal() {
+    document.getElementById('ehnInstallModal')?.remove();
+    const modal = document.createElement('div');
+    modal.id = 'ehnInstallModal';
+    modal.className = 'ehn-modal-backdrop';
+    modal.innerHTML = `<div class="ehn-modal"><div class="ehn-head"><div><div class="ehn-eyebrow">Vehicle Poster Extension</div><h2 class="ehn-title">Install the latest extension build</h2><div class="ehn-copy">Keep this overlay open while installing.</div></div><button class="action-btn" type="button" data-ehn-action="close_modal">Close</button></div><div class="ehn-step"><strong>1. Download the latest build.</strong><br>Use the button below.</div><div class="ehn-step"><strong>2. Unzip the file.</strong><br>Move the extracted folder somewhere permanent.</div><div class="ehn-step"><strong>3. Open Chrome Extensions.</strong><br>Open the Chrome extensions page.</div><div class="ehn-step"><strong>4. Turn on Developer Mode.</strong><br>Use the top-right toggle.</div><div class="ehn-step"><strong>5. Load Unpacked.</strong><br>Select the folder containing manifest.json.</div><div class="ehn-step"><strong>6. Return here and Sync State.</strong></div><div class="ehn-command-actions"><button class="btn-primary" type="button" data-ehn-action="download_extension">Download Latest Build</button><button class="action-btn" type="button" data-ehn-action="refresh_extension_state">Sync State</button></div></div>`;
+    document.body.appendChild(modal);
+    bindActions(modal);
+  }
+
+  function runAction(action) {
+    const state = getState();
+    if (action === 'install_extension') return showInstallModal();
+    if (action === 'download_extension') return window.open(getDownloadUrl(), '_blank', 'noopener,noreferrer');
+    if (action === 'close_modal') return document.getElementById('ehnInstallModal')?.remove();
+    if (action === 'open_marketplace') return document.getElementById('openMarketplaceBtn')?.click() || window.open('https://www.facebook.com/marketplace/create/vehicle','_blank','noopener,noreferrer');
+    if (action === 'open_inventory_url') return document.getElementById('openInventoryBtn')?.click() || (state.inventoryUrl ? window.open(state.inventoryUrl,'_blank','noopener,noreferrer') : null);
+    if (action === 'copy_inventory_url') return navigator.clipboard?.writeText?.(state.inventoryUrl || '');
+    if (action === 'refresh_extension_state') return (document.getElementById('refreshExtensionStateBtn') || document.getElementById('refreshAccessBtn'))?.click() || renderExecutionHubNative();
+    if (action === 'view_setup_steps') return window.showSection?.('profile');
+    if (action === 'open_plan_access') return window.showSection?.('billing');
+  }
+
+  function bindActions(root) {
+    root.querySelectorAll('[data-ehn-action]').forEach((btn) => {
+      if (btn.dataset.ehnBound === 'true') return;
+      btn.dataset.ehnBound = 'true';
+      btn.addEventListener('click', () => runAction(btn.getAttribute('data-ehn-action')));
+    });
+  }
+
+  function boot() {
+    ensureStyle();
+    applyNavLabels();
+    renderExecutionHubNative();
+  }
+
+  window.addEventListener('elevate:summary-ready', () => setTimeout(renderExecutionHubNative, 80));
+  window.addEventListener('elevate:tracking-refreshed', () => setTimeout(renderExecutionHubNative, 80));
+  window.addEventListener('elevate:workflow-updated', () => setTimeout(renderExecutionHubNative, 80));
+
+  NS.sectionGovernor = { applyNavLabels, renderExecutionHubNative };
   NS.modules.sectionGovernor = true;
 
-  const boot = () => { ensureStyle(); applyNavLabels(); bootExecutionHubOwnership(); };
-  window.addEventListener('elevate:summary-ready', () => { applyNavLabels(); renderExecutionHubNative(); });
-  window.addEventListener('elevate:tracking-refreshed', () => { applyNavLabels(); renderExecutionHubNative(); });
-  window.addEventListener('elevate:workflow-updated', () => { applyNavLabels(); renderExecutionHubNative(); });
-  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded', boot, { once:true }); else boot();
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot, { once: true });
+  else boot();
 })();
