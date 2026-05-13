@@ -33,14 +33,31 @@
     document.head.appendChild(style);
   }
 
+  function ensureAnalyticsSection(){
+    const mainInner = document.querySelector('.main-inner');
+    if (!mainInner) return null;
+
+    let analyticsSection = document.getElementById('analytics');
+    if (!analyticsSection) {
+      analyticsSection = document.createElement('section');
+      analyticsSection.id = 'analytics';
+      analyticsSection.className = 'dashboard-section';
+      mainInner.appendChild(analyticsSection);
+    }
+
+    return analyticsSection;
+  }
+
   function mountRoot(){
-    const tools = document.getElementById('tools');
-    if(!tools) return null;
+    const analyticsSection = ensureAnalyticsSection();
+    if(!analyticsSection) return null;
     let root = document.getElementById('eaRootG');
     if(!root){
       root = document.createElement('div');
       root.id = 'eaRootG';
-      tools.appendChild(root);
+      analyticsSection.appendChild(root);
+    } else if (!analyticsSection.contains(root)) {
+      analyticsSection.appendChild(root);
     }
     return root;
   }
@@ -165,5 +182,5 @@
   NS.analyticsWorkspace = { render };
 
   window.addEventListener('load', render);
-  window.addEventListener('elevate:tracking-refreshed', bindSegment);
+  window.addEventListener('elevate:tracking-refreshed', render);
 })();
