@@ -15,6 +15,7 @@
     "/dashboard-listings.js?v=20260406p12a",
     "/dashboard-profile.js?v=20260406p12a",
     "/dashboard-tools.js?v=20260406p12a",
+    "/dashboard-execution-hub-p3.js?v=20260513p35",
     "/dashboard-analytics.js?v=20260513d2",
     "/dashboard-affiliate.js?v=20260406p12a",
     "/dashboard-billing.js?v=20260406p12a",
