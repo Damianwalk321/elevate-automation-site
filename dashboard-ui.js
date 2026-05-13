@@ -65,11 +65,41 @@
     return headingMatch || null;
   }
 
+  function desiredNavOrder() {
+    return ['overview', 'tools', 'analytics', 'compliance', 'partners', 'setup', 'billing'];
+  }
+
+  function canonicalNavKey(button) {
+    const slot = Number(button.dataset.eaNavSlot);
+    const order = desiredNavOrder();
+    if (Number.isInteger(slot) && order[slot]) return order[slot];
+
+    const raw = clean(button.dataset.eaOriginalSection || button.getAttribute('data-section') || button.dataset.section || '');
+    const resolved = clean(resolveSectionId(raw));
+    if (resolved === 'overview') return 'overview';
+    if (resolved === 'extension' || resolved === 'tools') return 'tools';
+    if (resolved === 'analytics') return 'analytics';
+    if (resolved === 'compliance') return 'compliance';
+    if (resolved === 'affiliate' || resolved === 'partners') return 'partners';
+    if (resolved === 'profile' || resolved === 'setup') return 'setup';
+    if (resolved === 'billing') return 'billing';
+
+    const text = lower(button.textContent || '');
+    if (text.includes('command centre') || text === 'overview') return 'overview';
+    if (text.includes('tools')) return 'tools';
+    if (text.includes('analytics')) return 'analytics';
+    if (text.includes('compliance')) return 'compliance';
+    if (text.includes('partners')) return 'partners';
+    if (text.includes('setup')) return 'setup';
+    if (text.includes('billing')) return 'billing';
+
+    return raw || resolved || 'overview';
+  }
+
   function markActiveNav(sectionId, sectionEl = null) {
     const resolved = clean(sectionEl?.id || resolveSectionId(sectionId));
     qsa("[data-section], .nav-btn").forEach((button) => {
-      const raw = button.getAttribute("data-section") || button.dataset.section || button.dataset.eaNavKey || "";
-      const buttonResolved = clean(resolveSectionId(raw));
+      const buttonResolved = clean(resolveSectionId(canonicalNavKey(button)) || canonicalNavKey(button));
       button.classList.toggle("active", Boolean(resolved) && buttonResolved === resolved);
     });
   }
@@ -121,10 +151,6 @@
 
   function findSidebarNav() {
     return qs(".sidebar-nav") || qs("[data-sidebar-nav]") || null;
-  }
-
-  function desiredNavOrder() {
-    return ['overview', 'tools', 'analytics', 'compliance', 'partners', 'setup', 'billing'];
   }
 
   function sidebarNavMeta() {
@@ -179,7 +205,7 @@
       .ea-brand-title{font-size:20px;font-weight:800;line-height:1.06;letter-spacing:-.02em;color:var(--text)}
       .ea-brand-subtitle{margin-top:10px;color:var(--muted);font-size:13px;line-height:1.55}
       .sidebar-card.ea-session-card{border-radius:18px;padding:16px;background:linear-gradient(180deg, rgba(255,255,255,.02), rgba(255,255,255,0));border:1px solid rgba(212,175,55,.16);position:relative}
-      .ea-session-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:10px}
+      .ea-session-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:10px}
       .ea-session-label-wrap{display:inline-flex;align-items:center;gap:7px;min-width:0}
       .ea-session-label{font-size:12px;color:var(--gold);text-transform:uppercase;letter-spacing:1.4px;font-weight:800}
       .ea-session-crown{display:inline-flex;align-items:center;justify-content:center;color:var(--gold-soft);opacity:.95}
@@ -306,15 +332,9 @@
     qsa('.nav-btn, [data-section]', nav)
       .filter((button, index, array) => array.indexOf(button) === index)
       .forEach((button, index) => {
-        if (!button.dataset.eaNavSlot) {
-          button.dataset.eaNavSlot = String(index);
-        }
-        if (!button.dataset.eaOriginalSection) {
-          button.dataset.eaOriginalSection = clean(button.getAttribute('data-section') || button.dataset.section || '');
-        }
-        if (!button.dataset.eaNavKey && slots[index]) {
-          button.dataset.eaNavKey = slots[index];
-        }
+        if (!button.dataset.eaNavSlot) button.dataset.eaNavSlot = String(index);
+        if (!button.dataset.eaOriginalSection) button.dataset.eaOriginalSection = clean(button.getAttribute('data-section') || button.dataset.section || '');
+        button.dataset.eaNavKey = slots[index] || canonicalNavKey(button);
       });
   }
 
@@ -322,45 +342,15 @@
     stampSidebarNavSlots();
     qsa('[data-section], .nav-btn').forEach((button) => {
       if (button.dataset.eaBound === 'true') return;
-      const sectionId = clean(button.getAttribute('data-section') || button.dataset.section || button.dataset.eaNavKey || '');
-      if (!sectionId) return;
       button.dataset.eaBound = 'true';
       button.addEventListener('click', (event) => {
+        const sectionId = clean(resolveSectionId(canonicalNavKey(button)) || canonicalNavKey(button));
+        if (!sectionId) return;
         event.preventDefault();
-        event.stopPropagation();
+        event.stopImmediatePropagation();
         showSection(sectionId, { scroll: false });
-      });
+      }, true);
     });
-  }
-
-  function canonicalNavKey(button) {
-    const locked = clean(button.dataset.eaNavKey || '');
-    if (locked) return locked;
-
-    const slot = Number(button.dataset.eaNavSlot);
-    const order = desiredNavOrder();
-    if (Number.isInteger(slot) && order[slot]) return order[slot];
-
-    const raw = clean(button.dataset.eaOriginalSection || button.getAttribute('data-section') || button.dataset.section || '');
-    const resolved = clean(resolveSectionId(raw));
-    if (resolved === 'overview') return 'overview';
-    if (resolved === 'extension' || resolved === 'tools') return 'tools';
-    if (resolved === 'analytics') return 'analytics';
-    if (resolved === 'compliance') return 'compliance';
-    if (resolved === 'affiliate' || resolved === 'partners') return 'partners';
-    if (resolved === 'profile' || resolved === 'setup') return 'setup';
-    if (resolved === 'billing') return 'billing';
-
-    const text = lower(button.textContent || '');
-    if (text.includes('command centre') || text === 'overview') return 'overview';
-    if (text.includes('analytics')) return 'analytics';
-    if (text.includes('tools')) return 'tools';
-    if (text.includes('compliance')) return 'compliance';
-    if (text.includes('partners')) return 'partners';
-    if (text.includes('setup')) return 'setup';
-    if (text.includes('billing')) return 'billing';
-
-    return raw || resolved || text;
   }
 
   function enhanceSidebarNavVisuals() {
@@ -372,10 +362,10 @@
       const item = meta[key];
       if (!item) return;
       const currentActive = button.classList.contains('active');
-      const originalSection = clean(button.dataset.eaOriginalSection || button.getAttribute('data-section') || button.dataset.section || key);
       button.classList.add('ea-nav-enhanced');
       button.dataset.eaNavKey = key;
-      button.setAttribute('data-section', originalSection || key);
+      button.dataset.section = key;
+      button.setAttribute('data-section', key);
       button.setAttribute('aria-label', item.label);
       button.innerHTML = `
         <span class="ea-nav-inner">
@@ -394,7 +384,6 @@
     const nav = findSidebarNav();
     if (!nav) return;
     stampSidebarNavSlots();
-
     const order = desiredNavOrder();
     const buttons = qsa('.nav-btn, [data-section]', nav).filter((button, index, array) => array.indexOf(button) === index);
     const keyed = new Map();
@@ -402,48 +391,20 @@
 
     buttons.forEach((button) => {
       const key = canonicalNavKey(button);
-      if (order.includes(key) && !keyed.has(key)) {
-        keyed.set(key, button);
-      } else {
-        leftovers.push(button);
-      }
+      if (order.includes(key) && !keyed.has(key)) keyed.set(key, button);
+      else leftovers.push(button);
     });
 
     order.forEach((key) => {
       const button = keyed.get(key);
       if (button) nav.appendChild(button);
     });
-
     leftovers.forEach((button) => nav.appendChild(button));
-
-    const analyticsButtons = buttons.filter((button) => canonicalNavKey(button) === 'analytics');
-    const extraTools = buttons.filter((button) => canonicalNavKey(button) === 'tools').slice(1);
-    if (!analyticsButtons.length && extraTools.length) {
-      const rescue = extraTools[0];
-      rescue.dataset.eaNavKey = 'analytics';
-      rescue.dataset.eaOriginalSection = 'analytics';
-    }
-  }
-
-  function pinSidebarOrder() {
-    const nav = findSidebarNav();
-    if (!nav || nav.dataset.eaPinned === 'true') return;
-    nav.dataset.eaPinned = 'true';
-    let runs = 0;
-    const interval = setInterval(() => {
-      reorderSidebarNav();
-      enhanceSidebarNavVisuals();
-      enhanceSidebarBrand();
-      enhanceSessionCard();
-      runs += 1;
-      if (runs >= 40) clearInterval(interval);
-    }, 250);
   }
 
   function bindSidebarIdentityRefresh() {
     if (window.__ELEVATE_SIDEBAR_IDENTITY_BOUND__) return;
     window.__ELEVATE_SIDEBAR_IDENTITY_BOUND__ = true;
-
     const rerender = () => setTimeout(() => enhanceSessionCard(), 80);
     window.addEventListener('elevate:summary-ready', rerender);
     window.addEventListener('elevate:auth-ready', rerender);
@@ -451,17 +412,12 @@
   }
 
   function bootSidebarNavRepair() {
-    bindExistingNavButtons();
     reorderSidebarNav();
     enhanceSidebarBrand();
     enhanceSessionCard();
     enhanceSidebarNavVisuals();
+    bindExistingNavButtons();
     bindSidebarIdentityRefresh();
-    pinSidebarOrder();
-    setTimeout(() => { reorderSidebarNav(); enhanceSidebarBrand(); enhanceSessionCard(); enhanceSidebarNavVisuals(); }, 50);
-    setTimeout(() => { reorderSidebarNav(); enhanceSidebarBrand(); enhanceSessionCard(); enhanceSidebarNavVisuals(); }, 250);
-    setTimeout(() => { reorderSidebarNav(); enhanceSidebarBrand(); enhanceSessionCard(); enhanceSidebarNavVisuals(); }, 1000);
-    setTimeout(() => { reorderSidebarNav(); enhanceSidebarBrand(); enhanceSessionCard(); enhanceSidebarNavVisuals(); }, 2500);
     const sections = getDashboardSections();
     if (!sections.length) return;
     const active = NS.state?.get?.('ui.activeSection') || sections[0].id || 'overview';
@@ -480,7 +436,6 @@
     findSectionElement,
     bindExistingNavButtons,
     reorderSidebarNav,
-    pinSidebarOrder,
     enhanceSidebarBrand,
     enhanceSidebarNavVisuals,
     enhanceSessionCard
