@@ -17,6 +17,7 @@
     "/dashboard-tools.js?v=20260513eh1",
     "/dashboard-execution-hub-p3.js?v=20260513eh2",
     "/dashboard-execution-hub-cleanup.js?v=20260513eh3",
+    "/dashboard-execution-hub-hard-replace.js?v=20260513ehr1",
     "/dashboard-analytics.js?v=20260513d2",
     "/dashboard-affiliate.js?v=20260406p12a",
     "/dashboard-billing.js?v=20260406p12a",
