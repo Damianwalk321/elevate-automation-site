@@ -78,6 +78,7 @@
     .xhp3-metric{background:#171717;border:1px solid rgba(255,255,255,.05);border-radius:16px;padding:16px}
     .xhp3-metric .value{font-size:26px;font-weight:700;line-height:1.05;margin-top:8px}
     .xhp3-empty{padding:20px;border-radius:16px;border:1px dashed rgba(212,175,55,.18);background:#111;color:#a9a9a9;text-align:center}
+    .xhp3-hide-legacy{display:none !important}
     @media (max-width:1200px){.xhp3-grid{grid-template-columns:1fr}}
     @media (max-width:760px){.xhp3-actions,.xhp3-preview-grid{grid-template-columns:1fr}.xhp3-plan-row{display:grid;text-align:left}.xhp3-plan-stat-stack{text-align:left}}
   `;
@@ -262,19 +263,50 @@
   }
 
   function relabelExecutionHub() {
-    const header = document.querySelector('#extension .main-header h1');
-    if (header) header.textContent = 'Execution Hub';
-    const sub = document.querySelector('#extension .main-header .subtext');
-    if (sub) sub.textContent = 'Live execution surface for Vehicle Poster, posting readiness, monetization leverage, and future platform modules.';
-    const buttons = Array.from(document.querySelectorAll('.sidebar-nav .nav-btn'));
-    const target = buttons.find((btn) => clean(btn.getAttribute('data-section') || btn.dataset.section || btn.dataset.eaNavKey) === 'tools' || clean(btn.dataset.eaNavKey) === 'tools');
-    if (target) {
-      const label = target.querySelector('.ea-nav-label');
-      const detail = target.querySelector('.ea-nav-detail');
-      if (label) label.textContent = 'Execution Hub';
-      if (detail) detail.textContent = 'Vehicle Poster, execution';
-      target.setAttribute('aria-label', 'Execution Hub');
+    const extensionSection = document.getElementById('extension');
+    if (extensionSection) {
+      const primaryHeader = extensionSection.querySelector('h1');
+      if (primaryHeader) primaryHeader.textContent = 'Execution Hub';
+      const headerBlock = extensionSection.querySelector('.main-header');
+      if (headerBlock) {
+        const sub = headerBlock.querySelector('.subtext');
+        if (sub) sub.textContent = 'Live execution surface for Vehicle Poster, posting readiness, monetization leverage, and future platform modules.';
+      }
     }
+
+    const buttons = Array.from(document.querySelectorAll('.sidebar-nav .nav-btn'));
+    const labels = {
+      overview: { label: 'Command Centre', detail: 'Overview' },
+      tools: { label: 'Execution Hub', detail: 'Vehicle Poster, execution' },
+      analytics: { label: 'Intelligence Centre', detail: 'Listings, review, performance' },
+      compliance: { label: 'Compliance', detail: 'AB/BC readiness, disclosures' },
+      partners: { label: 'Partner Network', detail: 'Affiliates, referrals, growth' },
+      setup: { label: 'Activation', detail: 'Profile, dealer, activation' },
+      billing: { label: 'Plan & Access', detail: 'Plan, access, usage' }
+    };
+
+    buttons.forEach((btn) => {
+      const key = clean(btn.dataset.eaNavKey || btn.dataset.section || btn.getAttribute('data-section'));
+      const item = labels[key];
+      if (!item) return;
+      const label = btn.querySelector('.ea-nav-label');
+      const detail = btn.querySelector('.ea-nav-detail');
+      if (label) label.textContent = item.label;
+      if (detail) detail.textContent = item.detail;
+      btn.setAttribute('aria-label', item.label);
+    });
+  }
+
+  function hideLegacyBottomCards() {
+    const section = document.getElementById('extension');
+    if (!section) return;
+    const cards = Array.from(section.querySelectorAll('.card'));
+    cards.forEach((card) => {
+      if (card.closest('#executionHubV2Shell')) return;
+      const text = clean(card.textContent || '').toLowerCase();
+      const shouldHide = /review queue|stale listings|scanner type|dealer website|inventory url|listing location|compliance mode|download extension|open marketplace|open inventory url|refresh extension state|view setup steps|posts used today|review pressure|backlog remaining|platform stack|tool unlock path|workflow engine/.test(text);
+      if (shouldHide) card.classList.add('xhp3-hide-legacy');
+    });
   }
 
   function enhance() {
@@ -283,6 +315,7 @@
     renderPlanCard();
     renderVehiclePosterEnhancements();
     renderPreviewEnhancement();
+    hideLegacyBottomCards();
   }
 
   NS.modules = NS.modules || {};
