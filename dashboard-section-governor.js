@@ -11,14 +11,72 @@
   NS.modules.executionHubHardReplace = true;
   NS.modules.executionHubFinalGovernor = true;
 
+  const STORAGE_KEY = 'ea_execution_module_v2';
+
   const MODULES = [
-    { key: 'vehicle_poster', label: 'Vehicle Poster', status: 'Live Now', title: 'Vehicle Poster', subtitle: 'Inventory-to-Marketplace execution for sales professionals. Clean handoff, controlled posting, and extension readiness from one command surface.' },
-    { key: 'reactivation_engine', label: 'Reactivation Engine', status: 'Planned', title: 'Reactivation Engine', subtitle: 'Revive old leads, trigger conversations, and push dormant pipeline back into motion.' },
-    { key: 'pipeline_engine', label: 'Pipeline Engine', status: 'Planned', title: 'Pipeline Engine', subtitle: 'Control deal movement, ownership, and lead stage pressure.' },
-    { key: 'follow_up_engine', label: 'Follow-Up Engine', status: 'Planned', title: 'Follow-Up Engine', subtitle: 'Automate persistence so warm opportunities do not die from manual drop-off.' },
-    { key: 'content_engine', label: 'Content Engine', status: 'Planned', title: 'Content Engine', subtitle: 'Generate platform-ready inventory and sales content faster.' },
-    { key: 'distribution_hub', label: 'Distribution Hub', status: 'Planned', title: 'Distribution Hub', subtitle: 'Expand beyond one posting surface and push distribution across more channels.' },
-    { key: 'market_intelligence', label: 'Market Intelligence', status: 'Analytics Only', title: 'Market Intelligence', subtitle: 'Analytics belongs inside Intelligence Centre, not the execution surface.' }
+    {
+      key: 'vehicle_poster',
+      label: 'Vehicle Poster',
+      status: 'Live Now',
+      eyebrow: 'Live Execution Tool',
+      title: 'Vehicle Poster',
+      subtitle: 'Inventory-to-Marketplace execution for sales professionals. Clean handoff, controlled posting, and extension readiness from one command surface.',
+      bullets: ['Live extension workflow', 'Inventory source control', 'Marketplace handoff', 'Compliance-aware posting']
+    },
+    {
+      key: 'reactivation_engine',
+      label: 'Reactivation Engine',
+      status: 'Planned',
+      eyebrow: 'Future Module',
+      title: 'Reactivation Engine',
+      subtitle: 'Revive old leads, trigger new conversations, and push dormant pipeline back into motion.',
+      bullets: ['Segment dormant leads', 'Launch reactivation campaigns', 'Surface callback intent', 'Convert dead pipeline into live opportunities']
+    },
+    {
+      key: 'pipeline_engine',
+      label: 'Pipeline Engine',
+      status: 'Planned',
+      eyebrow: 'Future Module',
+      title: 'Pipeline Engine',
+      subtitle: 'Control deal movement, ownership, stage pressure, and operator accountability from one workspace.',
+      bullets: ['Stage movement', 'Owner visibility', 'Deal pressure tracking', 'Manager-level pipeline control']
+    },
+    {
+      key: 'follow_up_engine',
+      label: 'Follow-Up Engine',
+      status: 'Planned',
+      eyebrow: 'Future Module',
+      title: 'Follow-Up Engine',
+      subtitle: 'Automate persistence so warm opportunities do not die from inconsistent manual follow-up.',
+      bullets: ['Timed follow-up sequences', 'No-response nudges', 'Appointment reminders', 'Deal-stall recovery']
+    },
+    {
+      key: 'content_engine',
+      label: 'Content Engine',
+      status: 'Planned',
+      eyebrow: 'Future Module',
+      title: 'Content Engine',
+      subtitle: 'Generate platform-ready inventory and sales content faster without manual copywriting drag.',
+      bullets: ['Listing copy', 'Social captions', 'Hooks and prompts', 'Salesperson content support']
+    },
+    {
+      key: 'distribution_hub',
+      label: 'Distribution Hub',
+      status: 'Planned',
+      eyebrow: 'Future Module',
+      title: 'Distribution Hub',
+      subtitle: 'Expand beyond one posting surface and push sales distribution across more channels.',
+      bullets: ['Marketplace', 'Facebook Groups', 'Social channels', 'Future multi-platform publishing']
+    },
+    {
+      key: 'market_intelligence',
+      label: 'Market Intelligence',
+      status: 'Intelligence Centre',
+      eyebrow: 'Analytics Module',
+      title: 'Market Intelligence',
+      subtitle: 'Analytics, listing performance, stale risk, and pricing intelligence belong inside Intelligence Centre.',
+      bullets: ['Stale risk', 'Listing performance', 'Pricing pressure', 'VIN-level market signals']
+    }
   ];
 
   const NAV_LABELS = {
@@ -35,14 +93,7 @@
   function escapeHtml(value) { return String(value ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
   function num(value) { const parsed = Number(String(value ?? '').replace(/[^0-9.-]/g, '')); return Number.isFinite(parsed) ? parsed : 0; }
   function isReal(value) { const v = clean(value); return Boolean(v) && !/^(loading\.?|unknown|undefined|null|unset|missing|review)$/i.test(v); }
-
-  function first(...values) {
-    for (const value of values) {
-      const v = clean(value);
-      if (isReal(v)) return v;
-    }
-    return '';
-  }
+  function first(...values) { for (const value of values) { const v = clean(value); if (isReal(v)) return v; } return ''; }
 
   function getSummary() {
     const summary = window.dashboardSummary?.data ? window.dashboardSummary.data : window.dashboardSummary;
@@ -51,6 +102,19 @@
 
   function getProfile(summary) {
     return { ...(summary.account_snapshot || {}), ...(summary.profile_snapshot || {}), ...(summary.profile || {}) };
+  }
+
+  function getSelectedModuleKey() {
+    try { return clean(localStorage.getItem(STORAGE_KEY) || 'vehicle_poster') || 'vehicle_poster'; } catch { return 'vehicle_poster'; }
+  }
+
+  function setSelectedModuleKey(key) {
+    try { localStorage.setItem(STORAGE_KEY, key || 'vehicle_poster'); } catch {}
+  }
+
+  function getSelectedModule() {
+    const key = getSelectedModuleKey();
+    return MODULES.find((m) => m.key === key) || MODULES[0];
   }
 
   function hostFromUrl(url, fallback) {
@@ -82,11 +146,9 @@
     const listingLocation = first(profile.listing_location, profile.listingLocation, profile.city && profile.province ? `${profile.city}, ${profile.province}` : '', s.listing_location, s.listingLocation, document.getElementById('extensionListingLocation')?.textContent) || 'Location missing';
     const complianceMode = first(profile.compliance_mode, profile.complianceMode, profile.province, s.compliance_mode, s.complianceMode, setup.compliance_mode, setup.compliance_mode_present ? 'Configured' : '', document.getElementById('extensionComplianceMode')?.textContent) || 'Unset';
     const accessState = first(account.access_granted || s.can_post ? 'Active' : '', account.status, s.access_state, profile.access_state, document.getElementById('extensionAccessState')?.textContent) || 'Inactive';
-
     const remaining = num(s.posts_remaining ?? kpis.remaining_today ?? plan.posts_remaining ?? document.getElementById('extensionRemainingPosts')?.textContent ?? 0);
     const reviewQueue = num(s.review_queue_count ?? kpis.in_review ?? queues.review_queue ?? document.getElementById('extensionReviewQueue')?.textContent ?? 0);
     const staleListings = num(s.review_delete_count ?? queues.stale_review ?? s.stale_listings_count ?? document.getElementById('staleQueueCount')?.textContent ?? 0);
-
     const accessReady = /active|ready|connected|live/i.test(accessState);
     const setupReady = [dealerWebsite, inventoryUrl, listingLocation, complianceMode].filter(isReal).length;
     const marketplaceBridge = first(s.marketplace_bridge, document.getElementById('extensionMarketplaceBridge')?.textContent, accessReady ? 'Ready' : 'Review');
@@ -118,26 +180,7 @@
       commandLabel = 'Open Marketplace';
     }
 
-    return {
-      dealerWebsite,
-      inventoryUrl,
-      scannerType,
-      listingLocation,
-      complianceMode,
-      accessState,
-      remaining: String(remaining),
-      reviewQueue: String(reviewQueue),
-      staleListings: String(staleListings),
-      accessReady,
-      setupReady,
-      marketplaceBridge,
-      sourceHost: hostFromUrl(inventoryUrl, dealerWebsite),
-      sourceRoute: routeFromUrl(inventoryUrl),
-      commandTitle,
-      commandCopy,
-      commandAction,
-      commandLabel
-    };
+    return { dealerWebsite, inventoryUrl, scannerType, listingLocation, complianceMode, accessState, remaining: String(remaining), reviewQueue: String(reviewQueue), staleListings: String(staleListings), accessReady, setupReady, marketplaceBridge, sourceHost: hostFromUrl(inventoryUrl, dealerWebsite), sourceRoute: routeFromUrl(inventoryUrl), commandTitle, commandCopy, commandAction, commandLabel };
   }
 
   function ensureStyle() {
@@ -147,7 +190,7 @@
     style.textContent = `
       #extension > :not(#executionHubNativeShell){display:none!important;}
       #executionHubNativeShell{display:grid;gap:16px;margin-bottom:22px;}
-      .ehn-card,.ehn-panel{background:#121212;border:1px solid rgba(212,175,55,.14);border-radius:22px;box-shadow:0 10px 30px rgba(0,0,0,.28);padding:18px}.ehn-grid{display:grid;grid-template-columns:minmax(0,1.18fr) minmax(340px,.82fr);gap:16px}.ehn-two{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.ehn-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.ehn-title{font-size:30px;line-height:1.05;margin:0 0 8px}.ehn-copy{color:#a9a9a9;line-height:1.55}.ehn-eyebrow{color:#d4af37;font-size:12px;font-weight:900;letter-spacing:1.3px;text-transform:uppercase;margin-bottom:10px}.ehn-head{display:flex;justify-content:space-between;gap:16px;align-items:flex-start;flex-wrap:wrap}.ehn-status,.ehn-pill{display:inline-flex;align-items:center;min-height:32px;padding:0 12px;border-radius:999px;border:1px solid rgba(212,175,55,.22);background:rgba(212,175,55,.1);color:#f3ddb0;font-size:12px;font-weight:800}.ehn-kpi{background:#171717;border:1px solid rgba(255,255,255,.05);border-radius:16px;padding:15px}.ehn-kpi-value{font-size:22px;font-weight:800;line-height:1.08;word-break:break-word}.ehn-kpi-sub{font-size:12px;color:#a9a9a9;line-height:1.45;margin-top:7px}.ehn-source{background:linear-gradient(180deg,rgba(255,255,255,.025),rgba(255,255,255,0));border:1px solid rgba(212,175,55,.12);border-radius:18px;padding:16px;margin-bottom:14px}.ehn-source-title{font-size:24px;font-weight:900;margin-bottom:8px}.ehn-route{font-size:13px;color:#f3ddb0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.ehn-pills{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}.ehn-command-actions{display:flex;gap:12px;flex-wrap:wrap;margin-top:16px}.ehn-command-actions button,.ehn-actions button{min-height:50px}.ehn-details{margin-top:16px;border-top:1px solid rgba(255,255,255,.06);padding-top:14px}.ehn-details summary{cursor:pointer;color:#f3ddb0;font-size:13px;font-weight:900;letter-spacing:.5px;text-transform:uppercase}.ehn-row{display:flex;justify-content:space-between;gap:16px;padding:12px 0;border-bottom:1px solid rgba(255,255,255,.05)}.ehn-row:last-child{border-bottom:none}.ehn-label{font-weight:800}.ehn-value{text-align:right;color:#f3ddb0;word-break:break-word;line-height:1.45}.ehn-modal-backdrop{position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.78);display:flex;align-items:center;justify-content:center;padding:22px}.ehn-modal{width:min(720px,96vw);max-height:90vh;overflow:auto;background:#101010;border:1px solid rgba(212,175,55,.22);border-radius:24px;box-shadow:0 24px 80px rgba(0,0,0,.6);padding:22px}.ehn-step{background:#171717;border:1px solid rgba(255,255,255,.06);border-radius:16px;padding:14px;margin-top:10px;line-height:1.45}@media(max-width:1100px){.ehn-grid{grid-template-columns:1fr}}@media(max-width:720px){.ehn-two,.ehn-actions{grid-template-columns:1fr}.ehn-command-actions{display:grid}}
+      .ehn-card,.ehn-panel{background:#121212;border:1px solid rgba(212,175,55,.14);border-radius:22px;box-shadow:0 10px 30px rgba(0,0,0,.28);padding:18px}.ehn-grid{display:grid;grid-template-columns:minmax(0,1.18fr) minmax(340px,.82fr);gap:16px}.ehn-two{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.ehn-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.ehn-title{font-size:30px;line-height:1.05;margin:0 0 8px}.ehn-copy{color:#a9a9a9;line-height:1.55}.ehn-eyebrow{color:#d4af37;font-size:12px;font-weight:900;letter-spacing:1.3px;text-transform:uppercase;margin-bottom:10px}.ehn-head{display:flex;justify-content:space-between;gap:16px;align-items:flex-start;flex-wrap:wrap}.ehn-status,.ehn-pill{display:inline-flex;align-items:center;min-height:32px;padding:0 12px;border-radius:999px;border:1px solid rgba(212,175,55,.22);background:rgba(212,175,55,.1);color:#f3ddb0;font-size:12px;font-weight:800}.ehn-select-wrap{display:grid;gap:8px;min-width:310px}.ehn-select-row{display:flex;gap:10px;align-items:center;justify-content:flex-end;flex-wrap:wrap}.ehn-select{appearance:none;background:#1a1a1a;color:#f5f5f5;border:1px solid rgba(255,255,255,.08);border-radius:14px;padding:14px 16px;font-size:14px;outline:none;min-width:280px}.ehn-kpi{background:#171717;border:1px solid rgba(255,255,255,.05);border-radius:16px;padding:15px}.ehn-kpi-value{font-size:22px;font-weight:800;line-height:1.08;word-break:break-word}.ehn-kpi-sub{font-size:12px;color:#a9a9a9;line-height:1.45;margin-top:7px}.ehn-source{background:linear-gradient(180deg,rgba(255,255,255,.025),rgba(255,255,255,0));border:1px solid rgba(212,175,55,.12);border-radius:18px;padding:16px;margin-bottom:14px}.ehn-source-title{font-size:24px;font-weight:900;margin-bottom:8px}.ehn-route{font-size:13px;color:#f3ddb0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.ehn-pills{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}.ehn-command-actions{display:flex;gap:12px;flex-wrap:wrap;margin-top:16px}.ehn-command-actions button,.ehn-actions button{min-height:50px}.ehn-details{margin-top:16px;border-top:1px solid rgba(255,255,255,.06);padding-top:14px}.ehn-details summary{cursor:pointer;color:#f3ddb0;font-size:13px;font-weight:900;letter-spacing:.5px;text-transform:uppercase}.ehn-row{display:flex;justify-content:space-between;gap:16px;padding:12px 0;border-bottom:1px solid rgba(255,255,255,.05)}.ehn-row:last-child{border-bottom:none}.ehn-label{font-weight:800}.ehn-value{text-align:right;color:#f3ddb0;word-break:break-word;line-height:1.45}.ehn-preview-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(320px,.75fr);gap:16px}.ehn-module-list{display:grid;gap:10px}.ehn-module-item{background:#171717;border:1px solid rgba(255,255,255,.05);border-radius:14px;padding:14px;color:#d8d8d8;line-height:1.45}.ehn-modal-backdrop{position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.78);display:flex;align-items:center;justify-content:center;padding:22px}.ehn-modal{width:min(720px,96vw);max-height:90vh;overflow:auto;background:#101010;border:1px solid rgba(212,175,55,.22);border-radius:24px;box-shadow:0 24px 80px rgba(0,0,0,.6);padding:22px}.ehn-step{background:#171717;border:1px solid rgba(255,255,255,.06);border-radius:16px;padding:14px;margin-top:10px;line-height:1.45}@media(max-width:1100px){.ehn-grid,.ehn-preview-grid{grid-template-columns:1fr}.ehn-select-row{justify-content:flex-start}}@media(max-width:720px){.ehn-two,.ehn-actions{grid-template-columns:1fr}.ehn-command-actions{display:grid}.ehn-select{min-width:100%}.ehn-select-wrap{min-width:100%}}
     `;
     document.head.appendChild(style);
   }
@@ -165,25 +208,29 @@
     });
   }
 
+  function renderModuleSelector(selectedModule) {
+    return `<div class="ehn-select-wrap"><label for="executionHubModuleSelect" class="ehn-eyebrow" style="margin-bottom:0;">Execution Module</label><div class="ehn-select-row"><select id="executionHubModuleSelect" class="ehn-select">${MODULES.map((module) => `<option value="${escapeHtml(module.key)}" ${module.key === selectedModule.key ? 'selected' : ''}>${escapeHtml(module.label)}</option>`).join('')}</select><div class="ehn-status">${escapeHtml(selectedModule.status)}</div></div></div>`;
+  }
+
+  function renderVehiclePoster(state) {
+    return `<div class="ehn-grid"><div class="ehn-panel"><div class="ehn-eyebrow">Inventory Source</div><div class="ehn-source"><div class="ehn-source-title">${escapeHtml(state.sourceHost)}</div><div class="ehn-route" title="${escapeHtml(state.inventoryUrl)}">${escapeHtml(state.sourceRoute)}</div><div class="ehn-pills"><span class="ehn-pill">${isReal(state.dealerWebsite) ? 'Connected' : 'Review'}</span><span class="ehn-pill">${escapeHtml(state.listingLocation)}</span><span class="ehn-pill">${escapeHtml(state.complianceMode)}</span></div></div><div class="ehn-command-actions" style="margin-top:0;"><button class="action-btn" type="button" data-ehn-action="open_inventory_url">Open Source</button><button class="action-btn" type="button" data-ehn-action="copy_inventory_url">Copy URL</button><button class="action-btn" type="button" data-ehn-action="view_setup_steps">Change Source</button></div><details class="ehn-details"><summary>Advanced Diagnostics</summary><div style="margin-top:12px;"><div class="ehn-row"><div class="ehn-label">Inventory Detection</div><div class="ehn-value">${escapeHtml(state.scannerType)}</div></div><div class="ehn-row"><div class="ehn-label">Dealer Source</div><div class="ehn-value">${escapeHtml(state.dealerWebsite || 'Review')}</div></div><div class="ehn-row"><div class="ehn-label">Raw Inventory Route</div><div class="ehn-value">${escapeHtml(state.inventoryUrl || 'Review')}</div></div><div class="ehn-row"><div class="ehn-label">Marketplace Bridge</div><div class="ehn-value">${escapeHtml(state.marketplaceBridge)}</div></div></div></details></div><div class="ehn-panel"><div class="ehn-eyebrow">Primary Actions</div><div class="ehn-actions"><button class="action-btn" type="button" data-ehn-action="install_extension">Install Extension</button><button class="action-btn" type="button" data-ehn-action="open_marketplace">Open Marketplace</button><button class="action-btn" type="button" data-ehn-action="open_inventory_url">Open Source</button><button class="action-btn" type="button" data-ehn-action="refresh_extension_state">Sync State</button><button class="action-btn" type="button" data-ehn-action="view_setup_steps">Activation</button><button class="action-btn" type="button" data-ehn-action="open_plan_access">Plan & Access</button></div><div class="ehn-copy" style="margin-top:14px;font-size:13px;">Install Extension opens guided instructions: download, unzip, Chrome Extensions, Developer Mode, Load Unpacked, then Sync State.</div></div></div>`;
+  }
+
+  function renderModulePreview(module) {
+    return `<div class="ehn-card"><div class="ehn-head"><div><div class="ehn-eyebrow">${escapeHtml(module.eyebrow)}</div><h2 class="ehn-title">${escapeHtml(module.title)}</h2><div class="ehn-copy">${escapeHtml(module.subtitle)}</div></div><div class="ehn-status">${escapeHtml(module.status)}</div></div><div class="ehn-preview-grid" style="margin-top:16px;"><div class="ehn-panel"><div class="ehn-eyebrow">Module Roadmap</div><div class="ehn-module-list">${(module.bullets || []).map((item) => `<div class="ehn-module-item">${escapeHtml(item)}</div>`).join('')}</div></div><div class="ehn-panel"><div class="ehn-eyebrow">Positioning</div><div class="ehn-kpi"><div class="ehn-kpi-value">Coming Soon</div><div class="ehn-kpi-sub">This module is shown here to signal the broader Sales OS roadmap. Live analytics and listing review stay in Intelligence Centre.</div></div><div class="ehn-command-actions"><button class="action-btn" type="button" data-ehn-action="switch_vehicle_poster">Return to Vehicle Poster</button><button class="action-btn" type="button" data-ehn-action="open_plan_access">Plan & Access</button></div></div></div></div>`;
+  }
+
   function renderExecutionHubNative() {
     const section = document.getElementById('extension');
     if (!section) return;
     ensureStyle();
     applyNavLabels();
-
     const state = getState();
+    const selectedModule = getSelectedModule();
     let shell = document.getElementById('executionHubNativeShell');
-    if (!shell) {
-      shell = document.createElement('div');
-      shell.id = 'executionHubNativeShell';
-      section.prepend(shell);
-    }
+    if (!shell) { shell = document.createElement('div'); shell.id = 'executionHubNativeShell'; section.prepend(shell); }
 
-    shell.innerHTML = `
-      <div class="ehn-card"><div class="ehn-head"><div><div class="ehn-eyebrow">Execution Module</div><h2 class="ehn-title">Execution Hub</h2><div class="ehn-copy">Vehicle Poster is the live execution surface. Analytics stay inside Intelligence Centre.</div></div><div class="ehn-status">Vehicle Poster · Live Now</div></div></div>
-      <div class="ehn-grid"><div class="ehn-card"><div class="ehn-eyebrow">Execution Command</div><h2 class="ehn-title">${escapeHtml(state.commandTitle)}</h2><div class="ehn-copy">${escapeHtml(state.commandCopy)}</div><div class="ehn-command-actions"><button class="btn-primary" type="button" data-ehn-action="${escapeHtml(state.commandAction)}">${escapeHtml(state.commandLabel)}</button><button class="action-btn" type="button" data-ehn-action="install_extension">Install Extension</button></div></div><div class="ehn-card"><div class="ehn-eyebrow">Execution Status</div><div class="ehn-two"><div class="ehn-kpi"><div class="ehn-eyebrow">Poster Status</div><div class="ehn-kpi-value">${state.accessReady ? 'Ready' : 'Review'}</div><div class="ehn-kpi-sub">Can the poster be used right now?</div></div><div class="ehn-kpi"><div class="ehn-eyebrow">Access State</div><div class="ehn-kpi-value">${escapeHtml(state.accessState)}</div><div class="ehn-kpi-sub">Current account/extension truth.</div></div><div class="ehn-kpi"><div class="ehn-eyebrow">Compliance Region</div><div class="ehn-kpi-value">${escapeHtml(state.complianceMode)}</div><div class="ehn-kpi-sub">Active publish rule profile.</div></div><div class="ehn-kpi"><div class="ehn-eyebrow">Remaining Today</div><div class="ehn-kpi-value">${escapeHtml(state.remaining)}</div><div class="ehn-kpi-sub">Posting capacity available today.</div></div></div></div></div>
-      <div class="ehn-grid"><div class="ehn-panel"><div class="ehn-eyebrow">Inventory Source</div><div class="ehn-source"><div class="ehn-source-title">${escapeHtml(state.sourceHost)}</div><div class="ehn-route" title="${escapeHtml(state.inventoryUrl)}">${escapeHtml(state.sourceRoute)}</div><div class="ehn-pills"><span class="ehn-pill">${isReal(state.dealerWebsite) ? 'Connected' : 'Review'}</span><span class="ehn-pill">${escapeHtml(state.listingLocation)}</span><span class="ehn-pill">${escapeHtml(state.complianceMode)}</span></div></div><div class="ehn-command-actions" style="margin-top:0;"><button class="action-btn" type="button" data-ehn-action="open_inventory_url">Open Source</button><button class="action-btn" type="button" data-ehn-action="copy_inventory_url">Copy URL</button><button class="action-btn" type="button" data-ehn-action="view_setup_steps">Change Source</button></div><details class="ehn-details"><summary>Advanced Diagnostics</summary><div style="margin-top:12px;"><div class="ehn-row"><div class="ehn-label">Inventory Detection</div><div class="ehn-value">${escapeHtml(state.scannerType)}</div></div><div class="ehn-row"><div class="ehn-label">Dealer Source</div><div class="ehn-value">${escapeHtml(state.dealerWebsite || 'Review')}</div></div><div class="ehn-row"><div class="ehn-label">Raw Inventory Route</div><div class="ehn-value">${escapeHtml(state.inventoryUrl || 'Review')}</div></div><div class="ehn-row"><div class="ehn-label">Marketplace Bridge</div><div class="ehn-value">${escapeHtml(state.marketplaceBridge)}</div></div></div></details></div><div class="ehn-panel"><div class="ehn-eyebrow">Primary Actions</div><div class="ehn-actions"><button class="action-btn" type="button" data-ehn-action="install_extension">Install Extension</button><button class="action-btn" type="button" data-ehn-action="open_marketplace">Open Marketplace</button><button class="action-btn" type="button" data-ehn-action="open_inventory_url">Open Source</button><button class="action-btn" type="button" data-ehn-action="refresh_extension_state">Sync State</button><button class="action-btn" type="button" data-ehn-action="view_setup_steps">Activation</button><button class="action-btn" type="button" data-ehn-action="open_plan_access">Plan & Access</button></div><div class="ehn-copy" style="margin-top:14px;font-size:13px;">Install Extension opens guided instructions: download, unzip, Chrome Extensions, Developer Mode, Load Unpacked, then Sync State.</div></div></div>
-    `;
+    shell.innerHTML = `<div class="ehn-card"><div class="ehn-head"><div><div class="ehn-eyebrow">Execution Hub</div><h2 class="ehn-title">${escapeHtml(selectedModule.title)}</h2><div class="ehn-copy">${escapeHtml(selectedModule.subtitle)}</div></div>${renderModuleSelector(selectedModule)}</div></div><div class="ehn-grid"><div class="ehn-card"><div class="ehn-eyebrow">Execution Command</div><h2 class="ehn-title">${escapeHtml(selectedModule.key === 'vehicle_poster' ? state.commandTitle : 'Module preview')}</h2><div class="ehn-copy">${escapeHtml(selectedModule.key === 'vehicle_poster' ? state.commandCopy : 'This module is part of the planned Elevate Automation Sales OS. Vehicle Poster remains the active execution tool today.')}</div><div class="ehn-command-actions"><button class="btn-primary" type="button" data-ehn-action="${escapeHtml(selectedModule.key === 'vehicle_poster' ? state.commandAction : 'switch_vehicle_poster')}">${escapeHtml(selectedModule.key === 'vehicle_poster' ? state.commandLabel : 'Return to Vehicle Poster')}</button><button class="action-btn" type="button" data-ehn-action="install_extension">Install Extension</button></div></div><div class="ehn-card"><div class="ehn-eyebrow">Execution Status</div><div class="ehn-two"><div class="ehn-kpi"><div class="ehn-eyebrow">Poster Status</div><div class="ehn-kpi-value">${state.accessReady ? 'Ready' : 'Review'}</div><div class="ehn-kpi-sub">Can the poster be used right now?</div></div><div class="ehn-kpi"><div class="ehn-eyebrow">Access State</div><div class="ehn-kpi-value">${escapeHtml(state.accessState)}</div><div class="ehn-kpi-sub">Current account/extension truth.</div></div><div class="ehn-kpi"><div class="ehn-eyebrow">Compliance Region</div><div class="ehn-kpi-value">${escapeHtml(state.complianceMode)}</div><div class="ehn-kpi-sub">Active publish rule profile.</div></div><div class="ehn-kpi"><div class="ehn-eyebrow">Remaining Today</div><div class="ehn-kpi-value">${escapeHtml(state.remaining)}</div><div class="ehn-kpi-sub">Posting capacity available today.</div></div></div></div></div>${selectedModule.key === 'vehicle_poster' ? renderVehiclePoster(state) : renderModulePreview(selectedModule)}`;
     bindActions(shell);
   }
 
@@ -210,6 +257,7 @@
     if (action === 'refresh_extension_state') return (document.getElementById('refreshExtensionStateBtn') || document.getElementById('refreshAccessBtn'))?.click() || renderExecutionHubNative();
     if (action === 'view_setup_steps') return window.showSection?.('profile');
     if (action === 'open_plan_access') return window.showSection?.('billing');
+    if (action === 'switch_vehicle_poster') { setSelectedModuleKey('vehicle_poster'); return renderExecutionHubNative(); }
   }
 
   function bindActions(root) {
@@ -218,21 +266,18 @@
       btn.dataset.ehnBound = 'true';
       btn.addEventListener('click', () => runAction(btn.getAttribute('data-ehn-action')));
     });
+    const select = root.querySelector('#executionHubModuleSelect');
+    if (select && select.dataset.ehnSelectBound !== 'true') {
+      select.dataset.ehnSelectBound = 'true';
+      select.addEventListener('change', () => { setSelectedModuleKey(select.value || 'vehicle_poster'); renderExecutionHubNative(); });
+    }
   }
 
-  function boot() {
-    ensureStyle();
-    applyNavLabels();
-    renderExecutionHubNative();
-  }
-
+  function boot() { ensureStyle(); applyNavLabels(); renderExecutionHubNative(); }
   window.addEventListener('elevate:summary-ready', () => setTimeout(renderExecutionHubNative, 80));
   window.addEventListener('elevate:tracking-refreshed', () => setTimeout(renderExecutionHubNative, 80));
   window.addEventListener('elevate:workflow-updated', () => setTimeout(renderExecutionHubNative, 80));
-
   NS.sectionGovernor = { applyNavLabels, renderExecutionHubNative };
   NS.modules.sectionGovernor = true;
-
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot, { once: true });
-  else boot();
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot, { once: true }); else boot();
 })();
