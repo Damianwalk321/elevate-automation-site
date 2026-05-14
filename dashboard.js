@@ -4,18 +4,18 @@
   window.__ELEVATE_DASHBOARD_PHASE18_20_LOADER__ = true;
 
   const NS = (window.ElevateDashboard = window.ElevateDashboard || {});
-  NS.version = "bundle2-core-runtime";
+  NS.version = "bundle2-core-runtime-intelligence-truth-20260513";
   NS.modules = NS.modules || {};
   NS.events = NS.events || new EventTarget();
   NS.loaderState = NS.loaderState && typeof NS.loaderState === "object" ? NS.loaderState : {};
 
   const MODULES = [
-    "/dashboard-state.js?v=20260406p12a",
+    "/dashboard-state.js?v=20260513truth2",
     "/dashboard-ui.js?v=20260406p12a",
     "/dashboard-section-governor.js?v=20260513stable1",
-    "/dashboard-api.js?v=20260406p12a",
+    "/dashboard-api.js?v=20260513truth1",
     "/dashboard-overview.js?v=20260512cc3",
-    "/dashboard-listings.js?v=20260406p12a",
+    "/dashboard-listings.js?v=20260513truth3",
     "/dashboard-profile.js?v=20260406p12a",
     "/dashboard-analytics.js?v=20260412p22e",
     "/dashboard-affiliate.js?v=20260406p12a",
