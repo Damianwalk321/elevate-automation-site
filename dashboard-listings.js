@@ -21,6 +21,17 @@
   function formatDate(value) { if (!value) return "Not recorded"; const d = new Date(value); if (!Number.isFinite(d.getTime())) return "Not recorded"; return d.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" }); }
   function formatMileage(item) { const text = clean(item.display_mileage_text || ""); if (text) return text; const mileage = Number(item.mileage || item.kilometers || item.odometer || 0); return mileage > 0 ? `${mileage.toLocaleString()} km` : "Mileage pending"; }
 
+  function isRemovedOrReviewDelete(item) {
+    const status = clean(item.status).toLowerCase();
+    const lifecycle = clean(item.lifecycle_status).toLowerCase();
+    const bucket = clean(item.review_bucket).toLowerCase();
+    return ['sold', 'deleted', 'inactive', 'failed', 'removed'].includes(status) || lifecycle === 'review_delete' || bucket === 'removedvehicles';
+  }
+
+  function isActivePortfolioItem(item) {
+    return !isRemovedOrReviewDelete(item);
+  }
+
   function inferHealth(item, events = []) {
     const views = Number(item.views || item.views_count || 0);
     const messages = Number(item.messages || item.messages_count || 0);
@@ -110,7 +121,7 @@
       const messages = n(specs.find((s) => /message/i.test(s)) || (textBlob.match(/messages?\s*:?\s*([\d,]+)/i) || [])[1] || 0);
       const image = card.querySelector("img")?.getAttribute("src") || "";
       return { id: clean(card.dataset.listingId || title || `listing_${idx}`), title, price, views, messages, image_url: image, source: "recent_listings_grid", status: "active", last_seen_at: new Date().toISOString(), sync_source: "dom_fallback", sync_confidence: "tracked" };
-    });
+    }).filter(isActivePortfolioItem);
   }
 
   function readSummaryFallback() { return []; }
@@ -135,22 +146,23 @@
   function buildAnalyticsFromRegistry() {
     const state = NS.state;
     const listings = Object.values(state?.get?.("listingRegistry", {}) || {});
+    const activePortfolio = listings.filter(isActivePortfolioItem);
     const sync = state?.get?.("sync", {}) || {};
     const events = state?.get?.("listingEvents", []) || [];
-    const sortedByViews = [...listings].sort((a, b) => Number(b.views || b.views_count || 0) - Number(a.views || a.views_count || 0));
-    const sortedByMessages = [...listings].sort((a, b) => Number(b.messages || b.messages_count || 0) - Number(a.messages || a.messages_count || 0));
+    const sortedByViews = [...activePortfolio].sort((a, b) => Number(b.views || b.views_count || 0) - Number(a.views || a.views_count || 0));
+    const sortedByMessages = [...activePortfolio].sort((a, b) => Number(b.messages || b.messages_count || 0) - Number(a.messages || a.messages_count || 0));
     const reviewQueue = listings.filter((item) => isReviewItem(item));
     const buckets = {
-      message_leaders: listings.filter((item) => item.health_state === "message_leader").slice(0, 5), view_leaders: listings.filter((item) => item.health_state === "view_leader").slice(0, 5), high_interest: listings.filter((item) => item.health_state === "high_interest").slice(0, 5), high_views_low_messages: listings.filter((item) => item.health_state === "high_views_low_messages").slice(0, 5), weak_conversion: listings.filter((item) => item.health_state === "weak_conversion" || item.weak).slice(0, 5), fresh_traction: listings.filter((item) => item.health_state === "fresh_traction").slice(0, 5), needs_refresh: listings.filter((item) => item.health_state === "needs_refresh").slice(0, 5), price_attention: listings.filter((item) => item.health_state === "price_attention" || item.price_review_required || clean(item.lifecycle_status).toLowerCase() === "review_price_update").slice(0, 5), cooling_off: listings.filter((item) => Number(item.views || 0) > 0 && minutesSince(item.last_view_at) > 240 && Number(item.messages || 0) <= 1).slice(0, 5), recovered: []
+      message_leaders: activePortfolio.filter((item) => item.health_state === "message_leader").slice(0, 5), view_leaders: activePortfolio.filter((item) => item.health_state === "view_leader").slice(0, 5), high_interest: activePortfolio.filter((item) => item.health_state === "high_interest").slice(0, 5), high_views_low_messages: activePortfolio.filter((item) => item.health_state === "high_views_low_messages").slice(0, 5), weak_conversion: activePortfolio.filter((item) => item.health_state === "weak_conversion" || item.weak).slice(0, 5), fresh_traction: activePortfolio.filter((item) => item.health_state === "fresh_traction").slice(0, 5), needs_refresh: activePortfolio.filter((item) => item.health_state === "needs_refresh").slice(0, 5), price_attention: activePortfolio.filter((item) => item.health_state === "price_attention" || item.price_review_required || clean(item.lifecycle_status).toLowerCase() === "review_price_update").slice(0, 5), cooling_off: activePortfolio.filter((item) => Number(item.views || 0) > 0 && minutesSince(item.last_view_at) > 240 && Number(item.messages || 0) <= 1).slice(0, 5), recovered: []
     };
-    const trackedViews = listings.reduce((sum, item) => sum + Number(item.views || item.views_count || 0), 0);
-    const trackedMessages = listings.reduce((sum, item) => sum + Number(item.messages || item.messages_count || 0), 0);
+    const trackedViews = activePortfolio.reduce((sum, item) => sum + Number(item.views || item.views_count || 0), 0);
+    const trackedMessages = activePortfolio.reduce((sum, item) => sum + Number(item.messages || item.messages_count || 0), 0);
     const actionQueue = [];
     if ((sync.issues || []).length) actionQueue.push({ id: "sync_issue", title: "Sync truth needs attention", copy: (sync.issues || []).slice(0, 2).join(" "), reason: "Recommendations may rely on fallback tracking until sync is healthy.", tone: "cleanup", section: "tools", focus: "analyticsListingSearchInput" });
-    if (buckets.price_attention.length) actionQueue.push({ id: "price_attention", title: `${buckets.price_attention.length} listing${buckets.price_attention.length === 1 ? "" : "s"} need price truth review`, copy: `${buckets.price_attention[0].title || "Top listing"} has unresolved or suspicious price data.`, reason: "Price/mileage truth affects card accuracy and review workflow.", tone: "cleanup", section: "analytics", focus: "analyticsListingSearchInput" });
-    if (!actionQueue.length) actionQueue.push({ id: "sync_quiet", title: "Supabase truth layer is live", copy: "Portfolio rows are now rendered from the Supabase listing payload only.", reason: "Current state is stable and synced.", tone: "growth", section: "tools", focus: null });
+    if (buckets.price_attention.length) actionQueue.push({ id: "price_attention", title: `${buckets.price_attention.length} active listing${buckets.price_attention.length === 1 ? "" : "s"} need price truth review`, copy: `${buckets.price_attention[0].title || "Top listing"} has unresolved or suspicious price data.`, reason: "Price/mileage truth affects card accuracy and review workflow.", tone: "cleanup", section: "analytics", focus: "analyticsListingSearchInput" });
+    if (!actionQueue.length) actionQueue.push({ id: "sync_quiet", title: "Supabase truth layer is live", copy: "Active portfolio rows are rendered from Supabase truth.", reason: "Current state is stable and synced.", tone: "growth", section: "tools", focus: null });
     const countType = (type) => events.filter((evt) => evt.type === type).length;
-    const payload = { tracking_summary: { total_listings: listings.length, tracked_views: trackedViews, tracked_messages: trackedMessages, message_leaders_count: buckets.message_leaders.length || sortedByMessages.filter((item) => Number(item.messages || 0) > 0).length, view_leaders_count: buckets.view_leaders.length || sortedByViews.filter((item) => Number(item.views || 0) > 0).length, high_interest_count: buckets.high_interest.length, high_views_low_messages_count: buckets.high_views_low_messages.length, weak_conversion_count: buckets.weak_conversion.length, fresh_traction_count: buckets.fresh_traction.length, needs_refresh_count: buckets.needs_refresh.length, price_attention_count: buckets.price_attention.length, cooling_off_count: buckets.cooling_off.length, recovered_count: buckets.recovered.length, review_queue_count: reviewQueue.length, listing_seen_events: countType("listing_seen"), view_update_events: countType("view_update"), message_update_events: countType("message_update"), price_changed_events: countType("price_changed"), listing_removed_events: countType("listing_removed"), sync_source: clean(sync.source || "supabase_truth"), sync_confidence: clean(sync.confidence || "synced"), sync_remote_listing_count: Number(sync.remote_listing_count || listings.length), sync_remote_event_count: Number(sync.remote_event_count || 0), refreshed_at: new Date().toISOString() }, action_queue: actionQueue, leaders: buckets };
+    const payload = { tracking_summary: { total_listings: activePortfolio.length, tracked_views: trackedViews, tracked_messages: trackedMessages, message_leaders_count: buckets.message_leaders.length || sortedByMessages.filter((item) => Number(item.messages || 0) > 0).length, view_leaders_count: buckets.view_leaders.length || sortedByViews.filter((item) => Number(item.views || 0) > 0).length, high_interest_count: buckets.high_interest.length, high_views_low_messages_count: buckets.high_views_low_messages.length, weak_conversion_count: buckets.weak_conversion.length, fresh_traction_count: buckets.fresh_traction.length, needs_refresh_count: buckets.needs_refresh.length, price_attention_count: buckets.price_attention.length, cooling_off_count: buckets.cooling_off.length, recovered_count: buckets.recovered.length, review_queue_count: reviewQueue.length, listing_seen_events: countType("listing_seen"), view_update_events: countType("view_update"), message_update_events: countType("message_update"), price_changed_events: countType("price_changed"), listing_removed_events: countType("listing_removed"), sync_source: clean(sync.source || "supabase_truth"), sync_confidence: clean(sync.confidence || "synced"), sync_remote_listing_count: Number(sync.remote_listing_count || listings.length), sync_remote_event_count: Number(sync.remote_event_count || 0), refreshed_at: new Date().toISOString() }, action_queue: actionQueue, leaders: buckets };
     state?.setAnalytics?.(payload, { silent: false });
     state?.set?.("tracking.last_rebuild_at", payload.tracking_summary.refreshed_at, { silent: true });
     state?.set?.("tracking.source", "supabase_truth", { silent: true, skipPersist: false });
@@ -180,14 +192,18 @@
   function allRegistryListings() { return Object.values(NS.state?.get?.("listingRegistry", {}) || {}); }
   function isReviewItem(item) { const lifecycle = clean(item.lifecycle_status).toLowerCase(); const bucket = clean(item.review_bucket).toLowerCase(); return lifecycle.startsWith("review_") || bucket === "removedvehicles" || bucket === "pricechanges" || !!item.needs_action || !!item.weak || !!item.price_review_required || !!item.missing_image; }
 
+  function listingPoolForCards() {
+    return allRegistryListings().filter(isActivePortfolioItem);
+  }
+
   function applyFilter(items) {
     const search = clean(listingUi.search).toLowerCase();
     let out = [...items];
-    if (listingUi.filter === "active") out = out.filter((item) => clean(item.status).toLowerCase() === "active" && !isReviewItem(item));
-    if (listingUi.filter === "review") out = out.filter((item) => isReviewItem(item));
+    if (listingUi.filter === "active" || listingUi.filter === "all") out = out.filter(isActivePortfolioItem);
+    if (listingUi.filter === "review") out = allRegistryListings().filter(isReviewItem);
     if (listingUi.filter === "weak") out = out.filter((item) => !!item.weak || clean(item.health_state).toLowerCase() === "weak_conversion");
-    if (listingUi.filter === "likely_sold") out = out.filter((item) => !!item.likely_sold || clean(item.lifecycle_status).toLowerCase() === "review_delete" || clean(item.review_bucket).toLowerCase() === "removedvehicles");
-    if (listingUi.filter === "needs_action") out = out.filter((item) => !!item.needs_action);
+    if (listingUi.filter === "likely_sold") out = allRegistryListings().filter((item) => !!item.likely_sold || clean(item.lifecycle_status).toLowerCase() === "review_delete" || clean(item.review_bucket).toLowerCase() === "removedvehicles");
+    if (listingUi.filter === "needs_action") out = out.filter((item) => !!item.needs_action && isActivePortfolioItem(item));
     if (search) out = out.filter((item) => [item.title, item.make, item.model, item.vin, item.stock_number].map((v) => clean(v).toLowerCase()).join(" ").includes(search));
     if (listingUi.sort === "newest") out.sort((a, b) => new Date(b.updated_at || b.posted_at || 0) - new Date(a.updated_at || a.posted_at || 0));
     else if (listingUi.sort === "price_high") out.sort((a, b) => Number(b.price || 0) - Number(a.price || 0));
@@ -210,11 +226,13 @@
 
   function renderListingsSection() {
     const mount = document.getElementById('analyticsListingsGrid'); if (!mount) return;
-    const rows = applyFilter(allRegistryListings());
+    const rows = applyFilter(listingPoolForCards());
+    const activeCount = listingPoolForCards().length;
     const statusNode = document.getElementById('analyticsListingsStatus'); const gridStatus = document.getElementById('analyticsListingsGridStatus');
-    if (statusNode) statusNode.textContent = `${listingUi.filter.replace(/_/g, ' ')} • ${rows.length} rows available`;
-    if (gridStatus) gridStatus.textContent = rows.length ? `${rows.length} listing row${rows.length === 1 ? '' : 's'} loaded from Supabase truth.` : 'No portfolio rows are available yet.';
-    mount.innerHTML = rows.length ? `<div class="listing-grid">${rows.slice(0, 60).map(listingCard).join('')}</div>` : `<div class="listing-empty">No portfolio rows are available yet.</div>`;
+    const label = listingUi.filter === 'all' ? 'active portfolio' : listingUi.filter.replace(/_/g, ' ');
+    if (statusNode) statusNode.textContent = `${label} • ${rows.length} rows available`;
+    if (gridStatus) gridStatus.textContent = activeCount ? `${activeCount} active listing row${activeCount === 1 ? '' : 's'} loaded from Supabase truth.` : 'No active portfolio rows are available yet.';
+    mount.innerHTML = rows.length ? `<div class="listing-grid">${rows.slice(0, 60).map(listingCard).join('')}</div>` : `<div class="listing-empty">No portfolio rows are available for this filter.</div>`;
     bindListingActions(mount);
   }
 
