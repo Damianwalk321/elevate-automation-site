@@ -44,6 +44,13 @@ function normalizeLifecycleStatus(value, reviewBucket = "") {
   return "active";
 }
 
+function buildMarketplaceUrl(row = {}) {
+  const direct = clean(row.marketplace_url || row.platform_listing_url || row.posted_url || "");
+  if (/^https?:\/\//i.test(direct)) return direct;
+  const id = clean(row.marketplace_listing_id || "").replace(/[^0-9]/g, "");
+  return id ? `https://www.facebook.com/marketplace/item/${id}` : "";
+}
+
 function buildListingIntelligence(row = {}) {
   const postedValue = row.posted_at || row.created_at || row.updated_at || null;
   const postedTs = postedValue ? new Date(postedValue).getTime() : 0;
@@ -53,6 +60,8 @@ function buildListingIntelligence(row = {}) {
   const status = normalizeStatus(row.status);
   const lifecycle = normalizeLifecycleStatus(row.lifecycle_status, row.review_bucket);
   const reviewBucket = normalizeReviewBucket(row.review_bucket);
+  const priceReview = Boolean(row.price_review_required) || !row.price_resolved;
+  const missingImage = !clean(row.image_url || "");
 
   const staleLike = status === "stale" || lifecycle === "stale" || lifecycle === "review_delete" || reviewBucket === "removedvehicles";
   const likelySold = lifecycle === "review_delete" || reviewBucket === "removedvehicles";
@@ -61,10 +70,11 @@ function buildListingIntelligence(row = {}) {
   const promoteNow = activeLike && views >= 20 && messages >= 1;
   const lowPerformance = activeLike && ageDays >= 7 && views < 5 && messages === 0;
   const weak = staleLike || lowPerformance;
-  const needsAction = weak || highViewsNoMessages || lifecycle === "review_price_update" || reviewBucket === "pricechanges" || !row.price_resolved;
+  const needsAction = weak || highViewsNoMessages || lifecycle === "review_price_update" || reviewBucket === "pricechanges" || priceReview || missingImage;
 
   let recommendedAction = "Keep live";
-  if (!row.price_resolved) recommendedAction = "Resolve price source";
+  if (priceReview) recommendedAction = "Resolve price source";
+  else if (missingImage) recommendedAction = "Sync listing image";
   else if (likelySold) recommendedAction = "Check if sold or stale";
   else if (lifecycle === "review_price_update" || reviewBucket === "pricechanges" || highViewsNoMessages) recommendedAction = "Review price";
   else if (lifecycle === "review_new" || reviewBucket === "newvehicles") recommendedAction = "Review new listing";
@@ -77,22 +87,27 @@ function buildListingIntelligence(row = {}) {
     promote_now: promoteNow,
     weak,
     needs_action: needsAction,
+    missing_image: missingImage,
     recommended_action: recommendedAction,
-    predicted_score: Math.max(0, Math.min(100, Math.round(50 + Math.min(views, 25) + Math.min(messages * 18, 36) - Math.min(ageDays * 3, 24) - (!row.price_resolved ? 15 : 0)))),
-    predicted_label: !row.price_resolved ? "Data Incomplete" : "Likely Performer",
-    pricing_insight: !row.price_resolved ? "Price source is unresolved. Do not trust displayed price yet." : highViewsNoMessages ? "Price may be limiting message conversion." : messages >= 2 ? "Pricing appears competitive." : "Pricing signal still developing.",
-    content_feedback: "Listing structure looks strong.",
+    predicted_score: Math.max(0, Math.min(100, Math.round(50 + Math.min(views, 25) + Math.min(messages * 18, 36) - Math.min(ageDays * 3, 24) - (priceReview ? 15 : 0)))),
+    predicted_label: priceReview ? "Data Incomplete" : "Likely Performer",
+    pricing_insight: priceReview ? "Price source is unresolved. Do not trust displayed price yet." : highViewsNoMessages ? "Price may be limiting message conversion." : messages >= 2 ? "Pricing appears competitive." : "Pricing signal still developing.",
+    content_feedback: missingImage ? "Image is missing from listing truth." : "Listing structure looks strong.",
     popularity_score: messages * 1000 + views * 10 + (postedTs / 100000000)
   };
 }
 
+function stripVinPrefix(value) {
+  return clean(value || "").replace(/^VIN:/i, "").toUpperCase();
+}
+
 function listingIdentityKey(row) {
-  const marketplace = clean(row.marketplace_listing_id || "").toUpperCase();
-  if (marketplace) return `MARKETPLACE:${marketplace}`;
-  const vin = clean(row.vin || "").toUpperCase();
-  if (vin) return `VIN:${vin}`;
+  const vin = stripVinPrefix(row.vin || row.id || "");
+  if (vin && /^[A-HJ-NPR-Z0-9]{11,17}$/.test(vin)) return `VIN:${vin}`;
   const stock = clean(row.stock_number || "").toUpperCase();
   if (stock) return `STOCK:${stock}`;
+  const marketplace = clean(row.marketplace_listing_id || "").toUpperCase();
+  if (marketplace) return `MARKETPLACE:${marketplace}`;
   const source = clean(row.source_url || "").toLowerCase();
   if (source) return `URL:${source}`;
   const id = clean(row.id || "");
@@ -102,6 +117,7 @@ function listingIdentityKey(row) {
 
 function normalizeListingRow(row = {}, source = "user_listings") {
   const canonical = extractCanonicalPriceMileage(row);
+  const marketplaceUrl = buildMarketplaceUrl(row);
   const normalized = {
     ...row,
     id: clean(row.id || ""),
@@ -110,9 +126,10 @@ function normalizeListingRow(row = {}, source = "user_listings") {
     lifecycle_status: normalizeLifecycleStatus(row.lifecycle_status, row.review_bucket),
     review_bucket: normalizeReviewBucket(row.review_bucket),
     identity_key: listingIdentityKey({ ...row, price: canonical.price, mileage: canonical.mileage }),
-    title: clean(row.title || ""),
+    title: clean(row.title || `${clean(row.year)} ${clean(row.make)} ${clean(row.model)} ${clean(row.trim)}`.trim()),
     posted_at: row.posted_at || row.created_at || null,
     updated_at: row.updated_at || row.created_at || null,
+    last_seen_at: row.last_seen_at || row.updated_at || row.created_at || null,
     views_count: safeNumber(row.views_count, 0),
     messages_count: safeNumber(row.messages_count, 0),
     price: canonical.price,
@@ -124,20 +141,47 @@ function normalizeListingRow(row = {}, source = "user_listings") {
     price_warning: canonical.price_warning,
     price_resolved: canonical.price_resolved,
     mileage_resolved: canonical.mileage_resolved,
+    price_review_required: canonical.price_review_required,
     display_price_text: canonical.display_price_text,
+    display_mileage_text: canonical.display_mileage_text,
+    marketplace_url: marketplaceUrl,
     body_style: clean(row.body_style || ""),
     make: clean(row.make || ""),
     model: clean(row.model || ""),
-    trim: clean(row.trim || "")
+    trim: clean(row.trim || ""),
+    vin: stripVinPrefix(row.vin || row.id || ""),
+    stock_number: clean(row.stock_number || ""),
+    image_url: clean(row.image_url || "")
   };
   return { ...normalized, ...buildListingIntelligence(normalized) };
 }
 
 function preferListingRow(current, incoming) {
   if (!current) return incoming;
-  const currentScore = (current.source_table === "user_listings" ? 1000 : 0) + safeNumber(current.views_count) + safeNumber(current.messages_count) * 10 + (current.price_resolved ? 100 : 0);
-  const incomingScore = (incoming.source_table === "user_listings" ? 1000 : 0) + safeNumber(incoming.views_count) + safeNumber(incoming.messages_count) * 10 + (incoming.price_resolved ? 100 : 0);
-  return incomingScore >= currentScore ? { ...current, ...incoming } : { ...incoming, ...current };
+  const currentScore =
+    (current.source_table === "user_listings" ? 1000 : 0) +
+    (clean(current.image_url) ? 90 : 0) +
+    (current.price_resolved ? 120 : 0) +
+    (current.mileage_resolved ? 40 : 0) +
+    (clean(current.marketplace_url) ? 70 : 0) +
+    safeNumber(current.views_count) + safeNumber(current.messages_count) * 10;
+  const incomingScore =
+    (incoming.source_table === "user_listings" ? 1000 : 0) +
+    (clean(incoming.image_url) ? 90 : 0) +
+    (incoming.price_resolved ? 120 : 0) +
+    (incoming.mileage_resolved ? 40 : 0) +
+    (clean(incoming.marketplace_url) ? 70 : 0) +
+    safeNumber(incoming.views_count) + safeNumber(incoming.messages_count) * 10;
+
+  const base = incomingScore >= currentScore ? { ...current, ...incoming } : { ...incoming, ...current };
+  return {
+    ...base,
+    image_url: clean(base.image_url || current.image_url || incoming.image_url || ""),
+    marketplace_url: clean(base.marketplace_url || current.marketplace_url || incoming.marketplace_url || ""),
+    source_url: clean(base.source_url || current.source_url || incoming.source_url || ""),
+    vin: stripVinPrefix(base.vin || current.vin || incoming.vin || ""),
+    stock_number: clean(base.stock_number || current.stock_number || incoming.stock_number || "")
+  };
 }
 
 function makeRequestId() {
@@ -151,12 +195,7 @@ function makeRequestId() {
 async function resolveIdentityCandidates({ userId, email }) {
   const userIds = Array.from(new Set([clean(userId)].filter(Boolean)));
   const emails = Array.from(new Set([normalizeEmail(email)].filter(Boolean)));
-  return {
-    primary_user_id: userIds[0] || "",
-    primary_email: emails[0] || "",
-    user_ids: userIds,
-    emails
-  };
+  return { primary_user_id: userIds[0] || "", primary_email: emails[0] || "", user_ids: userIds, emails };
 }
 
 async function fetchTableRows(tableName, userIds = [], emails = []) {
@@ -164,33 +203,21 @@ async function fetchTableRows(tableName, userIds = [], emails = []) {
   const seen = new Set();
 
   for (const userId of userIds) {
-    const { data } = await supabase
-      .from(tableName)
-      .select("*")
-      .eq("user_id", userId)
-      .order("updated_at", { ascending: false })
-      .limit(300);
-
+    const { data } = await supabase.from(tableName).select("*").eq("user_id", userId).order("updated_at", { ascending: false }).limit(300);
     for (const row of Array.isArray(data) ? data : []) {
-      const key = clean(row?.id || "") || `${clean(row?.marketplace_listing_id || "")}|${clean(row?.posted_at || row?.created_at || "")}`;
-      if (!key || seen.has(key)) continue;
-      seen.add(key);
+      const normalizedKey = listingIdentityKey(row) || clean(row?.id || "") || `${clean(row?.marketplace_listing_id || "")}|${clean(row?.posted_at || row?.created_at || "")}`;
+      if (!normalizedKey || seen.has(normalizedKey)) continue;
+      seen.add(normalizedKey);
       rows.push(row);
     }
   }
 
   for (const email of emails) {
-    const { data } = await supabase
-      .from(tableName)
-      .select("*")
-      .ilike("email", email)
-      .order("updated_at", { ascending: false })
-      .limit(300);
-
+    const { data } = await supabase.from(tableName).select("*").ilike("email", email).order("updated_at", { ascending: false }).limit(300);
     for (const row of Array.isArray(data) ? data : []) {
-      const key = clean(row?.id || "") || `${clean(row?.marketplace_listing_id || "")}|${clean(row?.posted_at || row?.created_at || "")}`;
-      if (!key || seen.has(key)) continue;
-      seen.add(key);
+      const normalizedKey = listingIdentityKey(row) || clean(row?.id || "") || `${clean(row?.marketplace_listing_id || "")}|${clean(row?.posted_at || row?.created_at || "")}`;
+      if (!normalizedKey || seen.has(normalizedKey)) continue;
+      seen.add(normalizedKey);
       rows.push(row);
     }
   }
@@ -205,29 +232,18 @@ function matchesFilter(row, { status, lifecycleStatus, reviewBucket, search, pre
 
   if (status) {
     if (status === "review") {
-      if (!["review_delete", "review_price_update", "review_new"].includes(normalizedLifecycle)) return false;
-    } else if (normalizedStatus !== status) {
-      return false;
-    }
+      if (!["review_delete", "review_price_update", "review_new"].includes(normalizedLifecycle) && !row.needs_action) return false;
+    } else if (normalizedStatus !== status) return false;
   }
 
   if (lifecycleStatus && normalizedLifecycle !== lifecycleStatus) return false;
   if (reviewBucket && normalizedBucket !== reviewBucket) return false;
-  if (preset === "price" && normalizedLifecycle !== "review_price_update" && normalizedBucket !== "pricechanges") return false;
+  if (preset === "price" && !row.price_review_required && normalizedLifecycle !== "review_price_update" && normalizedBucket !== "pricechanges") return false;
   if (preset === "unresolved_price" && row.price_resolved) return false;
+  if (preset === "missing_image" && clean(row.image_url)) return false;
 
   if (search) {
-    const haystack = [
-      row.title,
-      row.make,
-      row.model,
-      row.trim,
-      row.vin,
-      row.stock_number,
-      row.body_style,
-      row.price_source,
-      row.mileage_source
-    ].map((v) => clean(v).toLowerCase()).join(" ");
+    const haystack = [row.title, row.make, row.model, row.trim, row.vin, row.stock_number, row.body_style, row.price_source, row.mileage_source].map((v) => clean(v).toLowerCase()).join(" ");
     if (!haystack.includes(search)) return false;
   }
 
@@ -247,27 +263,17 @@ export default async function handler(req, res) {
   res.setHeader("Content-Type", "application/json");
   res.setHeader("x-request-id", requestId);
 
-  if (req.method !== "GET") {
-    return res.status(405).json({ error: "Method not allowed", request_id: requestId });
-  }
+  if (req.method !== "GET") return res.status(405).json({ error: "Method not allowed", request_id: requestId });
 
   try {
     const dashboardClient = isDashboardClient(req);
-    const verifiedUser = dashboardClient
-      ? await requireVerifiedDashboardUser(req, res)
-      : await getVerifiedRequestUser(req);
-
-    if (dashboardClient && !verifiedUser) {
-      return;
-    }
+    const verifiedUser = dashboardClient ? await requireVerifiedDashboardUser(req, res) : await getVerifiedRequestUser(req);
+    if (dashboardClient && !verifiedUser) return;
 
     const trusted = getTrustedIdentity({ verifiedUser, body: req.body || {}, query: req.query || {} });
     const userId = clean(trusted.id || req.query?.userId || req.query?.user_id || "");
     const email = normalizeEmail(trusted.email || req.query?.email || "");
-
-    if (!userId && !email) {
-      return res.status(400).json({ error: "No identity provided", request_id: requestId });
-    }
+    if (!userId && !email) return res.status(400).json({ error: "No identity provided", request_id: requestId });
 
     const status = clean(req.query?.status || "").toLowerCase();
     const preset = clean(req.query?.preset || "").toLowerCase();
@@ -294,11 +300,7 @@ export default async function handler(req, res) {
       mergedMap.set(normalized.identity_key, preferListingRow(mergedMap.get(normalized.identity_key), normalized));
     }
 
-    const filteredRows = sortRows(
-      [...mergedMap.values()].filter((row) => matchesFilter(row, { status, lifecycleStatus, reviewBucket, search, preset })),
-      sort
-    );
-
+    const filteredRows = sortRows([...mergedMap.values()].filter((row) => matchesFilter(row, { status, lifecycleStatus, reviewBucket, search, preset })), sort);
     const totalFiltered = filteredRows.length;
     const pagedRows = filteredRows.slice(offset, offset + limit);
 
@@ -310,15 +312,12 @@ export default async function handler(req, res) {
         total: totalFiltered,
         returned_count: pagedRows.length,
         unresolved_price_count: filteredRows.filter((row) => !row.price_resolved).length,
+        missing_image_count: filteredRows.filter((row) => !clean(row.image_url)).length,
         limit,
         offset,
         has_more: offset + pagedRows.length < totalFiltered,
         auth_mode: verifiedUser ? "verified_bearer" : "query_identity",
-        sources: {
-          user_listings: userRows.length,
-          listings: legacyRows.length,
-          merged: mergedMap.size
-        }
+        sources: { user_listings: userRows.length, listings: legacyRows.length, merged: mergedMap.size }
       }
     });
   } catch (error) {
