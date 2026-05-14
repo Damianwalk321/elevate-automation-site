@@ -12,7 +12,7 @@
   const MODULES = [
     "/dashboard-state.js?v=20260406p12a",
     "/dashboard-ui.js?v=20260406p12a",
-    "/dashboard-section-governor.js?v=20260513live1",
+    "/dashboard-section-governor.js?v=20260513stable1",
     "/dashboard-api.js?v=20260406p12a",
     "/dashboard-overview.js?v=20260512cc3",
     "/dashboard-listings.js?v=20260406p12a",
@@ -20,15 +20,13 @@
     "/dashboard-analytics.js?v=20260412p22e",
     "/dashboard-affiliate.js?v=20260406p12a",
     "/dashboard-billing.js?v=20260406p12a",
-    "/dashboard-execution-hub-data-bridge.js?v=20260513b1",
-    "/dashboard-execution-hub-final-governor.js?v=20260513c2",
     "/dashboard-bootstrap.js?v=20260406p12a"
   ];
 
   const MODULE_STAGE_GROUPS = [
     { upto: 3, label: "Core shell" },
     { upto: 7, label: "Workspace modules" },
-    { upto: 12, label: "Operator panels" },
+    { upto: 10, label: "Operator panels" },
     { upto: MODULES.length, label: "Bootstrap" }
   ];
 
@@ -47,16 +45,12 @@
 
   function setFriendlyStatus(message) {
     const bootStatus = document.getElementById("bootStatus");
-    if (bootStatus && /waiting|loading|boot/i.test(clean(bootStatus.textContent || ""))) {
-      bootStatus.textContent = "";
-    }
+    if (bootStatus && /waiting|loading|boot/i.test(clean(bootStatus.textContent || ""))) bootStatus.textContent = "";
     const welcomeText = document.getElementById("welcomeText");
     if (!welcomeText) return;
     const current = clean(welcomeText.textContent || "");
     const looksLoading = !current || /loading|booting|starting/i.test(current);
-    if (message && looksLoading) {
-      welcomeText.textContent = message;
-    }
+    if (message && looksLoading) welcomeText.textContent = message;
   }
 
   function setBootStatus(message) {
@@ -71,9 +65,7 @@
   }
 
   function publishLoaderDiagnostics() {
-    try {
-      NS.events?.dispatchEvent?.(new CustomEvent("loader:state", { detail: { ...NS.loaderState } }));
-    } catch {}
+    try { NS.events?.dispatchEvent?.(new CustomEvent("loader:state", { detail: { ...NS.loaderState } })); } catch {}
   }
 
   function updateProgress(index, src) {
@@ -85,9 +77,7 @@
       NS.loaderState.currentModule = src || "";
       NS.loaderState.stageLabel = stageLabel;
       document.body?.setAttribute("data-ea-loader-progress", `${loaded}/${MODULES.length}`);
-      if (loaded < MODULES.length) {
-        setBootStatus(`Loading stage: ${stageLabel} • ${loaded}/${MODULES.length}`);
-      }
+      if (loaded < MODULES.length) setBootStatus(`Loading stage: ${stageLabel} • ${loaded}/${MODULES.length}`);
       publishLoaderDiagnostics();
     } catch {}
   }
@@ -100,9 +90,7 @@
       if (!raw) return false;
       const parsed = JSON.parse(raw);
       return Boolean(parsed && (parsed.user_id || parsed.email) && parsed.canonical_profile_table);
-    } catch {
-      return false;
-    }
+    } catch { return false; }
   }
 
   function authStillSettling() {
@@ -123,10 +111,7 @@
       const script = document.createElement("script");
       script.src = src;
       script.async = false;
-      script.onload = () => {
-        updateProgress(index + 1, src);
-        resolve();
-      };
+      script.onload = () => { updateProgress(index + 1, src); resolve(); };
       script.onerror = () => reject(new Error(`Failed to load ${src}`));
       document.head.appendChild(script);
     }).then(() => loadScriptSequentially(index + 1));
@@ -139,11 +124,7 @@
   loadScriptSequentially()
     .then(() => {
       setLoaderState(hasCanonicalTruth() ? "truth-ready" : "modules-loaded");
-      if (hasCanonicalTruth()) {
-        setBootStatus("Canonical account data loaded.");
-      } else {
-        setBootStatus(authStillSettling() ? "Modules loaded. Waiting for auth settle..." : "Modules loaded. Waiting for canonical account data...");
-      }
+      setBootStatus(hasCanonicalTruth() ? "Canonical account data loaded." : (authStillSettling() ? "Modules loaded. Waiting for auth settle..." : "Modules loaded. Waiting for canonical account data..."));
     })
     .catch((error) => {
       console.error("[Elevate Dashboard] Loader error:", error);
