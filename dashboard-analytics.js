@@ -10,20 +10,11 @@
     .ea-analytics-segment button.active{background:rgba(212,175,55,.15);color:#f3ddb0}
     .ea-analytics-pane{display:grid;gap:18px}
     .ea-analytics-pane.hidden{display:none !important}
-    .ea-analytics-review-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px}
     .ea-analytics-listing-toolbar{display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:14px}
     .ea-analytics-listing-toolbar .toolbar{margin:0}
     .ea-analytics-note{padding:14px 16px;border-radius:14px;background:#161616;border:1px solid rgba(255,255,255,.05);color:#d1d1d1;line-height:1.55}
-    @media (max-width: 980px){.ea-analytics-review-grid{grid-template-columns:1fr}}
+    .ea-review-single-card{padding:0!important;background:transparent!important;border:none!important;box-shadow:none!important}
   `;
-
-  function clean(value){
-    return String(value || '').replace(/\s+/g,' ').trim();
-  }
-
-  function role(){
-    return (window.dashboardSummary?.manager_access) ? 'manager' : 'operator';
-  }
 
   function injectStyle(){
     if (document.getElementById('ea-analytics-workspace-style')) return;
@@ -33,10 +24,11 @@
     document.head.appendChild(style);
   }
 
+  function role(){ return (window.dashboardSummary?.manager_access) ? 'manager' : 'operator'; }
+
   function ensureAnalyticsSection(){
     const mainInner = document.querySelector('.main-inner');
     if (!mainInner) return null;
-
     let analyticsSection = document.getElementById('analytics');
     if (!analyticsSection) {
       analyticsSection = document.createElement('section');
@@ -44,7 +36,6 @@
       analyticsSection.className = 'dashboard-section';
       mainInner.appendChild(analyticsSection);
     }
-
     return analyticsSection;
   }
 
@@ -68,8 +59,8 @@
         <div class="ea-analytics-toolbar">
           <div>
             <div class="module-group-label">Analytics Workspace</div>
-            <h2 style="margin-top:6px;">Listings and review now live together</h2>
-            <div class="subtext">Performance, portfolio rows, and intervention workflow are consolidated into one operating area.</div>
+            <h2 style="margin-top:6px;">Intelligence Centre</h2>
+            <div class="subtext">Performance, active listings, and operator review are consolidated into one operating area.</div>
           </div>
           <div class="ea-analytics-segment" id="analyticsSegmentControl">
             <button type="button" data-pane="performance" class="active">Performance</button>
@@ -79,15 +70,15 @@
         </div>
 
         <div id="analyticsPanePerformance" class="ea-analytics-pane">
-          <div class="ea-analytics-note">Use this pane for performance and intelligence. Listings and review have been moved out of Overview and condensed here for a cleaner operator flow.</div>
+          <div class="ea-analytics-note">Performance intelligence will sit here next: active listing trend, posts by day, review pressure, and data-quality signals from Supabase truth.</div>
         </div>
 
         <div id="analyticsPaneListings" class="ea-analytics-pane hidden">
           <div class="card">
             <div class="ea-analytics-listing-toolbar">
               <div>
-                <h3>All vehicle listings</h3>
-                <div id="analyticsListingsStatus" class="subtext">Filter, search, and review the full portfolio here.</div>
+                <h3>Active vehicle listings</h3>
+                <div id="analyticsListingsStatus" class="subtext">Active portfolio rows only. Review/stale rows live in Review.</div>
               </div>
               <div class="toolbar" style="gap:12px; flex-wrap:wrap;">
                 <div id="analyticsListingQuickFilters" style="display:flex; gap:8px; flex-wrap:wrap;">
@@ -96,7 +87,7 @@
                   <button class="action-btn" type="button" data-filter="review">Review</button>
                   <button class="action-btn" type="button" data-filter="weak">Weak</button>
                   <button class="action-btn" type="button" data-filter="needs_action">Needs Action</button>
-                  <button class="action-btn" type="button" data-filter="likely_sold">Likely Sold</button>
+                  <button class="action-btn" type="button" data-filter="likely_sold">Inventory Missing</button>
                 </div>
                 <select id="analyticsListingSortSelect">
                   <option value="popular">Sort: Most Popular</option>
@@ -113,20 +104,11 @@
         </div>
 
         <div id="analyticsPaneReview" class="ea-analytics-pane hidden">
-          <div class="ea-analytics-review-grid">
-            <div class="card">
-              <div class="section-head"><div><h3>Review queue</h3><div class="subtext">Vehicles needing operator validation, price attention, or cleanup.</div></div></div>
-              <div id="analyticsReviewQueue"><div class="listing-empty">No review items yet.</div></div>
-            </div>
-            <div class="card">
-              <div class="section-head"><div><h3>Needs action</h3><div class="subtext">Priority intervention cards to resolve before adding more posting pressure.</div></div></div>
-              <div id="analyticsNeedsActionQueue"><div class="listing-empty">No critical items yet.</div></div>
-            </div>
+          <div class="ea-review-single-card">
+            <div id="analyticsReviewQueue"><div class="listing-empty">No review items yet.</div></div>
           </div>
-          <div class="card">
-            <div class="section-head"><div><h3>Price watch & sold-risk</h3><div class="subtext">Monitor likely sold rows and price-update reviews from one place.</div></div></div>
-            <div id="analyticsPriceWatchQueue"><div class="listing-empty">No price watch or sold-risk items yet.</div></div>
-          </div>
+          <div id="analyticsNeedsActionQueue" style="display:none"></div>
+          <div id="analyticsPriceWatchQueue" style="display:none"></div>
         </div>
       </section>
     `;
@@ -166,13 +148,7 @@
     const root = mountRoot();
     if(!root) return;
     injectStyle();
-
-    if(role()==='operator'){
-      root.innerHTML = operatorView();
-    } else {
-      root.innerHTML = managerView();
-    }
-
+    root.innerHTML = role() === 'operator' ? operatorView() : managerView();
     bindSegment();
     window.dispatchEvent(new CustomEvent('elevate:analytics-workspace-mounted'));
   }
