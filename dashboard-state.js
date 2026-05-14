@@ -71,9 +71,7 @@
         listingRegistry: parsed.listingRegistry || {},
         listingEvents: Array.isArray(parsed.listingEvents) ? parsed.listingEvents : []
       };
-    } catch {
-      return base;
-    }
+    } catch { return base; }
   }
 
   const store = hydrate();
@@ -103,8 +101,23 @@
     return next;
   }
 
+  function normalizeVin(value) {
+    const vin = clean(value || "").replace(/^VIN:/i, "").toUpperCase();
+    return /^[A-HJ-NPR-Z0-9]{11,17}$/.test(vin) ? vin : "";
+  }
+
   function canonicalListingId(item = {}) {
-    const preferred = clean(item.id || item.listing_id || item.marketplace_listing_id || item.vin || item.stock_number);
+    const identity = clean(item.identity_key || item.canonical_key || "");
+    if (identity) return identity;
+    const vin = normalizeVin(item.vin || item.id || "");
+    if (vin) return `VIN:${vin}`;
+    const stock = clean(item.stock_number || "").toUpperCase();
+    if (stock) return `STOCK:${stock}`;
+    const marketplace = clean(item.marketplace_listing_id || "");
+    if (marketplace) return `MARKETPLACE:${marketplace}`;
+    const sourceUrl = clean(item.source_url || "").toLowerCase();
+    if (sourceUrl) return `URL:${sourceUrl}`;
+    const preferred = clean(item.id || item.listing_id || "");
     if (preferred) return preferred;
     const title = clean(item.title).toLowerCase();
     const price = clean(item.current_price || item.price).toLowerCase();
@@ -123,12 +136,7 @@
       meta: clone(event.meta || {})
     };
     if (!next.listing_id) return null;
-    const duplicate = events.find((evt) =>
-      evt.listing_id === next.listing_id &&
-      evt.type === next.type &&
-      String(evt.timestamp) === String(next.timestamp) &&
-      JSON.stringify(evt.meta || {}) === JSON.stringify(next.meta || {})
-    );
+    const duplicate = events.find((evt) => evt.listing_id === next.listing_id && evt.type === next.type && String(evt.timestamp) === String(next.timestamp) && JSON.stringify(evt.meta || {}) === JSON.stringify(next.meta || {}));
     if (duplicate) return duplicate;
     events.push(next);
     while (events.length > 1500) events.shift();
@@ -136,9 +144,7 @@
     return next;
   }
 
-  function getListingEvents(listingId) {
-    return (get("listingEvents", []) || []).filter((evt) => evt.listing_id === listingId);
-  }
+  function getListingEvents(listingId) { return (get("listingEvents", []) || []).filter((evt) => evt.listing_id === listingId); }
 
   function setSyncState(payload = {}, options = {}) {
     const current = get("sync", {});
@@ -164,6 +170,7 @@
       ...existing,
       ...item,
       id,
+      identity_key: item.identity_key || id,
       views,
       views_count: views,
       messages,
@@ -243,24 +250,12 @@
     const now = nowIso();
 
     listings.forEach((item) => {
-      upsertListing({
-        ...item,
-        sync_source: clean(payload.source || item.sync_source || "remote_sync"),
-        sync_confidence: clean(payload.confidence || item.sync_confidence || "synced"),
-        last_seen_at: item.last_seen_at || now
-      }, { silent: true, skipPersist: true, skipEvents: false });
+      upsertListing({ ...item, sync_source: clean(payload.source || item.sync_source || "remote_sync"), sync_confidence: clean(payload.confidence || item.sync_confidence || "synced"), last_seen_at: item.last_seen_at || now }, { silent: true, skipPersist: true, skipEvents: false });
     });
 
     events.forEach((evt) => {
       const listingId = clean(evt.listing_id || canonicalListingId(evt));
-      appendListingEvent({
-        id: evt.id,
-        listing_id: listingId,
-        type: clean(evt.type || "listing_updated"),
-        timestamp: evt.timestamp || now,
-        source: clean(evt.source || payload.source || "remote_sync"),
-        meta: evt.meta || {}
-      }, { silent: true, skipPersist: true });
+      appendListingEvent({ id: evt.id, listing_id: listingId, type: clean(evt.type || "listing_updated"), timestamp: evt.timestamp || now, source: clean(evt.source || payload.source || "remote_sync"), meta: evt.meta || {} }, { silent: true, skipPersist: true });
     });
 
     if (removedIds.length) {
@@ -274,16 +269,7 @@
       set("listingRegistry", registry, { silent: true, skipPersist: true });
     }
 
-    setSyncState({
-      source: clean(payload.source || "remote_sync"),
-      confidence: clean(payload.confidence || ((listings.length || events.length) ? "synced" : "local")),
-      last_ingest_at: payload.ingested_at || now,
-      last_reconcile_at: now,
-      remote_listing_count: listings.length,
-      remote_event_count: events.length,
-      payload_version: clean(payload.version || "v1"),
-      issues
-    }, { silent: true, skipPersist: true });
+    setSyncState({ source: clean(payload.source || "remote_sync"), confidence: clean(payload.confidence || ((listings.length || events.length) ? "synced" : "local")), last_ingest_at: payload.ingested_at || now, last_reconcile_at: now, remote_listing_count: listings.length, remote_event_count: events.length, payload_version: clean(payload.version || "v1"), issues }, { silent: true, skipPersist: true });
 
     rebuildFilteredListings();
     persist();
@@ -294,13 +280,7 @@
     return { listings: listings.length, events: events.length };
   }
 
-  NS.state = {
-    store, get, set, merge, persist,
-    upsertListing, markMissingListingsRemoved, rebuildFilteredListings, setAnalytics,
-    canonicalListingId, appendListingEvent, getListingEvents,
-    setSyncState, applyRemoteSync
-  };
-
+  NS.state = { store, get, set, merge, persist, upsertListing, markMissingListingsRemoved, rebuildFilteredListings, setAnalytics, canonicalListingId, appendListingEvent, getListingEvents, setSyncState, applyRemoteSync };
   NS.modules = NS.modules || {};
   NS.modules.state = true;
 })();
