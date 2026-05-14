@@ -1,11 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import { randomUUID } from "node:crypto";
-import {
-  getVerifiedRequestUser,
-  getTrustedIdentity,
-  requireVerifiedDashboardUser,
-  isDashboardClient
-} from "./_shared/auth.js";
+import { requireVerifiedUser } from "./_shared/auth.js";
 import {
   clean,
   normalizeEmail,
@@ -62,7 +57,6 @@ function buildListingIntelligence(row = {}) {
   const reviewBucket = normalizeReviewBucket(row.review_bucket);
   const priceReview = Boolean(row.price_review_required) || !row.price_resolved;
   const missingImage = !clean(row.image_url || "");
-
   const staleLike = status === "stale" || lifecycle === "stale" || lifecycle === "review_delete" || reviewBucket === "removedvehicles";
   const likelySold = lifecycle === "review_delete" || reviewBucket === "removedvehicles";
   const activeLike = !["sold", "deleted", "inactive"].includes(status) && lifecycle !== "review_delete";
@@ -172,7 +166,6 @@ function preferListingRow(current, incoming) {
     (incoming.mileage_resolved ? 40 : 0) +
     (clean(incoming.marketplace_url) ? 70 : 0) +
     safeNumber(incoming.views_count) + safeNumber(incoming.messages_count) * 10;
-
   const base = incomingScore >= currentScore ? { ...current, ...incoming } : { ...incoming, ...current };
   return {
     ...base,
@@ -185,68 +178,46 @@ function preferListingRow(current, incoming) {
 }
 
 function makeRequestId() {
-  try {
-    return randomUUID();
-  } catch {
-    return `req_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 9)}`;
-  }
+  try { return randomUUID(); } catch { return `req_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 9)}`; }
 }
 
-async function resolveIdentityCandidates({ userId, email }) {
-  const userIds = Array.from(new Set([clean(userId)].filter(Boolean)));
-  const emails = Array.from(new Set([normalizeEmail(email)].filter(Boolean)));
-  return { primary_user_id: userIds[0] || "", primary_email: emails[0] || "", user_ids: userIds, emails };
-}
+async function fetchTableRows(tableName, userId = "", email = "") {
+  const byKey = new Map();
+  const queries = [];
+  if (userId) queries.push(supabase.from(tableName).select("*").eq("user_id", userId).order("updated_at", { ascending: false }).limit(300));
+  if (email) queries.push(supabase.from(tableName).select("*").eq("email", email).order("updated_at", { ascending: false }).limit(300));
 
-async function fetchTableRows(tableName, userIds = [], emails = []) {
-  const rows = [];
-  const seen = new Set();
-
-  for (const userId of userIds) {
-    const { data } = await supabase.from(tableName).select("*").eq("user_id", userId).order("updated_at", { ascending: false }).limit(300);
+  const results = await Promise.allSettled(queries);
+  for (const result of results) {
+    if (result.status !== "fulfilled") continue;
+    const { data } = result.value || {};
     for (const row of Array.isArray(data) ? data : []) {
       const normalizedKey = listingIdentityKey(row) || clean(row?.id || "") || `${clean(row?.marketplace_listing_id || "")}|${clean(row?.posted_at || row?.created_at || "")}`;
-      if (!normalizedKey || seen.has(normalizedKey)) continue;
-      seen.add(normalizedKey);
-      rows.push(row);
+      if (!normalizedKey) continue;
+      byKey.set(normalizedKey, preferListingRow(byKey.get(normalizedKey), row));
     }
   }
-
-  for (const email of emails) {
-    const { data } = await supabase.from(tableName).select("*").ilike("email", email).order("updated_at", { ascending: false }).limit(300);
-    for (const row of Array.isArray(data) ? data : []) {
-      const normalizedKey = listingIdentityKey(row) || clean(row?.id || "") || `${clean(row?.marketplace_listing_id || "")}|${clean(row?.posted_at || row?.created_at || "")}`;
-      if (!normalizedKey || seen.has(normalizedKey)) continue;
-      seen.add(normalizedKey);
-      rows.push(row);
-    }
-  }
-
-  return rows;
+  return [...byKey.values()];
 }
 
 function matchesFilter(row, { status, lifecycleStatus, reviewBucket, search, preset }) {
   const normalizedStatus = normalizeStatus(row.status);
   const normalizedLifecycle = normalizeLifecycleStatus(row.lifecycle_status, row.review_bucket);
   const normalizedBucket = normalizeReviewBucket(row.review_bucket);
-
   if (status) {
     if (status === "review") {
       if (!["review_delete", "review_price_update", "review_new"].includes(normalizedLifecycle) && !row.needs_action) return false;
     } else if (normalizedStatus !== status) return false;
   }
-
   if (lifecycleStatus && normalizedLifecycle !== lifecycleStatus) return false;
   if (reviewBucket && normalizedBucket !== reviewBucket) return false;
   if (preset === "price" && !row.price_review_required && normalizedLifecycle !== "review_price_update" && normalizedBucket !== "pricechanges") return false;
   if (preset === "unresolved_price" && row.price_resolved) return false;
   if (preset === "missing_image" && clean(row.image_url)) return false;
-
   if (search) {
     const haystack = [row.title, row.make, row.model, row.trim, row.vin, row.stock_number, row.body_style, row.price_source, row.mileage_source].map((v) => clean(v).toLowerCase()).join(" ");
     if (!haystack.includes(search)) return false;
   }
-
   return true;
 }
 
@@ -266,14 +237,12 @@ export default async function handler(req, res) {
   if (req.method !== "GET") return res.status(405).json({ error: "Method not allowed", request_id: requestId });
 
   try {
-    const dashboardClient = isDashboardClient(req);
-    const verifiedUser = dashboardClient ? await requireVerifiedDashboardUser(req, res) : await getVerifiedRequestUser(req);
-    if (dashboardClient && !verifiedUser) return;
+    const verifiedUser = await requireVerifiedUser(req, res);
+    if (!verifiedUser) return;
 
-    const trusted = getTrustedIdentity({ verifiedUser, body: req.body || {}, query: req.query || {} });
-    const userId = clean(trusted.id || req.query?.userId || req.query?.user_id || "");
-    const email = normalizeEmail(trusted.email || req.query?.email || "");
-    if (!userId && !email) return res.status(400).json({ error: "No identity provided", request_id: requestId });
+    const userId = clean(verifiedUser.id || "");
+    const email = normalizeEmail(verifiedUser.email || "");
+    if (!userId && !email) return res.status(401).json({ error: "Unauthorized", request_id: requestId });
 
     const status = clean(req.query?.status || "").toLowerCase();
     const preset = clean(req.query?.preset || "").toLowerCase();
@@ -284,10 +253,9 @@ export default async function handler(req, res) {
     const limit = Math.min(Math.max(Number(req.query?.limit || 100), 1), 300);
     const offset = Math.max(Number(req.query?.offset || 0), 0);
 
-    const identity = await resolveIdentityCandidates({ userId, email });
     const [userRows, legacyRows] = await Promise.all([
-      fetchTableRows("user_listings", identity.user_ids, identity.emails),
-      fetchTableRows("listings", identity.user_ids, identity.emails)
+      fetchTableRows("user_listings", userId, email),
+      fetchTableRows("listings", userId, email)
     ]);
 
     const mergedMap = new Map();
@@ -316,7 +284,8 @@ export default async function handler(req, res) {
         limit,
         offset,
         has_more: offset + pagedRows.length < totalFiltered,
-        auth_mode: verifiedUser ? "verified_bearer" : "query_identity",
+        auth_mode: "verified_bearer_owner_scoped",
+        owner_scope: { user_id: userId, email },
         sources: { user_listings: userRows.length, listings: legacyRows.length, merged: mergedMap.size }
       }
     });
