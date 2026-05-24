@@ -283,6 +283,20 @@
     });
   }
 
+  function loadSideNavRestore() {
+    try {
+      if (document.querySelector('script[src*="dashboard-side-nav-restore.js"]')) return;
+      const script = document.createElement("script");
+      script.src = "/dashboard-side-nav-restore.js?v=20260524f";
+      script.async = false;
+      script.onload = () => pushStage("Side nav", "restore module loaded");
+      script.onerror = () => pushStage("Side nav", "restore module failed to load");
+      document.head.appendChild(script);
+    } catch (error) {
+      pushStage("Side nav", `restore injection failed: ${error?.message || error}`);
+    }
+  }
+
   function boot() {
     const state = ensureBootstrapState();
     if (state.started) return;
@@ -290,6 +304,7 @@
     state.startedAt = new Date().toISOString();
     state.authSettling = true;
 
+    loadSideNavRestore();
     setWorkspaceState("false");
     NS.phase2render?.prepare?.();
     setFriendlyStatus("Loading your operator workspace...");
@@ -307,6 +322,7 @@
     }, AUTH_SETTLE_MS);
 
     setTimeout(() => {
+      loadSideNavRestore();
       attemptReady("mid-startup-check");
       bindActionButtons();
     }, 3000);
