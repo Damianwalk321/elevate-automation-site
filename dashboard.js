@@ -4,7 +4,7 @@
   window.__ELEVATE_DASHBOARD_PHASE18_20_LOADER__ = true;
 
   const NS = (window.ElevateDashboard = window.ElevateDashboard || {});
-  NS.version = "bundle2-core-runtime-intelligence-review-2-4-20260513";
+  NS.version = "bundle2-core-runtime-intelligence-listing-centre-20260524a";
   NS.modules = NS.modules || {};
   NS.events = NS.events || new EventTarget();
   NS.loaderState = NS.loaderState && typeof NS.loaderState === "object" ? NS.loaderState : {};
@@ -18,6 +18,7 @@
     "/dashboard-listings-v23.js?v=20260513review24a",
     "/dashboard-profile.js?v=20260406p12a",
     "/dashboard-analytics.js?v=20260513performance1",
+    "/dashboard-listing-centre-upgrade.js?v=20260524a",
     "/dashboard-affiliate.js?v=20260406p12a",
     "/dashboard-billing.js?v=20260406p12a",
     "/dashboard-bootstrap.js?v=20260406p12a"
@@ -25,8 +26,8 @@
 
   const MODULE_STAGE_GROUPS = [
     { upto: 3, label: "Core shell" },
-    { upto: 7, label: "Workspace modules" },
-    { upto: 10, label: "Operator panels" },
+    { upto: 8, label: "Workspace modules" },
+    { upto: 11, label: "Operator panels" },
     { upto: MODULES.length, label: "Bootstrap" }
   ];
 
