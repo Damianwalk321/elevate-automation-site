@@ -10,6 +10,19 @@
     return String(value || '').replace(/\s+/g, ' ').trim();
   }
 
+  function loadSideNavRestore() {
+    try {
+      if (window.ElevateDashboard?.modules?.sideNavRestore20260524) return;
+      if (document.querySelector('script[src*="dashboard-side-nav-restore.js"]')) return;
+      const script = document.createElement('script');
+      script.src = '/dashboard-side-nav-restore.js?v=20260524g';
+      script.async = false;
+      document.head.appendChild(script);
+    } catch (error) {
+      console.warn('[Elevate Bundle C] side nav restore load failed:', error);
+    }
+  }
+
   function text(id) {
     return clean(document.getElementById(id)?.textContent || '');
   }
@@ -130,11 +143,16 @@
   }
 
   function render() {
+    loadSideNavRestore();
     document.getElementById('overview')?.classList.add('bundle-c-live');
     renderTakeover();
   }
 
+  loadSideNavRestore();
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', render, { once: true });
   else render();
   window.addEventListener('elevate:summary-ready', () => setTimeout(render, 100));
+  setTimeout(loadSideNavRestore, 400);
+  setTimeout(loadSideNavRestore, 1600);
+  setTimeout(loadSideNavRestore, 3600);
 })();
