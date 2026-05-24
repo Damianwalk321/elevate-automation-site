@@ -4,7 +4,7 @@
   window.__ELEVATE_DASHBOARD_PHASE18_20_LOADER__ = true;
 
   const NS = (window.ElevateDashboard = window.ElevateDashboard || {});
-  NS.version = "bundle2-core-runtime-intelligence-centre-2-1-20260524b";
+  NS.version = "bundle2-core-runtime-intelligence-centre-2-1-1-20260524c";
   NS.modules = NS.modules || {};
   NS.events = NS.events || new EventTarget();
   NS.loaderState = NS.loaderState && typeof NS.loaderState === "object" ? NS.loaderState : {};
@@ -18,7 +18,7 @@
     "/dashboard-listings-v23.js?v=20260513review24a",
     "/dashboard-profile.js?v=20260406p12a",
     "/dashboard-analytics.js?v=20260513performance1",
-    "/dashboard-listing-centre-upgrade.js?v=20260524b",
+    "/dashboard-listing-centre-upgrade.js?v=20260524c",
     "/dashboard-affiliate.js?v=20260406p12a",
     "/dashboard-billing.js?v=20260406p12a",
     "/dashboard-bootstrap.js?v=20260406p12a"
