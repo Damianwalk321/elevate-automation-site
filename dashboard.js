@@ -3,7 +3,7 @@
   window.__ELEVATE_DASHBOARD_PHASE18_20_LOADER__ = true;
 
   const NS = (window.ElevateDashboard = window.ElevateDashboard || {});
-  NS.version = "bundle2-core-runtime-sidenav-restore-20260524g";
+  NS.version = "bundle2-core-runtime-sidenav-restore-20260525j";
   NS.modules = NS.modules || {};
   NS.events = NS.events || new EventTarget();
   NS.loaderState = NS.loaderState && typeof NS.loaderState === "object" ? NS.loaderState : {};
@@ -18,7 +18,7 @@
     "/dashboard-profile.js?v=20260406p12a",
     "/dashboard-analytics.js?v=20260513performance1",
     "/dashboard-listing-centre-upgrade.js?v=20260524c",
-    "/dashboard-side-nav-restore.js?v=20260524g",
+    "/dashboard-side-nav-restore.js?v=20260525j",
     "/dashboard-affiliate.js?v=20260406p12a",
     "/dashboard-billing.js?v=20260406p12a",
     "/dashboard-bootstrap.js?v=20260524g"
