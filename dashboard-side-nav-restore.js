@@ -1,7 +1,9 @@
 (() => {
   const NS = (window.ElevateDashboard = window.ElevateDashboard || {});
   NS.modules = NS.modules || {};
-  const VERSION = 'side-nav-restore-20260525k';
+  const VERSION = 'side-nav-restore-20260525l';
+  let profileIdentity = null;
+  let profilePromise = null;
 
   const navItems = [
     { id: 'overview', icon: '⌘', title: 'Command Centre', sub: 'Overview' },
@@ -18,12 +20,12 @@
   function clean(value) { return String(value || '').replace(/\s+/g, ' ').trim(); }
   function titleCase(value) { return clean(value).split(/[._\-\s]+/).filter(Boolean).map((p) => p.charAt(0).toUpperCase() + p.slice(1).toLowerCase()).join(' '); }
   function readJson(key) { try { const raw = localStorage.getItem(key); return raw ? JSON.parse(raw) : null; } catch { return null; } }
+  function writeJson(key, value) { try { localStorage.setItem(key, JSON.stringify(value)); } catch {} }
   function invalidName(value) { const v = clean(value).toLowerCase(); return !v || v === 'operator' || v === 'loading' || v === 'loading...' || v === 'session active' || v === 'user'; }
   function pickName(...values) { for (const value of values) { const next = clean(value); if (!invalidName(next)) return next; } return ''; }
 
   function commandCentreName() {
-    const cards = Array.from(document.querySelectorAll('.ea-ops-card'));
-    for (const card of cards) {
+    for (const card of Array.from(document.querySelectorAll('.ea-ops-card'))) {
       const eyebrow = clean(card.querySelector('.ea-ops-eyebrow')?.textContent || '').toLowerCase();
       const title = clean(card.querySelector('.ea-ops-title')?.textContent || '');
       if (eyebrow === 'operator' && !invalidName(title)) return title;
@@ -32,8 +34,7 @@
   }
 
   function commandCentreDealer() {
-    const cards = Array.from(document.querySelectorAll('.ea-ops-card'));
-    for (const card of cards) {
+    for (const card of Array.from(document.querySelectorAll('.ea-ops-card'))) {
       const eyebrow = clean(card.querySelector('.ea-ops-eyebrow')?.textContent || '').toLowerCase();
       const sub = clean(card.querySelector('.ea-ops-subtitle')?.textContent || '');
       if (eyebrow === 'operator' && sub) return sub.replace(/\s+•\s+.*/, '');
@@ -41,18 +42,29 @@
     return '';
   }
 
+  function profileFromDom() {
+    const name = clean(document.getElementById('full_name')?.value || document.getElementById('profile_full_name')?.value || document.querySelector('[name="full_name"]')?.value || '');
+    const dealer = clean(document.getElementById('dealership')?.value || document.getElementById('dealership_name')?.value || document.querySelector('[name="dealership"]')?.value || '');
+    const email = clean(document.getElementById('dealer_email')?.value || document.getElementById('email')?.value || document.querySelector('[name="email"]')?.value || '');
+    return { name, dealer, email };
+  }
+
   function getOperatorIdentity() {
+    const cached = readJson('elevate.sidebar_identity.v1') || {};
     const truth = NS.accountTruth || readJson('elevate.account_truth.v1') || {};
     const summary = window.dashboardSummary || NS.summary || {};
     const data = summary.data || summary || {};
     const profileSnapshot = data.profile_snapshot || summary.profile_snapshot || {};
     const profile = data.profile || summary.profile || truth.profile || {};
+    const domProfile = profileFromDom();
     const user = window.currentUser || window.currentNormalizedSession?.user || {};
     const meta = user.user_metadata || user.raw_user_meta_data || {};
-    const email = clean(truth.email || data.email || summary.email || profile.email || user.email || document.querySelector('.ea-operator-sub.user-email')?.textContent || document.querySelector('.user-email')?.textContent || '');
-    const dealer = commandCentreDealer() || clean(profileSnapshot.dealership || profileSnapshot.dealer_name || profile.dealership || profile.dealer_name || '');
+    const email = clean(profileIdentity?.email || cached.email || truth.email || data.email || summary.email || profile.email || domProfile.email || user.email || document.querySelector('.ea-operator-sub.user-email')?.textContent || document.querySelector('.user-email')?.textContent || '');
+    const dealer = clean(profileIdentity?.dealer || commandCentreDealer() || cached.dealer || profileSnapshot.dealership || profileSnapshot.dealer_name || profile.dealership || profile.dealer_name || domProfile.dealer || '');
     let name = pickName(
+      profileIdentity?.name,
       commandCentreName(),
+      cached.name,
       profileSnapshot.salesperson_name,
       profileSnapshot.full_name,
       profileSnapshot.name,
@@ -72,6 +84,7 @@
       profile.display_name,
       profile.operator_name,
       profile.name,
+      domProfile.name,
       meta.full_name,
       meta.name,
       meta.display_name
@@ -86,9 +99,33 @@
   function updateOperatorIdentity() {
     const identity = getOperatorIdentity();
     const nameEl = document.querySelector('.ea-operator-value');
-    const emailEl = document.querySelector('.ea-operator-sub.user-email');
+    const subEl = document.querySelector('.ea-operator-sub.user-email');
     if (nameEl) nameEl.textContent = identity.name;
-    if (emailEl) emailEl.textContent = identity.dealer || identity.email || 'Session active';
+    if (subEl) subEl.textContent = identity.dealer || identity.email || 'Session active';
+  }
+
+  async function hydrateProfileIdentity() {
+    if (profilePromise) return profilePromise;
+    profilePromise = (async () => {
+      try {
+        if (!NS.api?.apiFetch || !NS.api?.parseJsonSafe) return null;
+        const response = await NS.api.apiFetch('/api/profile', { method: 'GET' });
+        const result = await NS.api.parseJsonSafe(response);
+        if (!response.ok) return null;
+        const profile = result?.profile || result?.data?.profile || result?.data || null;
+        if (!profile) return null;
+        profileIdentity = {
+          name: pickName(profile.full_name, profile.salesperson_name, profile.name, profile.default_seller_name),
+          dealer: clean(profile.dealership || profile.dealer_name || profile.company || ''),
+          email: clean(profile.dealer_email || profile.email || '')
+        };
+        if (profileIdentity.name || profileIdentity.dealer || profileIdentity.email) writeJson('elevate.sidebar_identity.v1', profileIdentity);
+        updateOperatorIdentity();
+        return profileIdentity;
+      } catch { return null; }
+      finally { profilePromise = null; }
+    })();
+    return profilePromise;
   }
 
   function injectStyle() { let style = document.getElementById('ea-side-nav-restore-style'); if (!style) { style = document.createElement('style'); style.id = 'ea-side-nav-restore-style'; document.head.appendChild(style); } style.textContent = css; }
@@ -100,7 +137,7 @@
     injectStyle();
     const sidebar = document.querySelector('.sidebar');
     if (!sidebar) return false;
-    if (sidebar.dataset.eaSideNavRestoredVersion === VERSION && sidebar.textContent.includes('Intelligence Centre')) { updateOperatorIdentity(); syncActive(activeSection()); return true; }
+    if (sidebar.dataset.eaSideNavRestoredVersion === VERSION && sidebar.textContent.includes('Intelligence Centre')) { updateOperatorIdentity(); syncActive(activeSection()); hydrateProfileIdentity(); return true; }
     const identity = getOperatorIdentity();
     sidebar.innerHTML = `
       <div class="ea-side-brand"><div class="ea-side-logo">⌂</div><div><div class="ea-side-eyebrow">Elevate Automation</div><div class="ea-side-title">Elevate Operator Console</div><div class="ea-side-sub">Sales automation command center</div></div></div>
@@ -116,6 +153,7 @@
     sidebar.querySelector('#logoutBtn')?.addEventListener('click', () => { location.href = '/login.html'; });
     updateOperatorIdentity();
     syncActive(activeSection());
+    hydrateProfileIdentity();
     return true;
   }
 
@@ -124,10 +162,10 @@
     NS.modules.sideNavRestoreVersion = VERSION;
     restoreSidebar('boot');
     [100,350,800,1500,2500,4000,6500,9000].forEach((ms) => setTimeout(() => restoreSidebar(`retry-${ms}`), ms));
-    [1200,3000,6000,10000,15000,22000].forEach((ms) => setTimeout(updateOperatorIdentity, ms));
+    [1200,3000,6000,10000,15000,22000].forEach((ms) => setTimeout(() => { updateOperatorIdentity(); hydrateProfileIdentity(); }, ms));
     window.addEventListener('elevate:summary-ready', () => setTimeout(() => restoreSidebar('summary-ready'), 50));
-    window.addEventListener('elevate:auth-ready', () => setTimeout(() => restoreSidebar('auth-ready'), 50));
-    window.addEventListener('elevate:account-truth', () => setTimeout(updateOperatorIdentity, 50));
+    window.addEventListener('elevate:auth-ready', () => setTimeout(() => { restoreSidebar('auth-ready'); hydrateProfileIdentity(); }, 50));
+    window.addEventListener('elevate:account-truth', () => setTimeout(() => { updateOperatorIdentity(); hydrateProfileIdentity(); }, 50));
   }
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot, { once: true });
